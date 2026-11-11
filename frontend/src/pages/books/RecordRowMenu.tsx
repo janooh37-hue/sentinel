@@ -81,7 +81,8 @@ export function RecordRowMenu({
           target.focus()
         }}
       >
-        {itemsFor(book).map((item) => (
+        {/* Built on open only: the list renders hundreds of closed menus. */}
+        {open && itemsFor(book).map((item) => (
           <DropdownMenuItem key={item.key} onSelect={item.onSelect}>
             {item.icon}
             {item.label}

@@ -16,7 +16,7 @@
  * the paper-count chip drop out and the ref stacks over the label, so the list
  * stays legible beside a wide pane or in the narrow desktop tiers.
  */
-import { useRef, useState } from 'react'
+import { memo, useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { FileText } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -31,10 +31,13 @@ import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { GradeChip } from '@/components/books/GradeChip'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { formatDmy } from '@/lib/formatDmy'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { reportReviewOf, signedSourceOf } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
 import { subjectEmployeePart } from './formKind'
+import { RestrictedHint } from './RestrictedRowNote'
+import { useRestrictedRowLabel } from './useRestrictedRowLabel'
 import { paperCountOf } from './recordPapers'
 import { openRecord, recordLinkProps, type RecordNavState } from './useRecordNavContext'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
@@ -58,6 +61,8 @@ function SnippetLine({ text }: { text: string }): React.JSX.Element {
     </span>
   )
 }
+
+const noMenuItems = (): RowMenuItem[] => []
 
 export function RecordsList({
   rows,
@@ -95,10 +100,23 @@ export function RecordsList({
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const locale = i18n.language.startsWith('ar') ? 'ar-AE' : 'en-GB'
-  const serviceLabel = useServiceLabel()
   const internalRef = useRef<HTMLDivElement | null>(null)
   const scroller = scrollerRef ?? internalRef
+  // Event handlers read the latest props through a ref, so rows get stable callbacks.
+  const live = useRef({ nav, onSelect, onToggleSelect, onRowMenuOpen })
+  useLayoutEffect(() => {
+    live.current = { nav, onSelect, onToggleSelect, onRowMenuOpen }
+  })
+  const handleSelect = useCallback((id: number) => live.current.onSelect(id), [])
+  const handleToggleSelect = useCallback((id: number) => live.current.onToggleSelect?.(id), [])
+  const handleRowMenuOpen = useCallback((book: BookRead) => live.current.onRowMenuOpen?.(book), [])
+  const handleOpen = useCallback((id: number) => openRecord(navigate, id, live.current.nav()), [navigate])
+  // `nav(0)` is a fresh object each render; reuse the previous one while its content is unchanged.
   const linkNav = nav(0)
+  const linkNavKey = JSON.stringify(linkNav)
+  const [stableNav, setStableNav] = useState({ key: linkNavKey, value: linkNav })
+  if (stableNav.key !== linkNavKey) setStableNav({ key: linkNavKey, value: linkNav })
+  const stableLinkNav = stableNav.key === linkNavKey ? stableNav.value : linkNav
   const [menuRowId, setMenuRowId] = useState<number | null>(null)
   const menuReturnFocus = useRef<HTMLElement | null>(null)
 
@@ -131,201 +149,27 @@ export function RecordsList({
               <bdi dir="ltr">{items.length}</bdi>
             </span>
           </div>
-          {items.map((row) => {
-            if (row.metadata_only) {
-              return (
-                <div key={row.id} data-book-id={row.id} className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-3.5 py-2 text-[0.78em]">
-                  <bdi dir="ltr" className="font-mono font-bold tabular-nums">{row.ref_number}</bdi>
-                  {row.classification_code && <bdi dir="ltr" className="text-muted-foreground">{row.classification_code}</bdi>}
-                  {row.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeChip level={row.grade} />}
-                  <bdi dir="ltr" className="font-mono text-muted-foreground tabular-nums">{row.created_at.slice(0, 10)}</bdi>
-                </div>
-              )
-            }
-            const classified = { classified: !!row.classification_code }
-            const glyph = serviceGlyph(row.service_id)
-            const artwork = serviceArtwork(row.service_id)
-            const label = serviceLabel(row.service_id)
-            const who = subjectEmployeePart(row.subject, classified)
-            const snippet = (row as BookReadWithSnippet).search_snippet
-            const paperCount = paperCountOf(row, { inmateReporter: isInmateReporter })
-            const isChecked = selected?.has(row.id) ?? false
-            const selectable = onToggleSelect != null
-            const isSelected = row.id === selectedId
-            const creator = pickEmployeeName({ name_en: row.created_by_name ?? '', name_ar: row.created_by_name_ar }, i18n.language)
-            const open = (): void => openRecord(navigate, row.id, nav())
-            return (
-              <div
-                key={row.id}
-                data-book-id={row.id}
-                onContextMenu={(e) => {
-                  // The ref link keeps the browser's own link menu.
-                  if (!rowMenu || (e.target as Element).closest('a')) return
-                  e.preventDefault()
-                  e.stopPropagation()
-                  // Right-click need not focus its target; Escape should return to this row.
-                  const target = (e.target as Element).closest<HTMLElement>('button, input')
-                    ?? e.currentTarget.querySelector<HTMLButtonElement>('button')
-                  target?.focus()
-                  menuReturnFocus.current = target
-                  onRowMenuOpen?.(row)
-                  setMenuRowId(row.id)
-                }}
-                className={cn(
-                  'group relative flex items-center gap-2.5 border-b border-hairline px-3.5 py-2 transition-colors motion-reduce:transition-none',
-                  isSelected ? 'bg-primary-soft' : 'hover:bg-surface-tinted',
-                  row.id === highlightedId && 'bg-accent-soft',
-                  isChecked && 'bg-primary-soft/60',
-                  // Draft tinted background; voided struck-through
-                  row.is_draft && !row.voided_at && !isSelected && 'bg-warning-soft/20',
-                  row.voided_at && 'opacity-60',
-                )}
-              >
-                {isSelected && (
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-y-1.5 start-0 w-[3px] rounded-full bg-primary"
-                  />
-                )}
-                {selectable && (
-                  <label className="relative z-10 -ms-1.5 grid h-11 w-8 shrink-0 cursor-pointer place-items-center">
-                    <input
-                      type="checkbox"
-                      aria-label={t('books.list.selectRef', { ref: bidi(row.ref_number) })}
-                      checked={isChecked}
-                      onChange={() => onToggleSelect(row.id)}
-                      className="h-4 w-4 cursor-pointer accent-primary"
-                    />
-                  </label>
-                )}
-                <span
-                  aria-hidden
-                  className="hidden h-7 w-7 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised text-[0.9em] @[26rem]:grid"
-                >
-                  {artwork ? <ServiceArtwork artwork={artwork} size="row" /> : glyph}
-                </span>
-                <div className="flex min-w-0 flex-1 flex-col @[26rem]:flex-row @[26rem]:items-center @[26rem]:gap-2.5">
-                  <Link
-                    {...recordLinkProps(row.id, linkNav)}
-                    // Enter only opens the selected row, so only that row advertises it.
-                    aria-keyshortcuts={isSelected ? 'Enter' : undefined}
-                    onClick={(e) => {
-                      const modified = e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
-                      if (e.defaultPrevented || modified) return
-                      e.preventDefault()
-                      open()
-                    }}
-                    className={cn(
-                      'relative z-10 w-fit shrink-0 rounded-sm font-mono text-[0.7em] font-bold text-primary hover:underline @[26rem]:w-[4.6rem]',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                      row.voided_at && 'line-through',
-                    )}
-                  >
-                    <bdi dir="ltr">{row.ref_number}</bdi>
-                  </Link>
-                  <button
-                    type="button"
-                    aria-current={isSelected ? 'true' : undefined}
-                    aria-keyshortcuts={rowMenu ? 'Shift+F10 ContextMenu' : undefined}
-                    onClick={() => onSelect(row.id)}
-                    onDoubleClick={open}
-                    onKeyDown={(e) => {
-                      if (rowMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        menuReturnFocus.current = e.currentTarget
-                        onRowMenuOpen?.(row)
-                        setMenuRowId(row.id)
-                        return
-                      }
-                      if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
-                      e.preventDefault()
-                      open()
-                    }}
-                    className={cn(
-                      'min-w-0 flex-1 rounded-sm text-start',
-                      "after:absolute after:inset-0 after:content-['']",
-                      'focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring',
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        'block truncate text-[0.78em] font-semibold',
-                        row.voided_at && 'line-through',
-                      )}
-                    >
-                      <InboxUnreadDot book={row} />
-                      {label}
-                    </span>
-                    <span className="block truncate text-[0.68em] text-muted-foreground">
-                      {who && (
-                        <>
-                          <span dir="auto">{who}</span>
-                          <span aria-hidden> · </span>
-                        </>
-                      )}
-                      <span className="sr-only">{t('books.record.createdBy')} </span>
-                      {creator ? (
-                        <bdi>{creator}</bdi>
-                      ) : (
-                        <span className="italic">{t('books.record.creatorUnknown')}</span>
-                      )}
-                    </span>
-                    {snippet && (
-                      <span
-                        className="mt-0.5 block truncate text-[0.65em] italic text-muted-foreground"
-                        dir="auto"
-                      >
-                        <span className="me-1 not-italic font-medium text-warning">
-                          {t('books.search.bodyMatch')}
-                        </span>
-                        <SnippetLine text={snippet} />
-                      </span>
-                    )}
-                    {/* Level / draft / editing / voided / classification chips */}
-                    {(row.grade !== 'unclassified' ||
-                      row.is_draft ||
-                      row.edit_session?.state === 'active' ||
-                      row.voided_at ||
-                      row.classification_code) && (
-                      <span className="mt-0.5 flex flex-wrap gap-1">
-                        <BookStatusChips book={row} noClassification={!row.classification_code} />
-                      </span>
-                    )}
-                  </button>
-                </div>
-                {paperCount > 0 && (
-                  <span className="hidden shrink-0 items-center gap-0.5 font-mono text-[0.62em] text-faint tabular-nums @[26rem]:flex">
-                    <FileText className="h-3 w-3" aria-hidden />
-                    <bdi dir="ltr">{paperCount}</bdi>
-                    <span className="sr-only">{t('books.pane.papers', { count: paperCount })}</span>
-                  </span>
-                )}
-                <StateSeal
-                  state={row.approval_state}
-                  signingPath={row.signing_path}
-                  signedSource={signedSourceOf(row)}
-                  review={reportReviewOf(row)}
-                />
-                {rowMenu && (
-                  <RecordRowMenu
-                    book={row}
-                    itemsFor={rowMenu}
-                    open={menuRowId === row.id}
-                    returnFocusRef={menuReturnFocus}
-                    onOpenChange={(o) => {
-                      if (o) {
-                        // Trigger entry uses Radix's own restoration, not a previous row's origin.
-                        menuReturnFocus.current = null
-                        onRowMenuOpen?.(row)
-                      }
-                      setMenuRowId(o ? row.id : null)
-                    }}
-                  />
-                )}
-              </div>
-            )
-          })}
+          {items.map((row) => (
+            <RecordRow
+              key={row.id}
+              row={row}
+              isSelected={row.id === selectedId}
+              isChecked={selected?.has(row.id) ?? false}
+              highlighted={row.id === highlightedId}
+              selectable={onToggleSelect != null}
+              isInmateReporter={isInmateReporter}
+              hasMenu={rowMenu != null}
+              menuOpen={menuRowId === row.id}
+              menuItemsFor={menuRowId === row.id && rowMenu ? rowMenu : noMenuItems}
+              menuReturnFocusRef={menuReturnFocus}
+              linkNav={stableLinkNav}
+              onSelect={handleSelect}
+              onToggleSelect={handleToggleSelect}
+              onOpen={handleOpen}
+              onRowMenuOpen={handleRowMenuOpen}
+              onMenuRowChange={setMenuRowId}
+            />
+          ))}
         </section>
       ))}
       {rows.length === 0 &&
@@ -337,3 +181,242 @@ export function RecordsList({
     </div>
   )
 }
+
+interface RecordRowProps {
+  row: BookRead
+  isSelected: boolean
+  isChecked: boolean
+  highlighted: boolean
+  /** Shows the checkbox. */
+  selectable: boolean
+  isInmateReporter: boolean
+  /** The ⋯ menu exists (preview collapsed). */
+  hasMenu: boolean
+  menuOpen: boolean
+  /** Items builder: the live one for the open row, a constant for the rest, so closed rows stay memoised. */
+  menuItemsFor: (book: BookRead) => RowMenuItem[]
+  menuReturnFocusRef: React.RefObject<HTMLElement | null>
+  linkNav: RecordNavState
+  onSelect: (id: number) => void
+  onToggleSelect: (id: number) => void
+  onOpen: (id: number) => void
+  onRowMenuOpen: (book: BookRead) => void
+  onMenuRowChange: (id: number | null) => void
+}
+
+/** One register row. Memoised: a selection change re-renders only the rows whose own props changed. */
+const RecordRow = memo(function RecordRow({
+  row,
+  isSelected,
+  isChecked,
+  highlighted,
+  selectable,
+  isInmateReporter,
+  hasMenu,
+  menuOpen,
+  menuItemsFor,
+  menuReturnFocusRef,
+  linkNav,
+  onSelect,
+  onToggleSelect,
+  onOpen,
+  onRowMenuOpen,
+  onMenuRowChange,
+}: RecordRowProps): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const serviceLabel = useServiceLabel()
+  const restrictedLabel = useRestrictedRowLabel()
+  if (row.metadata_only) {
+    return (
+      <div key={row.id} data-book-id={row.id} role="group" aria-label={restrictedLabel(row.ref_number)} className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-3.5 py-2 text-[0.78em]">
+        <bdi dir="ltr" className="font-mono font-bold tabular-nums">{row.ref_number}</bdi>
+        {row.classification_code && <bdi dir="ltr" className="text-muted-foreground">{row.classification_code}</bdi>}
+        {row.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeChip level={row.grade} />}
+        <bdi dir="ltr" className="font-mono text-muted-foreground tabular-nums">{formatDmy(row.created_at.slice(0, 10))}</bdi>
+        <RestrictedHint />
+      </div>
+    )
+  }
+  const classified = { classified: !!row.classification_code }
+  const glyph = serviceGlyph(row.service_id)
+  const artwork = serviceArtwork(row.service_id)
+  const label = serviceLabel(row.service_id)
+  const who = subjectEmployeePart(row.subject, classified)
+  const snippet = (row as BookReadWithSnippet).search_snippet
+  const paperCount = paperCountOf(row, { inmateReporter: isInmateReporter })
+  const creator = pickEmployeeName({ name_en: row.created_by_name ?? '', name_ar: row.created_by_name_ar }, i18n.language)
+  const open = (): void => onOpen(row.id)
+  return (
+    <div
+      key={row.id}
+      data-book-id={row.id}
+      onContextMenu={(e) => {
+        // The ref link keeps the browser's own link menu.
+        if (!hasMenu || (e.target as Element).closest('a')) return
+        e.preventDefault()
+        e.stopPropagation()
+        // Right-click need not focus its target; Escape should return to this row.
+        const target = (e.target as Element).closest<HTMLElement>('button, input')
+          ?? e.currentTarget.querySelector<HTMLButtonElement>('button')
+        target?.focus()
+        menuReturnFocusRef.current = target
+        onRowMenuOpen(row)
+        onMenuRowChange(row.id)
+      }}
+      className={cn(
+        'group relative flex items-center gap-2.5 border-b border-hairline px-3.5 py-2 transition-colors motion-reduce:transition-none',
+        // Off-screen rows skip layout and paint; `auto` remembers the measured height.
+        '[contain-intrinsic-size:auto_3.5rem] [content-visibility:auto]',
+        isSelected ? 'bg-primary-soft' : 'hover:bg-surface-tinted',
+        highlighted && 'bg-accent-soft',
+        isChecked && 'bg-primary-soft/60',
+        // Draft tinted background; voided struck-through
+        row.is_draft && !row.voided_at && !isSelected && 'bg-warning-soft/20',
+        row.voided_at && 'opacity-60',
+      )}
+    >
+      {isSelected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-y-1.5 start-0 w-[3px] rounded-full bg-primary"
+        />
+      )}
+      {selectable && (
+        <label className="relative z-10 -ms-1.5 grid h-11 w-8 shrink-0 cursor-pointer place-items-center">
+          <input
+            type="checkbox"
+            aria-label={t('books.list.selectRef', { ref: bidi(row.ref_number) })}
+            checked={isChecked}
+            onChange={() => onToggleSelect(row.id)}
+            className="h-4 w-4 cursor-pointer accent-primary"
+          />
+        </label>
+      )}
+      <span
+        aria-hidden
+        className="hidden h-7 w-7 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised text-[0.9em] @[26rem]:grid"
+      >
+        {artwork ? <ServiceArtwork artwork={artwork} size="row" /> : glyph}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col @[26rem]:flex-row @[26rem]:items-center @[26rem]:gap-2.5">
+        <Link
+          {...recordLinkProps(row.id, linkNav)}
+          // Enter only opens the selected row, so only that row advertises it.
+          aria-keyshortcuts={isSelected ? 'Enter' : undefined}
+          onClick={(e) => {
+            const modified = e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
+            if (e.defaultPrevented || modified) return
+            e.preventDefault()
+            open()
+          }}
+          className={cn(
+            'relative z-10 w-fit shrink-0 rounded-sm font-mono text-[0.7em] font-bold text-primary hover:underline @[26rem]:w-[4.6rem]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            row.voided_at && 'line-through',
+          )}
+        >
+          <bdi dir="ltr">{row.ref_number}</bdi>
+        </Link>
+        <button
+          type="button"
+          aria-current={isSelected ? 'true' : undefined}
+          aria-keyshortcuts={hasMenu ? 'Shift+F10 ContextMenu' : undefined}
+          onClick={() => onSelect(row.id)}
+          onDoubleClick={open}
+          onKeyDown={(e) => {
+            if (hasMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+              e.preventDefault()
+              e.stopPropagation()
+              menuReturnFocusRef.current = e.currentTarget
+              onRowMenuOpen(row)
+              onMenuRowChange(row.id)
+              return
+            }
+            if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+            e.preventDefault()
+            open()
+          }}
+          className={cn(
+            'min-w-0 flex-1 rounded-sm text-start',
+            "after:absolute after:inset-0 after:content-['']",
+            'focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring',
+          )}
+        >
+          <span
+            className={cn(
+              'block truncate text-[0.78em] font-semibold',
+              row.voided_at && 'line-through',
+            )}
+          >
+            <InboxUnreadDot book={row} />
+            {label}
+          </span>
+          <span className="block truncate text-[0.68em] text-muted-foreground">
+            {who && (
+              <>
+                <span dir="auto">{who}</span>
+                <span aria-hidden> · </span>
+              </>
+            )}
+            <span className="sr-only">{t('books.record.createdBy')} </span>
+            {creator ? (
+              <bdi>{creator}</bdi>
+            ) : (
+              <span className="italic">{t('books.record.creatorUnknown')}</span>
+            )}
+          </span>
+          {snippet && (
+            <span
+              className="mt-0.5 block truncate text-[0.65em] italic text-muted-foreground"
+              dir="auto"
+            >
+              <span className="me-1 not-italic font-medium text-warning">
+                {t('books.search.bodyMatch')}
+              </span>
+              <SnippetLine text={snippet} />
+            </span>
+          )}
+          {/* Level / draft / editing / voided / classification chips */}
+          {(row.grade !== 'unclassified' ||
+            row.is_draft ||
+            row.edit_session?.state === 'active' ||
+            row.voided_at ||
+            row.classification_code) && (
+            <span className="mt-0.5 flex flex-wrap gap-1">
+              <BookStatusChips book={row} noClassification={!row.classification_code} />
+            </span>
+          )}
+        </button>
+      </div>
+      {paperCount > 0 && (
+        <span className="hidden shrink-0 items-center gap-0.5 font-mono text-[0.62em] text-faint tabular-nums @[26rem]:flex">
+          <FileText className="h-3 w-3" aria-hidden />
+          <bdi dir="ltr">{paperCount}</bdi>
+          <span className="sr-only">{t('books.pane.papers', { count: paperCount })}</span>
+        </span>
+      )}
+      <StateSeal
+        state={row.approval_state}
+        signingPath={row.signing_path}
+        signedSource={signedSourceOf(row)}
+        review={reportReviewOf(row)}
+      />
+      {hasMenu && (
+        <RecordRowMenu
+          book={row}
+          itemsFor={menuItemsFor}
+          open={menuOpen}
+          returnFocusRef={menuReturnFocusRef}
+          onOpenChange={(o) => {
+            if (o) {
+              // Trigger entry uses Radix's own restoration, not a previous row's origin.
+              menuReturnFocusRef.current = null
+              onRowMenuOpen(row)
+            }
+            onMenuRowChange(o ? row.id : null)
+          }}
+        />
+      )}
+    </div>
+  )
+})

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -31,7 +31,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, BookSortKey, SendPurpose } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -42,9 +42,12 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
+import { canSendBook, isLedgerBookRecord } from '@/pages/books/canSendBook'
 import { inboxSummaryKey } from '@/pages/books/useInboxCount'
 import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books/recordPapers'
 import type { PaperKey } from '@/pages/books/recordPapers'
+import { RestrictedHint } from '@/pages/books/RestrictedRowNote'
+import { useRestrictedRowLabel } from '@/pages/books/useRestrictedRowLabel'
 import { BookFolderHeader } from './BookFolderHeader'
 import { BooksRail, FolderGlyph, ScopeIcon } from './BooksRail'
 import type { Scope } from './BooksRail'
@@ -63,6 +66,8 @@ const SORT_LABEL: Record<SortColumn, string> = {
 }
 const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-grade', 'status']
 const PAGE_SIZE = 50
+/** 44px hit area on touch screens; the desktop (fine pointer) sizes stay as they are. */
+const TOUCH = 'pointer-coarse:h-11 pointer-coarse:min-w-11'
 
 function BookDate({ value }: { value: string }): React.JSX.Element {
   return <time dateTime={value} dir="ltr" className="font-mono tabular-nums">{formatDmy(value.slice(0, 10))}</time>
@@ -79,18 +84,17 @@ function Person({ label, people, column, className }: {
   const { t, i18n } = useTranslation()
   const sep = i18n.language.startsWith('ar') ? '، ' : ', '
   const entries = people.map(({ name, title }) => title ? `${title} (${name})` : name)
+  // The tooltip provider lives at the app root; one per cell would mount ~150 of them.
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span role="img" data-column={column} aria-label={`${label}: ${entries.join(sep)}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
-            <span className="shrink-0 xl:sr-only">{label}:</span>
-            <span className="min-w-0 truncate text-foreground"><bdi>{people[0].title || people[0].name}</bdi>{people.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: people.length - 1 })}</bdi></>}</span>
-          </span>
-        </TooltipTrigger>
-        <TooltipContent>{entries.map((entry, index) => <span key={index}>{index > 0 && sep}<bdi>{entry}</bdi></span>)}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" data-column={column} aria-label={`${label}: ${entries.join(sep)}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
+          <span className="shrink-0 xl:sr-only">{label}:</span>
+          <span className="min-w-0 truncate text-foreground"><bdi>{people[0].title || people[0].name}</bdi>{people.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: people.length - 1 })}</bdi></>}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{entries.map((entry, index) => <span key={index}>{index > 0 && sep}<bdi>{entry}</bdi></span>)}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -154,6 +158,8 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [lastOpenedId, setLastOpenedId] = useState(selectedId)
   if (selectedId !== null && selectedId !== lastOpenedId) setLastOpenedId(selectedId)
+  const openPage = bookPage.open
+  const openBook = useCallback((id: number): void => openPage(String(id)), [openPage])
   const deskRef = useRef<HTMLElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
@@ -285,7 +291,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
             {switcher}
             <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
-              <SheetTrigger asChild><Button variant="ghost" size="sm" className="min-w-0">{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : draftsPlace ? <NotebookPen className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
+              <SheetTrigger asChild><Button variant="ghost" size="sm" className={cn('min-w-0', TOUCH)}>{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : draftsPlace ? <NotebookPen className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
               <SheetContent dir={i18n.dir()} className="w-[260px] bg-rail p-0 pt-10" aria-describedby={undefined}>
                 <SheetTitle className="sr-only">{t('ledger.booksDesk.folders.navigation')}</SheetTitle>
                 {rail}
@@ -372,7 +378,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} dragBox={listScope === 'folder' || listScope === 'any' ? undefined : listScope} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} dragBox={listScope === 'folder' || listScope === 'any' ? undefined : listScope} onOpen={openBook} />
                   </li>
                 ))}
               </ul>
@@ -381,8 +387,8 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
         </div>
         {(offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
           <div className="flex shrink-0 justify-between gap-2 border-t border-hairline px-4 py-3 lg:px-6">
-            <Button variant="outline" size="sm" disabled={offset === 0 || list.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{t('ledger.booksDesk.previous')}</Button>
-            <Button variant="outline" size="sm" disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>
+            <Button variant="outline" size="sm" className={TOUCH} disabled={offset === 0 || list.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{t('ledger.booksDesk.previous')}</Button>
+            <Button variant="outline" size="sm" className={TOUCH} disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>
           </div>
         )}
         </div>
@@ -402,7 +408,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center border-b border-border bg-surface-raised px-3 py-2 lg:px-4">
-              <Button variant="ghost" size="sm" onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
+              <Button variant="ghost" size="sm" className={TOUCH} onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
             </div>
             {detail.isError
               ? <div role="alert" className="px-4 py-8 text-destructive lg:px-6"><p>{apiErrorMessage(detail.error)}</p><Button variant="outline" className="mt-3" onClick={() => void detail.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
@@ -420,7 +426,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
  * under the column header: one centred mark per mark column. Below xl it
  * stacks: marks and ref, then subject with my state, then designations.
  */
-function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBox, onOpen }: {
+const BookRow = memo(function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBox, onOpen }: {
   book: BookRead
   /** Outgoing tab: show my send even when I also received this book. */
   asSent: boolean
@@ -431,17 +437,20 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBo
   draggable: boolean
   /** The box list the row is dragged from; folder and search lists use the book's own box. */
   dragBox?: Scope
-  onOpen: () => void
+  /** Stable across renders, so typing in the search box does not re-render every row. */
+  onOpen: (id: number) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const me = useAuth().user?.id
+  const restrictedLabel = useRestrictedRowLabel()
   if (book.metadata_only) {
     return (
-      <div data-book-id={book.id} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm lg:px-6">
+      <div data-book-id={book.id} role="group" aria-label={restrictedLabel(book.ref_number)} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm lg:px-6">
         <bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
         {book.classification_code && <bdi dir="ltr" className="text-muted-foreground">{book.classification_code}</bdi>}
         {book.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeMark level={book.grade} showLabel />}
         <span className="text-muted-foreground"><BookDate value={book.created_at} /></span>
+        <RestrictedHint />
       </div>
     )
   }
@@ -470,7 +479,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBo
       aria-current={current ? 'true' : undefined}
       draggable={draggable}
       onDragStart={draggable ? (event) => startBookDrag(event, book.id, dragBox ?? place, book.ref_number, subject, i18n.dir()) : undefined}
-      onClick={onOpen}
+      onClick={() => onOpen(book.id)}
       className={cn(
         'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6 xl:py-2.5',
         DESK_GRID,
@@ -490,16 +499,14 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBo
         <span dir="auto" title={subject} className={cn('min-w-0 break-words xl:truncate', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{subject}</span>
         {papers > 1 && <PaperCount count={papers} />}
         {note && (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span role="img" aria-label={noteLabel} className="inline-flex shrink-0 items-center text-muted-foreground">
-                  <MessageSquareText className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs whitespace-pre-wrap break-words">{t('ledger.booksDesk.noteShort')}: <bdi>{note}</bdi></TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span role="img" aria-label={noteLabel} className="inline-flex shrink-0 items-center text-muted-foreground">
+                <MessageSquareText className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs whitespace-pre-wrap break-words">{t('ledger.booksDesk.noteShort')}: <bdi>{note}</bdi></TooltipContent>
+          </Tooltip>
         )}
         {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
           <span className="min-w-0 truncate text-xs text-muted-foreground">
@@ -525,7 +532,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBo
       </span>
     </button>
   )
-}
+})
 
 /** Carry the book id and show a compact chip under the pointer, not the whole wide row. */
 function startBookDrag(event: DragEvent<HTMLElement>, id: number, box: Scope, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
@@ -574,7 +581,7 @@ function BookFolderMenu({ bookId, boxes, disabled }: { bookId: number; boxes: re
   })
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} dir={i18n.dir()}>
-      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={disabled}><FolderPlus className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.folders.folder')}</Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className={TOUCH} disabled={disabled}><FolderPlus className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.folders.folder')}</Button></DropdownMenuTrigger>
       <DropdownMenuContent className="max-h-80 max-w-xs overflow-y-auto" align="start">
         {folders.isPending ? <DropdownMenuItem disabled>{t('common.loading')}</DropdownMenuItem> : folders.isError ? (
           <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void folders.refetch() }}>{t('ledger.booksDesk.folders.loadError')} {t('ledger.booksDesk.retry')}</DropdownMenuItem>
@@ -615,15 +622,19 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const userId = useAuth().user?.id
-  const isLedgerBook = book.current_template_id === 'Ledger Book'
-  const canSend = !isLedgerBook && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId))
+  const isLedgerBook = isLedgerBookRecord(book)
+  const canSend = canSendBook(book, userId)
+  // A Ledger Book's paper, JSON and actions need only the id and Revision the list row already
+  // carries (they are separate reads from `getBook`, whose read receipt they do not depend on),
+  // so they start in parallel with the detail. A restricted (metadata-only) row never opens them.
+  const ledgerReady = isLedgerBook && !book.metadata_only
   // The shown Revision (`version_id`) stays in the URL; empty = the newest I may read.
   const [rawRev, setRev] = useSearchParam('rev')
   const revision = isLedgerBook && /^\d+$/.test(rawRev) ? Number(rawRev) : undefined
   const ledgerBook = useQuery({
     queryKey: ledgerBookKey(book.id, revision),
     queryFn: () => api.getLedgerBook(book.id, revision),
-    enabled: isLedgerBook && !loading,
+    enabled: ledgerReady,
   })
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
@@ -659,16 +670,16 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   return (
     <article aria-labelledby={titleId} className={cn('flex min-h-0 min-w-0 flex-1 flex-col', isMobile && 'overflow-y-auto')}>
       <div className={cn('flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface-raised px-3 py-2 lg:px-4', isMobile && 'sticky top-0 z-10')}>
-        <Button variant="ghost" size="sm" className="shrink-0" onClick={onBack}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
+        <Button variant="ghost" size="sm" className={cn('shrink-0', TOUCH)} onClick={onBack}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
-        {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        {canSend && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
-        {isLedgerBook && !loading && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
-        {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+        {inboxActions.map((action) => <Button key={action.key} className={cn('shrink-0', TOUCH)} variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+        {canSend && <Button className={cn('shrink-0', TOUCH)} variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
+        {ledgerReady && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} onRevisionChange={(versionId) => setRev(String(versionId))} />}
+        {reply.actions.map((action) => <Button key={action.key} className={cn('shrink-0', TOUCH)} variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
         <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
-          {!isMobile && <Button variant="ghost" size="sm" onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
-          <Link to={`/books/${book.id}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>
+          {!isMobile && <Button variant="ghost" size="sm" className={TOUCH} onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
+          <Link to={`/books/${book.id}`} className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), TOUCH)}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>
         </div>
       </div>
       <header className="shrink-0 border-b border-hairline px-4 py-4 lg:px-6">
@@ -682,7 +693,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       </header>
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
-          {loading ? <DeskLoading /> : isLedgerBook ? (
+          {loading && !ledgerReady ? <DeskLoading /> : isLedgerBook ? (
             <LedgerPaperPdf url={api.ledgerBookPaperPdfUrl(book.id, revision)} className="min-h-0 flex-1 rounded-none border-0" />
           ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />

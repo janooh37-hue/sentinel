@@ -19,6 +19,7 @@ import {
   type InmateReporterAction,
 } from '@/components/books/book-detail-drawer-utils'
 import { approvalStageLabel, approverStep } from '@/components/books/reviewers'
+import { canSubmitRecord } from './canSendBook'
 import { parseUtcMs } from '@/lib/time'
 import { pickEmployeeName } from '@/lib/employeeName'
 
@@ -264,7 +265,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const isInmateReport =
     inmate && book.ref_number.startsWith('REPORT-') && ctx.inmateAction !== 'read-only'
   const canApprove = ctx.has('books.approve')
-  const canSubmitBook = ctx.has('books.submit') && book.can_write
+  const canSubmitBook = canSubmitRecord(book, ctx.has('books.submit'))
   const canScan = ctx.has('documents.scan') && book.can_write
   const review = reportReviewOf(book)
 

@@ -210,6 +210,13 @@ describe('recordNextStep rows', () => {
     expect(r.secondary).toEqual([])
   })
 
+  it('never offers the generic Submit for approval on a Ledger Book', () => {
+    const ledger = recordNextStep(bookOf('none', { current_template_id: 'Ledger Book' }), ctxOf())
+    expect(ledger.primary).not.toBe('sendForApproval')
+    expect(ledger.secondary).not.toContain('sendForApproval')
+    expect(recordNextStep(bookOf('none'), ctxOf()).primary).toBe('sendForApproval')
+  })
+
   it('draft that failed to render: noDoc, continue editing, delete draft only', () => {
     const r = recordNextStep(bookOf('none'), ctxOf({ hasDocument: false }))
     expect(r.status.key).toBe('noDoc')

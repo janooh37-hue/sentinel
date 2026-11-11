@@ -26,12 +26,15 @@ const NUM_TOKEN_ONE = new RegExp(`^${NUM_OPEN}(\\w+)${NUM_CLOSE}$`)
 export function QueueNav({
   position,
   total,
+  more = false,
   onPrev,
   onNext,
   compact = false,
 }: {
   position: number | null
   total: number
+  /** More records exist beyond `total`: show "n of total+". */
+  more?: boolean
   onPrev: () => void
   onNext: () => void
   compact?: boolean
@@ -87,9 +90,9 @@ export function QueueNav({
         className="min-w-[2.5rem] px-1 text-center font-mono text-[0.72em] font-semibold tabular-nums text-muted-foreground"
       >
         {compact ? (
-          <bdi dir="ltr">{`${position}/${total}`}</bdi>
+          <bdi dir="ltr">{`${position}/${total}${more ? '+' : ''}`}</bdi>
         ) : (
-          t('books.record.queuePosition', {
+          t(more ? 'books.record.queuePositionMore' : 'books.record.queuePosition', {
             n: `${NUM_OPEN}n${NUM_CLOSE}`,
             total: `${NUM_OPEN}total${NUM_CLOSE}`,
           })

@@ -34,6 +34,8 @@ export interface RecordNavState {
   queue: number[]
   /** The list scroller's `scrollTop` at the moment of opening. */
   scrollY: number
+  /** The list was cut off at its fetch limit: more records exist beyond `queue`. */
+  more?: boolean
 }
 
 /** The state a list receives when the reader comes Back from a record. */
@@ -75,7 +77,7 @@ export function stripOpenParam(url: string): string {
 }
 
 function normalized(nav: RecordNavState): RecordNavState {
-  return { from: stripOpenParam(nav.from), queue: nav.queue, scrollY: nav.scrollY }
+  return { from: stripOpenParam(nav.from), queue: nav.queue, scrollY: nav.scrollY, ...(nav.more ? { more: true } : {}) }
 }
 
 /** Open a record from a list, carrying the navigation context. */
@@ -161,7 +163,7 @@ export function useRecordNavContext({
     hiddenIds,
   )
   const queue = useMemo(
-    () => (approvalContext ? approvalQueue : queueFromIds(navState?.queue ?? [], bookId, hiddenIds)),
+    () => (approvalContext ? approvalQueue : { ...queueFromIds(navState?.queue ?? [], bookId, hiddenIds), more: navState?.more === true }),
     [approvalContext, approvalQueue, navState, bookId, hiddenIds],
   )
 

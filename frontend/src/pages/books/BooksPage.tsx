@@ -481,13 +481,17 @@ function BooksRegister(): React.JSX.Element {
 
   // ── Navigation: every open carries the list context ─────────────────────────
   const listUrl = `${location.pathname}${location.search}`
+  // The list is fetched with a limit: the record navigator says "n of 500+" when the server holds more.
+  const fetchedList = serverSearchActive && searchQuery.data ? searchQuery.data : listQuery.data
+  const listTruncated = fetchedList != null && fetchedList.total > fetchedList.items.length
   const buildNav = useCallback(
     (scrollY?: number): RecordNavState => ({
       from: listUrl,
       queue: desktopRowIds,
       scrollY: scrollY ?? scrollerRef.current?.scrollTop ?? 0,
+      ...(listTruncated ? { more: true } : {}),
     }),
-    [listUrl, desktopRowIds],
+    [listUrl, desktopRowIds, listTruncated],
   )
   const openFromList = useCallback(
     (id: number): void => {
@@ -1085,6 +1089,7 @@ function BooksRegister(): React.JSX.Element {
             isError={listQuery.isError}
             onRetry={() => void listQuery.refetch()}
             rows={mobileRows}
+            moreAvailable={listTruncated}
             hasFilters={hasFilters}
             isAr={isAr}
             isInmateReporter={isInmateReporter}

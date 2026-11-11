@@ -20,6 +20,8 @@ export interface AwaitingQueue {
   /** 1-based position of the open book, or null when it isn't queued. */
   position: number | null
   total: number
+  /** The walk continues past `total` (the originating list hit its fetch limit). */
+  more?: boolean
   prevId: number | null
   prevVersionId: number | null
   nextId: number | null

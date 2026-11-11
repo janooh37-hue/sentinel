@@ -64,6 +64,7 @@ import { Hint } from '@/components/ui/hint'
 import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
+import { canSendBook } from './canSendBook'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { currentBookDocId } from '@/lib/bookDocument'
@@ -388,7 +389,7 @@ export function RecordPane({
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
   const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
-  const canSend = book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))
+  const canSend = canSendBook(book, user?.id)
   const reporterAction = inmateReporterActionFor(book, user?.id)
   const isInmateReport =
     isInmateReporter && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'

@@ -38,6 +38,7 @@ import type { RecordPieceProps } from './recordActions'
 import { useRecordPrint } from '../useRecordPrintMode'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
+import { canSendBook } from '../canSendBook'
 
 function GroupLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -138,7 +139,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.includedPapers.addToPdf')}
           </DropdownMenuItem>
         )}
-        {book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (view.userId !== undefined && book.created_by_user_id === view.userId)) && (
+        {canSendBook(book, view.userId) && (
           <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
             <Send className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.send.menu')}

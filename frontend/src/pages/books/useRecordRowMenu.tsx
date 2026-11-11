@@ -19,6 +19,7 @@ import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
 import type { RowMenuItem } from './RecordRowMenu'
+import { canSendBook } from './canSendBook'
 import { defaultPaperKey, downloadPaper, paperKey, papersOf } from './recordPapers'
 
 const icon = 'h-3.5 w-3.5'
@@ -74,7 +75,7 @@ export function useRecordRowMenu({
         icon: <SquareArrowOutUpRight className={cn(icon, 'rtl:-scale-x-100')} aria-hidden />,
         onSelect: () => window.open(`/books/${book.id}`, '_blank', 'noopener'),
       },
-      book.can_send === true && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (userId !== undefined && book.created_by_user_id === userId)) && {
+      canSendBook(book, userId) && {
         key: 'send',
         label: t('books.send.menu'),
         icon: <Send className={icon} aria-hidden />,

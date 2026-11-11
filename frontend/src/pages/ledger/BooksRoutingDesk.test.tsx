@@ -10,7 +10,8 @@ import type { BookFolderRead, BookRead, LedgerBookRead, LedgerDraftRead } from '
 import type * as ApiModule from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
+const authReads = vi.hoisted(() => ({ count: 0 }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => { authReads.count += 1; return { user: { id: 1, role: 'employee' } } } }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
@@ -25,6 +26,7 @@ vi.mock('@/lib/api', async (original) => {
 })
 
 import { api } from '@/lib/api'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { BooksRoutingDesk } from './BooksRoutingDesk'
 
 const BOOK: BookRead = {
@@ -53,7 +55,7 @@ function RouterControls(): React.JSX.Element {
 
 function mount(url = '/ledger?tab=books'): QueryClient {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[url]}><BooksRoutingDesk /><RouterControls /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[url]}><TooltipProvider><BooksRoutingDesk /><RouterControls /></TooltipProvider></MemoryRouter></QueryClientProvider>)
   return qc
 }
 beforeEach(() => {
@@ -159,7 +161,8 @@ describe('Books routing desk: Ledger Books', () => {
     vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, can_return: true })
     const sign = vi.spyOn(api, 'signLedgerBook').mockResolvedValue(LEDGER_BOOK)
     const genericSign = vi.spyOn(api, 'signBook')
-    const sendBack = vi.spyOn(api, 'returnLedgerBook').mockResolvedValue(LEDGER_BOOK)
+    // The action writes the server's answer into the cache (no refetch); keep both actions in it so the sequence continues.
+    const sendBack = vi.spyOn(api, 'returnLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, can_return: true })
     mount('/ledger?tab=books&book=7')
     const signButton = await screen.findByRole('button', { name: 'Sign' })
     expect(signButton.parentElement).toBe(screen.getByRole('button', { name: 'Print' }).parentElement)
@@ -184,7 +187,7 @@ describe('Books routing desk: Ledger Books', () => {
     vi.spyOn(api, 'listManagers').mockResolvedValue([
       { id: 3, name_en: 'Manager', name_ar: 'المدير', user_id: 10, active: true, title: 'Director', has_signature: true },
     ])
-    const change = vi.spyOn(api, 'changeLedgerSigner').mockResolvedValue(LEDGER_BOOK)
+    const change = vi.spyOn(api, 'changeLedgerSigner').mockResolvedValue({ ...LEDGER_BOOK, can_change_signer: true, can_resubmit: true, return_note: 'Update the subject.' })
     const resubmit = vi.spyOn(api, 'resubmitLedgerBook').mockResolvedValue(LEDGER_BOOK)
     mount('/ledger?tab=books&book=7')
     expect(await screen.findByText('Update the subject.')).toBeInTheDocument()
@@ -196,6 +199,7 @@ describe('Books routing desk: Ledger Books', () => {
     await waitFor(() => expect(change).toHaveBeenCalledWith(7, 3))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     await userEvent.click(await screen.findByRole('button', { name: 'Resubmit for signature' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Resubmit for signature?' })).getByRole('button', { name: 'Resubmit for signature' }))
     await waitFor(() => expect(resubmit).toHaveBeenCalledWith(7))
   })
 
@@ -209,6 +213,7 @@ describe('Books routing desk: Ledger Books', () => {
     const draft = vi.spyOn(api, 'createLedgerOutlookDraft').mockResolvedValue({ id: 7 })
     mount('/ledger?tab=books&book=7')
     await userEvent.click(await screen.findByRole('button', { name: 'Create Outlook draft' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Create an Outlook draft?' })).getByRole('button', { name: 'Create Outlook draft' }))
     await waitFor(() => expect(draft).toHaveBeenCalledWith(7))
     expect(screen.queryByRole('button', { name: 'Change signer' })).not.toBeInTheDocument()
   })
@@ -991,5 +996,38 @@ describe('Books routing desk (Arabic)', () => {
     expect(details).toHaveTextContent(/الفئة\s*المراسلات العامة/)
     await waitFor(() => expect(details).toHaveTextContent('فتحه 1 من 2'))
     expect(details).toHaveTextContent('أنجزه 0 من 2')
+  })
+})
+describe('Books routing desk: list rows and the dossier head start', () => {
+  const LEDGER_ROW = { ...BOOK, current_template_id: 'Ledger Book' }
+
+  it('starts a Ledger Book paper and JSON from the list row, before the record detail answers', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [LEDGER_ROW], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockReturnValue(new Promise(() => undefined))
+    const getLedgerBook = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ revisions: [], references: [], folders: [] } as unknown as LedgerBookRead)
+    mount('/ledger?tab=books')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    expect(await screen.findByRole('document')).toHaveAttribute('data-url', expect.stringContaining('/7/'))
+    await waitFor(() => expect(getLedgerBook).toHaveBeenCalledWith(7, undefined))
+    expect(api.getBook).toHaveBeenCalled()
+  })
+
+  it('names a restricted row and says why it cannot be opened', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, metadata_only: true, grade: 'secret' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('group', { name: /Restricted record/ })
+    expect(row).toHaveTextContent('Restricted')
+    expect(within(row).queryByRole('button')).toBeNull()
+  })
+
+  it('does not re-render the rows while typing in the search box', async () => {
+    const rows = [1, 2, 3, 4, 5].map((id) => ({ ...BOOK, id, ref_number: `GS-${id}` }))
+    vi.mocked(api.listBooks).mockResolvedValue({ items: rows, total: 5, limit: 50, offset: 0 })
+    mount()
+    await screen.findByRole('button', { name: /GS-5/ })
+    const before = authReads.count
+    await userEvent.type(screen.getByRole('searchbox'), 'S')
+    // Only the rail and the box update; a row re-render would add one read per row.
+    expect(authReads.count - before).toBeLessThan(rows.length)
   })
 })
