@@ -33,14 +33,23 @@ function Where(): React.JSX.Element {
   return <output aria-label="URL">{useLocation().pathname}</output>
 }
 
-function mount(onRevisionChange = vi.fn()): void {
-  render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+const newClient = (): QueryClient => new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+function mount(onRevisionChange = vi.fn(), client = newClient(), revision?: number): { rerenderWith: (rev?: number) => void } {
+  const tree = (rev?: number): React.JSX.Element => (
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/ledger']}>
-        <Routes><Route path="*" element={<><LedgerBookActions bookId={40} reviewedPaper={{ versionId: 71, contentHash: 'abc' }} onRevisionChange={onRevisionChange} /><Where /></>} /></Routes>
+        <Routes><Route path="*" element={<><LedgerBookActions bookId={40} revision={rev} reviewedPaper={{ versionId: 71, contentHash: 'abc' }} onRevisionChange={onRevisionChange} /><Where /></>} /></Routes>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const view = render(tree(revision))
+  return { rerenderWith: (rev) => view.rerender(tree(rev)) }
+}
+
+const confirmIn = async (title: string, action: string): Promise<void> => {
+  const dialog = await screen.findByRole('dialog', { name: title })
+  await userEvent.click(within(dialog).getByRole('button', { name: action }))
 }
 
 afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.clearAllMocks(); await i18n.changeLanguage('en') })
@@ -77,6 +86,7 @@ it.each([false, true])('does not redirect a departed correction visit; StrictMod
   const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
   const { router, qc } = mountCorrectionVisit(strict)
   await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await confirmIn('Start a correction?', 'Start correction')
   await waitFor(() => expect(start).toHaveBeenCalledWith(40))
   await act(() => router.navigate('/employees'))
   await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
@@ -90,6 +100,7 @@ it.each([false, true])('opens the correction editor for an active visit; StrictM
   const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
   mountCorrectionVisit(strict)
   await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await confirmIn('Start a correction?', 'Start correction')
   await waitFor(() => expect(start).toHaveBeenCalledWith(40))
   await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
   expect(screen.getByLabelText('URL')).toHaveTextContent('/ledger/books/40/edit')
@@ -101,6 +112,7 @@ it('does not redirect an old correction after the selected book changes', async 
   const start = vi.spyOn(api, 'startLedgerCorrection').mockReturnValue(new Promise((resolve) => { resolveCorrection = resolve }))
   const { router, qc } = mountCorrectionVisit(false)
   await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await confirmIn('Start a correction?', 'Start correction')
   await waitFor(() => expect(start).toHaveBeenCalledWith(40))
   await act(() => router.navigate('/ledger?book=41'))
   await act(async () => resolveCorrection(book([rev(1, true), rev(2, false)])))
@@ -186,6 +198,8 @@ it('T-C8 Start correction on a signed Revision opens the content editor', async 
   const start = vi.spyOn(api, 'startLedgerCorrection').mockResolvedValue(book([rev(1, true), rev(2, false)]))
   mount()
   await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  expect(start).not.toHaveBeenCalled()
+  await confirmIn('Start a correction?', 'Start correction')
   await waitFor(() => expect(start).toHaveBeenCalledWith(40))
   expect(await screen.findByText('/ledger/books/40/edit')).toBeInTheDocument()
 })
@@ -279,6 +293,8 @@ it('T-F3 writer sees the return note and resubmits the same book for signature',
   expect(await screen.findByText('Correct the subject.')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Edit content' })).toHaveAttribute('href', '/ledger/books/40/edit')
   await userEvent.click(screen.getByRole('button', { name: 'Resubmit for signature' }))
+  expect(resubmit).not.toHaveBeenCalled()
+  await confirmIn('Resubmit for signature?', 'Resubmit for signature')
   await waitFor(() => expect(resubmit).toHaveBeenCalledWith(40))
 })
 
@@ -289,6 +305,8 @@ it('T-F3 writer creates an Outlook draft from signed external paper and is direc
   const draft = vi.spyOn(api, 'createLedgerOutlookDraft').mockResolvedValue({ id: 40 })
   mount()
   await userEvent.click(await screen.findByRole('button', { name: 'Create Outlook draft' }))
+  expect(draft).not.toHaveBeenCalled()
+  await confirmIn('Create an Outlook draft?', 'Create Outlook draft')
   await waitFor(() => expect(draft).toHaveBeenCalledWith(40))
   await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Draft created. Open Outlook Drafts to review and send it.'))
 })
@@ -342,4 +360,58 @@ it.each([['en', 'Print'], ['ar', 'طباعة']])('preserves Print of the selecte
   expect(open).toHaveBeenCalledWith('/api/v1/ledger/books/40/paper?revision=71', 'ledger-book-40')
   printWindow.dispatchEvent(new Event('load'))
   expect(print).toHaveBeenCalledTimes(1)
+})
+
+it('declining a confirmation leaves the book untouched', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)], { can_resubmit: true, can_create_outlook_draft: true }))
+  const start = vi.spyOn(api, 'startLedgerCorrection')
+  const resubmit = vi.spyOn(api, 'resubmitLedgerBook')
+  const draft = vi.spyOn(api, 'createLedgerOutlookDraft')
+  mount()
+  for (const name of ['Start correction', 'Resubmit for signature', 'Create Outlook draft']) {
+    await userEvent.click(await screen.findByRole('button', { name }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  }
+  expect([start, resubmit, draft].map((spy) => spy.mock.calls.length)).toEqual([0, 0, 0])
+})
+
+it('Start correction also refreshes the Books lists', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  vi.spyOn(api, 'startLedgerCorrection').mockResolvedValue(book([rev(1, true), rev(2, false)]))
+  const client = newClient()
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  mount(vi.fn(), client)
+  await userEvent.click(await screen.findByRole('button', { name: 'Start correction' }))
+  await confirmIn('Start a correction?', 'Start correction')
+  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] }))
+})
+
+it('a mutation result is written once: the latest key is not refetched straight after', async () => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(book([rev(1, false)], { can_sign: true }))
+  vi.spyOn(api, 'signLedgerBook').mockResolvedValue(book([rev(1, true)]))
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+  await confirmIn('Sign this Ledger Book?', 'Sign')
+  await waitFor(() => expect(screen.queryByRole('button', { name: 'Sign' })).not.toBeInTheDocument())
+  expect(get).toHaveBeenCalledTimes(1)
+})
+
+it('asking for the newest Revision by number reuses the latest entry; other Revisions keep the toolbar mounted while they load', async () => {
+  const two = book([rev(1, true), rev(2, false)])
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(two)
+  const client = newClient()
+  const view = mount(vi.fn(), client)
+  await screen.findByRole('button', { name: 'Print' })
+  expect(get).toHaveBeenCalledTimes(1)
+  view.rerenderWith(72) // the newest, by number
+  expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument()
+  expect(get).toHaveBeenCalledTimes(1)
+
+  let finish: (value: LedgerBookRead) => void = () => undefined
+  get.mockReturnValueOnce(new Promise<LedgerBookRead>((resolve) => { finish = resolve }))
+  view.rerenderWith(71) // an older one: fetched, but the toolbar stays while it loads
+  expect(screen.getByRole('button', { name: 'Print' })).toBeInTheDocument()
+  expect(get).toHaveBeenLastCalledWith(40, 71)
+  finish(two)
 })

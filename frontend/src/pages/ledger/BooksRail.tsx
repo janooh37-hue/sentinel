@@ -29,7 +29,7 @@ const SCOPE_ICONS = {
   archived: FolderArchive,
 }
 const KEY = 'ledger.booksDesk.folders'
-const ACTION_CLASS = 'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-rail-text hover:bg-rail-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
+const ACTION_CLASS = 'inline-flex h-7 w-7 shrink-0 pointer-coarse:h-11 pointer-coarse:w-11 items-center justify-center rounded-md text-rail-text hover:bg-rail-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50'
 
 type FolderEdit = { id: number | null; name: string; box: Scope; team: boolean }
 
@@ -96,7 +96,7 @@ function FolderEditor({ edit, canShare, pending, onChange, onSave, onCancel }: {
             value={edit.box}
             disabled={pending}
             onChange={(event) => onChange({ ...edit, box: event.target.value as Scope })}
-            className="h-7 min-w-0 flex-1 rounded-md border border-rail-line bg-rail px-1.5 text-rail-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="h-7 pointer-coarse:h-11 min-w-0 flex-1 rounded-md border border-rail-line bg-rail px-1.5 text-rail-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {FOLDER_BOXES.map((box) => <option key={box} value={box}>{t(`ledger.booksDesk.${box}`)}</option>)}
           </select>

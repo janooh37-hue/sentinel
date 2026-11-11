@@ -3063,6 +3063,11 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "restricted": {
+      "hint": "Restricted",
+      "explain": "You can see that this record exists, but not its contents.",
+      "rowLabel": "Restricted record {{ref}}. You can see that it exists, but not its contents."
+    },
     "thread": {
       "reply": "Reply",
       "createFrom": "Create from",
@@ -3119,7 +3124,9 @@
       "menu": "Change grade…",
       "changeTitle": "Change grade",
       "save": "Save grade",
-      "changed": "Grade changed to {{level}}"
+      "changed": "Grade changed to {{level}}",
+      "lowerConfirmTitle": "Lower this record's grade?",
+      "lowerConfirmDescription": "The grade will change from {{from}} to {{to}}. The record becomes less restricted, so more people may be able to open it."
     },
     "distribution": {
       "errors": {
@@ -3383,7 +3390,7 @@
       "approverNotEligible": "Choose an active account that is allowed to approve.",
       "sequentialSignerHint": "The Branch Manager signs first, then the Project Manager.",
       "branchNotes": "Branch Manager notes (optional)",
-      "noteCounter": "Characters: {{count}} / {{max}}",
+      "noteCounter": "Characters: {{used}} / {{max}}",
       "branchStageWordRevision": "This Administrative Leave was edited in Word. Regenerate it from the form to route it through the branch manager and project manager.",
       "stageProgress": "Approval stages",
       "notYourStep": "This approval stage is not yours to sign. The record has been refreshed.",
@@ -3878,7 +3885,13 @@
       "resubmit": "Resubmit for signature",
       "resubmitted": "Book resubmitted for signature.",
       "createOutlookDraft": "Create Outlook draft",
-      "outlookDraftCreated": "Draft created. Open Outlook Drafts to review and send it."
+      "outlookDraftCreated": "Draft created. Open Outlook Drafts to review and send it.",
+      "correctionConfirmTitle": "Start a correction?",
+      "correctionConfirmDescription": "A new unsigned revision will be created from the signed one for you to edit. The signed revision stays on record.",
+      "resubmitConfirmTitle": "Resubmit for signature?",
+      "resubmitConfirmDescription": "The book will be sent back to the signing manager to sign.",
+      "outlookConfirmTitle": "Create an Outlook draft?",
+      "outlookConfirmDescription": "A draft email with the signed paper attached will be created in your Outlook Drafts. Nothing is sent until you send it from Outlook."
     },
     "composer": {
       "newButton": "New Ledger Book",

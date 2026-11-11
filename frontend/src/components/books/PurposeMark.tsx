@@ -11,7 +11,7 @@
 import { ClipboardCheck, Eye, Megaphone, MessageSquareReply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { SendPurpose } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { MARK_ICON_CLASS, MARK_STROKE_WIDTH } from './markSize'
@@ -42,13 +42,11 @@ export function PurposeMark({ purpose, showLabel = false, className }: {
     )
   }
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span role="img" data-purpose={purpose} aria-label={label} className={cn('inline-flex shrink-0 items-center', className)}>{glyph}</span>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" data-purpose={purpose} aria-label={label} className={cn('inline-flex shrink-0 items-center', className)}>{glyph}</span>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }

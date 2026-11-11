@@ -6,7 +6,7 @@ import { MemoryRouter, Link, Route, Routes, useLocation } from 'react-router-dom
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { api, type LedgerDraftRead } from '@/lib/api'
-import { LEDGER_DRAFTS_KEY } from './ledgerBookKeys'
+import { LEDGER_DRAFTS_KEY, ledgerDraftKey } from './ledgerBookKeys'
 import { NewLedgerBookButton } from './NewLedgerBookButton'
 
 const DRAFT: LedgerDraftRead = {
@@ -24,8 +24,9 @@ afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 it('T-C1 creates a draft and opens it in the composer', async () => {
   const create = vi.spyOn(api, 'createLedgerDraft').mockResolvedValue(DRAFT)
+  const client = new QueryClient()
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={['/ledger?tab=books']}>
         <Routes><Route path="*" element={<><NewLedgerBookButton /><Where /></>} /></Routes>
       </MemoryRouter>
@@ -35,6 +36,22 @@ it('T-C1 creates a draft and opens it in the composer', async () => {
   expect(create).toHaveBeenCalledTimes(1)
   expect(create.mock.calls[0][0]).toMatchObject({ grade: 'unclassified' })
   expect(await screen.findByText('/ledger/compose/12')).toBeInTheDocument()
+  // The create response seeds the composer's draft query, so it does not refetch it.
+  expect(client.getQueryData(ledgerDraftKey(12))).toEqual(DRAFT)
+})
+
+it('refreshes only the drafts list, leaving the seeded draft fresh', async () => {
+  vi.spyOn(api, 'createLedgerDraft').mockResolvedValue(DRAFT)
+  const client = new QueryClient()
+  const invalidate = vi.spyOn(client, 'invalidateQueries')
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter><NewLedgerBookButton /></MemoryRouter>
+    </QueryClientProvider>,
+  )
+  await userEvent.click(screen.getByRole('button', { name: 'New Ledger Book' }))
+  await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: LEDGER_DRAFTS_KEY, exact: true }))
+  expect(client.getQueryState(ledgerDraftKey(12))?.isInvalidated).toBe(false)
 })
 
 it.each([false, true])('does not redirect after leaving during creation (StrictMode: %s)', async (strict) => {

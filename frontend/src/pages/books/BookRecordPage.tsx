@@ -45,6 +45,7 @@ import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { canSendBook, canSubmitRecord } from './canSendBook'
 import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { approverStep, changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
@@ -391,7 +392,7 @@ function BookRecordPageBody(): React.JSX.Element {
   })
   const canDerive = !isInmateReporter && book?.access_scope === 'full' && has('books.create') && has('books.view')
   const canEdit = has('books.edit') && !!book?.can_write
-  const canSubmitBook = has('books.submit') && !!book?.can_write
+  const canSubmitBook = !!book && canSubmitRecord(book, has('books.submit'))
   // Filing a physically-signed scan back requires books.edit + documents.scan.
   const canScan = has('documents.scan') && !!book?.can_write
   // Revise regenerates via POST /documents/generate.
@@ -517,7 +518,7 @@ function BookRecordPageBody(): React.JSX.Element {
         canOverrideState &&
         canMutateCurrent) ||
       (value === 'decision' && action === 'decide') ||
-      (value === 'send' && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))) ||
+      (value === 'send' && canSendBook(book, user?.id)) ||
       (value === 'level' && book.can_change_grade) ||
       ((value === 'reply' || value === 'createFrom') && canDerive) ||
       (value === 'link' && canEdit && book.access_scope === 'full')
@@ -1245,7 +1246,7 @@ function BookRecordPageBody(): React.JSX.Element {
                     rows={4}
                     className="block w-full rounded-lg border border-hairline bg-background px-3 py-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <span className="block text-end text-xs tabular-nums">{t('books.approval.noteCounter', { count: signNote.length, max: 1000 })}</span>
+                  <span className="block text-end text-xs tabular-nums">{t('books.approval.noteCounter', { used: signNote.length, max: 1000 })}</span>
                 </label>
               )}
             </div>
@@ -1360,7 +1361,7 @@ function BookRecordPageBody(): React.JSX.Element {
       {book && (
         <SendRecordDialog
           book={book}
-          open={overlay.value === 'send' && book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (user?.id !== undefined && book.created_by_user_id === user.id))}
+          open={overlay.value === 'send' && canSendBook(book, user?.id)}
           onOpenChange={(open) => { if (!open) overlay.close() }}
         />
       )}

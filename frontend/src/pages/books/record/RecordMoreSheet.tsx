@@ -32,6 +32,7 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
+import { canSendBook } from '../canSendBook'
 import { deleteBlockReason, deleteReasonKey } from '../recordDelete'
 import type { NextStep } from '../recordNextStep'
 import { useRecordPrint } from '../useRecordPrintMode'
@@ -186,7 +187,7 @@ export function RecordMoreSheet({
       onSelect: () => openOverlay('papers'),
     })
   }
-  if (book.can_send && ((book.grade !== 'top_secret' && book.grade !== 'addressee_only') || (view.userId !== undefined && book.created_by_user_id === view.userId))) {
+  if (canSendBook(book, view.userId)) {
     documentRows.push({
       id: 'send',
       icon: iconOf(Send),

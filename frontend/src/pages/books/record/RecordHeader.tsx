@@ -572,6 +572,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
               compact
               position={queue.position}
               total={queue.total}
+              more={queue.more}
               onPrev={onPrev}
               onNext={onNext}
             />
@@ -632,7 +633,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} aria-hidden="true" />
         </IconAction>
         {!isInmateReporter && (
-          <QueueNav position={queue.position} total={queue.total} onPrev={onPrev} onNext={onNext} />
+          <QueueNav position={queue.position} total={queue.total} more={queue.more} onPrev={onPrev} onNext={onNext} />
         )}
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

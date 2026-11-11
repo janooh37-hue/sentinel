@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { BooksMobileList, type BooksMobileListProps } from './BooksMobileList'
 
@@ -273,6 +274,24 @@ describe('BooksMobileList select mode', () => {
   it('is unavailable to inmate reporters', () => {
     renderList({ isInmateReporter: true })
     expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
+  })
+})
+
+describe('BooksMobileList titles and restricted cards', () => {
+  it('titles a generated-form card with the translated form name, not the English stored subject', async () => {
+    vi.spyOn(api, 'listTemplates').mockResolvedValue({
+      items: [{ id: 'Leave Form', name_en: 'Leave Application Form', name_ar: 'طلب إجازة' }],
+    } as unknown as Awaited<ReturnType<typeof api.listTemplates>>)
+    renderList({ rows: [book(1, { service_id: 'Leave Form', subject: 'Leave Application Form — AHMED AL-ALI' })] })
+    expect(await screen.findByText('طلب إجازة')).toBeInTheDocument()
+    expect(screen.getByText('AHMED AL-ALI')).toBeInTheDocument()
+    expect(screen.queryByText(/Leave Application Form/)).not.toBeInTheDocument()
+  })
+
+  it('explains a restricted card with a visible hint and an accessible name', () => {
+    renderList({ rows: [book(1, { metadata_only: true })] })
+    expect(screen.getByText('books.restricted.hint')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /books\.restricted\.rowLabel/ })).toBeInTheDocument()
   })
 })
 

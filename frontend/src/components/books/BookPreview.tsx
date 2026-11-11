@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { ExternalLink, Loader2, PencilLine, Send, Trash2, X } from 'lucide-react'
 
 import { api } from '@/lib/api'
+import { canSubmitRecord } from '@/pages/books/canSendBook'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { inmateReporterActionFor } from './book-detail-drawer-utils'
@@ -51,7 +52,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   })
   const canEdit = has('books.edit') && !!book?.can_write
   // Submit is independent of edit, but still requires this record's write access.
-  const canSubmitBook = has('books.submit') && !!book?.can_write
+  const canSubmitBook = !!book && canSubmitRecord(book, has('books.submit'))
 
   // Discard goes through the shared deferred-delete service (6 s Undo toast).
   const discard = (): void => {

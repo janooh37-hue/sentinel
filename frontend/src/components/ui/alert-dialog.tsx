@@ -127,7 +127,7 @@ export function AlertDialogAction({
 export function AlertDialogCancel({
   className,
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
+}: React.ComponentPropsWithRef<'button'>): React.JSX.Element {
   return (
     <button
       type="button"

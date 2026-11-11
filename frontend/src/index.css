@@ -1821,14 +1821,14 @@ body {
   .modal-centered[data-state] { animation: none !important; }
 }
 
-/* High importance: one clear on/off blink per second (below three flashes/s).
-   Reduced motion keeps the mark steady at full red. */
+/* High importance: a gentle fade, opacity 1 to 0.45 over a 2s cycle (DESIGN.md section 7).
+   The mark never disappears. Reduced motion keeps it steady at full red. */
 @keyframes gssg-importance-pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+  50% { opacity: 0.45; }
 }
 .gssg-importance-pulse {
-  animation: gssg-importance-pulse 1s steps(1, end) infinite;
+  animation: gssg-importance-pulse 2s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

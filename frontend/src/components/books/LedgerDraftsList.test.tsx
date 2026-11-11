@@ -32,6 +32,9 @@ it('T-C6 lists my drafts with label, first subject and updated date; delete asks
   expect(first).toHaveTextContent('Leave plan')
   expect(first).not.toHaveTextContent('Annex A')
   expect(first.closest('li')).toHaveTextContent(/Updated .28\/10\/2026/)
+  // A truncated subject can be read in full, and the label is not letter-spaced when it renders Arabic.
+  expect(screen.getByText('Leave plan')).toHaveAttribute('title', 'Leave plan')
+  expect(screen.getByText('DRAFT 000012').parentElement).toHaveClass('rtl:tracking-normal')
 
   await userEvent.click(screen.getByRole('button', { name: 'Delete DRAFT 000012' }))
   const dialog = await screen.findByRole('dialog', { name: 'Delete this draft?' })

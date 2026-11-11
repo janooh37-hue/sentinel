@@ -120,7 +120,10 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
     const row = container.querySelector('[data-book-id="1"]')!
     expect(screen.getByText('GS-0001')).toBeInTheDocument()
     expect(screen.getByText('7/2')).toBeInTheDocument()
-    expect(screen.getByText('2026-07-17')).toBeInTheDocument()
+    expect(screen.getByText('17/07/2026')).toBeInTheDocument()
+    // Why the row cannot be opened: visible hint plus an accessible name.
+    expect(screen.getByText('books.restricted.hint')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'books.restricted.rowLabel' })).toBe(row)
     expect(screen.queryByText(/Hidden/)).not.toBeInTheDocument()
     expect(row.querySelector('a,button,input')).toBeNull()
     fireEvent.click(row)

@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 // Keep pdf.js and its worker in the preview chunk, as in the document viewer.
-const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
+const LedgerPaperCanvas = lazy(() => import('./LedgerPaperCanvas'))
 
 export function LedgerPaperPdf({ url, title, className, onReady }: {
   url: string | null
@@ -14,7 +14,16 @@ export function LedgerPaperPdf({ url, title, className, onReady }: {
   className?: string
   onReady?: () => void
 }): React.JSX.Element {
-  return <PaperPreview key={url} url={url} title={title} className={className} onReady={onReady} />
+  // Zoom and scroll belong to the paper; autosave and content-hash queries replace its pages.
+  return <PaperPreview key={paperIdentity(url)} url={url} title={title} className={className} onReady={onReady} />
+}
+
+/** Preserve zoom for refreshes of the same path and Revision. */
+function paperIdentity(url: string | null): string | null {
+  if (url === null) return null
+  const [path, query = ''] = url.split('?', 2)
+  return `${path}?revision=${new URLSearchParams(query).get('revision') ?? ''}`
+
 }
 
 function PaperPreview({ url, title, className, onReady }: {
@@ -50,7 +59,7 @@ function PaperPreview({ url, title, className, onReady }: {
         {url ? (
           <div data-ledger-pdf-width className="mx-auto" style={{ width: `${zoom}%` }}>
             <Suspense fallback={loading}>
-              <DocPdfCanvas pdfUrl={url} bare sizing="fit" onReady={onReady} onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
+              <LedgerPaperCanvas url={url} onReady={onReady} onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
             </Suspense>
           </div>
         ) : loading}

@@ -58,8 +58,8 @@ export function LedgerDraftsList({ className }: { className?: string }): React.J
               >
                 <FileText aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-[0.72em] font-semibold tracking-wide text-muted-foreground"><bdi>{label}</bdi></span>
-                  <span className={cn('truncate text-[0.88em]', !subject && 'italic text-muted-foreground')}>
+                  <span className="text-[0.72em] font-semibold tracking-wide text-muted-foreground rtl:tracking-normal"><bdi>{label}</bdi></span>
+                  <span title={subject} className={cn('truncate text-[0.88em]', !subject && 'italic text-muted-foreground')}>
                     {subject ?? t('ledgerBook.composer.drafts.noSubject')}
                   </span>
                   <span className="text-[0.72em] text-muted-foreground">

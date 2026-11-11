@@ -106,3 +106,9 @@
 - Round6 independent review found PDF cache-buster alone did not bind rendered content (A metadata/B preview/A restore); server now validates optional v against same read used for rendering before conversion. Original mismatch reproduced200; fix matching/mismatch/malformed and interleaving tests pass. Reviewer recheck confirms gap closed. Signing17focused + PDF7focused pass; ordinary reference5pass. i18n/RTL clean.
 - Frontend: Actions29pass, preview/desk targeted10pass, full desk/content/i18n/API-error integration135pass after fixing async test assertions to wait for React Query notification. Sign requires matching first-painted paper, bookchanges reset dialogs, confirmation tokens remain pinned. API schema/types regenerated after final v parameter. No browser/live-PDF verification or deployment; full baseline backend still running.
 - Final round6 TypeScript/scoped ESLint and whitespace checks pass; backend changed-file Ruff/format pass. Ready for next bot review.
+
+## Combined audit integration and sandbox preview
+
+- User authorized Fable audit commits c56bd27f/a96b0fc6/532090b3 and running the combined feature on laptop dev. Merged with round6 signing safeguards; retained confirmations, cache invalidation and stable paper zoom while binding readiness to the requested document's first paint.
+- Combined Actions33 and preview/desk/locales167 tests pass. TypeScript passes; scoped ESLint0errors (8existing Outlook warnings). Required i18n/RTL review clean. Fixed the inherited noteCounter interpolation regression in both locales and its caller. Production build running.
+- Sandbox old0115 stamp assessed read-only: six Ledger upgrades match renumbered0119–0124; main0110–0118 changes genuinely missing. Rehearsing those changes on a SQLite backup before any source replacement; existing drafts and original rollback copy must be preserved. Production and normal dev data untouched.

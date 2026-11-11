@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast'
 import { api, ApiError, apiErrorMessage, type BookRead, type Grade } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDialogReturnFocus } from './useDialogReturnFocus'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { ClassificationField } from '@/components/application/fields/ClassificationField'
 import { GradeSelect } from './GradeSelect'
@@ -27,17 +28,18 @@ const ERROR_KEYS: Record<string, string | undefined> = {
 }
 
 export function DeriveRecordDialog({ book, kind, open, onOpenChange }: Props): React.JSX.Element | null {
+  const returnFocus = useDialogReturnFocus(open)
   const { user } = useAuth()
   const { has } = useCapabilities()
   if (!user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view')) return null
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      {open && <Body key={`${book.id}-${kind}`} book={book} kind={kind} close={() => onOpenChange(false)} />}
+      {open && <Body key={`${book.id}-${kind}`} book={book} kind={kind} close={() => onOpenChange(false)} returnFocus={returnFocus} />}
     </DialogRoot>
   )
 }
 
-function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () => void }): React.JSX.Element {
+function Body({ book, kind, close, returnFocus }: Pick<Props, 'book' | 'kind'> & { close: () => void; returnFocus: (event: Event) => void }): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const navigate = useNavigate()
@@ -68,7 +70,7 @@ function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () 
     },
   })
   return (
-    <DialogContent data-print-hide className="bottom-sheet !inset-x-0 !bottom-0 !top-auto !max-h-[92dvh] !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:!max-h-[80dvh] md:!-translate-x-1/2 md:!-translate-y-1/2 md:rounded-b-2xl rtl:md:!translate-x-1/2">
+    <DialogContent data-print-hide onCloseAutoFocus={returnFocus} className="bottom-sheet !inset-x-0 !bottom-0 !top-auto !max-h-[92dvh] !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:!max-h-[80dvh] md:!-translate-x-1/2 md:!-translate-y-1/2 md:rounded-b-2xl rtl:md:!translate-x-1/2">
       <DialogHeader className="pe-12">
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription><bdi dir="ltr" className="font-mono">{book.ref_number}</bdi></DialogDescription>

@@ -14,12 +14,18 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
-import { api, apiErrorMessage, ApiError, type LedgerSignRequest } from '@/lib/api'
+import { api, apiErrorMessage, ApiError, type LedgerBookRead, type LedgerSignRequest } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
-import { ledgerBookKey, ledgerPaperUrl } from './ledgerBookKeys'
+import { ledgerBookKey, ledgerBookPrefix, ledgerPaperUrl } from './ledgerBookKeys'
 import { SigningManagerPicker } from './SigningManagerPicker'
+
+const CONFIRM_LABEL = {
+  correction: 'ledgerBook.composer.book.startCorrection',
+  resubmit: 'ledgerBook.actions.resubmit',
+  outlook: 'ledgerBook.actions.createOutlookDraft',
+} as const
 
 export interface LedgerReviewedPaper { versionId: number; contentHash: string }
 
@@ -50,17 +56,39 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const pickerId = useId()
   const [signOpen, setSignOpen] = useState(false)
   const [signSnapshot, setSignSnapshot] = useState<LedgerSignRequest | null>(null)
+  const [confirming, setConfirming] = useState<'correction' | 'resubmit' | 'outlook' | null>(null)
   const [returnOpen, setReturnOpen] = useState(false)
   const [returnNote, setReturnNote] = useState('')
   const [returnError, setReturnError] = useState(false)
   const [signerOpen, setSignerOpen] = useState(false)
   const [managerId, setManagerId] = useState<number | null>(null)
   const [signerError, setSignerError] = useState(false)
-  const query = useQuery({ queryKey: ledgerBookKey(bookId, revision), queryFn: () => api.getLedgerBook(bookId, revision) })
+  // The newest Revision is cached under the 'latest' key: asking for it by number would refetch the
+  // same book (and its paper) under a second key.
+  const cachedLatest = qc.getQueryData<LedgerBookRead>(ledgerBookKey(bookId))?.revisions.at(-1)?.version_id
+  const requested = revision !== undefined && revision === cachedLatest ? undefined : revision
+  const query = useQuery({
+    queryKey: ledgerBookKey(bookId, requested),
+    queryFn: () => api.getLedgerBook(bookId, requested),
+    // Keep the toolbar (and the picker) mounted while another Revision loads; never carry one book's data to another.
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === bookId ? previous : undefined,
+  })
+  // A mutation returns the book: write it as the latest and refresh every other cached Revision, but
+  // not the key just written. Always refresh the Books lists.
+  const commit = (updated: LedgerBookRead): void => {
+    const latestKey = ledgerBookKey(bookId)
+    qc.setQueryData(latestKey, updated)
+    void qc.invalidateQueries({
+      queryKey: ledgerBookPrefix(bookId),
+      predicate: (q) => q.queryKey[3] !== latestKey[3],
+    })
+    void qc.invalidateQueries({ queryKey: ['books'] })
+  }
   const correction = useMutation({
     mutationFn: () => api.startLedgerCorrection(bookId),
     onSuccess: (book) => {
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', book.id] })
+      void qc.invalidateQueries({ queryKey: ledgerBookPrefix(book.id) })
+      void qc.invalidateQueries({ queryKey: ['books'] })
       if (activeVisit.current !== book.id) return
       const latest = book.revisions.at(-1)
       if (latest) toast.success(t('ledgerBook.composer.book.correctionStarted', { n: latest.version_no }))
@@ -71,15 +99,13 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const sign = useMutation({
     mutationFn: (snapshot: LedgerSignRequest) => api.signLedgerBook(bookId, snapshot),
     onSuccess: (updated) => {
-      qc.setQueryData(ledgerBookKey(bookId), updated)
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      commit(updated)
       toast.success(t('ledgerBook.actions.signed'))
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'SIGNING_CONTENT_CONFLICT') {
         setSignOpen(false)
-        void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
+        void qc.invalidateQueries({ queryKey: ledgerBookPrefix(bookId) })
         void qc.invalidateQueries({ queryKey: ['books'] })
       }
       toast.error(apiErrorMessage(err))
@@ -88,9 +114,7 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const sendBack = useMutation({
     mutationFn: () => api.returnLedgerBook(bookId, returnNote.trim()),
     onSuccess: (updated) => {
-      qc.setQueryData(ledgerBookKey(bookId), updated)
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      commit(updated)
       setReturnOpen(false)
       toast.success(t('ledgerBook.actions.returned'))
     },
@@ -99,9 +123,7 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const changeSigner = useMutation({
     mutationFn: (id: number) => api.changeLedgerSigner(bookId, id),
     onSuccess: (updated) => {
-      qc.setQueryData(ledgerBookKey(bookId), updated)
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      commit(updated)
       setSignerOpen(false)
       toast.success(t('ledgerBook.actions.signerChanged'))
     },
@@ -110,9 +132,7 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const resubmit = useMutation({
     mutationFn: () => api.resubmitLedgerBook(bookId),
     onSuccess: (updated) => {
-      qc.setQueryData(ledgerBookKey(bookId), updated)
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      commit(updated)
       toast.success(t('ledgerBook.actions.resubmitted'))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
@@ -120,7 +140,7 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
   const outlookDraft = useMutation({
     mutationFn: () => api.createLedgerOutlookDraft(bookId),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['ledger', 'books', bookId] })
+      void qc.invalidateQueries({ queryKey: ledgerBookPrefix(bookId) })
       void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('ledgerBook.actions.outlookDraftCreated'))
     },
@@ -243,15 +263,27 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
         </p>
       )}
       {book.can_resubmit && (
-        <Button type="button" variant="outline" size="sm" disabled={resubmit.isPending} onClick={() => resubmit.mutate()}>
+        <Button type="button" variant="outline" size="sm" disabled={resubmit.isPending} onClick={() => setConfirming('resubmit')}>
           {t('ledgerBook.actions.resubmit')}
         </Button>
       )}
       {book.can_create_outlook_draft && (
-        <Button type="button" variant="outline" size="sm" disabled={outlookDraft.isPending} onClick={() => outlookDraft.mutate()}>
+        <Button type="button" variant="outline" size="sm" disabled={outlookDraft.isPending} onClick={() => setConfirming('outlook')}>
           {t('ledgerBook.actions.createOutlookDraft')}
         </Button>
       )}
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(open) => { if (!open) setConfirming(null) }}
+        title={t(`ledgerBook.actions.${confirming ?? 'correction'}ConfirmTitle`)}
+        description={t(`ledgerBook.actions.${confirming ?? 'correction'}ConfirmDescription`)}
+        confirmLabel={t(CONFIRM_LABEL[confirming ?? 'correction'])}
+        onConfirm={() => {
+          if (confirming === 'correction') correction.mutate()
+          else if (confirming === 'resubmit') resubmit.mutate()
+          else if (confirming === 'outlook') outlookDraft.mutate()
+        }}
+      />
       {onRevisionChange && (
         <span className="inline-flex min-w-0 max-w-full flex-wrap items-center gap-1.5">
           <label htmlFor={pickerId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.book.revisions')}</label>
@@ -270,7 +302,7 @@ function BookActions({ bookId, reviewedPaper, revision, onRevisionChange, classN
         </span>
       )}
       {isWriter && latest && (latest.locked ? (
-        <Button type="button" variant="outline" size="sm" disabled={correction.isPending} onClick={() => correction.mutate()}>
+        <Button type="button" variant="outline" size="sm" disabled={correction.isPending} onClick={() => setConfirming('correction')}>
           <FilePenLine aria-hidden="true" className="size-4" />
           {t('ledgerBook.composer.book.startCorrection')}
         </Button>
