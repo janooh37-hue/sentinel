@@ -207,6 +207,7 @@ def save_ledger_content(
         user,
         book_id,
         addressed_to=payload.addressed_to,
+        printed_cc=payload.printed_cc,
         subjects=payload.subjects,
         body_html=payload.body_html,
         expected_version_id=payload.expected_version_id,

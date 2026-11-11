@@ -13905,6 +13905,8 @@ export interface components {
             selected_version_id: number;
             /** Addressed To */
             addressed_to: string | null;
+            /** Printed Cc */
+            printed_cc: string[] | null;
             /** Subjects */
             subjects: string[];
             /** Body Html */
@@ -13940,6 +13942,8 @@ export interface components {
         };
         /** LedgerContentUpdate */
         LedgerContentUpdate: {
+            /** Printed Cc */
+            printed_cc?: string[];
             /** Expected Version Id */
             expected_version_id: number;
             /** Expected Content Sha256 */
@@ -13963,6 +13967,8 @@ export interface components {
             grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
             /** Importance */
             importance?: ("medium" | "high") | null;
+            /** Printed Cc */
+            printed_cc?: string[];
             /** Addressed To */
             addressed_to?: string;
             /** Subjects */
@@ -14015,6 +14021,8 @@ export interface components {
             importance: ("medium" | "high") | null;
             /** Addressed To */
             addressed_to: string;
+            /** Printed Cc */
+            printed_cc: string[];
             /** Subjects */
             subjects: string[];
             /** Body Html */
@@ -14050,6 +14058,8 @@ export interface components {
          * @description Partial update: only the fields sent change.
          */
         LedgerDraftUpdate: {
+            /** Printed Cc */
+            printed_cc?: string[];
             /** Tab */
             tab?: number | null;
             /** Grade */

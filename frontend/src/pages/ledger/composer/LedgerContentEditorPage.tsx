@@ -26,17 +26,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { SavedRecipientPicker } from '@/components/application/fields/SavedRecipientPicker'
 import { api, ApiError, apiErrorMessage, type LedgerBookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
 import { toast } from '@/lib/toast'
-import { MAX_SUBJECT_LINES } from './composerForm'
+import { MAX_SUBJECT_LINES, printedCcSchema } from './composerForm'
 import { LedgerBodyEditor } from './LedgerBodyEditor'
 import { SubjectLines } from './SubjectLines'
 
 const contentSchema = z.object({
   addressed_to: z.string().max(500, 'ledgerBook.composer.errors.addressedToTooLong').refine((value) => value.trim() !== '', 'ledgerBook.composer.errors.addressedToRequired'),
+  printed_cc: printedCcSchema,
   subjects: z.array(z.string()).max(MAX_SUBJECT_LINES)
     .refine((lines) => lines.some((line) => line.trim() !== ''), 'errors.ledger.draftSubjectRequired'),
   body_html: z.string().refine(
@@ -120,7 +121,7 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   const staleRevision = contentConflict || !editable || book.revisions.at(-1)?.version_id !== revisionId
   const form = useForm<ContentValues>({
     resolver: zodResolver(contentSchema),
-    defaultValues: { addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
+    defaultValues: { addressed_to: book.addressed_to ?? '', printed_cc: book.printed_cc ?? book.addressees.filter((a) => a.role === 'cc').map((a) => a.name_ar || a.name), subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html },
   })
   const { errors, isDirty } = form.formState
   const { reset } = form
@@ -142,8 +143,9 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
       // A completed request does not include text entered while it was pending.
       const current = form.getValues()
       if (JSON.stringify(current) !== JSON.stringify(submitted)) {
-        reset({ addressed_to: accepted.addressed_to ?? '', subjects: accepted.subjects, body_html: accepted.body_html }, { keepValues: true })
+        reset({ addressed_to: accepted.addressed_to ?? '', printed_cc: accepted.printed_cc ?? submitted.printed_cc, subjects: accepted.subjects, body_html: accepted.body_html }, { keepValues: true })
         form.setValue('addressed_to', current.addressed_to, { shouldDirty: true })
+        form.setValue('printed_cc', current.printed_cc, { shouldDirty: true })
         form.setValue('subjects', current.subjects, { shouldDirty: true })
         form.setValue('body_html', current.body_html, { shouldDirty: true })
         return
@@ -160,9 +162,9 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   // A pending or failed save can contain a local revert that isDirty cannot detect.
   useEffect(() => {
     if (form.formState.isDirty || staleRevision || save.isPending || save.isError) return
-    reset({ addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
+    reset({ addressed_to: book.addressed_to ?? '', printed_cc: book.printed_cc ?? book.addressees.filter((a) => a.role === 'cc').map((a) => a.name_ar || a.name), subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
     contentHash.current = book.content_sha256
-  }, [book.addressed_to, book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision, save.isPending, save.isError])
+  }, [book.printed_cc, book.addressees, book.addressed_to, book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision, save.isPending, save.isError])
   const hasUnsavedChanges = isDirty || save.isPending || save.isError
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (
     !leaveAllowed.current && hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
@@ -188,12 +190,8 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   return (
     <form className="ledger-composer flex flex-col gap-4" noValidate onSubmit={form.handleSubmit((values) => { if (!staleRevision) save.mutate(values) })}>
       {staleRevision && <p role="alert" className="rounded-lg bg-muted px-3 py-2 text-[0.84em]">{t(contentConflict ? 'errors.ledger.contentConflict' : 'ledgerBook.composer.content.revisionChanged')}</p>}
-      <div className="flex flex-col gap-1">
-        <label htmlFor={addressedToId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.addressedTo')}</label>
-        <Input {...form.register('addressed_to')} id={addressedToId} dir="auto" maxLength={500} aria-required="true" aria-invalid={Boolean(errors.addressed_to)} aria-describedby={`${addressedToId}-hint${errors.addressed_to ? ` ${addressedToId}-error` : ''}`} />
-        <p id={`${addressedToId}-hint`} className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>
-        {errors.addressed_to?.message && <p id={`${addressedToId}-error`} role="alert" className="text-[0.78em] text-destructive">{t(errors.addressed_to.message)}</p>}
-      </div>
+      <Controller control={form.control} name="addressed_to" render={({ field }) => <SavedRecipientPicker maxNameLength={500} inputRef={field.ref} onBlur={field.onBlur} id={addressedToId} mode="name" label={t('ledgerBook.composer.fields.addressedTo')} required value={field.value} onChange={field.onChange} disabled={staleRevision} error={errors.addressed_to?.message && t(errors.addressed_to.message)} hint={t('ledgerBook.composer.preset.openingHint')} />} />
+      <Controller control={form.control} name="printed_cc" render={({ field }) => <SavedRecipientPicker maxNameLength={500} inputRef={field.ref} onBlur={field.onBlur} mode="multiple" label={t('ledgerBook.composer.fields.printedCc')} value={field.value} maxNames={20} onChange={field.onChange} disabled={staleRevision} error={errors.printed_cc?.message && t(errors.printed_cc.message)} hint={t('ledgerBook.composer.fields.printedCcHint')} />} />
       <Controller
         control={form.control}
         name="subjects"

@@ -2,10 +2,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, Outlet, RouterProvider, useLocation } from 'react-router-dom'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 import { api, ApiError, type LedgerBookRead, type LedgerRevisionRead } from '@/lib/api'
 
+vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 vi.mock('./LedgerBodyEditor', () => ({
   LedgerBodyEditor: ({ value, onChange, label }: { value: string; onChange: (v: string) => void; label: string }) => (
@@ -27,7 +28,7 @@ const BOOK: LedgerBookRead = {
   id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
   paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
   revisions: [rev(1, true), rev(2, false)], selected_version_id: 72,
-  addressed_to: 'HR director', subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
+  printed_cc: [], addressed_to: 'HR director', subjects: ['Leave plan'], body_html: '<p>Hello</p>', content_sha256: 'abc',
   external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
   paper_preset: 'normal', references: [], folders: [],
 }
@@ -63,13 +64,15 @@ async function openAndRevise(): Promise<void> {
   await userEvent.type(screen.getByLabelText('Subject line 1'), ' (revised)')
 }
 
+beforeEach(() => { vi.spyOn(api, 'listRecipients').mockResolvedValue([]) })
+
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 it('requires a printed salutation when saving a legacy correction and sends it with the content snapshot', async () => {
   vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...BOOK, addressed_to: null })
   const put = vi.spyOn(api, 'updateLedgerBookContent').mockResolvedValue(BOOK)
   mount()
-  const salutation = await screen.findByRole('textbox', { name: 'Addressed to' })
+  const salutation = await screen.findByRole('combobox', { name: 'Addressed to' })
   expect(salutation).toHaveValue('')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Enter the printed salutation.')
@@ -77,7 +80,7 @@ it('requires a printed salutation when saving a legacy correction and sends it w
   await userEvent.type(salutation, 'مدير إدارة الموارد البشرية')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(put).toHaveBeenCalledWith(40, {
-    addressed_to: 'مدير إدارة الموارد البشرية', subjects: BOOK.subjects, body_html: BOOK.body_html,
+    printed_cc: [], addressed_to: 'مدير إدارة الموارد البشرية', subjects: BOOK.subjects, body_html: BOOK.body_html,
     expected_version_id: 72, expected_content_sha256: 'abc',
   }))
 })
@@ -138,7 +141,7 @@ it('T-C8 saving the content editor PUTs subjects and body, then returns to the d
   await userEvent.click(screen.getByRole('button', { name: 'Add line' }))
   await userEvent.type(screen.getByLabelText('Subject line 2'), 'Annex')
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { addressed_to: 'HR director', subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>', expected_version_id: 72, expected_content_sha256: 'abc' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, { printed_cc: [], addressed_to: 'HR director', subjects: ['Leave plan (revised)', 'Annex'], body_html: '<p>Hello</p>', expected_version_id: 72, expected_content_sha256: 'abc' }))
   expect(await screen.findByText('/ledger?tab=books&book=40')).toBeInTheDocument()
 })
 
@@ -362,4 +365,32 @@ it('retains dirty corrections through a failed background refresh and retry', as
   await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
   await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan (revised)')
+})
+
+it('maps legacy printed CC from its Arabic snapshot and permits an explicit clear in a correction', async () => {
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...BOOK, printed_cc: null, addressees: [{ role: 'cc', user_id: 8, contact_id: null, name: 'HR director', name_ar: 'مدير الموارد البشرية', email: null, g_number: null }] })
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockResolvedValue({ ...BOOK, printed_cc: [] })
+  mount()
+  await userEvent.click(await screen.findByRole('button', { name: /Remove.*مدير الموارد البشرية/ }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, expect.objectContaining({ printed_cc: [] })))
+})
+
+it('preserves printed CC typed after submitting a correction', async () => {
+  vi.mocked(api.listRecipients).mockResolvedValue([{ id: 91, name: 'HR director', name_ar: null }, { id: 92, name: 'Office', name_ar: null }])
+  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+  let resolve!: (value: LedgerBookRead) => void
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockImplementationOnce(() => new Promise((accept) => { resolve = accept }))
+  mount()
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Printed CC' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'HR director' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenCalledWith(40, expect.objectContaining({ printed_cc: ['HR director'] })))
+  await userEvent.click(screen.getByRole('combobox', { name: 'Printed CC' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'Office' }))
+  await act(async () => resolve({ ...BOOK, printed_cc: ['HR director'], content_sha256: 'saved' }))
+  expect(screen.getByLabelText('URL')).toHaveTextContent(EDIT_URL)
+  put.mockResolvedValue({ ...BOOK, printed_cc: ['HR director', 'Office'] })
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+  await waitFor(() => expect(put).toHaveBeenLastCalledWith(40, expect.objectContaining({ printed_cc: ['HR director', 'Office'], expected_content_sha256: 'saved' })))
 })

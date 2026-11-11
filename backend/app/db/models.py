@@ -496,6 +496,9 @@ class BookDraft(Base):
     subjects: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
+    printed_cc: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
     addressed_to: Mapped[str] = mapped_column(
         String(500), nullable=False, default="", server_default=""
     )
@@ -563,6 +566,7 @@ class LedgerBookSave(Base):
     )
     subjects: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     body_html: Mapped[str] = mapped_column(Text, nullable=False)
+    printed_cc: Mapped[list[str] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     addressed_to: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
 

@@ -21,7 +21,7 @@ import { LedgerComposerPage } from './LedgerComposerPage'
 
 const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'secret', importance: null,
-  addressed_to: '', subjects: ['خطة الإجازات'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+  printed_cc: [], addressed_to: '', subjects: ['خطة الإجازات'], body_html: '', created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
   external: false, signer_manager_id: null, addressees: [],
   paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
 }
@@ -48,6 +48,7 @@ function mountAll(): HTMLElement {
 }
 
 beforeEach(() => {
+  vi.spyOn(api, 'listRecipients').mockResolvedValue([])
   vi.spyOn(api, 'getLedgerDraft').mockResolvedValue(DRAFT)
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([DRAFT])
@@ -58,7 +59,7 @@ beforeEach(() => {
     id: 40, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
     paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
     revisions: [{ version_id: 71, version_no: 1, trigger: 'initial', created_at: '2026-10-28T08:00:00Z', signed_at: '2026-10-28T09:00:00Z', superseded: false, locked: true }],
-    selected_version_id: 71, addressed_to: null, subjects: ['x'], body_html: '<p>x</p>', content_sha256: 'abc',
+    selected_version_id: 71, printed_cc: [], addressed_to: null, subjects: ['x'], body_html: '<p>x</p>', content_sha256: 'abc',
     external: false, addressees: [], signer: null, can_sign: false, can_return: false, can_change_signer: false, can_resubmit: false, can_create_outlook_draft: false, return_note: null,
     paper_preset: 'normal', references: [], folders: [],
   })
@@ -104,7 +105,7 @@ describe('Arabic', () => {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
     expect(screen.getByLabelText('نص الكتاب')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'التوجيه' })).toHaveAccessibleDescription('يُطبع التوجيه على الورقة. تُختار جهات الإرسال بشكل منفصل.')
+    expect(screen.getByRole('combobox', { name: 'التوجيه' })).toHaveAccessibleDescription('يُطبع التوجيه على الورقة. تُختار جهات الإرسال بشكل منفصل.')
     expect(screen.getByRole('combobox', { name: 'إرسال إلى' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'بدء تصحيح' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'طباعة' })).toBeInTheDocument()

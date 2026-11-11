@@ -31,7 +31,7 @@ import { LedgerComposerPage } from './LedgerComposerPage'
 
 const DRAFT: LedgerDraftRead = {
   id: 12, draft_number: '000012', tab: null, grade: 'unclassified', importance: null,
-  addressed_to: '', subjects: ['Leave plan'], body_html: '<p>Hello</p>',
+  printed_cc: [], addressed_to: '', subjects: ['Leave plan'], body_html: '<p>Hello</p>',
   external: false, signer_manager_id: 3, addressees: [{ role: 'to', user_id: 8 }],
   paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
@@ -65,6 +65,7 @@ function mountComposer(url = '/ledger/compose/12', autosaveMs = 10, strict = fal
 
 let update: MockInstance<typeof api.updateLedgerDraft>
 beforeEach(() => {
+  vi.spyOn(api, 'listRecipients').mockResolvedValue([])
   vi.spyOn(api, 'getLedgerDraft').mockResolvedValue(DRAFT)
   vi.spyOn(api, 'listBookFolders').mockResolvedValue([])
   vi.spyOn(api, 'listBooks').mockResolvedValue({ items: [], total: 0, limit: 8, offset: 0 })
@@ -90,7 +91,7 @@ afterEach(async () => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); 
 describe('Ledger Book composer', () => {
   it('autosaves the printed salutation independently of delivery recipients', async () => {
     mountComposer()
-    const salutation = await screen.findByRole('textbox', { name: 'Addressed to' })
+    const salutation = await screen.findByRole('combobox', { name: 'Addressed to' })
     await userEvent.clear(salutation)
     await userEvent.type(salutation, 'مدير إدارة الموارد البشرية')
     await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { addressed_to: 'مدير إدارة الموارد البشرية' }))
@@ -618,4 +619,36 @@ describe('Ledger Book composer', () => {
     expect(screen.getByLabelText('Send to')).toHaveFocus()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
+})
+
+it('keeps printed names above and independent of delivery across presets and destinations', async () => {
+  vi.mocked(api.listRecipients).mockResolvedValue([{ id: 91, name: 'HR director', name_ar: 'مدير الموارد البشرية' }])
+  mountComposer()
+  const direction = await screen.findByRole('combobox', { name: 'Addressed to' })
+  const cc = screen.getByRole('combobox', { name: 'Printed CC' })
+  const delivery = screen.getByRole('combobox', { name: 'Send to' })
+  expect(direction.compareDocumentPosition(delivery) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(cc.compareDocumentPosition(delivery) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  await userEvent.click(cc)
+  await userEvent.click(await screen.findByRole('option', { name: /HR director/ }))
+  await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { printed_cc: ['HR director'] }))
+  expect(screen.getByText('Ali')).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('radio', { name: 'Report' }))
+  await userEvent.click(screen.getByRole('radio', { name: 'External' }))
+  expect(screen.getByRole('button', { name: /Remove.*HR director/ })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: /Remove.*HR director/ }))
+  await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, expect.objectContaining({ printed_cc: [] })))
+})
+
+it('preserves printed CC edits made while an earlier autosave is pending', async () => {
+  vi.mocked(api.listRecipients).mockResolvedValue([{ id: 91, name: 'HR director', name_ar: null }, { id: 92, name: 'Office', name_ar: null }])
+  let resolve!: (value: LedgerDraftRead) => void
+  update.mockImplementationOnce(() => new Promise((accept) => { resolve = accept }))
+  mountComposer()
+  await userEvent.click(await screen.findByRole('combobox', { name: 'Printed CC' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'HR director' }))
+  await waitFor(() => expect(update).toHaveBeenCalled())
+  await userEvent.click(screen.getByRole('option', { name: 'Office' }))
+  await act(async () => resolve({ ...DRAFT, printed_cc: ['HR director'] }))
+  await waitFor(() => expect(update).toHaveBeenLastCalledWith(12, { printed_cc: ['HR director', 'Office'] }))
 })

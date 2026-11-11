@@ -54882,6 +54882,20 @@
             ],
             "title": "Addressed To"
           },
+          "printed_cc": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printed Cc"
+          },
           "subjects": {
             "items": {
               "type": "string"
@@ -54987,6 +55001,7 @@
           "revisions",
           "selected_version_id",
           "addressed_to",
+          "printed_cc",
           "subjects",
           "body_html",
           "content_sha256",
@@ -55007,6 +55022,16 @@
       },
       "LedgerContentUpdate": {
         "properties": {
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
+          },
           "expected_version_id": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
@@ -55087,6 +55112,16 @@
               }
             ],
             "title": "Importance"
+          },
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
           },
           "addressed_to": {
             "type": "string",
@@ -55228,6 +55263,13 @@
             "type": "string",
             "title": "Addressed To"
           },
+          "printed_cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Printed Cc"
+          },
           "subjects": {
             "items": {
               "type": "string"
@@ -55302,6 +55344,7 @@
           "grade",
           "importance",
           "addressed_to",
+          "printed_cc",
           "subjects",
           "body_html",
           "external",
@@ -55317,6 +55360,16 @@
       },
       "LedgerDraftUpdate": {
         "properties": {
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
+          },
           "tab": {
             "anyOf": [
               {

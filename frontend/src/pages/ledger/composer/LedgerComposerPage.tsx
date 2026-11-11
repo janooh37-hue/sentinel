@@ -20,7 +20,7 @@ import { SigningManagerPicker } from '@/components/books/SigningManagerPicker'
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { Input } from '@/components/ui/input'
+import { SavedRecipientPicker } from '@/components/application/fields/SavedRecipientPicker'
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { api, ApiError, apiErrorMessage, type LedgerDraftRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
@@ -352,6 +352,8 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
             </div>
           </fieldset>
 
+          <Controller control={form.control} name="addressed_to" render={({ field }) => <SavedRecipientPicker maxNameLength={500} inputRef={field.ref} onBlur={field.onBlur} id={addressedToId} mode="name" label={t('ledgerBook.composer.fields.addressedTo')} required value={field.value} disabled={sending} error={errors.addressedTo} hint={t('ledgerBook.composer.preset.openingHint')} onChange={(value) => { if (!sendingRef.current) { clearError('addressedTo'); field.onChange(value) } }} />} />
+          <Controller control={form.control} name="printed_cc" render={({ field }) => <SavedRecipientPicker maxNameLength={500} inputRef={field.ref} onBlur={field.onBlur} mode="multiple" label={t('ledgerBook.composer.fields.printedCc')} value={field.value} maxNames={20} disabled={sending} hint={t('ledgerBook.composer.fields.printedCcHint')} onChange={(value) => { if (!sendingRef.current) field.onChange(value) }} />} />
           <fieldset className="flex flex-wrap gap-4">
             <legend className="mb-1 text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.kind')}</legend>
             {[false, true].map((external) => <label key={String(external)} className="inline-flex min-h-10 items-center gap-2 text-sm">
@@ -367,12 +369,7 @@ function Composer({ draft, autosaveMs }: { draft: LedgerDraftRead; autosaveMs: n
           <Controller control={form.control} name="signer_manager_id" render={({ field }) => <SigningManagerPicker id={signerId} value={field.value} onChange={(v) => { clearError('signer'); if (!sendingRef.current) field.onChange(v) }} error={errors.signer} />} />
           <Controller control={form.control} name="reference_book_ids" render={({ field }) => <LedgerReferencesPicker id={referencesId} value={field.value} onChange={(v) => { clearError('references'); if (!sendingRef.current) field.onChange(v) }} error={errors.references} />} />
           <Controller control={form.control} name="folder_ids" render={({ field }) => <LedgerFoldersPicker id={foldersId} value={field.value} onChange={(v) => { clearError('folders'); if (!sendingRef.current) field.onChange(v) }} error={errors.folders} />} />
-          <div className="flex flex-col gap-1">
-            <label htmlFor={addressedToId} className="text-[0.78em] font-semibold text-muted-foreground">{t('ledgerBook.composer.fields.addressedTo')}</label>
-            <Controller control={form.control} name="addressed_to" render={({ field }) => <Input {...field} id={addressedToId} dir="auto" maxLength={500} aria-required="true" aria-invalid={Boolean(errors.addressedTo)} aria-describedby={`${addressedToId}-hint${errors.addressedTo ? ` ${addressedToId}-error` : ''}`} onChange={(event) => { if (!sendingRef.current) { clearError('addressedTo'); field.onChange(event) } }} />} />
-            <p id={`${addressedToId}-hint`} className="text-[0.78em] text-muted-foreground">{t('ledgerBook.composer.preset.openingHint')}</p>
-            {errors.addressedTo && <p id={`${addressedToId}-error`} role="alert" className="text-[0.78em] text-destructive">{errors.addressedTo}</p>}
-          </div>
+
           <Controller
             control={form.control}
             name="subjects"

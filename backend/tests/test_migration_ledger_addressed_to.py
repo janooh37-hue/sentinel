@@ -12,7 +12,7 @@ PARENT = "0125_ledger_paper_preset"
 
 def test_printed_addressee_round_trip_preserves_legacy_rows(tmp_path):
     config = _config(tmp_path / "addressed-to.db")
-    assert ScriptDirectory.from_config(config).get_heads() == [HEAD]
+    assert ScriptDirectory.from_config(config).get_revision(HEAD) is not None
     command.upgrade(config, PARENT)
     engine = create_engine(f"sqlite:///{tmp_path / 'addressed-to.db'}")
     with engine.begin() as c:

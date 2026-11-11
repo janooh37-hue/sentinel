@@ -5,12 +5,15 @@ import type { LedgerDraftRead, LedgerDraftUpdate } from '@/lib/api'
 
 export const MAX_SUBJECT_LINES = 20
 
+export const printedCcSchema = z.array(z.string().trim().min(1).max(500)).max(20, 'ledgerBook.composer.errors.printedCcLimit')
+
 export const composerSchema = z.object({
   tab: z.number().int().min(1).max(15).nullable(),
   grade: z.enum(['unclassified', 'secret', 'top_secret', 'addressee_only']),
   importance: z.enum(['medium', 'high']).nullable(),
   subjects: z.array(z.string()).min(1).max(MAX_SUBJECT_LINES),
   addressed_to: z.string().max(500),
+  printed_cc: printedCcSchema,
   body_html: z.string(),
   external: z.boolean(),
   paper_preset: z.enum(['normal', 'report']),
@@ -30,6 +33,7 @@ export function valuesFromDraft(draft: LedgerDraftRead): ComposerValues {
     importance: draft.importance,
     subjects: draft.subjects.length > 0 ? draft.subjects : [''],
     addressed_to: draft.addressed_to ?? '',
+    printed_cc: draft.printed_cc ?? [],
     body_html: draft.body_html,
     external: draft.external,
     paper_preset: draft.paper_preset,
@@ -51,6 +55,7 @@ export function changedFields(saved: ComposerValues, next: ComposerValues): Ledg
   }
   if (next.body_html !== saved.body_html) patch.body_html = next.body_html
   if (next.addressed_to !== saved.addressed_to) patch.addressed_to = next.addressed_to
+  if (JSON.stringify(next.printed_cc) !== JSON.stringify(saved.printed_cc)) patch.printed_cc = next.printed_cc
   if (next.external !== saved.external) patch.external = next.external
   if (next.paper_preset !== saved.paper_preset) patch.paper_preset = next.paper_preset
   if (JSON.stringify(next.reference_book_ids) !== JSON.stringify(saved.reference_book_ids)) patch.reference_book_ids = next.reference_book_ids

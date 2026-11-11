@@ -9,7 +9,7 @@ import { LedgerDraftsList } from './LedgerDraftsList'
 
 const draft = (over: Partial<LedgerDraftRead>): LedgerDraftRead => ({
   id: 12, draft_number: '000012', tab: 2, grade: 'unclassified', importance: null,
-  addressed_to: '', subjects: ['Leave plan', 'Annex A'], body_html: '<p>x</p>',
+  printed_cc: [], addressed_to: '', subjects: ['Leave plan', 'Annex A'], body_html: '<p>x</p>',
   external: false, signer_manager_id: null, addressees: [],
   paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
   created_at: '2026-10-27T08:00:00Z', updated_at: '2026-10-28T09:30:00Z', ...over,

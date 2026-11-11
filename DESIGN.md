@@ -2597,6 +2597,13 @@ will trip over them.
   الملف», outgoing-box folders the writer may file into, max 10). Addressee Only
   hides CC and blocks Save & Send until existing CC rows are removed; Secret
   shows uncleared users disabled with the reason.
+- Printed direction («التوجيه») and Printed CC («نسخة إلى») precede delivery
+  recipients. Both reuse General Book's searchable saved designation list and
+  its `books.edit`-gated management dialog/inline save. Direction also accepts
+  free text; CC stores up to 20 canonical names as removable chips. Arrow keys,
+  Enter and Escape operate the list while focus stays in the input. Printed
+  values survive paper-preset and internal/external changes independently of
+  delivery users. Corrections show legacy CC snapshots until explicitly saved.
 - Autosave: 800 ms after the last change, PATCH only the changed fields. A
   failed save keeps them pending and the next change sends them again.
 - Preview shows the real server PDF pages in `LedgerPaperPdf` (lazy

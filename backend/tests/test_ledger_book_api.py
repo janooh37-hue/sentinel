@@ -140,7 +140,7 @@ def test_save_and_send_materializes_numbered_book_and_provenance(ledger):
     history = saves(db, version.id)
     assert len(history) == 1
     assert history[0].subjects == CONTENT["subjects"]
-    canonical = json.dumps(CONTENT, ensure_ascii=False, sort_keys=True)
+    canonical = json.dumps({**CONTENT, "printed_cc": []}, ensure_ascii=False, sort_keys=True)
     assert history[0].content_sha256 == hashlib.sha256(canonical.encode()).hexdigest()
     assert db.get(BookDraft, draft["id"]) is None
     assert (
@@ -826,18 +826,25 @@ def test_issuance_and_content_require_nonblank_direction(ledger):
 def test_legacy_pending_direction_hash_and_signed_paper_are_preserved(ledger, monkeypatch, preset):
     from tests.test_ledger_book_signing_api import saved_signature
 
-    client, db, actor, writer, _, root = ledger
-    _, book = send(client, paper_preset=preset)
+    client, db, actor, writer, other, root = ledger
+    other.display_name = "Legacy delivery CC"
+    db.commit()
+    recipients = addressees_payload(client)
+    recipients["addressees"].append({"role": "cc", "user_id": other.id})
+    _, book = send(client, **recipients, paper_preset=preset)
     save = saves(db, book["selected_version_id"])[0]
     save.addressed_to = None
+    save.printed_cc = None
     save.content_sha256 = ledger_book_service._content_sha256(save.subjects, save.body_html)
     db.commit()
     url = f"{BOOKS}/{book['id']}"
     legacy = client.get(url).json()
     assert legacy["addressed_to"] is None
+    assert legacy["printed_cc"] is None
     assert legacy["content_sha256"] == save.content_sha256
     before = client.get(f"{url}/paper").text
     assert "Printed office" not in before
+    assert "Legacy delivery CC" in before
     if preset == "normal":
         assert book["addressees"][0]["name"] in before
     else:
@@ -852,10 +859,165 @@ def test_legacy_pending_direction_hash_and_signed_paper_are_preserved(ledger, mo
     paper = client.get(f"{url}/paper").text
     correction = client.post(f"{url}/corrections").json()
     assert correction["addressed_to"] is None
+    assert correction["printed_cc"] is None
     assert correction["content_sha256"] == legacy["content_sha256"]
     payload = content_payload(correction, CONTENT)
     payload["addressed_to"] = "Corrected office"
+    payload["printed_cc"] = []
     assert client.put(f"{url}/content", json=payload).status_code == 200
     assert (
         client.get(f"{url}/paper", params={"revision": legacy["selected_version_id"]}).text == paper
     )
+
+
+@pytest.mark.parametrize("preset", ["normal", "report"])
+def test_printed_cc_is_independent_tracked_and_signed(ledger, monkeypatch, preset):
+    client, db, actor, writer, signer, root = ledger
+    from tests.test_ledger_book_signing_api import saved_signature
+
+    draft = client.post(
+        DRAFTS,
+        json={
+            "tab": 5,
+            **CONTENT,
+            **addressees_payload(client),
+            "printed_cc": ["  مدير إدارة الموارد البشرية  "],
+            "paper_preset": preset,
+        },
+    )
+    assert draft.status_code == 201, draft.text
+    assert draft.json()["printed_cc"] == ["مدير إدارة الموارد البشرية"]
+    preview = client.get(f"{DRAFTS}/{draft.json()['id']}/paper")
+    assert "مدير إدارة الموارد البشرية" in preview.text
+    issued = client.post(f"{DRAFTS}/{draft.json()['id']}/save-and-send")
+    assert issued.status_code == 200, issued.text
+    book = issued.json()
+    assert book["printed_cc"] == ["مدير إدارة الموارد البشرية"]
+    preserved = client.put(f"{BOOKS}/{book['id']}/content", json=content_payload(book, CONTENT))
+    assert preserved.status_code == 200, preserved.text
+    assert preserved.json()["printed_cc"] == book["printed_cc"]
+    assert preserved.json()["content_sha256"] == book["content_sha256"]
+    assert book["addressees"][0]["user_id"] != writer.id
+    changed = client.put(
+        f"{BOOKS}/{book['id']}/content",
+        json={**content_payload(book, CONTENT), "printed_cc": ["<مدير جديد>"]},
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["content_sha256"] != book["content_sha256"]
+    error(
+        client.put(f"{BOOKS}/{book['id']}/content", json=content_payload(book, CONTENT)),
+        409,
+        "CONTENT_CONFLICT",
+    )
+    book = changed.json()
+    signer = db.get(User, book["signer"]["user_id"])
+    saved_signature(db, signer, root, monkeypatch)
+    actor[0] = signer
+    error(
+        client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(issued.json())),
+        409,
+        "SIGNING_CONTENT_CONFLICT",
+    )
+    signed = client.post(f"{BOOKS}/{book['id']}/sign", json=sign_payload(book))
+    assert signed.status_code == 200, signed.text
+    actor[0] = writer
+    assert (
+        client.put(
+            f"{BOOKS}/{book['id']}/content",
+            json={**content_payload(book, CONTENT), "printed_cc": []},
+        ).status_code
+        == 409
+    )
+    url = f"{BOOKS}/{book['id']}"
+    original = client.get(f"{url}/paper").text
+    assert "&lt;مدير جديد&gt;" in original
+    correction = client.post(f"{url}/corrections").json()
+    assert correction["printed_cc"] == ["<مدير جديد>"]
+    changed = client.put(
+        f"{url}/content",
+        json={**content_payload(correction, CONTENT), "printed_cc": []},
+    )
+    assert changed.status_code == 200, changed.text
+    assert (
+        client.get(f"{url}/paper", params={"revision": book["selected_version_id"]}).text
+        == original
+    )
+
+
+@pytest.mark.parametrize("value", [None, [""], ["  "], ["x" * 501], ["Office"] * 21])
+def test_printed_cc_validation(ledger, value):
+    client, *_ = ledger
+    assert client.post(DRAFTS, json={"printed_cc": value}).status_code == 422
+    draft, book = send(client)
+    assert client.patch(f"{DRAFTS}/{draft['id']}", json={"printed_cc": value}).status_code == 422
+    assert (
+        client.put(
+            f"{BOOKS}/{book['id']}/content",
+            json={**content_payload(book, CONTENT), "printed_cc": value},
+        ).status_code
+        == 422
+    )
+
+
+@pytest.mark.parametrize("preset", ["normal", "report"])
+def test_printed_cc_empty_and_legacy_delivery_fallback(ledger, preset):
+    client, db, _actor, _writer, other, _ = ledger
+    recipients = addressees_payload(client)
+    recipients["addressees"].append({"role": "cc", "user_id": other.id})
+    other.display_name = "DELIVERY CC ONLY"
+    db.commit()
+    draft, book = send(client, **recipients, paper_preset=preset)
+    url = f"{BOOKS}/{book['id']}"
+    assert draft["printed_cc"] == book["printed_cc"] == []
+    assert "DELIVERY CC ONLY" not in client.get(f"{url}/paper").text
+    save = saves(db, book["selected_version_id"])[0]
+    save.printed_cc = None
+    save.content_sha256 = ledger_book_service._content_sha256(
+        save.subjects, save.body_html, save.addressed_to
+    )
+    db.commit()
+    legacy = client.get(url).json()
+    assert legacy["printed_cc"] is None
+    assert "DELIVERY CC ONLY" in client.get(f"{url}/paper").text
+    preserved = client.put(f"{url}/content", json=content_payload(legacy, CONTENT))
+    assert preserved.status_code == 200, preserved.text
+    assert preserved.json()["printed_cc"] is None
+    assert preserved.json()["content_sha256"] == legacy["content_sha256"]
+    cleared = client.put(
+        f"{url}/content", json={**content_payload(legacy, CONTENT), "printed_cc": []}
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["printed_cc"] == []
+    assert cleared.json()["content_sha256"] != legacy["content_sha256"]
+    assert "DELIVERY CC ONLY" not in client.get(f"{url}/paper").text
+
+
+@pytest.mark.parametrize("preset", ["normal", "report"])
+def test_draft_printed_cc_patch_preserves_delivery_and_escapes(ledger, preset):
+    client, db, _actor, _writer, other, _ = ledger
+    recipients = addressees_payload(client)
+    recipients["addressees"].append({"role": "cc", "user_id": other.id})
+    other.display_name = "DELIVERY CC ONLY"
+    db.commit()
+    response = client.post(DRAFTS, json={**CONTENT, **recipients, "paper_preset": preset})
+    assert response.status_code == 201, response.text
+    url = f"{DRAFTS}/{response.json()['id']}"
+    assert "DELIVERY CC ONLY" not in client.get(f"{url}/paper").text
+    changed = client.patch(url, json={"printed_cc": ["  <Office & Team>  "]})
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["printed_cc"] == ["<Office & Team>"]
+    assert changed.json()["addressees"] == response.json()["addressees"]
+    assert "&lt;Office &amp; Team&gt;" in client.get(f"{url}/paper").text
+    assert client.patch(url, json={"body_html": "<p>Changed</p>"}).json()["printed_cc"] == [
+        "<Office & Team>"
+    ]
+    assert client.patch(url, json={"printed_cc": []}).json()["printed_cc"] == []
+    assert "Office &amp; Team" not in client.get(f"{url}/paper").text
+
+
+def test_printed_cc_names_do_not_grant_record_access(ledger):
+    client, _db, actor, _writer, other, _ = ledger
+    _, book = send(client, printed_cc=[other.display_name or other.email])
+    assert all(a["user_id"] != other.id for a in book["addressees"])
+    actor[0] = other
+    assert client.get(f"{BOOKS}/{book['id']}").status_code == 404

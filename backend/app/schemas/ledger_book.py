@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import date as date_type
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from app.schemas._base import ORMBase
 from app.schemas.book import BookGrade, BookImportance
@@ -53,6 +53,24 @@ class LedgerOutlookDraftRead(BaseModel):
 
 
 LedgerPaperPreset = Literal["normal", "report"]
+PrintedCCName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+]
+PrintedCC = Annotated[list[PrintedCCName], Field(max_length=20)]
+
+
+class PrintedCCUpdate(BaseModel):
+    # Omitted preserves the current list; explicit null is never a clearing operation.
+    printed_cc: PrintedCC | None = None
+
+    @field_validator("printed_cc", mode="before", json_schema_input_type=PrintedCC)
+    @classmethod
+    def reject_null(cls, value: object) -> object:
+        if value is None:
+            raise ValueError("printed_cc must be a list; use [] to clear")
+        return value
+
+
 MAX_REFERENCES = 20
 MAX_FOLDERS = 10
 
@@ -77,6 +95,7 @@ class LedgerDraftCreate(BaseModel):
     tab: int | None = Field(default=None, ge=1, le=15)
     grade: BookGrade = "unclassified"
     importance: BookImportance | None = None
+    printed_cc: PrintedCC = Field(default_factory=list)
     addressed_to: str = Field(default_factory=lambda: "", max_length=500)
     subjects: list[str] = Field(default_factory=list, max_length=20)
     body_html: str = Field(default="", max_length=2_000_000)
@@ -90,7 +109,7 @@ class LedgerDraftCreate(BaseModel):
     folder_ids: list[int] = Field(default_factory=list, max_length=MAX_FOLDERS)
 
 
-class LedgerDraftUpdate(BaseModel):
+class LedgerDraftUpdate(PrintedCCUpdate):
     """Partial update: only the fields sent change."""
 
     model_config = ConfigDict(extra="forbid")
@@ -118,6 +137,7 @@ class LedgerDraftRead(ORMBase):
     grade: BookGrade
     importance: BookImportance | None
     addressed_to: str
+    printed_cc: list[str]
     subjects: list[str]
     body_html: str
     external: bool
@@ -162,6 +182,7 @@ class LedgerBookRead(ORMBase):
     revisions: list[LedgerRevisionRead]
     selected_version_id: int
     addressed_to: str | None
+    printed_cc: list[str] | None
     subjects: list[str]
     body_html: str
     content_sha256: str
@@ -186,7 +207,7 @@ class LedgerSignRequest(BaseModel):
     expected_content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class LedgerContentUpdate(BaseModel):
+class LedgerContentUpdate(PrintedCCUpdate):
     model_config = ConfigDict(extra="forbid")
 
     expected_version_id: int = Field(gt=0)
