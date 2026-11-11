@@ -305,20 +305,28 @@ it('retains the edited baseline after a dirty refetch and preserves text on conf
   expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
 })
 
-it('protects a revert to the initial text while a different save is pending', async () => {
-  vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
+it.each(['success', 'error'])('protects a revert across a refresh while the pending save ends in %s', async (outcome) => {
+  const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue(BOOK)
   let resolveSave!: (book: LedgerBookRead) => void
-  const put = vi.spyOn(api, 'updateLedgerBookContent').mockReturnValue(new Promise((resolve) => { resolveSave = resolve }))
-  mount()
+  let rejectSave!: (error: Error) => void
+  const put = vi.spyOn(api, 'updateLedgerBookContent').mockReturnValue(new Promise((resolve, reject) => { resolveSave = resolve; rejectSave = reject }))
+  const { qc } = mount()
   await openAndRevise()
   await userEvent.click(screen.getByRole('button', { name: 'Save' }))
   await waitFor(() => expect(put).toHaveBeenCalled())
   await userEvent.clear(screen.getByLabelText('Subject line 1'))
   await userEvent.type(screen.getByLabelText('Subject line 1'), 'Leave plan')
+  get.mockResolvedValue({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' })
+  await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 40] }))
+  await waitFor(() => expect(get).toHaveBeenCalledTimes(2))
+  expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan')
   await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))
   expect(await screen.findByRole('dialog', { name: DISCARD_TITLE })).toBeInTheDocument()
   await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }))
-  await act(async () => resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' }))
+  await act(async () => {
+    if (outcome === 'success') resolveSave({ ...BOOK, subjects: ['Leave plan (revised)'], content_sha256: 'saved' })
+    else rejectSave(new Error('Response lost after persistence'))
+  })
   await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
   expect(screen.getByLabelText('Subject line 1')).toHaveValue('Leave plan')
   await userEvent.click(screen.getByRole('link', { name: 'Back to Ledger' }))

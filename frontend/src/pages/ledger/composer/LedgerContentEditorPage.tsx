@@ -124,12 +124,6 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
   })
   const { errors, isDirty } = form.formState
   const { reset } = form
-  // Content that changed on the server replaces an untouched form only.
-  useEffect(() => {
-    if (form.formState.isDirty || staleRevision) return
-    reset({ addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
-    contentHash.current = book.content_sha256
-  }, [book.addressed_to, book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision])
   const keepEditingButton = useRef<HTMLButtonElement>(null)
   const dialogOpener = useRef<HTMLElement | null>(null)
   // Set once leaving is allowed: the edit is saved, or the writer chose to discard it.
@@ -163,7 +157,13 @@ function ContentForm({ book, editable }: { book: LedgerBookRead; editable: boole
       toast.error(apiErrorMessage(err))
     },
   })
-  const hasUnsavedChanges = isDirty || save.isPending
+  // A pending or failed save can contain a local revert that isDirty cannot detect.
+  useEffect(() => {
+    if (form.formState.isDirty || staleRevision || save.isPending || save.isError) return
+    reset({ addressed_to: book.addressed_to ?? '', subjects: book.subjects.length > 0 ? book.subjects : [''], body_html: book.body_html })
+    contentHash.current = book.content_sha256
+  }, [book.addressed_to, book.body_html, book.content_sha256, book.subjects, form, reset, staleRevision, save.isPending, save.isError])
+  const hasUnsavedChanges = isDirty || save.isPending || save.isError
   const blocker = useBlocker(({ currentLocation, nextLocation }) => (
     !leaveAllowed.current && hasUnsavedChanges && currentLocation.pathname !== nextLocation.pathname
   ))
