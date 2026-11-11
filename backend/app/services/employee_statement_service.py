@@ -9,7 +9,8 @@ The Activity statement is the uncapped sibling of the Employee Detail
 - documents through the canonical record read gate, preview drafts excluded;
 - correspondence that is live, about a Record the caller may open, and not
   another user's private email;
-- duty events limited to initial placements and transfers.
+- duty events limited to initial placements and transfers;
+- employee number corrections, retaining the old and newly assigned numbers.
 
 Every source is filtered by the requested period in SQL (inclusive dates; the
 site calendar for timestamped sources). Timestamps are stored as naive UTC and
@@ -266,6 +267,24 @@ def activity_statement(
             status_source=status_event.source,
         )
         pending_actor.append((item, status_event.actor_user_id))
+
+    for change in db.scalars(
+        select(models.EmployeeFormerId)
+        .where(models.EmployeeFormerId.employee_id == emp.id)
+        .where(*_instant_bounds(models.EmployeeFormerId.changed_at, from_date, to_date))
+        .order_by(models.EmployeeFormerId.changed_at.desc(), models.EmployeeFormerId.id.desc())
+        .limit(fetch)
+    ):
+        item = ActivityStatementItemRead(
+            kind="id_change",
+            source_id=change.id,
+            occurred_at=_site(change.changed_at),
+            date_only=False,
+            reference=change.former_id,
+            title=change.new_id,
+            reason=change.reason,
+        )
+        pending_actor.append((item, change.changed_by_user_id))
 
     user_ids = {uid for _, uid in pending_actor if uid is not None}
     names = _user_names(db, user_ids)

@@ -116,6 +116,24 @@ class Employee(Base):
     )
 
 
+class EmployeeFormerId(Base):
+    """Append-only number corrections; ownership follows the employee's live ID."""
+
+    __tablename__ = "employee_former_ids"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    former_id: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
+    new_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    changed_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class EmployeeStatusEvent(Base):
     """Append-only history of an employee's status (migration 0094).
 
@@ -3267,6 +3285,7 @@ __all__ = [
     "EditorTemplate",
     "EmailAccount",
     "Employee",
+    "EmployeeFormerId",
     "GeneralBookRecipient",
     "InmateViolationManualRow",
     "InmateViolationPeriod",

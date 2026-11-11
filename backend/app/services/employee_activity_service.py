@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.models import (
     Document,
     Employee,
+    EmployeeFormerId,
     EmployeeStatusEvent,
     Leave,
     LedgerEntry,
@@ -335,6 +336,52 @@ def _status_events(
     ], total
 
 
+def _id_changes(
+    db: Session, *, employee_id: str | None, requested: int
+) -> tuple[list[EmployeeActivityItemRead], int]:
+    """Number corrections retain each change's assigned number, not the current ID."""
+    stmt = (
+        select(
+            EmployeeFormerId.id.label("source_id"),
+            EmployeeFormerId.changed_at.label("occurred_at"),
+            EmployeeFormerId.former_id.label("reference"),
+            EmployeeFormerId.new_id.label("title"),
+            EmployeeFormerId.reason,
+            func.coalesce(func.nullif(User.display_name, ""), User.email).label("actor_name"),
+            Employee.id.label("employee_id"),
+            Employee.name_en.label("employee_name_en"),
+            Employee.name_ar.label("employee_name_ar"),
+            func.count().over().label("source_total"),
+        )
+        .join(Employee, EmployeeFormerId.employee_id == Employee.id)
+        .outerjoin(User, EmployeeFormerId.changed_by_user_id == User.id)
+    )
+    if employee_id is not None:
+        stmt = stmt.where(EmployeeFormerId.employee_id == employee_id)
+    rows = db.execute(
+        stmt.order_by(EmployeeFormerId.changed_at.desc(), EmployeeFormerId.id.desc()).limit(
+            requested
+        )
+    ).all()
+    total = int(rows[0].source_total) if rows else 0
+    return [
+        EmployeeActivityItemRead(
+            kind="id_change",
+            source_id=row.source_id,
+            target_id=row.source_id,
+            occurred_at=row.occurred_at,
+            employee_id=row.employee_id,
+            employee_name_en=row.employee_name_en,
+            employee_name_ar=row.employee_name_ar,
+            title=row.title,
+            reference=row.reference,
+            reason=row.reason,
+            actor_name=row.actor_name,
+        )
+        for row in rows
+    ], total
+
+
 def list_employee_activity(
     db: Session,
     *,
@@ -370,6 +417,8 @@ def list_employee_activity(
         sources.append(_duty_locations(db, employee_id=employee_id, requested=requested))
     if kind in (None, "status"):
         sources.append(_status_events(db, employee_id=employee_id, requested=requested))
+    if kind in (None, "id_change"):
+        sources.append(_id_changes(db, employee_id=employee_id, requested=requested))
 
     # Documents are filtered in SQL; the exact per-document gate then re-checks
     # only the documents that land on this page. A refused one is excluded and

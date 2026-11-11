@@ -55,6 +55,7 @@ function item(kind: ActivityStatementItem['kind'], sourceId: number, extra: Part
     actor_name: 'Mariam Al Kaabi',
     actor_employee_id: null,
     reference: null,
+    title: null,
     template_id: null,
     template_name_en: null,
     template_name_ar: null,

@@ -86,6 +86,8 @@ export function entrySentence(item: ActivityStatementItem, t: TFunction, languag
         ...base,
         note: item.note ? t('activityStatement.sentence.absenceNote', { note: clean(item.note) }) : '',
       })
+    case 'id_change':
+      return t('employees.idChangeActivity.sentence', { reference: clean(item.reference ?? ''), title: clean(item.title ?? '') })
     case 'duty_location':
     case 'status':
       return null
@@ -136,6 +138,9 @@ export function entryFacts(item: ActivityStatementItem, t: TFunction, language: 
       add('toDepartment', item.to_department)
       add('reason', item.reason)
       break
+    case 'id_change':
+      if (item.reason) facts.push({ label: t('employees.idChangeActivity.reason'), value: item.reason })
+      break
     case 'status':
       add('site', item.site)
       break
@@ -152,6 +157,7 @@ export interface ActivityCounts {
   ledger: number
   transfer: number
   status: number
+  id_change: number
 }
 
 export function countActivity(items: readonly ActivityStatementItem[]): ActivityCounts {
@@ -164,6 +170,7 @@ export function countActivity(items: readonly ActivityStatementItem[]): Activity
     ledger: 0,
     transfer: 0,
     status: 0,
+    id_change: 0,
   }
   for (const item of items) {
     switch (item.kind) {
@@ -195,6 +202,7 @@ export function summarySentence(counts: ActivityCounts, t: TFunction, language: 
   for (const name of ['violation', 'absence', 'document', 'ledger', 'transfer', 'status'] as const) {
     if (counts[name] > 0) parts.push(t(`activityStatement.summary.${name}`, { count: counts[name] }))
   }
+  if (counts.id_change > 0) parts.push(t('employees.idChangeActivity.summary', { count: counts.id_change }))
   if (parts.length === 0) return t('activityStatement.summary.empty')
   const list = new Intl.ListFormat(statementLocale(language), { style: 'long', type: 'conjunction' }).format(parts)
   return t('activityStatement.summary.sentence', { list })

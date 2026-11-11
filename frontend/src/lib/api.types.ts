@@ -865,6 +865,40 @@ export interface paths {
         patch: operations["update_employee_api_v1_employees__employee_id__patch"];
         trace?: never;
     };
+    "/api/v1/employees/{employee_id}/id-change/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Employee Id Change */
+        get: operations["preview_employee_id_change_api_v1_employees__employee_id__id_change_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/{employee_id}/id-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change Employee Id */
+        post: operations["change_employee_id_api_v1_employees__employee_id__id_change_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/{employee_id}/detail": {
         parameters: {
             query?: never;
@@ -8236,7 +8270,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location" | "status";
+            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location" | "status" | "id_change";
             /** Source Id */
             source_id: number;
             /**
@@ -8322,6 +8356,8 @@ export interface components {
             status_event_kind: ("changed" | "scheduled" | "scheduled_cancelled" | "applied" | "imported") | null;
             /** Status Source */
             status_source: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
+            /** Title */
+            title: string | null;
             /** Linked Documents */
             linked_documents: components["schemas"]["LinkedDocumentRead"][];
         };
@@ -11663,7 +11699,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "duty_location" | "status";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change";
             /** Source Id */
             source_id: number;
             /** Target Id */
@@ -11984,6 +12020,41 @@ export interface components {
             missing_fields: string[];
             completeness: components["schemas"]["CompletenessRead"];
         };
+        /** EmployeeIdChangeImpactRead */
+        EmployeeIdChangeImpactRead: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "documents" | "leaves" | "violations" | "absences" | "attendance" | "timesheet" | "messages" | "uniform" | "vault_files";
+            /** Count */
+            count: number;
+        };
+        /** EmployeeIdChangePreviewRead */
+        EmployeeIdChangePreviewRead: {
+            /** New Id */
+            new_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "invalid" | "same" | "taken";
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Owner Name En */
+            owner_name_en?: string | null;
+            /** Owner Name Ar */
+            owner_name_ar?: string | null;
+            /** Impact */
+            impact: components["schemas"]["EmployeeIdChangeImpactRead"][];
+        };
+        /** EmployeeIdChangeRequest */
+        EmployeeIdChangeRequest: {
+            /** New Id */
+            new_id: string;
+            /** Reason */
+            reason: string;
+        };
         /**
          * EmployeeListItem
          * @description Minimal projection for the list endpoint — keep the wire small.
@@ -11991,6 +12062,8 @@ export interface components {
         EmployeeListItem: {
             /** Id */
             id: string;
+            /** Former Ids */
+            former_ids?: string[];
             /** Name En */
             name_en: string;
             /** Name Ar */
@@ -12105,6 +12178,8 @@ export interface components {
         EmployeeRead: {
             /** Id */
             id: string;
+            /** Former Ids */
+            former_ids?: string[];
             /** Name En */
             name_en: string;
             /** Name Ar */
@@ -21220,7 +21295,7 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: string | null;
-                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location" | "status") | null;
+                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -21299,6 +21374,78 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["EmployeeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_employee_id_change_api_v1_employees__employee_id__id_change_preview_get: {
+        parameters: {
+            query: {
+                new_id: string;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeIdChangePreviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_employee_id_api_v1_employees__employee_id__id_change_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmployeeIdChangeRequest"];
             };
         };
         responses: {

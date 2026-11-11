@@ -152,6 +152,19 @@ function sectionRows(
           }
         }),
       }
+    case 'id_change':
+      return {
+        columns: [col('event'), col('date', 'date'), { label: t('employees.idChangeActivity.reason') }, col('recordedBy', 'short')],
+        rows: items.map((item) => ({
+          key: key(item),
+          cells: [
+            <Txt key="event">{t('employees.idChangeActivity.sentence', { reference: item.reference ?? '', title: item.title ?? '' })}</Txt>,
+            date(item.occurred_at),
+            <Txt key="reason">{item.reason}</Txt>,
+            by(item),
+          ],
+        })),
+      }
     case 'placement':
       return {
         columns: [col('event', 'short'), col('date', 'date'), col('detail'), col('recordedBy', 'short')],

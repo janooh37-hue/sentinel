@@ -28,6 +28,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { serviceHref } from '@/lib/quickActions'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,7 @@ interface ExternalCardProps {
 function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const { has } = useCapabilities()
 
   const docTypeLabel = t(`extraction.doctype.${result.document_type}`, {
     defaultValue: result.document_type,
@@ -353,7 +355,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
 
     if (route_kind === 'employee') {
       if (matched && id) {
-        navigate(`/employees/${id}`, { state: { injectedExtraction: injection } })
+        navigate(`/employees/${encodeURIComponent(id)}/edit`, { state: { injectedExtraction: injection } })
       } else {
         navigate('/employees?create=1', { state: { injectedExtraction: injection } })
       }
@@ -468,6 +470,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
               <Button type="button" variant="ghost" size="sm" onClick={onDismiss}>
                 {t('extraction.panel.dismiss')}
               </Button>
+              {(result.route_kind !== 'employee' || !matched || has('employees.edit')) && (
               <Button type="button" size="sm" onClick={() => void handleRoute()}>
                 {result.route_kind === 'employee' && matched
                   ? t('intake.external.openRecord', { name: matchedName })
@@ -477,6 +480,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
                       ? t('intake.external.newSalaryTransfer')
                       : t('intake.external.newLeave')}
               </Button>
+              )}
             </div>
           )}
         </div>

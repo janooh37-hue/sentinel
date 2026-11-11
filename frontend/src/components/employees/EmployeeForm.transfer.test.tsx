@@ -60,6 +60,8 @@ describe('EmployeeForm transfer fields', () => {
     await userEvent.type(document.getElementById('transfer_site') as HTMLElement, 'Dubai')
     await setDate('transfer_return_date', '2026-11-15')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    expect(onSubmit).not.toHaveBeenCalled()
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
     expect(payload).toMatchObject({
@@ -80,6 +82,7 @@ describe('EmployeeForm transfer fields', () => {
     expect(document.getElementById('effective_date')).toBeNull()
     expect(document.querySelector('label[for="end_date"]')).not.toHaveTextContent('*')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce())
     expect(onSubmit.mock.calls[0][0]).toMatchObject({
       status: 'Loaned',
@@ -99,7 +102,9 @@ describe('EmployeeForm transfer fields', () => {
         onSubmit={onSubmit}
       />,
     )
+    await userEvent.type(document.getElementById('name_en') as HTMLElement, ' UPDATED')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
     expect(payload.transfer_site).toBeNull()
@@ -125,6 +130,7 @@ describe('EmployeeForm transfer fields', () => {
     expect(document.getElementById('effective_date')).not.toBeNull()
     await setDate('effective_date', '2026-09-01')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
     expect(payload.status).toBe(status)
@@ -150,7 +156,9 @@ describe('EmployeeForm transfer fields', () => {
         onSubmit={onSubmit}
       />,
     )
+    await userEvent.type(document.getElementById('name_en') as HTMLElement, ' UPDATED')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Confirm and save' }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
     expect(payload.status).toBe(status)

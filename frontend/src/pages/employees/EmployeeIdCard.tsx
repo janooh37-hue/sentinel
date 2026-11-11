@@ -7,8 +7,8 @@
  * edit ghost).
  *
  * Photo upload button (camera icon) is copied from the old EmployeeHero pattern.
- * Gate: edit & camera are hidden when the operator lacks `employees.edit`; the
- * time sheet is hidden without `timesheet.view`.
+ * Gate: profile edit & camera need `employees.edit`; number correction needs
+ * `employees.change_id`. The time sheet is hidden without `timesheet.view`.
  *
  * This card is the record's ONLY action surface — `EmployeeDetailPage` has no
  * `isMobile`, no `DropdownMenu` and no `md:hidden` / `hidden md:` pair — and the
@@ -304,13 +304,13 @@ export function EmployeeIdCard({
               : t('timesheet.record.action', { month: monthName(span.year, span.month) })}
           </button>
         )}
-        {canEdit && (
+        {(canEdit || has('employees.change_id')) && (
           <button
             type="button"
             onClick={onEdit}
-            className="flex flex-1 items-center justify-center whitespace-nowrap rounded-full border border-white/25 bg-white/15 px-2 py-2 text-[0.75em] font-medium transition-colors hover:bg-white/25"
+            className="flex min-h-11 flex-1 items-center justify-center rounded-full border border-white/25 bg-white/15 px-2 py-2 text-[0.75em] font-medium transition-colors hover:bg-white/25"
           >
-            {t('employee.card.edit')}
+            {t(canEdit ? 'employee.card.edit' : 'employees.idChange.correct')}
           </button>
         )}
       </div>

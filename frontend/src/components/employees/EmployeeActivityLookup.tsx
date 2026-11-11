@@ -133,6 +133,7 @@ export function EmployeeActivityLookup({
                   <p dir="auto" className="truncate text-sm font-semibold">{pickEmployeeName(employee, lang)}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span dir="auto" className="font-mono">{employee.id}</span>
+                    {employee.former_ids?.map((id) => <span key={id}>{t('employees.idChangeActivity.formerly', { id })}</span>)}
                     {position && <span dir="auto">{position}</span>}
                     <StatusPill status={employee.status} />
                   </p>

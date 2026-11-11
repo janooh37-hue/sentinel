@@ -209,8 +209,9 @@ export function EmployeeSearchHero({
                           <span className="block truncate text-[14.5px] font-semibold text-foreground">
                             {pickEmployeeName(row, lang)}
                           </span>
-                          <span className="mt-0.5 flex items-center gap-2 text-[12px] text-muted-foreground">
+                          <span className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
                             <span className="font-mono text-[11.5px]">{row.id}</span>
+                            {row.former_ids?.map((id) => <span key={id}>{t('employees.idChangeActivity.formerly', { id })}</span>)}
                             {pos && (
                               <>
                                 <span aria-hidden className="text-faint">·</span>

@@ -18,7 +18,7 @@ describe('activity setup <-> URL query', () => {
       preset: 'custom',
       from: '2026-02-03',
       to: '2026-09-30',
-      cats: ['leave.annual', 'leave.others', 'document'],
+      cats: ['leave.annual', 'leave.others', 'document', 'id_change'],
       lang: 'ar',
       orient: 'landscape',
       summary: false,
