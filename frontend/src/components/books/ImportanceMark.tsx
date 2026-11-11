@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { CircleAlert, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { MARK_ICON_CLASS, MARK_STROKE_WIDTH } from './markSize'
 
@@ -61,25 +61,23 @@ export function ImportanceMark({ importance, interactive = false, className }: {
   const glyph = <Icon className={MARK_ICON_CLASS} strokeWidth={MARK_STROKE_WIDTH} aria-hidden="true" />
   const markClass = cn('inline-flex shrink-0 items-center', tone, className)
   return (
-    <TooltipProvider>
-      <Tooltip open={open} onOpenChange={setOpen}>
-        <TooltipTrigger asChild>
-          {interactive ? (
-            <button
-              type="button"
-              data-importance={importance}
-              aria-label={label}
-              onClick={(event) => { event.preventDefault(); setOpen(true) }}
-              className={cn(markClass, 'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
-            >
-              {glyph}
-            </button>
-          ) : (
-            <span role="img" data-importance={importance} aria-label={label} className={markClass}>{glyph}</span>
-          )}
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip open={open} onOpenChange={setOpen}>
+      <TooltipTrigger asChild>
+        {interactive ? (
+          <button
+            type="button"
+            data-importance={importance}
+            aria-label={label}
+            onClick={(event) => { event.preventDefault(); setOpen(true) }}
+            className={cn(markClass, 'rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring')}
+          >
+            {glyph}
+          </button>
+        ) : (
+          <span role="img" data-importance={importance} aria-label={label} className={markClass}>{glyph}</span>
+        )}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }

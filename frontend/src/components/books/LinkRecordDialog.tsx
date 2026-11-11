@@ -16,6 +16,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { GradeChip } from './GradeChip'
+import { useDialogReturnFocus } from './useDialogReturnFocus'
 
 const LINK_ERROR_KEYS: Record<string, string | undefined> = {
   LINK_EXISTS: 'books.thread.errors.linkExists',
@@ -31,17 +32,18 @@ interface Props {
 }
 
 export function LinkRecordDialog({ book, open, onOpenChange }: Props): React.JSX.Element | null {
+  const returnFocus = useDialogReturnFocus(open)
   const { has } = useCapabilities()
   const canEdit = has('books.edit') && book.can_write
   if (!canEdit || book.access_scope !== 'full') return null
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      {open ? <LinkBody key={book.id} book={book} close={() => onOpenChange(false)} /> : null}
+      {open ? <LinkBody key={book.id} book={book} close={() => onOpenChange(false)} returnFocus={returnFocus} /> : null}
     </DialogRoot>
   )
 }
 
-function LinkBody({ book, close }: { book: BookRead; close: () => void }): React.JSX.Element {
+function LinkBody({ book, close, returnFocus }: { book: BookRead; close: () => void; returnFocus: (event: Event) => void }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [q, setQ] = useState('')
@@ -73,7 +75,7 @@ function LinkBody({ book, close }: { book: BookRead; close: () => void }): React
   })
 
   return (
-    <DialogContent className="!inset-x-0 !bottom-0 !top-auto max-w-none !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:max-w-xl md:!-translate-x-1/2 md:!-translate-y-1/2 rtl:md:!translate-x-1/2 md:rounded-b-2xl">
+    <DialogContent onCloseAutoFocus={returnFocus} className="!inset-x-0 !bottom-0 !top-auto max-w-none !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:max-w-xl md:!-translate-x-1/2 md:!-translate-y-1/2 rtl:md:!translate-x-1/2 md:rounded-b-2xl">
       <DialogHeader>
         <DialogTitle>{t('books.thread.linkTitle')}</DialogTitle>
         <DialogDescription>{t('books.thread.linkDescription')}</DialogDescription>
@@ -133,11 +135,11 @@ function LinkBody({ book, close }: { book: BookRead; close: () => void }): React
                     className="flex min-h-11 w-full items-center gap-2.5 px-3 py-2.5 text-start transition-colors hover:bg-surface-tinted active:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block font-mono text-[0.78em] font-semibold tabular-nums text-foreground" dir="ltr">
-                        {candidate.ref_number}
+                      <span className="block text-start font-mono text-[0.78em] font-semibold tabular-nums text-foreground">
+                        <bdi dir="ltr">{candidate.ref_number}</bdi>
                       </span>
-                      <span className="block truncate text-[0.82em] text-muted-foreground" dir="auto">
-                        {candidate.subject ?? '—'}
+                      <span className="block truncate text-start text-[0.82em] text-muted-foreground">
+                        <bdi>{candidate.subject ?? '—'}</bdi>
                       </span>
                     </span>
                     <GradeChip level={candidate.grade} className="shrink-0" />

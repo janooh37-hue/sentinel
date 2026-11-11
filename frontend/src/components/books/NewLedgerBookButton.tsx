@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom'
 import { Button, type ButtonProps } from '@/components/ui/button'
 import { api, apiErrorMessage } from '@/lib/api'
 import { toast } from '@/lib/toast'
-import { LEDGER_DRAFTS_KEY } from './ledgerBookKeys'
+import { LEDGER_DRAFTS_KEY, ledgerDraftKey } from './ledgerBookKeys'
 
 export function NewLedgerBookButton({ className, variant = 'default', size }: {
   className?: string
@@ -29,7 +29,10 @@ export function NewLedgerBookButton({ className, variant = 'default', size }: {
   const create = useMutation({
     mutationFn: () => api.createLedgerDraft({ grade: 'unclassified', body_html: '', external: false }),
     onSuccess: (draft) => {
-      void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY })
+      // The composer opens on this exact draft: hand it the create response so it does not refetch,
+      // and refresh only the list (an exact match leaves the seeded draft alone).
+      qc.setQueryData(ledgerDraftKey(draft.id), draft)
+      void qc.invalidateQueries({ queryKey: LEDGER_DRAFTS_KEY, exact: true })
       if (activeVisit.current) navigate(`/ledger/compose/${draft.id}`)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Grade } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { GRADE_META } from './grades'
@@ -20,7 +20,7 @@ export function GradeChip({
       data-testid="grade-chip"
       title={t('books.grade.chipTitle', { level: t(label) })}
       className={cn(
-        'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em]',
+        'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em] rtl:tracking-normal',
         tone,
         className,
       )}
@@ -62,13 +62,11 @@ export function GradeMark({
     )
   }
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span role="img" data-testid="grade-mark" data-grade={level} aria-label={name} className={cn('inline-flex shrink-0 items-center', tone, className)}>{glyph}</span>
-        </TooltipTrigger>
-        <TooltipContent>{name}</TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" data-testid="grade-mark" data-grade={level} aria-label={name} className={cn('inline-flex shrink-0 items-center', tone, className)}>{glyph}</span>
+      </TooltipTrigger>
+      <TooltipContent>{name}</TooltipContent>
+    </Tooltip>
   )
 }

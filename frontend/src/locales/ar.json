@@ -327,6 +327,7 @@
   },
   "common": {
     "forbidden": "لا تملك صلاحية عرض هذا المحتوى أو تنفيذ هذا الإجراء.",
+    "back": "رجوع",
     "save": "حفظ",
     "cancel": "إلغاء",
     "delete": "حذف",
@@ -3301,6 +3302,11 @@
     "addError": "تعذّر الإضافة إلى السلة — السجل غير موجود"
   },
   "books": {
+    "restricted": {
+      "hint": "مقيّد",
+      "explain": "يمكنك رؤية وجود هذا السجل دون الاطلاع على محتواه.",
+      "rowLabel": "سجل مقيّد {{ref}}. يمكنك رؤية وجوده دون الاطلاع على محتواه."
+    },
     "thread": {
       "reply": "رد",
       "createFrom": "إنشاء من",
@@ -3357,7 +3363,9 @@
       "menu": "تغيير درجة السرية…",
       "changeTitle": "تغيير درجة السرية",
       "save": "حفظ درجة السرية",
-      "changed": "تم تغيير درجة السرية إلى {{level}}"
+      "changed": "تم تغيير درجة السرية إلى {{level}}",
+      "lowerConfirmTitle": "خفض درجة سرية المعاملة؟",
+      "lowerConfirmDescription": "ستتغير درجة السرية من {{from}} إلى {{to}}. ستصبح المعاملة أقل تقييداً وقد يتمكن عدد أكبر من الأشخاص من الاطلاع عليها."
     },
     "distribution": {
       "errors": {
@@ -3876,6 +3884,7 @@
       "stationNotSent": "لم يُرسل للمراجعة",
       "metaScanned": "أُودعت النسخة الموقعة",
       "queuePosition": "{{n}} من {{total}}",
+      "queuePositionMore": "{{n}} من {{total}}+",
       "title": "السجل",
       "more": "المزيد",
       "delete": "حذف السجل",
@@ -4192,7 +4201,13 @@
       "resubmit": "إعادة الإرسال للتوقيع",
       "resubmitted": "أُعيد إرسال الكتاب للتوقيع.",
       "createOutlookDraft": "إنشاء مسودة Outlook",
-      "outlookDraftCreated": "تم إنشاء المسودة. افتح مسودات Outlook لمراجعتها وإرسالها."
+      "outlookDraftCreated": "تم إنشاء المسودة. افتح مسودات Outlook لمراجعتها وإرسالها.",
+      "correctionConfirmTitle": "بدء تصحيح؟",
+      "correctionConfirmDescription": "سيُنشأ إصدار جديد غير موقّع من الإصدار الموقّع لتعدّله، ويبقى الإصدار الموقّع محفوظاً في السجل.",
+      "resubmitConfirmTitle": "إعادة الإرسال للتوقيع؟",
+      "resubmitConfirmDescription": "سيُرسل الكتاب مجدداً إلى المدير الموقّع للتوقيع عليه.",
+      "outlookConfirmTitle": "إنشاء مسودة في Outlook؟",
+      "outlookConfirmDescription": "ستُنشأ مسودة رسالة مرفق بها الكتاب الموقّع في مسودات Outlook لديك. لن يُرسل شيء حتى ترسله من Outlook."
     },
     "composer": {
       "newButton": "كتاب سجل جديد",

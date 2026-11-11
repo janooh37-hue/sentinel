@@ -43,7 +43,33 @@ it.each([
   expect(pages).toHaveStyle({ width: '100%' })
   rerender(<LedgerPaperPdf url="/paper.pdf?revision=72" title="Proof" />)
   await waitFor(() => expect(leasePdfUrl).toHaveBeenCalledWith('/paper.pdf?revision=72', expect.any(AbortSignal)))
-  expect(release).toHaveBeenCalled()
+  await waitFor(() => expect(release).toHaveBeenCalled())
+})
+
+it('swaps the document in place for the same book, keeping zoom; another book starts afresh', async () => {
+  const releases: ReturnType<typeof vi.fn>[] = []
+  vi.mocked(leasePdfUrl, { partial: true }).mockImplementation(() => {
+    const release = vi.fn()
+    releases.push(release)
+    return Promise.resolve({ release })
+  })
+  const { rerender } = render(<LedgerPaperPdf url="/api/v1/ledger/drafts/5/paper.pdf?ts=1" title="Proof" />)
+  await screen.findByLabelText('PDF pages')
+  const pages = screen.getByLabelText('PDF pages').closest('[data-ledger-pdf-width]')
+  await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+  expect(pages).toHaveStyle({ width: '125%' })
+
+  // An autosave re-issues the URL with a new ts: same element, same zoom, old lease held until the new one lands.
+  rerender(<LedgerPaperPdf url="/api/v1/ledger/drafts/5/paper.pdf?ts=2" title="Proof" />)
+  await waitFor(() => expect(leasePdfUrl).toHaveBeenCalledWith('/api/v1/ledger/drafts/5/paper.pdf?ts=2', expect.any(AbortSignal)))
+  await waitFor(() => expect(releases[0]).toHaveBeenCalled())
+  expect(screen.getByLabelText('PDF pages').closest('[data-ledger-pdf-width]')).toBe(pages)
+  expect(pages).toHaveStyle({ width: '125%' })
+  expect(releases[1]).not.toHaveBeenCalled()
+
+  rerender(<LedgerPaperPdf url="/api/v1/ledger/drafts/6/paper.pdf?ts=1" title="Proof" />)
+  await waitFor(() => expect(screen.getByLabelText('PDF pages').closest('[data-ledger-pdf-width]')).toHaveStyle({ width: '100%' }))
+  expect(screen.getByLabelText('PDF pages').closest('[data-ledger-pdf-width]')).not.toBe(pages)
 })
 
 it.each(['en', 'ar'])('shows loading and a retryable rendering error in %s', async (lng) => {

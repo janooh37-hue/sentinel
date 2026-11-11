@@ -6,14 +6,23 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 // Keep pdf.js and its worker in the preview chunk, as in the document viewer.
-const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
+const LedgerPaperCanvas = lazy(() => import('./LedgerPaperCanvas'))
 
 export function LedgerPaperPdf({ url, title, className }: {
   url: string | null
   title?: string
   className?: string
 }): React.JSX.Element {
-  return <PaperPreview key={url} url={url} title={title} className={className} />
+  // Zoom and scroll belong to the paper, not to one URL: the composer re-issues the URL with a new
+  // cache-busting query after every autosave. Only another path or Revision starts afresh.
+  return <PaperPreview key={paperIdentity(url)} url={url} title={title} className={className} />
+}
+
+/** The URL minus its cache-busting query: path plus the Revision it asks for. */
+function paperIdentity(url: string | null): string | null {
+  if (url === null) return null
+  const [path, query = ''] = url.split('?', 2)
+  return `${path}?revision=${new URLSearchParams(query).get('revision') ?? ''}`
 }
 
 function PaperPreview({ url, title, className }: {
@@ -48,7 +57,7 @@ function PaperPreview({ url, title, className }: {
         {url ? (
           <div data-ledger-pdf-width className="mx-auto" style={{ width: `${zoom}%` }}>
             <Suspense fallback={loading}>
-              <DocPdfCanvas pdfUrl={url} bare sizing="fit" onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
+              <LedgerPaperCanvas url={url} onPageChange={(page, total) => setPosition((current) => current.page === page && current.total === total ? current : { page, total })} />
             </Suspense>
           </div>
         ) : loading}

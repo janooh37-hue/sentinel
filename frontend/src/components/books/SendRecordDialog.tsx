@@ -26,6 +26,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/authContext'
 import { isWriterOnlyGrade } from './grades'
+import { useDialogReturnFocus } from './useDialogReturnFocus'
 
 const MAX_RECIPIENTS = 50
 const MAX_NOTE = 500
@@ -42,6 +43,7 @@ interface Props {
 }
 
 export function SendRecordDialog({ book, open, onOpenChange }: Props): React.JSX.Element | null {
+  const returnFocus = useDialogReturnFocus(open)
   const { user } = useAuth()
   const permitted = !book.metadata_only && (!isWriterOnlyGrade(book.grade) || book.created_by_user_id === user?.id)
   const thread = useQuery({
@@ -59,10 +61,10 @@ export function SendRecordDialog({ book, open, onOpenChange }: Props): React.JSX
   if (!open || !permitted || thread.isPending || candidatesQuery.isPending) return null
   const replyTo = thread.data?.find((item) => item.direction === 'outgoing' && item.kind === 'reply')?.addressee_user_id
   const referenceCount = thread.data?.filter((item) => item.direction === 'outgoing' && item.attached).length ?? 0
-  return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} close={() => onOpenChange(false)} />
+  return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} close={() => onOpenChange(false)} returnFocus={returnFocus} />
 }
 
-function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pick<Props, 'book'> & { close: () => void; replyTo?: number | null; referenceCount: number; candidatesQuery: UseQueryResult<RecipientCandidateRead[]> }): React.JSX.Element {
+function SendBody({ book, close, returnFocus, replyTo, referenceCount, candidatesQuery }: Pick<Props, 'book'> & { close: () => void; returnFocus: (event: Event) => void; replyTo?: number | null; referenceCount: number; candidatesQuery: UseQueryResult<RecipientCandidateRead[]> }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
@@ -149,6 +151,7 @@ function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pic
         />
         <RadixDialog.Content
           data-print-hide
+          onCloseAutoFocus={returnFocus}
           className={cn(
             'bottom-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl bg-surface shadow-2xl',
             'focus-visible:outline-none',
