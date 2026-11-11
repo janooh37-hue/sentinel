@@ -65,7 +65,7 @@ export function LedgerContentEditorPage(): React.JSX.Element {
   const editable = latest !== undefined && !latest.locked && !book.voided && userId !== undefined && book.created_by_user_id === userId
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-3 py-4 sm:px-6">
+    <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-col gap-4 overflow-y-auto px-3 py-4 sm:px-6">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Link
           to={deskBookUrl(book.id)}

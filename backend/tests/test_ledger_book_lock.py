@@ -189,7 +189,11 @@ def _mutate(api: LedgerBookAPI, method: str, route: str, payload: str | None = N
         "submit": {"approver_user_id": api.admin.id, "reviewer_user_ids": []},
         "sign": {"version_id": api.version_id},
         "decision": {"version_id": api.version_id, "note": "Requested decision"},
-        "content": {"subjects": ["Changed subject"], "body_html": "<p>Changed body</p>"},
+        "content": {
+            "addressed_to": "Printed office",
+            "subjects": ["Changed subject"],
+            "body_html": "<p>Changed body</p>",
+        },
         "link": {"target_book_id": api.target_book_id},
         "review": {
             "version_id": api.version_id,
