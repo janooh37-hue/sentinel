@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
 HEAD = "0120_record_grade"
-PARENT = "0118_drop_record_category_overreach"
+PARENT = "0119_employee_former_ids"
 
 LEGACY = {
     1: ("general", "Normal", "unclassified", "organization"),
