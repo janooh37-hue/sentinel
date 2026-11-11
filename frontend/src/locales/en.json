@@ -298,7 +298,6 @@
   },
   "common": {
     "forbidden": "You do not have permission to view or perform this action.",
-    "back": "Back",
     "save": "Save",
     "cancel": "Cancel",
     "delete": "Delete",
@@ -3578,7 +3577,6 @@
       "stationNotSent": "Not sent for review",
       "metaScanned": "signed copy filed",
       "queuePosition": "{{n}} of {{total}}",
-      "queuePositionMore": "{{n}} of {{total}}+",
       "title": "Record",
       "more": "More",
       "delete": "Delete record",

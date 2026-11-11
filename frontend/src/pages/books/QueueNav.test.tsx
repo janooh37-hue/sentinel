@@ -14,12 +14,11 @@ describe('QueueNav position', () => {
   it('says "n of total" for a complete list', () => {
     render(<QueueNav position={1} total={500} onPrev={vi.fn()} onNext={vi.fn()} />)
     expect(screen.getByTestId('queue-position').textContent).toContain('books.record.queuePosition|')
-    expect(screen.getByTestId('queue-position').textContent).not.toContain('queuePositionMore')
   })
 
   it('says "n of total+" when the list was cut off at its fetch limit', () => {
     render(<QueueNav position={1} total={500} more onPrev={vi.fn()} onNext={vi.fn()} />)
-    expect(screen.getByTestId('queue-position').textContent).toContain('books.record.queuePositionMore')
+    expect(screen.getByTestId('queue-position').textContent).toContain('500+')
   })
 
   it('appends a plus to the compact counter', () => {

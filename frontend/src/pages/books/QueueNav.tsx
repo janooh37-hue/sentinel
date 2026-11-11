@@ -92,7 +92,7 @@ export function QueueNav({
         {compact ? (
           <bdi dir="ltr">{`${position}/${total}${more ? '+' : ''}`}</bdi>
         ) : (
-          t(more ? 'books.record.queuePositionMore' : 'books.record.queuePosition', {
+          t('books.record.queuePosition', {
             n: `${NUM_OPEN}n${NUM_CLOSE}`,
             total: `${NUM_OPEN}total${NUM_CLOSE}`,
           })
@@ -102,7 +102,7 @@ export function QueueNav({
               if (!key) return part
               return (
                 <bdi key={i} dir="ltr">
-                  {key === 'n' ? position : total}
+                  {key === 'n' ? position : more ? `${total}+` : total}
                 </bdi>
               )
             })
