@@ -123,6 +123,48 @@ describe('Books routing desk: Ledger Books', () => {
     expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument()
   })
 
+  it.each([
+    ['en', false], ['en', true], ['ar', false], ['ar', true],
+  ] as const)('retries a failed Ledger paper metadata read in %s (mobile=%s)', async (lng, mobile) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(lng)
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const ledger = vi.spyOn(api, 'getLedgerBook').mockRejectedValue(new TypeError('offline'))
+    mount('/ledger?tab=books&book=7')
+    const retry = await screen.findByRole('button', { name: i18n.t('common.retry') })
+    expect(screen.getByText(i18n.t('errors.network'))).toBeInTheDocument()
+    expect(api.getBook).toHaveBeenCalledWith(7)
+    expect(screen.queryByRole('document')).not.toBeInTheDocument()
+    ledger.mockResolvedValue(LEDGER_BOOK)
+    await userEvent.click(retry)
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc')))
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).not.toBeInTheDocument()
+    await i18n.changeLanguage('en')
+  })
+
+  it('keeps the accepted paper mounted after a background metadata read fails', async () => {
+    await i18n.changeLanguage('en')
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const ledger = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    const qc = mount('/ledger?tab=books&book=7')
+    const paper = await screen.findByRole('document')
+    await waitFor(() => expect(paper).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc')))
+    await userEvent.click(within(paper).getByRole('button', { name: 'Preview loaded' }))
+    expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled()
+    ledger.mockRejectedValue(new TypeError('offline'))
+    await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 7] }))
+    expect(screen.getByRole('document')).toBe(paper)
+    expect(paper).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeDisabled())
+    expect(screen.getByText(i18n.t('errors.network'))).toBeInTheDocument()
+    ledger.mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('ledger.booksDesk.retry') }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+    expect(screen.getByRole('document')).toBe(paper)
+    expect(screen.queryByRole('button', { name: i18n.t('ledger.booksDesk.retry') })).not.toBeInTheDocument()
+  })
+
   // W3
   it.each([false, true])('shows a Ledger Book PDF at ?rev with its actions (mobile=%s)', async (mobile) => {
     vi.mocked(useIsMobile).mockReturnValue(mobile)

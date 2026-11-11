@@ -34,6 +34,7 @@ from app.core import grades
 from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import CLASSIFICATIONS, classified_ref
 from app.core.constants import LEDGER_BOOK_TEMPLATE_ID
+from app.core.extraction.dates import parse_date
 from app.core.ledger_html import sanitize_body
 from app.core.ledger_paper import CURRENT_LAYOUT, PaperContext, render_paper
 from app.core.roles import INMATE_REPORTER_ROLE
@@ -817,8 +818,11 @@ def _book_date(book: Book) -> date:
     latest = max(book.versions, key=lambda version: version.version_no, default=None)
     printed = (latest.fields or {}).get("date") if latest is not None else None
     if isinstance(printed, str):
+        parsed = parse_date(printed)
+        if parsed is not None:
+            return parsed
         try:
-            return datetime.strptime(printed, PAPER_DATE_FORMAT).date()
+            return date.fromisoformat(printed.strip())
         except ValueError:
             pass
     return book.created_at.date()

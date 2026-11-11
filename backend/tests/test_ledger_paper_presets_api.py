@@ -287,7 +287,7 @@ def test_signed_reference_paper_survives_target_correction_with_live_access(ledg
     client, db, actor, owner, other, root = ledger
     _, target = send(client)
     target_version = db.get(BookVersion, target["selected_version_id"])
-    target_version.fields = {**target_version.fields, "date": "10-11-2026"}
+    target_version.fields = {**target_version.fields, "date": "2026-11-10"}
     db.commit()
     signer = db.get(User, target["signer"]["user_id"])
     saved_signature(db, signer, root, monkeypatch)
@@ -315,7 +315,7 @@ def test_signed_reference_paper_survives_target_correction_with_live_access(ledg
     correction = client.post(f"{BOOKS}/{target['id']}/corrections")
     assert correction.status_code == 201, correction.text
     newer = db.get(BookVersion, correction.json()["selected_version_id"])
-    newer.fields = {**newer.fields, "date": "11-11-2026"}
+    newer.fields = {**newer.fields, "date": "2026-11-11"}
     db.commit()
     assert client.get(f"{url}/paper", params={"revision": version_id}).text == paper.text
     read = client.get(url, params={"revision": version_id}).json()
@@ -522,3 +522,44 @@ def test_pdf_hash_check_covers_content_changes_between_metadata_and_render(ledge
     else:
         error(response, 409, "SIGNING_CONTENT_CONFLICT")
         assert printed == []
+
+
+@pytest.mark.parametrize(
+    ("printed", "expected"),
+    [
+        ("2026-11-02", "2026-11-02"),
+        ("02-11-2026", "2026-11-02"),
+        ("02/11/2026", "2026-11-02"),
+        (" 02.11.2026 ", "2026-11-02"),
+        ("31/02/2026", "2026-10-28"),
+        (None, "2026-10-28"),
+        (20261102, "2026-10-28"),
+    ],
+)
+def test_reference_issue_date_formats_and_invalid_fallback(printed, expected):
+    from types import SimpleNamespace
+
+    reference = SimpleNamespace(
+        versions=[SimpleNamespace(version_no=1, fields={"date": printed})],
+        created_at=datetime(2026, 10, 28),
+    )
+    assert ledger_book_service._book_date(reference).isoformat() == expected
+
+
+def test_iso_reference_date_matches_draft_and_issued_paper(ledger):
+    client, db, _, _, _, _ = ledger
+    _, target = send(client)
+    db.get(Book, target["id"]).created_at = datetime(2026, 10, 28)
+    version = db.get(BookVersion, target["selected_version_id"])
+    version.fields = {**version.fields, "date": "2026-11-02"}
+    db.commit()
+    draft = new_draft(client, reference_book_ids=[target["id"]])
+    preview = client.get(f"{DRAFTS}/{draft['id']}/paper")
+    assert preview.status_code == 200, preview.text
+    assert "02/11/2026" in preview.text and "28/10/2026" not in preview.text
+    issued = client.post(f"{DRAFTS}/{draft['id']}/save-and-send")
+    assert issued.status_code == 200, issued.text
+    assert issued.json()["references"][0]["date"] == "2026-11-02"
+    paper = client.get(f"{BOOKS}/{issued.json()['id']}/paper")
+    assert paper.status_code == 200, paper.text
+    assert "02/11/2026" in paper.text and "28/10/2026" not in paper.text

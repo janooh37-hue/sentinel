@@ -698,8 +698,13 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
       </header>
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
-          {loading && !ledgerReady ? <DeskLoading /> : isLedgerBook ? (
-            <LedgerPaperPdf url={paperUrl} onReady={() => setReadyPaperUrl(paperUrl)} className="min-h-0 flex-1 rounded-none border-0" />
+          {loading && !ledgerReady ? <DeskLoading /> : isLedgerBook && ledgerBook.isError && !ledgerBook.data ? (
+            <DocumentState kind="error" body={apiErrorMessage(ledgerBook.error)} onRetry={() => void ledgerBook.refetch()} />
+          ) : isLedgerBook ? (
+            <>
+              {ledgerBook.isError && <div role="alert" className="shrink-0 px-4 py-3 text-sm text-destructive"><p>{apiErrorMessage(ledgerBook.error)}</p><Button variant="outline" className="mt-3" onClick={() => void ledgerBook.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>}
+              <LedgerPaperPdf url={paperUrl} onReady={() => setReadyPaperUrl(paperUrl)} className="min-h-0 flex-1 rounded-none border-0" />
+            </>
           ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
           ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}
