@@ -2781,8 +2781,11 @@ export interface paths {
         delete: operations["delete_book_folder_api_v1_books_folders__folder_id__delete"];
         options?: never;
         head?: never;
-        /** Rename Book Folder */
-        patch: operations["rename_book_folder_api_v1_books_folders__folder_id__patch"];
+        /**
+         * Update Book Folder
+         * @description Rename a folder and/or move it to another box; filed books stay filed.
+         */
+        patch: operations["update_book_folder_api_v1_books_folders__folder_id__patch"];
         trace?: never;
     };
     "/api/v1/books/{book_id}/folders/{folder_id}": {
@@ -3369,7 +3372,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/{book_id}/confidentiality": {
+    "/api/v1/books/{book_id}/grade": {
         parameters: {
             query?: never;
             header?: never;
@@ -3377,9 +3380,29 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Set Book Confidentiality */
-        put: operations["set_book_confidentiality_api_v1_books__book_id__confidentiality_put"];
+        /** Set Book Grade */
+        put: operations["set_book_grade_api_v1_books__book_id__grade_put"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/restore-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Book Distribution
+         * @description Admin: give a legacy Personal record organization distribution again.
+         */
+        post: operations["restore_book_distribution_api_v1_books__book_id__restore_distribution_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3988,6 +4011,355 @@ export interface paths {
         head?: never;
         /** Rename Smart Folder */
         patch: operations["rename_smart_folder_api_v1_ledger_smart_folders__folder_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Drafts */
+        get: operations["list_drafts_api_v1_ledger_drafts_get"];
+        put?: never;
+        /** Create Draft */
+        post: operations["create_draft_api_v1_ledger_drafts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft */
+        get: operations["get_draft_api_v1_ledger_drafts__draft_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Draft */
+        delete: operations["delete_draft_api_v1_ledger_drafts__draft_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Draft */
+        patch: operations["update_draft_api_v1_ledger_drafts__draft_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Draft Image */
+        post: operations["upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft Image */
+        get: operations["get_draft_image_api_v1_ledger_drafts__draft_id__images__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Draft Paper */
+        get: operations["get_draft_paper_api_v1_ledger_drafts__draft_id__paper_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/paper.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft Paper Pdf
+         * @description The owner's Draft as real PDF pages for the composer preview.
+         */
+        get: operations["get_draft_paper_pdf_api_v1_ledger_drafts__draft_id__paper_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/drafts/{draft_id}/save-and-send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save And Send */
+        post: operations["save_and_send_api_v1_ledger_drafts__draft_id__save_and_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Book */
+        get: operations["get_ledger_book_api_v1_ledger_books__book_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/paper": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Book Paper */
+        get: operations["get_ledger_book_paper_api_v1_ledger_books__book_id__paper_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/paper.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Ledger Book Paper Pdf
+         * @description One Revision as PDF, under the same read access as its paper.
+         */
+        get: operations["get_ledger_book_paper_pdf_api_v1_ledger_books__book_id__paper_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Save Ledger Content */
+        put: operations["save_ledger_content_api_v1_ledger_books__book_id__content_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/revisions/{version_id}/saves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Ledger Saves */
+        get: operations["list_ledger_saves_api_v1_ledger_books__book_id__revisions__version_id__saves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Correction */
+        post: operations["start_correction_api_v1_ledger_books__book_id__corrections_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/images/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Book Image */
+        get: operations["get_book_image_api_v1_ledger_books__book_id__images__name__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign Ledger Book */
+        post: operations["sign_ledger_book_api_v1_ledger_books__book_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Ledger Book */
+        post: operations["return_ledger_book_api_v1_ledger_books__book_id__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/resubmit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resubmit Ledger Book */
+        post: operations["resubmit_ledger_book_api_v1_ledger_books__book_id__resubmit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/signer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Change Ledger Signer */
+        put: operations["change_ledger_signer_api_v1_ledger_books__book_id__signer_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/outlook-draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Ledger Outlook Draft */
+        post: operations["create_ledger_outlook_draft_api_v1_ledger_books__book_id__outlook_draft_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ledger/books/{book_id}/signature": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ledger Signature */
+        get: operations["get_ledger_signature_api_v1_ledger_books__book_id__signature_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/ledger": {
@@ -8591,10 +8963,10 @@ export interface components {
             /** Record Status */
             record_status?: string | null;
             /**
-             * Priority
+             * Urgency
              * @default Normal
              */
-            priority: string | null;
+            urgency: string | null;
             /** Submitted By User Id */
             submitted_by_user_id?: number | null;
             /** Submitted By Name */
@@ -8642,6 +9014,8 @@ export interface components {
              * @enum {string}
              */
             access_scope: "full" | "assigned_revision";
+            /** Template */
+            template?: string | null;
         };
         /** ApprovalLogNeighborsResponse */
         ApprovalLogNeighborsResponse: {
@@ -9354,6 +9728,14 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post */
+        Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_upload_employee_photo_api_v1_employees__employee_id__photo_post */
         Body_upload_employee_photo_api_v1_employees__employee_id__photo_post: {
             /**
@@ -9559,14 +9941,6 @@ export interface components {
             /** Requires Approval */
             requires_approval: boolean;
         };
-        /** BookConfidentialityUpdate */
-        BookConfidentialityUpdate: {
-            /**
-             * Confidentiality
-             * @enum {string}
-             */
-            confidentiality: "general" | "personal" | "secret" | "directed";
-        };
         /**
          * BookCreate
          * @description Caller-supplied fields for a new book entry.
@@ -9593,11 +9967,11 @@ export interface components {
             /** Doc Id */
             doc_id?: number | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
         };
         /** BookDecisionRequest */
         BookDecisionRequest: {
@@ -9613,8 +9987,8 @@ export interface components {
              * @enum {string}
              */
             kind: "reply" | "based_on";
-            /** Confidentiality */
-            confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+            /** Grade */
+            grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
             /**
              * Attach Reference
              * @default true
@@ -9622,6 +9996,14 @@ export interface components {
             attach_reference: boolean;
             /** Classification Code */
             classification_code?: string | null;
+        };
+        /**
+         * BookDistributionRestore
+         * @description Admin correction of a legacy Personal record (ADR 0007, D5).
+         */
+        BookDistributionRestore: {
+            /** Reason */
+            reason: string;
         };
         /**
          * BookEditSessionRead
@@ -9666,6 +10048,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Box
+             * @enum {string}
+             */
+            box: "incoming" | "outgoing" | "done" | "archived";
+            /**
              * Team
              * @default false
              */
@@ -9677,6 +10064,11 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /**
+             * Box
+             * @enum {string}
+             */
+            box: "incoming" | "outgoing" | "done" | "archived";
             /** Team */
             team: boolean;
             /** Count */
@@ -9740,10 +10132,23 @@ export interface components {
             /** Departments */
             departments?: string[];
         };
-        /** BookFolderUpdate */
+        /**
+         * BookFolderUpdate
+         * @description Rename and/or move a folder to another box; filed books stay filed.
+         */
         BookFolderUpdate: {
             /** Name */
-            name: string;
+            name?: string | null;
+            /** Box */
+            box?: ("incoming" | "outgoing" | "done" | "archived") | null;
+        };
+        /** BookGradeUpdate */
+        BookGradeUpdate: {
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
         };
         /**
          * BookInboxRead
@@ -9826,8 +10231,10 @@ export interface components {
             created_at: string;
             /** Deleted At */
             deleted_at: string | null;
-            /** Priority */
-            priority: string | null;
+            /** Urgency */
+            urgency: string | null;
+            /** Importance */
+            importance?: ("medium" | "high") | null;
             /** Approval State */
             approval_state: string;
             /**
@@ -9837,11 +10244,22 @@ export interface components {
              */
             access_scope: "full" | "assigned_revision";
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Distribution
+             * @default organization
+             * @enum {string}
+             */
+            distribution: "organization" | "named";
+            /**
+             * Metadata Only
+             * @default false
+             */
+            metadata_only: boolean;
             /**
              * Can Write
              * @default false
@@ -9853,10 +10271,10 @@ export interface components {
              */
             can_send: boolean;
             /**
-             * Can Change Confidentiality
+             * Can Change Grade
              * @default false
              */
-            can_change_confidentiality: boolean;
+            can_change_grade: boolean;
             my_inbox?: components["schemas"]["BookInboxRead"] | null;
             /** Selected Version Id */
             selected_version_id?: number | null;
@@ -10045,7 +10463,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "not_cleared" | "personal" | "already_recipient" | "self";
+            reason: "not_cleared" | "writer_only" | "already_recipient" | "self";
         };
         /** BookRevisionAccessRead */
         BookRevisionAccessRead: {
@@ -10092,11 +10510,6 @@ export interface components {
             purpose: "info" | "action" | "reply" | "circulate";
             /** Note */
             note?: string | null;
-            /**
-             * Make Directed
-             * @default false
-             */
-            make_directed: boolean;
             /**
              * Include References
              * @default true
@@ -10148,11 +10561,11 @@ export interface components {
         /** BookSubmitRequest */
         BookSubmitRequest: {
             /**
-             * Priority
+             * Urgency
              * @default Normal
              * @enum {string}
              */
-            priority: "Normal" | "High";
+            urgency: "Normal" | "High" | "Very High";
             /** Approver User Id */
             approver_user_id?: number | null;
             /** Branch Approver User Id */
@@ -10169,10 +10582,15 @@ export interface components {
             /** Subject */
             subject: string | null;
             /**
-             * Confidentiality
+             * Grade
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /**
+             * Distribution
+             * @enum {string}
+             */
+            distribution: "organization" | "named";
             /**
              * Created At
              * Format: date-time
@@ -11304,11 +11722,11 @@ export interface components {
             /** Classification Code */
             classification_code?: string | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
             /** Notify Employee */
             notify_employee?: boolean | null;
         };
@@ -13403,6 +13821,41 @@ export interface components {
             address: string;
         };
         /**
+         * LedgerAddresseeIn
+         * @description Exactly one id; service validation uses the ADDRESSEE_INVALID field error.
+         */
+        LedgerAddresseeIn: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "to" | "cc";
+            /** User Id */
+            user_id?: number | null;
+            /** Contact Id */
+            contact_id?: number | null;
+        };
+        /** LedgerAddresseeRead */
+        LedgerAddresseeRead: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "to" | "cc";
+            /** User Id */
+            user_id: number | null;
+            /** Contact Id */
+            contact_id: number | null;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Email */
+            email: string | null;
+            /** G Number */
+            g_number: string | null;
+        };
+        /**
          * LedgerAttachmentMeta
          * @description Per-attachment metadata for the detail view.
          *
@@ -13420,6 +13873,217 @@ export interface components {
             name: string;
             /** Size */
             size: number;
+        };
+        /** LedgerBookRead */
+        LedgerBookRead: {
+            /** Id */
+            id: number;
+            /** Ref Number */
+            ref_number: string;
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /** Importance */
+            importance: ("medium" | "high") | null;
+            /** Tab */
+            tab: number | null;
+            /** Classification Code */
+            classification_code: string | null;
+            /** Paper Date */
+            paper_date: string | null;
+            /** Approval State */
+            approval_state: string;
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /** Voided */
+            voided: boolean;
+            /** Revisions */
+            revisions: components["schemas"]["LedgerRevisionRead"][];
+            /** Selected Version Id */
+            selected_version_id: number;
+            /** Addressed To */
+            addressed_to: string | null;
+            /** Printed Cc */
+            printed_cc: string[] | null;
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+            /** Content Sha256 */
+            content_sha256: string;
+            /** External */
+            external: boolean;
+            /** Addressees */
+            addressees: components["schemas"]["LedgerAddresseeRead"][];
+            signer: components["schemas"]["LedgerSignerRead"] | null;
+            /** Can Sign */
+            can_sign: boolean;
+            /** Can Return */
+            can_return: boolean;
+            /** Can Change Signer */
+            can_change_signer: boolean;
+            /** Can Resubmit */
+            can_resubmit: boolean;
+            /** Can Create Outlook Draft */
+            can_create_outlook_draft: boolean;
+            /** Return Note */
+            return_note: string | null;
+            /**
+             * Paper Preset
+             * @enum {string}
+             */
+            paper_preset: "normal" | "report";
+            /** References */
+            references: components["schemas"]["LedgerReferenceRead"][];
+            /** Folders */
+            folders: components["schemas"]["LedgerFolderRead"][];
+        };
+        /** LedgerContentUpdate */
+        LedgerContentUpdate: {
+            /** Printed Cc */
+            printed_cc?: string[];
+            /** Expected Version Id */
+            expected_version_id: number;
+            /** Expected Content Sha256 */
+            expected_content_sha256: string;
+            /** Addressed To */
+            addressed_to: string;
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+        };
+        /** LedgerDraftCreate */
+        LedgerDraftCreate: {
+            /** Tab */
+            tab?: number | null;
+            /**
+             * Grade
+             * @default unclassified
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /** Importance */
+            importance?: ("medium" | "high") | null;
+            /** Printed Cc */
+            printed_cc?: string[];
+            /** Addressed To */
+            addressed_to?: string;
+            /** Subjects */
+            subjects?: string[];
+            /**
+             * Body Html
+             * @default
+             */
+            body_html: string;
+            /**
+             * External
+             * @default false
+             */
+            external: boolean;
+            /** Signer Manager Id */
+            signer_manager_id?: number | null;
+            /** Addressees */
+            addressees?: components["schemas"]["LedgerAddresseeIn"][];
+            /**
+             * Paper Preset
+             * @enum {string}
+             */
+            paper_preset?: "normal" | "report";
+            /** Reference Book Ids */
+            reference_book_ids?: number[];
+            /** Folder Ids */
+            folder_ids?: number[];
+        };
+        /** LedgerDraftImageRead */
+        LedgerDraftImageRead: {
+            /** Name */
+            name: string;
+            /** Src */
+            src: string;
+        };
+        /** LedgerDraftRead */
+        LedgerDraftRead: {
+            /** Id */
+            id: number;
+            /** Draft Number */
+            draft_number: string;
+            /** Tab */
+            tab: number | null;
+            /**
+             * Grade
+             * @enum {string}
+             */
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
+            /** Importance */
+            importance: ("medium" | "high") | null;
+            /** Addressed To */
+            addressed_to: string;
+            /** Printed Cc */
+            printed_cc: string[];
+            /** Subjects */
+            subjects: string[];
+            /** Body Html */
+            body_html: string;
+            /** External */
+            external: boolean;
+            /** Signer Manager Id */
+            signer_manager_id: number | null;
+            /** Addressees */
+            addressees: components["schemas"]["LedgerAddresseeIn"][];
+            /**
+             * Paper Preset
+             * @enum {string}
+             */
+            paper_preset: "normal" | "report";
+            /** Reference Book Ids */
+            reference_book_ids: number[];
+            /** Folder Ids */
+            folder_ids: number[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * LedgerDraftUpdate
+         * @description Partial update: only the fields sent change.
+         */
+        LedgerDraftUpdate: {
+            /** Printed Cc */
+            printed_cc?: string[];
+            /** Tab */
+            tab?: number | null;
+            /** Grade */
+            grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
+            /** Importance */
+            importance?: ("medium" | "high") | null;
+            /** Addressed To */
+            addressed_to?: string | null;
+            /** Subjects */
+            subjects?: string[] | null;
+            /** Body Html */
+            body_html?: string | null;
+            /** External */
+            external?: boolean | null;
+            /** Signer Manager Id */
+            signer_manager_id?: number | null;
+            /** Addressees */
+            addressees?: components["schemas"]["LedgerAddresseeIn"][] | null;
+            /** Paper Preset */
+            paper_preset?: ("normal" | "report") | null;
+            /** Reference Book Ids */
+            reference_book_ids?: number[] | null;
+            /** Folder Ids */
+            folder_ids?: number[] | null;
         };
         /**
          * LedgerEntryCreate
@@ -13559,6 +14223,13 @@ export interface components {
             /** Related Employee Id */
             related_employee_id?: string | null;
         };
+        /** LedgerFolderRead */
+        LedgerFolderRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+        };
         /**
          * LedgerListItem
          * @description Slim projection for list / timeline views.
@@ -13628,6 +14299,94 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** LedgerOutlookDraftRead */
+        LedgerOutlookDraftRead: {
+            /** Id */
+            id: number;
+        };
+        /**
+         * LedgerReferenceRead
+         * @description A «إشارة إلى:» entry; ``can_open`` false prints the ref without a link.
+         */
+        LedgerReferenceRead: {
+            /** Book Id */
+            book_id: number;
+            /** Ref */
+            ref: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Can Open */
+            can_open: boolean;
+        };
+        /** LedgerReturnIn */
+        LedgerReturnIn: {
+            /** Note */
+            note: string;
+        };
+        /** LedgerRevisionRead */
+        LedgerRevisionRead: {
+            /** Version Id */
+            version_id: number;
+            /** Version No */
+            version_no: number;
+            /** Trigger */
+            trigger: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Signed At */
+            signed_at: string | null;
+            /** Superseded */
+            superseded: boolean;
+            /** Locked */
+            locked: boolean;
+        };
+        /** LedgerSaveRead */
+        LedgerSaveRead: {
+            /** Id */
+            id: number;
+            /** Saved By User Id */
+            saved_by_user_id: number;
+            /** Saved By Name */
+            saved_by_name: string | null;
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+            /** Content Sha256 */
+            content_sha256: string;
+        };
+        /** LedgerSignRequest */
+        LedgerSignRequest: {
+            /** Expected Version Id */
+            expected_version_id: number;
+            /** Expected Content Sha256 */
+            expected_content_sha256: string;
+        };
+        /** LedgerSignerIn */
+        LedgerSignerIn: {
+            /** Manager Id */
+            manager_id: number;
+        };
+        /** LedgerSignerRead */
+        LedgerSignerRead: {
+            /** Manager Id */
+            manager_id: number;
+            /** User Id */
+            user_id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Title */
+            title: string | null;
         };
         /** LegacyCandidateRead */
         LegacyCandidateRead: {
@@ -19090,11 +19849,11 @@ export interface components {
                 [key: string]: string;
             }[] | null;
             /**
-             * Confidentiality
-             * @default general
+             * Grade
+             * @default unclassified
              * @enum {string}
              */
-            confidentiality: "general" | "personal" | "secret" | "directed";
+            grade: "unclassified" | "secret" | "top_secret" | "addressee_only";
             /** Attachments */
             attachments?: components["schemas"]["GenerateAttachmentSpec"][] | null;
             /** Signer Employee Id */
@@ -25744,7 +26503,7 @@ export interface operations {
             };
         };
     };
-    rename_book_folder_api_v1_books_folders__folder_id__patch: {
+    update_book_folder_api_v1_books_folders__folder_id__patch: {
         parameters: {
             query?: never;
             header?: never;
@@ -26575,7 +27334,7 @@ export interface operations {
     list_recipient_candidates_api_v1_books_recipient_candidates_get: {
         parameters: {
             query?: {
-                confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+                grade?: ("unclassified" | "secret" | "top_secret" | "addressee_only") | null;
             };
             header?: never;
             path?: never;
@@ -27088,7 +27847,7 @@ export interface operations {
             };
         };
     };
-    set_book_confidentiality_api_v1_books__book_id__confidentiality_put: {
+    set_book_grade_api_v1_books__book_id__grade_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -27101,7 +27860,44 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BookConfidentialityUpdate"];
+                "application/json": components["schemas"]["BookGradeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_book_distribution_api_v1_books__book_id__restore_distribution_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookDistributionRestore"];
             };
         };
         responses: {
@@ -28341,6 +29137,800 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SmartFolderRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_drafts_api_v1_ledger_drafts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_draft_api_v1_ledger_drafts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerDraftCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_api_v1_ledger_drafts__draft_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_draft_api_v1_ledger_drafts__draft_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_draft_api_v1_ledger_drafts__draft_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerDraftUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_draft_image_api_v1_ledger_drafts__draft_id__images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerDraftImageRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_image_api_v1_ledger_drafts__draft_id__images__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_paper_api_v1_ledger_drafts__draft_id__paper_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_draft_paper_pdf_api_v1_ledger_drafts__draft_id__paper_pdf_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_and_send_api_v1_ledger_drafts__draft_id__save_and_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_book_api_v1_ledger_books__book_id__get: {
+        parameters: {
+            query?: {
+                /** @description Revision (version) id */
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_book_paper_api_v1_ledger_books__book_id__paper_get: {
+        parameters: {
+            query?: {
+                /** @description Revision (version) id */
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_book_paper_pdf_api_v1_ledger_books__book_id__paper_pdf_get: {
+        parameters: {
+            query?: {
+                revision?: number | null;
+                v?: string | null;
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_ledger_content_api_v1_ledger_books__book_id__content_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerContentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ledger_saves_api_v1_ledger_books__book_id__revisions__version_id__saves_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                version_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerSaveRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_correction_api_v1_ledger_books__book_id__corrections_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_book_image_api_v1_ledger_books__book_id__images__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                name: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_ledger_book_api_v1_ledger_books__book_id__sign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerSignRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_ledger_book_api_v1_ledger_books__book_id__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerReturnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resubmit_ledger_book_api_v1_ledger_books__book_id__resubmit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_ledger_signer_api_v1_ledger_books__book_id__signer_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LedgerSignerIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerBookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ledger_outlook_draft_api_v1_ledger_books__book_id__outlook_draft_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LedgerOutlookDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ledger_signature_api_v1_ledger_books__book_id__signature_get: {
+        parameters: {
+            query?: {
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

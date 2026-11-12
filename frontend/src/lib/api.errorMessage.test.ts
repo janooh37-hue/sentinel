@@ -31,6 +31,7 @@ describe('apiErrorMessage', () => {
       'هذا المستند موقّع، لذا أصبح ملف Word القابل للتعديل مقفلاً.',
     ],
     ['SECRET_CLEARANCE_REQUIRED', 'Secret clearance is required for Secret records.', 'المعاملات السرية تتطلب تصريح الاطلاع على السري.'],
+    ['DISTRIBUTION_NOT_NAMED', 'Only an Unclassified record with named distribution can be restored.', 'لا يمكن الاستعادة إلا لمعاملة غير سرية موزعة على مسمّين.'],
     ['RECORD_TYPE_FORBIDDEN', "You don't have access to this record type.", 'لا تملك صلاحية الوصول إلى هذا النوع من المعاملات.'],
     [
       'INCLUDED_PAPERS_CREATOR_ONLY',
@@ -49,6 +50,45 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(refusal)).toBe(en)
     await i18n.changeLanguage('ar')
     expect(apiErrorMessage(refusal)).toBe(ar)
+  })
+
+  it.each([
+    [
+      'LEDGER_BOOK_CHAIN_ONLY',
+      'Ledger Books are approved and signed only through their branch chain.',
+      'لا يُعتمد كتاب السجل ولا يُوقَّع إلا عبر تسلسل الفرع.',
+    ],
+    ['DRAFT_TAB_REQUIRED', 'Choose the tab (classification) first.', 'اختر التبويب أولاً.'],
+    ['LEDGER_BOOK_CONTENT_ONLY', 'Edit Ledger Book subjects in the Ledger content editor.', 'عدّل مواضيع كتاب السجل في محرّر محتواه.'],
+    ['SIGNING_CONTENT_CONFLICT', 'This book changed after you opened it. Review the updated paper before signing again.', 'تغيّر هذا الكتاب بعد فتحه. راجع الورقة المحدّثة قبل التوقيع مرة أخرى.'],
+    ['CONTENT_CONFLICT', 'This book changed in another session. Your edits are still here. Copy any text you need, then reopen the book before saving.', 'تغيّر هذا الكتاب في جلسة أخرى. ما زالت تعديلاتك هنا. انسخ أي نص تحتاجه، ثم أعد فتح الكتاب قبل الحفظ.'],
+  ])('localizes the %s Ledger Book refusal even when the server text has Arabic letters', async (code, en, ar) => {
+    const refusal = new ApiError(409, code, 'Choose the tab (التبويب) first.')
+    expect(apiErrorMessage(refusal)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(refusal)).toBe(ar)
+  })
+
+  it.each([
+    ['ADDRESSEE_ONLY_CC_NOT_ALLOWED', 'Addressee Only books cannot include CC recipients.', 'لا يمكن أن تتضمن كتب «لعنايته فقط» مستلمي نسخة.'],
+    ['REFERENCE_INVALID', 'One or more references are unavailable. Choose the references again.', 'إحدى الإشارات غير متاحة. أعد اختيار الإشارات.'],
+    ['FOLDER_INVALID', 'One or more folders are unavailable in the outgoing box. Choose the folders again.', 'أحد الملفات غير متاح في صندوق الصادر. أعد اختيار الملفات.'],
+  ])('localizes the %s paper selection error', async (code, en, ar) => {
+    const error = new ApiError(422, code, 'Server detail')
+    expect(apiErrorMessage(error)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(error)).toBe(ar)
+  })
+
+  it.each([
+    ['secret', 'Secret', 'سري'],
+    ['top_secret', 'Top Secret', 'سري للغاية'],
+    ['addressee_only', 'Addressee Only', 'لعنايته فقط'],
+  ])('names the required %s grade from the backend minimum', async (min, en, ar) => {
+    const error = new ApiError(422, 'GRADE_BELOW_FLOOR', 'Server detail', { min })
+    expect(apiErrorMessage(error)).toBe(`The references require a grade of at least ${en}. Raise the grade before Save & Send.`)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(error)).toBe(`تتطلب الإشارات درجة ${ar} على الأقل. ارفع الدرجة قبل الحفظ والإرسال.`)
   })
 
   it('keeps server detail in English', () => {

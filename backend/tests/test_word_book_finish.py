@@ -461,10 +461,15 @@ def test_finish_accepts_public_pdf_converter(db_session, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "level, expected",
-    [("secret", ["سري"]), ("personal", ["شخصي"]), ("general", []), ("directed", [])],
+    "grade, expected",
+    [
+        ("secret", ["سري"]),
+        ("top_secret", ["سري للغاية"]),
+        ("addressee_only", ["سري للغاية — لعنايته فقط"]),
+        ("unclassified", []),
+    ],
 )
-def test_finish_restores_current_level_before_pdf_conversion(db_session, tmp_path, level, expected):
+def test_finish_restores_current_grade_before_pdf_conversion(db_session, tmp_path, grade, expected):
     from datetime import UTC, datetime
 
     from app.core.level_mark import apply_level_mark
@@ -478,7 +483,7 @@ def test_finish_restores_current_level_before_pdf_conversion(db_session, tmp_pat
     paper.save(source)
     assert apply_level_mark(source, "secret")
     footer = DocxFile(source).sections[0].footer.part.element.xml
-    book.confidentiality = level
+    book.grade = grade
     session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
     db_session.commit()
     converted = []

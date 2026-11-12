@@ -222,6 +222,13 @@ def test_0099_separates_inmate_violations_and_registers_classifications(tmp_path
             assert sum(code in categories for code in (c.code for c in CLASSIFICATIONS)) == 15
             for row in connection.execute(text("SELECT * FROM books")).mappings():
                 expected = {**original_books[row.id]}
+                expected["urgency"] = expected.pop("priority")
+                expected.update(
+                    grade="unclassified",
+                    distribution="organization",
+                    send_state="unsent",
+                    source_draft_id=None,
+                )
                 if row.id in moved_ids:
                     expected["category_id"] = "INV"
                 assert dict(row) == expected

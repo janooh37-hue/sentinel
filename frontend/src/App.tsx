@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { createBrowserRouter, RouterProvider, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
@@ -114,6 +114,12 @@ const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
 const StoreMovementsPage = lazy(loadStoreMovementsPage)
 const UniformPage = lazy(() => import('@/pages/assets/uniform/UniformPage').then(m => ({ default: m.UniformPage })))
 const LedgerPage = lazy(loadLedgerPage)
+const LedgerComposerPage = lazy(() =>
+  import('@/pages/ledger/composer/LedgerComposerPage').then((m) => ({ default: m.LedgerComposerPage })),
+)
+const LedgerContentEditorPage = lazy(() =>
+  import('@/pages/ledger/composer/LedgerContentEditorPage').then((m) => ({ default: m.LedgerContentEditorPage })),
+)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
 const AttendancePage = lazy(loadAttendancePage)
@@ -640,6 +646,25 @@ function Shell(): React.JSX.Element {
                   </RequireAnyCapability>
                 }
               />
+              {['/ledger/compose', '/ledger/compose/:draftId'].map((path) => (
+                <Route
+                  key={path}
+                  path={path}
+                  element={
+                    <RequireAnyCapability caps={['ledger.view', 'books.view']}>
+                      <LedgerComposerPage />
+                    </RequireAnyCapability>
+                  }
+                />
+              ))}
+              <Route
+                path="/ledger/books/:bookId/edit"
+                element={
+                  <RequireAnyCapability caps={['ledger.view', 'books.view']}>
+                    <LedgerContentEditorPage />
+                  </RequireAnyCapability>
+                }
+              />
               <Route
                 path="/settings"
                 element={
@@ -753,23 +778,26 @@ function Shell(): React.JSX.Element {
   )
 }
 
+const router = createBrowserRouter([{
+  path: '*',
+  element: (
+    <KeyboardShortcutsProvider>
+      <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+        <RecordDeleteProvider>
+          <MigrationGate><Shell /></MigrationGate>
+        </RecordDeleteProvider>
+      </TooltipProvider>
+    </KeyboardShortcutsProvider>
+  ),
+}])
+
 function App(): React.JSX.Element {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <RefreshShellHost />
         <AuthProvider>
-          <BrowserRouter>
-            <KeyboardShortcutsProvider>
-              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
-                <RecordDeleteProvider>
-                  <MigrationGate>
-                    <Shell />
-                  </MigrationGate>
-                </RecordDeleteProvider>
-              </TooltipProvider>
-            </KeyboardShortcutsProvider>
-          </BrowserRouter>
+          <RouterProvider router={router} />
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

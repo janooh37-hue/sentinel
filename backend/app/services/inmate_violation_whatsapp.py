@@ -17,6 +17,7 @@ from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core import grades
 from app.db.models import AppSetting, AuditLog, Book, BookVersion
 from app.services import notify_format as nf
 
@@ -73,7 +74,7 @@ def queue_send(db: Session, version: BookVersion) -> None:
     if version.template_id != TEMPLATE_ID or version.status != "approved":
         return
     book = db.get(Book, version.book_id)
-    if book is None or book.confidentiality != "general":
+    if book is None or not grades.is_open_record(book):
         return
     if not get_settings().openwa_enabled or get_group(db) is None:
         return
@@ -124,7 +125,7 @@ def _deliver(db: Session, version_id: int) -> None:
         return
     book = db.get(Book, version.book_id)
     assert book is not None  # FK
-    if book.confidentiality != "general":
+    if not grades.is_open_record(book):
         return
     filename, data = announce_service.resolve_version_pdf(db, book, version)
     # ponytail: claim before sending = at-most-once; a failed send is logged

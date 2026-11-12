@@ -384,7 +384,7 @@ def submit_letter_book(
     book_service.submit_for_approval(
         db,
         book_id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=None,
         reviewer_user_ids=[],
         submitted_by_user_id=submitter.id,

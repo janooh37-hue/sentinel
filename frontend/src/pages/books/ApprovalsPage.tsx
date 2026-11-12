@@ -27,6 +27,7 @@ import { ChevronLeft, ChevronRight, FileText, Inbox } from 'lucide-react'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
+import { deskBookUrl } from '@/components/books/ledgerBookKeys'
 import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -193,9 +194,9 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
         <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] font-semibold text-foreground">
           <bdi dir="ltr">{item.ref_number}</bdi>
         </span>
-        {item.priority === 'High' && (
+        {(item.urgency === 'High' || item.urgency === 'Very High') && (
           <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[0.65em] font-semibold text-accent">
-            {t('books.approval.high')}
+            {t(item.urgency === 'Very High' ? 'books.urgency.veryHigh' : 'books.urgency.high')}
           </span>
         )}
         {restricted && (
@@ -334,10 +335,11 @@ export function ApprovalsPage(): React.JSX.Element {
 
   function openRow(item: ApprovalLogItem): void {
     if (!context) return
+    const queueUrl = approvalQueueUrl(context)
     const scrollY = listRef.current?.scrollTop ?? 0
     // Stash scroll + focus on THIS history entry before navigating away, so
     // browser-back restores them.
-    navigate(location.pathname + location.search, {
+    navigate(queueUrl, {
       replace: true,
       state: { scrollY, focusBookId: item.book_id },
     })
@@ -345,11 +347,13 @@ export function ApprovalsPage(): React.JSX.Element {
     // status/sort/page) and gets the list it came from, so Back returns here
     // focused on this row (the restore effect above reads the same state shape).
     const nav: RecordNavState = {
-      from: location.pathname + location.search,
+      from: queueUrl,
       queue: rows.map((row) => row.book_id),
       scrollY,
     }
-    navigate(approvalRecordUrl(item.book_id, item.version_id ?? null, context), { state: nav })
+    navigate(item.template === 'ledger'
+      ? deskBookUrl(item.book_id)
+      : approvalRecordUrl(item.book_id, item.version_id ?? null, context), { state: nav })
   }
 
   if (summaryQuery.isPending) {
@@ -584,6 +588,10 @@ export function ApprovalsPage(): React.JSX.Element {
                 dfLocale={dfLocale}
                 onOpen={() => openRow(item)}
                 onPreview={(trigger) => {
+                  if (item.template === 'ledger') {
+                    openRow(item)
+                    return
+                  }
                   previewTriggerRef.current = trigger
                   setPreview(item)
                 }}

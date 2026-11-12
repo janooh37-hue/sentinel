@@ -11498,8 +11498,9 @@
         "tags": [
           "books"
         ],
-        "summary": "Rename Book Folder",
-        "operationId": "rename_book_folder_api_v1_books_folders__folder_id__patch",
+        "summary": "Update Book Folder",
+        "description": "Rename a folder and/or move it to another box; filed books stay filed.",
+        "operationId": "update_book_folder_api_v1_books_folders__folder_id__patch",
         "parameters": [
           {
             "name": "folder_id",
@@ -12617,7 +12618,7 @@
             "required": false,
             "schema": {
               "type": "string",
-              "pattern": "^-?(date|ref|subject|purpose|confidentiality|status)$",
+              "pattern": "^-?(date|ref|subject|purpose|grade|status)$",
               "default": "-date",
               "title": "Sort"
             }
@@ -13376,17 +13377,17 @@
         "operationId": "list_recipient_candidates_api_v1_books_recipient_candidates_get",
         "parameters": [
           {
-            "name": "confidentiality",
+            "name": "grade",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "enum": [
-                    "general",
-                    "personal",
+                    "unclassified",
                     "secret",
-                    "directed"
+                    "top_secret",
+                    "addressee_only"
                   ],
                   "type": "string"
                 },
@@ -13394,7 +13395,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Confidentiality"
+              "title": "Grade"
             }
           },
           {
@@ -14350,13 +14351,13 @@
         }
       }
     },
-    "/api/v1/books/{book_id}/confidentiality": {
+    "/api/v1/books/{book_id}/grade": {
       "put": {
         "tags": [
           "books"
         ],
-        "summary": "Set Book Confidentiality",
-        "operationId": "set_book_confidentiality_api_v1_books__book_id__confidentiality_put",
+        "summary": "Set Book Grade",
+        "operationId": "set_book_grade_api_v1_books__book_id__grade_put",
         "parameters": [
           {
             "name": "book_id",
@@ -14389,7 +14390,76 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/BookConfidentialityUpdate"
+                "$ref": "#/components/schemas/BookGradeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/restore-distribution": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Restore Book Distribution",
+        "description": "Admin: give a legacy Personal record organization distribution again.",
+        "operationId": "restore_book_distribution_api_v1_books__book_id__restore_distribution_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookDistributionRestore"
               }
             }
           }
@@ -16735,6 +16805,1515 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "List Drafts",
+        "operationId": "list_drafts_api_v1_ledger_drafts_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerDraftRead"
+                  },
+                  "title": "Response List Drafts Api V1 Ledger Drafts Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Create Draft",
+        "operationId": "create_draft_api_v1_ledger_drafts_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerDraftCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerDraftRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Draft",
+        "operationId": "get_draft_api_v1_ledger_drafts__draft_id__get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerDraftRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Update Draft",
+        "operationId": "update_draft_api_v1_ledger_drafts__draft_id__patch",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerDraftUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerDraftRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Delete Draft",
+        "operationId": "delete_draft_api_v1_ledger_drafts__draft_id__delete",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}/images": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Upload Draft Image",
+        "operationId": "upload_draft_image_api_v1_ledger_drafts__draft_id__images_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerDraftImageRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}/images/{name}": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Draft Image",
+        "operationId": "get_draft_image_api_v1_ledger_drafts__draft_id__images__name__get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}/paper": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Draft Paper",
+        "operationId": "get_draft_paper_api_v1_ledger_drafts__draft_id__paper_get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}/paper.pdf": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Draft Paper Pdf",
+        "description": "The owner's Draft as real PDF pages for the composer preview.",
+        "operationId": "get_draft_paper_pdf_api_v1_ledger_drafts__draft_id__paper_pdf_get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "encoding",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^base64$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Encoding"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/drafts/{draft_id}/save-and-send": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Save And Send",
+        "operationId": "save_and_send_api_v1_ledger_drafts__draft_id__save_and_send_post",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Draft Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Ledger Book",
+        "operationId": "get_ledger_book_api_v1_ledger_books__book_id__get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Revision (version) id",
+              "title": "Revision"
+            },
+            "description": "Revision (version) id"
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/paper": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Ledger Book Paper",
+        "operationId": "get_ledger_book_paper_api_v1_ledger_books__book_id__paper_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Revision (version) id",
+              "title": "Revision"
+            },
+            "description": "Revision (version) id"
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/paper.pdf": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Ledger Book Paper Pdf",
+        "description": "One Revision as PDF, under the same read access as its paper.",
+        "operationId": "get_ledger_book_paper_pdf_api_v1_ledger_books__book_id__paper_pdf_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          },
+          {
+            "name": "v",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "V"
+            }
+          },
+          {
+            "name": "encoding",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^base64$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Encoding"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/content": {
+      "put": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Save Ledger Content",
+        "operationId": "save_ledger_content_api_v1_ledger_books__book_id__content_put",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerContentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/revisions/{version_id}/saves": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "List Ledger Saves",
+        "operationId": "list_ledger_saves_api_v1_ledger_books__book_id__revisions__version_id__saves_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "version_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/LedgerSaveRead"
+                  },
+                  "title": "Response List Ledger Saves Api V1 Ledger Books  Book Id  Revisions  Version Id  Saves Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/corrections": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Start Correction",
+        "operationId": "start_correction_api_v1_ledger_books__book_id__corrections_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/images/{name}": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Book Image",
+        "operationId": "get_book_image_api_v1_ledger_books__book_id__images__name__get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/sign": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Sign Ledger Book",
+        "operationId": "sign_ledger_book_api_v1_ledger_books__book_id__sign_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerSignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/return": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Return Ledger Book",
+        "operationId": "return_ledger_book_api_v1_ledger_books__book_id__return_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerReturnIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/resubmit": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Resubmit Ledger Book",
+        "operationId": "resubmit_ledger_book_api_v1_ledger_books__book_id__resubmit_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/signer": {
+      "put": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Change Ledger Signer",
+        "operationId": "change_ledger_signer_api_v1_ledger_books__book_id__signer_put",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LedgerSignerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerBookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/outlook-draft": {
+      "post": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Create Ledger Outlook Draft",
+        "operationId": "create_ledger_outlook_draft_api_v1_ledger_books__book_id__outlook_draft_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerOutlookDraftRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ledger/books/{book_id}/signature": {
+      "get": {
+        "tags": [
+          "ledger-books"
+        ],
+        "summary": "Get Ledger Signature",
+        "operationId": "get_ledger_signature_api_v1_ledger_books__book_id__signature_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "revision",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Revision"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -38213,7 +39792,7 @@
             ],
             "title": "Record Status"
           },
-          "priority": {
+          "urgency": {
             "anyOf": [
               {
                 "type": "string"
@@ -38222,7 +39801,7 @@
                 "type": "null"
               }
             ],
-            "title": "Priority",
+            "title": "Urgency",
             "default": "Normal"
           },
           "submitted_by_user_id": {
@@ -38442,6 +40021,17 @@
             ],
             "title": "Access Scope",
             "default": "full"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Template"
           }
         },
         "type": "object",
@@ -40622,6 +42212,20 @@
         ],
         "title": "Body_stage_attachment_api_v1_documents_attachments_stage_post"
       },
+      "Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_draft_image_api_v1_ledger_drafts__draft_id__images_post"
+      },
       "Body_upload_employee_photo_api_v1_employees__employee_id__photo_post": {
         "properties": {
           "upload": {
@@ -41147,25 +42751,6 @@
         ],
         "title": "BookCategoryRead"
       },
-      "BookConfidentialityUpdate": {
-        "properties": {
-          "confidentiality": {
-            "type": "string",
-            "enum": [
-              "general",
-              "personal",
-              "secret",
-              "directed"
-            ],
-            "title": "Confidentiality"
-          }
-        },
-        "type": "object",
-        "required": [
-          "confidentiality"
-        ],
-        "title": "BookConfidentialityUpdate"
-      },
       "BookCreate": {
         "properties": {
           "category_id": {
@@ -41216,16 +42801,16 @@
             ],
             "title": "Doc Id"
           },
-          "confidentiality": {
+          "grade": {
             "type": "string",
             "enum": [
-              "general",
-              "personal",
+              "unclassified",
               "secret",
-              "directed"
+              "top_secret",
+              "addressee_only"
             ],
-            "title": "Confidentiality",
-            "default": "general"
+            "title": "Grade",
+            "default": "unclassified"
           }
         },
         "type": "object",
@@ -41271,22 +42856,22 @@
             ],
             "title": "Kind"
           },
-          "confidentiality": {
+          "grade": {
             "anyOf": [
               {
                 "type": "string",
                 "enum": [
-                  "general",
-                  "personal",
+                  "unclassified",
                   "secret",
-                  "directed"
+                  "top_secret",
+                  "addressee_only"
                 ]
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Confidentiality"
+            "title": "Grade"
           },
           "attach_reference": {
             "type": "boolean",
@@ -41310,6 +42895,22 @@
           "kind"
         ],
         "title": "BookDeriveRequest"
+      },
+      "BookDistributionRestore": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "BookDistributionRestore",
+        "description": "Admin correction of a legacy Personal record (ADR 0007, D5)."
       },
       "BookEditSessionRead": {
         "properties": {
@@ -41408,6 +43009,16 @@
             "minLength": 1,
             "title": "Name"
           },
+          "box": {
+            "type": "string",
+            "enum": [
+              "incoming",
+              "outgoing",
+              "done",
+              "archived"
+            ],
+            "title": "Box"
+          },
           "team": {
             "type": "boolean",
             "title": "Team",
@@ -41416,7 +43027,8 @@
         },
         "type": "object",
         "required": [
-          "name"
+          "name",
+          "box"
         ],
         "title": "BookFolderCreate"
       },
@@ -41429,6 +43041,16 @@
           "name": {
             "type": "string",
             "title": "Name"
+          },
+          "box": {
+            "type": "string",
+            "enum": [
+              "incoming",
+              "outgoing",
+              "done",
+              "archived"
+            ],
+            "title": "Box"
           },
           "team": {
             "type": "boolean",
@@ -41498,6 +43120,7 @@
         "required": [
           "id",
           "name",
+          "box",
           "team",
           "count",
           "can_manage",
@@ -41685,17 +43308,58 @@
       "BookFolderUpdate": {
         "properties": {
           "name": {
-            "type": "string",
-            "maxLength": 80,
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Name"
+          },
+          "box": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "incoming",
+                  "outgoing",
+                  "done",
+                  "archived"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box"
+          }
+        },
+        "type": "object",
+        "title": "BookFolderUpdate",
+        "description": "Rename and/or move a folder to another box; filed books stay filed."
+      },
+      "BookGradeUpdate": {
+        "properties": {
+          "grade": {
+            "type": "string",
+            "enum": [
+              "unclassified",
+              "secret",
+              "top_secret",
+              "addressee_only"
+            ],
+            "title": "Grade"
           }
         },
         "type": "object",
         "required": [
-          "name"
+          "grade"
         ],
-        "title": "BookFolderUpdate"
+        "title": "BookGradeUpdate"
       },
       "BookInboxRead": {
         "properties": {
@@ -41992,7 +43656,7 @@
             ],
             "title": "Deleted At"
           },
-          "priority": {
+          "urgency": {
             "anyOf": [
               {
                 "type": "string"
@@ -42001,7 +43665,22 @@
                 "type": "null"
               }
             ],
-            "title": "Priority"
+            "title": "Urgency"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
           },
           "approval_state": {
             "type": "string",
@@ -42016,16 +43695,30 @@
             "title": "Access Scope",
             "default": "full"
           },
-          "confidentiality": {
+          "grade": {
             "type": "string",
             "enum": [
-              "general",
-              "personal",
+              "unclassified",
               "secret",
-              "directed"
+              "top_secret",
+              "addressee_only"
             ],
-            "title": "Confidentiality",
-            "default": "general"
+            "title": "Grade",
+            "default": "unclassified"
+          },
+          "distribution": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "named"
+            ],
+            "title": "Distribution",
+            "default": "organization"
+          },
+          "metadata_only": {
+            "type": "boolean",
+            "title": "Metadata Only",
+            "default": false
           },
           "can_write": {
             "type": "boolean",
@@ -42037,9 +43730,9 @@
             "title": "Can Send",
             "default": false
           },
-          "can_change_confidentiality": {
+          "can_change_grade": {
             "type": "boolean",
-            "title": "Can Change Confidentiality",
+            "title": "Can Change Grade",
             "default": false
           },
           "my_inbox": {
@@ -42499,7 +44192,7 @@
           "stamp_style",
           "created_at",
           "deleted_at",
-          "priority",
+          "urgency",
           "approval_state",
           "current_template_id",
           "service_id"
@@ -42720,7 +44413,7 @@
             "type": "string",
             "enum": [
               "not_cleared",
-              "personal",
+              "writer_only",
               "already_recipient",
               "self"
             ],
@@ -42895,11 +44588,6 @@
             ],
             "title": "Note"
           },
-          "make_directed": {
-            "type": "boolean",
-            "title": "Make Directed",
-            "default": false
-          },
           "include_references": {
             "type": "boolean",
             "title": "Include References",
@@ -43029,13 +44717,14 @@
       },
       "BookSubmitRequest": {
         "properties": {
-          "priority": {
+          "urgency": {
             "type": "string",
             "enum": [
               "Normal",
-              "High"
+              "High",
+              "Very High"
             ],
-            "title": "Priority",
+            "title": "Urgency",
             "default": "Normal"
           },
           "approver_user_id": {
@@ -43092,15 +44781,23 @@
             ],
             "title": "Subject"
           },
-          "confidentiality": {
+          "grade": {
             "type": "string",
             "enum": [
-              "general",
-              "personal",
+              "unclassified",
               "secret",
-              "directed"
+              "top_secret",
+              "addressee_only"
             ],
-            "title": "Confidentiality"
+            "title": "Grade"
+          },
+          "distribution": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "named"
+            ],
+            "title": "Distribution"
           },
           "created_at": {
             "type": "string",
@@ -43164,7 +44861,8 @@
           "book_id",
           "ref_number",
           "subject",
-          "confidentiality",
+          "grade",
+          "distribution",
           "created_at",
           "approval_state",
           "direction",
@@ -46540,16 +48238,16 @@
             ],
             "title": "Classification Code"
           },
-          "confidentiality": {
+          "grade": {
             "type": "string",
             "enum": [
-              "general",
-              "personal",
+              "unclassified",
               "secret",
-              "directed"
+              "top_secret",
+              "addressee_only"
             ],
-            "title": "Confidentiality",
-            "default": "general"
+            "title": "Grade",
+            "default": "unclassified"
           },
           "notify_employee": {
             "anyOf": [
@@ -52928,6 +54626,129 @@
         ],
         "title": "LedgerAddress"
       },
+      "LedgerAddresseeIn": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "to",
+              "cc"
+            ],
+            "title": "Role"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "LedgerAddresseeIn",
+        "description": "Exactly one id; service validation uses the ADDRESSEE_INVALID field error."
+      },
+      "LedgerAddresseeRead": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "to",
+              "cc"
+            ],
+            "title": "Role"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "contact_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contact Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "g_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "G Number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role",
+          "user_id",
+          "contact_id",
+          "name",
+          "name_ar",
+          "email",
+          "g_number"
+        ],
+        "title": "LedgerAddresseeRead"
+      },
       "LedgerAttachmentMeta": {
         "properties": {
           "index": {
@@ -52951,6 +54772,775 @@
         ],
         "title": "LedgerAttachmentMeta",
         "description": "Per-attachment metadata for the detail view.\n\nPopulated by ``GET /{id}`` from disk; the other endpoints that return\n``LedgerEntryRead`` leave it empty (the drawer only reads the full entry).\n``index`` is the position in ``attachment_paths`` (stable; used to address\nthe file by ``/attachments/by-index/{index}`` so Arabic/spaced filenames\nnever go in the URL path). ``size`` is the on-disk byte count, or 0 when the\nfile is missing."
+      },
+      "LedgerBookRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "grade": {
+            "type": "string",
+            "enum": [
+              "unclassified",
+              "secret",
+              "top_secret",
+              "addressee_only"
+            ],
+            "title": "Grade"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "classification_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classification Code"
+          },
+          "paper_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Date"
+          },
+          "approval_state": {
+            "type": "string",
+            "title": "Approval State"
+          },
+          "created_by_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
+          },
+          "voided": {
+            "type": "boolean",
+            "title": "Voided"
+          },
+          "revisions": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerRevisionRead"
+            },
+            "type": "array",
+            "title": "Revisions"
+          },
+          "selected_version_id": {
+            "type": "integer",
+            "title": "Selected Version Id"
+          },
+          "addressed_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressed To"
+          },
+          "printed_cc": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Printed Cc"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subjects"
+          },
+          "body_html": {
+            "type": "string",
+            "title": "Body Html"
+          },
+          "content_sha256": {
+            "type": "string",
+            "title": "Content Sha256"
+          },
+          "external": {
+            "type": "boolean",
+            "title": "External"
+          },
+          "addressees": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerAddresseeRead"
+            },
+            "type": "array",
+            "title": "Addressees"
+          },
+          "signer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LedgerSignerRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_sign": {
+            "type": "boolean",
+            "title": "Can Sign"
+          },
+          "can_return": {
+            "type": "boolean",
+            "title": "Can Return"
+          },
+          "can_change_signer": {
+            "type": "boolean",
+            "title": "Can Change Signer"
+          },
+          "can_resubmit": {
+            "type": "boolean",
+            "title": "Can Resubmit"
+          },
+          "can_create_outlook_draft": {
+            "type": "boolean",
+            "title": "Can Create Outlook Draft"
+          },
+          "return_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Note"
+          },
+          "paper_preset": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "report"
+            ],
+            "title": "Paper Preset"
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerReferenceRead"
+            },
+            "type": "array",
+            "title": "References"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerFolderRead"
+            },
+            "type": "array",
+            "title": "Folders"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ref_number",
+          "grade",
+          "importance",
+          "tab",
+          "classification_code",
+          "paper_date",
+          "approval_state",
+          "created_by_user_id",
+          "voided",
+          "revisions",
+          "selected_version_id",
+          "addressed_to",
+          "printed_cc",
+          "subjects",
+          "body_html",
+          "content_sha256",
+          "external",
+          "addressees",
+          "signer",
+          "can_sign",
+          "can_return",
+          "can_change_signer",
+          "can_resubmit",
+          "can_create_outlook_draft",
+          "return_note",
+          "paper_preset",
+          "references",
+          "folders"
+        ],
+        "title": "LedgerBookRead"
+      },
+      "LedgerContentUpdate": {
+        "properties": {
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
+          },
+          "expected_version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Version Id"
+          },
+          "expected_content_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Content Sha256"
+          },
+          "addressed_to": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Addressed To"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Subjects"
+          },
+          "body_html": {
+            "type": "string",
+            "maxLength": 2000000,
+            "title": "Body Html"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version_id",
+          "expected_content_sha256",
+          "addressed_to",
+          "subjects",
+          "body_html"
+        ],
+        "title": "LedgerContentUpdate"
+      },
+      "LedgerDraftCreate": {
+        "properties": {
+          "tab": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 15.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "grade": {
+            "type": "string",
+            "enum": [
+              "unclassified",
+              "secret",
+              "top_secret",
+              "addressee_only"
+            ],
+            "title": "Grade",
+            "default": "unclassified"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
+          },
+          "addressed_to": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Addressed To"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Subjects"
+          },
+          "body_html": {
+            "type": "string",
+            "maxLength": 2000000,
+            "title": "Body Html",
+            "default": ""
+          },
+          "external": {
+            "type": "boolean",
+            "title": "External",
+            "default": false
+          },
+          "signer_manager_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Manager Id"
+          },
+          "addressees": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerAddresseeIn"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Addressees"
+          },
+          "paper_preset": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "report"
+            ],
+            "title": "Paper Preset"
+          },
+          "reference_book_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Reference Book Ids"
+          },
+          "folder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Folder Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LedgerDraftCreate"
+      },
+      "LedgerDraftImageRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "src": {
+            "type": "string",
+            "title": "Src"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "src"
+        ],
+        "title": "LedgerDraftImageRead"
+      },
+      "LedgerDraftRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "draft_number": {
+            "type": "string",
+            "title": "Draft Number"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "grade": {
+            "type": "string",
+            "enum": [
+              "unclassified",
+              "secret",
+              "top_secret",
+              "addressee_only"
+            ],
+            "title": "Grade"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "addressed_to": {
+            "type": "string",
+            "title": "Addressed To"
+          },
+          "printed_cc": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Printed Cc"
+          },
+          "subjects": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subjects"
+          },
+          "body_html": {
+            "type": "string",
+            "title": "Body Html"
+          },
+          "external": {
+            "type": "boolean",
+            "title": "External"
+          },
+          "signer_manager_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Manager Id"
+          },
+          "addressees": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerAddresseeIn"
+            },
+            "type": "array",
+            "title": "Addressees"
+          },
+          "paper_preset": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "report"
+            ],
+            "title": "Paper Preset"
+          },
+          "reference_book_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Reference Book Ids"
+          },
+          "folder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Folder Ids"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "draft_number",
+          "tab",
+          "grade",
+          "importance",
+          "addressed_to",
+          "printed_cc",
+          "subjects",
+          "body_html",
+          "external",
+          "signer_manager_id",
+          "addressees",
+          "paper_preset",
+          "reference_book_ids",
+          "folder_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "LedgerDraftRead"
+      },
+      "LedgerDraftUpdate": {
+        "properties": {
+          "printed_cc": {
+            "items": {
+              "type": "string",
+              "maxLength": 500,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Printed Cc"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 15.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "unclassified",
+                  "secret",
+                  "top_secret",
+                  "addressee_only"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "importance": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Importance"
+          },
+          "addressed_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressed To"
+          },
+          "subjects": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subjects"
+          },
+          "body_html": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body Html"
+          },
+          "external": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External"
+          },
+          "signer_manager_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Manager Id"
+          },
+          "addressees": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LedgerAddresseeIn"
+                },
+                "type": "array",
+                "maxItems": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressees"
+          },
+          "paper_preset": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "normal",
+                  "report"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paper Preset"
+          },
+          "reference_book_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Book Ids"
+          },
+          "folder_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 10
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LedgerDraftUpdate",
+        "description": "Partial update: only the fields sent change."
       },
       "LedgerEntryCreate": {
         "properties": {
@@ -53476,6 +56066,24 @@
         "title": "LedgerEntryUpdate",
         "description": "All fields optional — partial update (PATCH semantics)."
       },
+      "LedgerFolderRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "LedgerFolderRead"
+      },
       "LedgerListItem": {
         "properties": {
           "id": {
@@ -53649,6 +56257,238 @@
           "offset"
         ],
         "title": "LedgerListResponse"
+      },
+      "LedgerOutlookDraftRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "LedgerOutlookDraftRead"
+      },
+      "LedgerReferenceRead": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "can_open": {
+            "type": "boolean",
+            "title": "Can Open"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "ref",
+          "date",
+          "can_open"
+        ],
+        "title": "LedgerReferenceRead",
+        "description": "A «إشارة إلى:» entry; ``can_open`` false prints the ref without a link."
+      },
+      "LedgerReturnIn": {
+        "properties": {
+          "note": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "note"
+        ],
+        "title": "LedgerReturnIn"
+      },
+      "LedgerRevisionRead": {
+        "properties": {
+          "version_id": {
+            "type": "integer",
+            "title": "Version Id"
+          },
+          "version_no": {
+            "type": "integer",
+            "title": "Version No"
+          },
+          "trigger": {
+            "type": "string",
+            "title": "Trigger"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "signed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed At"
+          },
+          "superseded": {
+            "type": "boolean",
+            "title": "Superseded"
+          },
+          "locked": {
+            "type": "boolean",
+            "title": "Locked"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "version_no",
+          "trigger",
+          "created_at",
+          "signed_at",
+          "superseded",
+          "locked"
+        ],
+        "title": "LedgerRevisionRead"
+      },
+      "LedgerSaveRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "saved_by_user_id": {
+            "type": "integer",
+            "title": "Saved By User Id"
+          },
+          "saved_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved By Name"
+          },
+          "saved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Saved At"
+          },
+          "content_sha256": {
+            "type": "string",
+            "title": "Content Sha256"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "saved_by_user_id",
+          "saved_by_name",
+          "saved_at",
+          "content_sha256"
+        ],
+        "title": "LedgerSaveRead"
+      },
+      "LedgerSignRequest": {
+        "properties": {
+          "expected_version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Expected Version Id"
+          },
+          "expected_content_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Content Sha256"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version_id",
+          "expected_content_sha256"
+        ],
+        "title": "LedgerSignRequest"
+      },
+      "LedgerSignerIn": {
+        "properties": {
+          "manager_id": {
+            "type": "integer",
+            "title": "Manager Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "manager_id"
+        ],
+        "title": "LedgerSignerIn"
+      },
+      "LedgerSignerRead": {
+        "properties": {
+          "manager_id": {
+            "type": "integer",
+            "title": "Manager Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "manager_id",
+          "user_id",
+          "name",
+          "name_ar",
+          "title"
+        ],
+        "title": "LedgerSignerRead"
       },
       "LegacyCandidateRead": {
         "properties": {
@@ -71669,16 +74509,16 @@
             ],
             "title": "Table Rows"
           },
-          "confidentiality": {
+          "grade": {
             "type": "string",
             "enum": [
-              "general",
-              "personal",
+              "unclassified",
               "secret",
-              "directed"
+              "top_secret",
+              "addressee_only"
             ],
-            "title": "Confidentiality",
-            "default": "general"
+            "title": "Grade",
+            "default": "unclassified"
           },
           "attachments": {
             "anyOf": [

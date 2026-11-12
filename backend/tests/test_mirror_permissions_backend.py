@@ -1044,7 +1044,7 @@ def test_late_reviewer_completion_retains_only_the_assigned_revision(
         "category_id": "LATE",
         "category_name_ar": None,
         "category_name_en": "Late review",
-        "priority": "Normal",
+        "urgency": "Normal",
         "direction": "outgoing",
         "stamp_style": None,
         "employee_id": None,
@@ -1130,7 +1130,7 @@ def test_late_reviewer_completion_retains_only_the_assigned_revision(
 
     book.subject = "FUTURE V2 SECRET SUBJECT"
     book.category_id = "SECRET"
-    book.priority = "High"
+    book.urgency = "Very High"
     book.direction = "incoming"
     book.stamp_style = "FUTURE V2 SECRET STAMP"
     book.attachment_paths = ["book_attachments/FUTURE-V2-SECRET.pdf"]
@@ -1146,7 +1146,7 @@ def test_late_reviewer_completion_retains_only_the_assigned_revision(
             "category_id": "SECRET",
             "category_name_ar": None,
             "category_name_en": "Future secret",
-            "priority": "High",
+            "urgency": "Very High",
             "direction": "incoming",
             "stamp_style": "FUTURE V2 SECRET STAMP",
             "employee_id": None,
@@ -1172,7 +1172,7 @@ def test_late_reviewer_completion_retains_only_the_assigned_revision(
         assert payload["selected_version_id"] == version_v1.id
         assert payload["subject"] == "Visible v1 subject"
         assert payload["category_id"] == "LATE"
-        assert payload["priority"] == "Normal"
+        assert payload["urgency"] == "Normal"
         assert payload["direction"] == "outgoing"
         assert payload["submitted_by_name"] == "Mirror Admin"
         assert payload["stamp_style"] is None
@@ -2590,7 +2590,12 @@ def test_classification_denial_hides_records_and_linked_documents(
     mirror_api.as_user(admin)
     assert mirror_api.client.get("/api/v1/books").json()["total"] == 4
     assert mirror_api.client.get(f"/api/v1/books/{hidden.id}").status_code == 200
-    assert book_service.document_visibility_clause(mirror_api.db, admin) is None
+    admin_clause = book_service.document_visibility_clause(mirror_api.db, admin)
+    assert admin_clause is not None
+    assert set(mirror_api.db.scalars(select(Document.id).where(admin_clause))) == {
+        primary.id,
+        companion.id,
+    }
 
 
 def test_classification_denial_blocks_general_book_generation_and_word_creation(

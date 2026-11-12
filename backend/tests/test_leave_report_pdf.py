@@ -56,7 +56,7 @@ def test_prints_the_posted_sheet_without_its_scripts(
         def __init__(self, args: list[str], **_: object) -> None:
             seen["page"] = Path(url2pathname(urlparse(args[-1]).path)).read_text(encoding="utf-8")
             out = next(a for a in args if a.startswith("--print-to-pdf=")).split("=", 1)[1]
-            Path(out).write_bytes(b"%PDF-sheet")
+            Path(out).write_bytes(b"%PDF-sheet\n%%EOF\n")
 
         def wait(self, timeout: float | None = None) -> int:
             return 0
@@ -67,7 +67,7 @@ def test_prints_the_posted_sheet_without_its_scripts(
     r = _post(api_db, {"html": SHEET, "lang": "ar"})
 
     assert r.status_code == 200
-    assert base64.b64decode(r.text) == b"%PDF-sheet"
+    assert base64.b64decode(r.text) == b"%PDF-sheet\n%%EOF\n"
     page = seen["page"]
     assert '<html lang="ar" dir="rtl">' in page
     assert "<script" not in page and "تقرير الإجازات" in page
@@ -85,3 +85,46 @@ def test_host_without_a_browser_gets_a_clear_503(
 
     assert r.status_code == 503
     assert r.json()["error"]["code"] == "PDF_BROWSER_UNAVAILABLE"
+
+
+def test_waits_for_pdf_completion_after_browser_launcher_exits(monkeypatch):
+    output = None
+    ticks = 0
+
+    class BrowserLauncher:
+        def __init__(self, args, **kwargs):
+            nonlocal output
+            output = Path(next(a.split("=", 1)[1] for a in args if a.startswith("--print-to-pdf=")))
+
+        def wait(self, timeout=None):
+            return 0
+
+    def advance(seconds):
+        nonlocal ticks
+        ticks += 1
+        output.write_bytes(b"%PDF-partial" if ticks == 1 else b"%PDF-complete\n%%EOF\n")
+
+    monkeypatch.setattr(sheet_pdf_service, "find_browser", lambda: Path("msedge.exe"))
+    monkeypatch.setattr(sheet_pdf_service.subprocess, "Popen", BrowserLauncher)
+    monkeypatch.setattr("time.sleep", advance)
+    assert sheet_pdf_service.print_document("<p>Test</p>") == b"%PDF-complete\n%%EOF\n"
+    assert ticks == 2
+
+
+def test_incomplete_pdf_stops_at_deadline(monkeypatch):
+    from app.api.errors import AppError
+
+    class BrowserLauncher:
+        def __init__(self, args, **kwargs):
+            output = Path(next(a.split("=", 1)[1] for a in args if a.startswith("--print-to-pdf=")))
+            output.write_bytes(b"%PDF-incomplete")
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(sheet_pdf_service, "find_browser", lambda: Path("msedge.exe"))
+    monkeypatch.setattr(sheet_pdf_service.subprocess, "Popen", BrowserLauncher)
+    monkeypatch.setattr(sheet_pdf_service, "TIMEOUT_S", 0)
+    with pytest.raises(AppError) as error:
+        sheet_pdf_service.print_document("<p>Test</p>")
+    assert error.value.code == "PDF_NOT_AVAILABLE"

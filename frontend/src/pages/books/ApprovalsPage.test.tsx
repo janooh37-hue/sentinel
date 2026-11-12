@@ -93,7 +93,7 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
     category_name_en: null,
     status: 'pending',
     record_status: 'pending',
-    priority: 'Normal',
+    urgency: 'Normal',
     submitted_by_user_id: 9,
     submitted_by_name: 'Submitter',
     doc_manager_user_id: null,
@@ -133,6 +133,7 @@ function renderPage(initialEntry = '/books/approvals') {
           <Routes>
             <Route path="/books/approvals" element={<ApprovalsPage />} />
             <Route path="/books/:id" element={<div data-testid="record-page" />} />
+            <Route path="/ledger" element={<div data-testid="ledger-desk" />} />
           </Routes>
           <LocationProbe />
         </MemoryRouter>
@@ -147,6 +148,31 @@ beforeEach(() => {
   vi.mocked(api.listApprovalLog).mockReset()
   vi.mocked(api.getApprovalSummary).mockReset()
   vi.mocked(api.listApprovalLog).mockResolvedValue(emptyLog)
+})
+
+it.each([
+  ['High', 'books.urgency.high'],
+  ['Very High', 'books.urgency.veryHigh'],
+] as const)('shows the distinct %s urgency label', async (urgency, labelKey) => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+  vi.mocked(api.listApprovalLog).mockResolvedValue({
+    ...emptyLog,
+    items: [row({ urgency })],
+    total: 1,
+  })
+  renderPage()
+  expect(await screen.findByText(i18n.t(labelKey))).toBeInTheDocument()
+  const otherLabel = urgency === 'High' ? 'books.urgency.veryHigh' : 'books.urgency.high'
+  expect(screen.queryByText(i18n.t(otherLabel))).not.toBeInTheDocument()
+})
+
+it.each([null, 'Normal'])('does not flag %s urgency', async (urgency) => {
+  vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+  vi.mocked(api.listApprovalLog).mockResolvedValue({ ...emptyLog, items: [row({ urgency })], total: 1 })
+  renderPage()
+  expect(await screen.findByText('HR-0001')).toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.high'))).not.toBeInTheDocument()
+  expect(screen.queryByText(i18n.t('books.urgency.veryHigh'))).not.toBeInTheDocument()
 })
 
 it('marks unseen outcomes New only in Sent, and removes the marker after the outcome is seen', async () => {
@@ -484,6 +510,22 @@ describe('ApprovalsPage rows', () => {
       queue: [2],
       scrollY: 0,
     })
+  })
+
+  it.each(['row', 'thumbnail'])('T-F4 opens a Ledger approval from its %s on the desk, never the generic signing record', async (target) => {
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      ...emptyLog, items: [row({ book_id: 40, template: 'ledger', version_id: 71, document_id: 7 })], total: 1,
+    })
+    const genericSign = vi.spyOn(api, 'signBook')
+    renderPage()
+    await userEvent.click(target === 'row'
+      ? await screen.findByText('HR-0001')
+      : await screen.findByRole('button', { name: /preview document/i }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/ledger?tab=books&book=40')
+    expect(screen.getByTestId('ledger-desk')).toBeInTheDocument()
+    expect(screen.queryByTestId('record-page')).not.toBeInTheDocument()
+    expect(genericSign).not.toHaveBeenCalled()
+    genericSign.mockRestore()
   })
 
   it('opens a document preview from the thumbnail without navigating, then opens the full record', async () => {

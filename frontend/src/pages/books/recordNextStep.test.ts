@@ -66,6 +66,11 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
     ref_number: 'HR-1',
     approval_state: state,
     access_scope: 'full',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
+    urgency: 'Normal',
+    can_change_grade: false,
     can_write: true,
     voided_at: null,
     edit_session: null,
@@ -203,6 +208,13 @@ describe('recordNextStep rows', () => {
     const r = recordNextStep(bookOf('none'), ctxOf({}, caps))
     expect(r.primary).toBe('continueEditing')
     expect(r.secondary).toEqual([])
+  })
+
+  it('never offers the generic Submit for approval on a Ledger Book', () => {
+    const ledger = recordNextStep(bookOf('none', { current_template_id: 'Ledger Book' }), ctxOf())
+    expect(ledger.primary).not.toBe('sendForApproval')
+    expect(ledger.secondary).not.toContain('sendForApproval')
+    expect(recordNextStep(bookOf('none'), ctxOf()).primary).toBe('sendForApproval')
   })
 
   it('draft that failed to render: noDoc, continue editing, delete draft only', () => {

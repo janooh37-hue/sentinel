@@ -394,7 +394,7 @@ def test_returned_report_reopens_finishes_and_can_be_resubmitted(db_session, tmp
     submitted = book_service.submit_for_approval(
         db_session,
         book.id,
-        priority="Normal",
+        urgency="Normal",
         approver_user_id=None,
         reviewer_user_ids=[],
         submitted_by_user_id=reporter.id,
@@ -423,7 +423,7 @@ def test_returned_report_reopens_finishes_and_can_be_resubmitted(db_session, tmp
         book_service.submit_for_approval(
             db_session,
             book.id,
-            priority="Normal",
+            urgency="Normal",
             approver_user_id=manager_user.id,
             reviewer_user_ids=[],
             submitted_by_user_id=manager_user.id,

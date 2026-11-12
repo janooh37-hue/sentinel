@@ -147,7 +147,7 @@ def submit(env, book):
         branch_approver_user_id=(
             env.branch.id if book.versions[-1].template_id == "Administrative Leave Form" else None
         ),
-        priority="normal",
+        urgency="Normal",
         reviewer_user_ids=[],
     )
 
@@ -977,7 +977,7 @@ def test_permit_without_doc_manager_carries_the_signer_name(gate_env):
         book.id,
         submitted_by_user_id=env.signer.id,
         approver_user_id=env.signer.id,
-        priority="normal",
+        urgency="Normal",
         reviewer_user_ids=[],
     )
     version = book.versions[-1]
@@ -1215,7 +1215,7 @@ def test_admin_leave_requires_distinct_eligible_branch_approver(gate_env, select
             submitted_by_user_id=env.signer.id,
             approver_user_id=env.signer.id,
             branch_approver_user_id=branch_id,
-            priority="normal",
+            urgency="Normal",
             reviewer_user_ids=[],
         )
     assert caught.value.code == expected_code

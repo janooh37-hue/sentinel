@@ -1,8 +1,8 @@
-"""Printed level mark: سري / شخصي at the top of every page of a record DOCX.
+"""Printed grade mark (``app.core.grades``) at the top of every page of a record DOCX.
 
 The mark lives in each header part inside a content control tagged
 ``gssg-level-mark`` so it survives Word round-trips and can be replaced or
-removed when the record's level changes. It is a positioned frame in the top
+removed when the record's grade changes. It is a positioned frame in the top
 margin, so it never pushes the letterhead or body down.
 """
 
@@ -15,10 +15,11 @@ from docx import Document
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 
+from app.core.grades import paper_mark
+
 logger = logging.getLogger(__name__)
 
 LEVEL_MARK_TAG = "gssg-level-mark"
-LEVEL_MARKS = {"secret": "سري", "personal": "شخصي"}
 # Distance of the mark's top from the page's top edge, in twips (0.35 cm).
 _MARK_Y_TWIPS = 200
 _EMPTY_HEADER_P = (
@@ -67,12 +68,12 @@ def _ensure_headers(doc) -> None:  # type: ignore[no-untyped-def]
         section.header_distance = 0
 
 
-def apply_level_mark(docx_path: Path | str, level: str) -> bool:
-    """Make every header carry exactly the mark for ``level`` (none for general/directed).
+def apply_level_mark(docx_path: Path | str, grade: str) -> bool:
+    """Make every header carry exactly the mark for ``grade`` (none for Unclassified).
 
     Idempotent. Returns False when the DOCX can't be opened or saved.
     """
-    text = LEVEL_MARKS.get(level)
+    text = paper_mark(grade)
     try:
         doc = Document(str(docx_path))
         if text is not None:

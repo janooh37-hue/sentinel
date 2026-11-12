@@ -10,7 +10,7 @@ import { RecordDeleteProvider } from './RecordDeleteProvider'
 vi.mock('@/lib/api', () => ({
   api: {
     getBookFacets: vi.fn().mockResolvedValue({ total: 1, services: [] }),
-    listBooks: vi.fn().mockResolvedValue({ items: [{ id: 42, ref_number: 'GS-0042', subject: 'abc match', approval_state: 'pending', category: { name_en: 'General', name_ar: 'عام' }, direction: 'incoming', created_at: '2026-01-01', is_draft: false }] }),
+    listBooks: vi.fn().mockResolvedValue({ items: [{ id: 42, ref_number: 'GS-0042', subject: 'abc match', grade: 'unclassified', distribution: 'named', metadata_only: false, urgency: 'Normal', can_change_grade: false, approval_state: 'pending', category: { name_en: 'General', name_ar: 'عام' }, direction: 'incoming', created_at: '2026-01-01', is_draft: false }] }),
     listBookCategories: vi.fn().mockResolvedValue([]),
   },
   apiErrorMessage: (error: unknown) => String(error),
@@ -120,7 +120,7 @@ describe('Books URL state', () => {
   })
 
   it('loads matching dashboard records beyond the first 500 rows', async () => {
-    const row = { id: 42, ref_number: 'GS-0042', approval_state: 'approved', created_at: '2026-10-01', is_draft: false }
+    const row = { id: 42, ref_number: 'GS-0042', grade: 'unclassified', distribution: 'named', metadata_only: false, urgency: 'Normal', can_change_grade: false, approval_state: 'approved', created_at: '2026-10-01', is_draft: false }
     vi.mocked(api.listBooks)
       .mockResolvedValueOnce({
         items: Array.from({ length: 500 }, (_, id) => ({ ...row, id: id + 1 })),

@@ -38,6 +38,7 @@ import type { RecordPieceProps } from './recordActions'
 import { useRecordPrint } from '../useRecordPrintMode'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
+import { canSendBook } from '../canSendBook'
 
 function GroupLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -138,7 +139,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.includedPapers.addToPdf')}
           </DropdownMenuItem>
         )}
-        {book.can_send && (
+        {canSendBook(book, view.userId) && (
           <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
             <Send className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.send.menu')}
@@ -160,10 +161,10 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.thread.linkRecord')}
           </DropdownMenuItem>
         )}
-        {book.can_change_confidentiality && (
+        {book.can_change_grade && (
           <DropdownMenuItem data-testid="record-level-trigger" onSelect={() => openOverlay('level')}>
             <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-            {t('books.confidentiality.menu')}
+            {t('books.grade.menu')}
           </DropdownMenuItem>
         )}
         {state === 'approved' && current?.signed_pdf_url && (

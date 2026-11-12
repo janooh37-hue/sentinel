@@ -5,7 +5,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type BookRead, type BookThreadItem } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { ConfidentialityChip } from './ConfidentialityChip'
+import { GradeChip } from './GradeChip'
 
 function RecordLink({ item }: { item: BookThreadItem }): React.JSX.Element {
   return (
@@ -17,7 +17,7 @@ function RecordLink({ item }: { item: BookThreadItem }): React.JSX.Element {
         <bdi dir="ltr" className="font-mono font-medium tabular-nums">{item.ref_number}</bdi>
         <span className="break-words" dir="auto">{item.subject}</span>
       </Link>
-      <ConfidentialityChip level={item.confidentiality} />
+      <GradeChip level={item.grade} />
     </div>
   )
 }

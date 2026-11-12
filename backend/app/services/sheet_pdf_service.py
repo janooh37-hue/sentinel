@@ -21,6 +21,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 from app.api.errors import AppError
@@ -85,8 +86,16 @@ def _kill_tree(proc: subprocess.Popen[bytes]) -> None:
 
 
 def print_sheet(sheet_html: str, *, lang: str) -> bytes:
-    """The sheet printed to PDF bytes. 503 when no browser is installed or the
-    print fails."""
+    """Sanitize and print an on-screen sheet."""
+    return print_document(document(sheet_html, lang=lang))
+
+
+def print_document(html: str) -> bytes:
+    """Print a server-built standalone document, using an isolated browser.
+
+    Callers supply safe HTML and asset URLs/CSP. Untrusted posted sheets must
+    go through ``print_sheet`` instead.
+    """
     browser = find_browser()
     if browser is None:
         raise AppError(
@@ -97,8 +106,9 @@ def print_sheet(sheet_html: str, *, lang: str) -> bytes:
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         work = Path(tmp)
         page = work / "sheet.html"
-        page.write_text(document(sheet_html, lang=lang), encoding="utf-8")
+        page.write_text(html, encoding="utf-8")
         out = work / "sheet.pdf"
+        deadline = time.monotonic() + TIMEOUT_S
         proc = subprocess.Popen(
             [
                 str(browser),
@@ -117,11 +127,20 @@ def print_sheet(sheet_html: str, *, lang: str) -> bytes:
             stderr=subprocess.DEVNULL,
         )
         try:
-            proc.wait(timeout=TIMEOUT_S)
+            exit_code = proc.wait(timeout=TIMEOUT_S)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)
-        if not out.is_file() or out.stat().st_size == 0:
-            raise AppError(
-                "PDF_NOT_AVAILABLE", "The browser could not print the report.", http_status=503
-            )
-        return out.read_bytes()
+            exit_code = -1
+        # Windows browser launchers can exit before their child finishes writing the PDF.
+        while True:
+            try:
+                pdf = out.read_bytes()
+            except FileNotFoundError:
+                pdf = b""
+            if pdf.startswith(b"%PDF-") and pdf.rstrip().endswith(b"%%EOF"):
+                return pdf
+            if exit_code != 0 or time.monotonic() >= deadline:
+                raise AppError(
+                    "PDF_NOT_AVAILABLE", "The browser could not print the report.", http_status=503
+                )
+            time.sleep(0.1)

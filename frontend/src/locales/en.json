@@ -3136,6 +3136,11 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "restricted": {
+      "hint": "Restricted",
+      "explain": "You can see that this record exists, but not its contents.",
+      "rowLabel": "Restricted record {{ref}}. You can see that it exists, but not its contents."
+    },
     "thread": {
       "reply": "Reply",
       "createFrom": "Create from",
@@ -3154,8 +3159,8 @@
       "alsoSend": "Also send referenced records ({{count}})",
       "sendSummary": "Reference deliveries: {{sent}} sent, {{skipped}} skipped.",
       "skipped": {
-        "not_cleared": "{{ref}}: {{name}} does not have Secret clearance",
-        "personal": "{{ref}}: Personal records cannot be sent",
+        "not_cleared": "{{ref}}: {{name}} does not have the required grade clearance",
+        "writer_only": "{{ref}}: Only the writer can distribute this record",
         "already_recipient": "{{ref}}: {{name}} already received this record",
         "self": "{{ref}}: sending to yourself was skipped"
       },
@@ -3164,35 +3169,54 @@
         "incoming": { "reply": "Replied by", "based_on": "Used to create", "reference": "Referenced by" }
       },
       "errors": {
-        "levelFloor": "The level cannot be below the original's minimum level.",
+        "levelFloor": "An attached classified reference requires at least Secret grade.",
         "classificationRequired": "Select a classification before creating the record.",
         "secretClearance": "Secret clearance is required to create this record.",
         "forbidden": "You do not have permission to create this record.",
         "linkExists": "This record is already attached as a reference.",
         "linkSelf": "A record cannot reference itself.",
-        "levelBelowFloor": "Raise this record's level before attaching this reference.",
+        "levelBelowFloor": "Raise this record's grade before attaching this reference.",
         "bookNotFound": "This record is unavailable or you do not have access to it."
       }
     },
-    "confidentiality": {
-      "label": "Level",
-      "chipTitle": "Record level: {{level}}",
+    "grade": {
+      "label": "Grade",
+      "chipTitle": "Record grade: {{level}}",
       "levels": {
-        "general": "General",
-        "personal": "Personal",
+        "unclassified": "Unclassified",
         "secret": "Secret",
-        "directed": "Directed"
+        "top_secret": "Top Secret",
+        "addressee_only": "Addressee Only"
       },
       "hints": {
-        "general": "Everyone with access to this record type can open it.",
-        "personal": "Only you can open it.",
-        "secret": "Only people with Secret clearance can open it.",
-        "directed": "Only you and the people you send it to can open it."
+        "unclassified": "No clearance is required.",
+        "secret": "Access requires Secret clearance.",
+        "top_secret": "Only people named on the record can open it.",
+        "addressee_only": "Only people named on the record can open it."
       },
-      "menu": "Change level…",
-      "changeTitle": "Change record level",
-      "save": "Save level",
-      "changed": "Level changed to {{level}}"
+      "menu": "Change grade…",
+      "changeTitle": "Change grade",
+      "save": "Save grade",
+      "changed": "Grade changed to {{level}}",
+      "lowerConfirmTitle": "Lower this record's grade?",
+      "lowerConfirmDescription": "The grade will change from {{from}} to {{to}}. The record becomes less restricted, so more people may be able to open it."
+    },
+    "distribution": {
+      "errors": {
+        "notNamed": "Only an Unclassified record with named distribution can be restored."
+      }
+    },
+    "urgency": {
+      "label": "Urgency",
+      "normal": "Normal",
+      "high": "Urgent",
+      "veryHigh": "Very Urgent"
+    },
+    "importance": {
+      "label": "Importance",
+      "high": "High",
+      "medium": "Medium",
+      "none": "None"
     },
     "send": {
       "menu": "Send to…",
@@ -3215,9 +3239,7 @@
       "note": "Note (optional)",
       "notePlaceholder": "Add a short note for the recipients",
       "send": "Send",
-      "switchAndSend": "Switch to Directed and send",
-      "personalNotice": "This record is Personal. Sending it switches it to Directed: only you and the people you send it to can open it.",
-      "secretNotice": "Secret record: only people with Secret clearance are listed.",
+      "secretNotice": "Only people with the required grade clearance are listed.",
       "sent_one": "Sent to {{count}} person",
       "sent_other": "Sent to {{count}} people",
       "nothingSent": "Nothing new was sent",
@@ -3225,9 +3247,9 @@
       "skippedSelf": "you",
       "skippedAlready": "{{name}} (already has it)",
       "errors": {
-        "notCleared": "Some recipients don't have Secret clearance.",
+        "notCleared": "Some recipients don't have the required grade clearance.",
         "invalid": "Some recipients can't receive records.",
-        "personal": "A Personal record must be switched to Directed before sending."
+        "writerOnly": "Only the writer can distribute this record."
       },
       "sentTo_one": "Sent to {{count}} person",
       "sentTo_other": "Sent to {{count}} people",
@@ -3381,9 +3403,6 @@
       "return": "Return for changes",
       "returnShort": "Return",
       "addNote": "Add note",
-      "priority": "Priority",
-      "high": "High",
-      "normal": "Normal",
       "approvalChain": "Approval chain",
       "submitter": "Submitter",
       "approved": "Book approved",
@@ -3444,7 +3463,7 @@
       "approverNotEligible": "Choose an active account that is allowed to approve.",
       "sequentialSignerHint": "The Branch Manager signs first, then the Project Manager.",
       "branchNotes": "Branch Manager notes (optional)",
-      "noteCounter": "Characters: {{count}} / {{max}}",
+      "noteCounter": "Characters: {{used}} / {{max}}",
       "branchStageWordRevision": "This Administrative Leave was edited in Word. Regenerate it from the form to route it through the branch manager and project manager.",
       "stageProgress": "Approval stages",
       "notYourStep": "This approval stage is not yours to sign. The record has been refreshed.",
@@ -3894,6 +3913,207 @@
       "deleted": "Template deleted"
     }
   },
+  "ledgerBook": {
+    "paper": {
+      "title": "Ledger Book paper",
+      "loading": "Loading paper…",
+      "pageCount": "Page {{page}} of {{total}}",
+      "pagesLabel": "{{title}} pages",
+      "fitWidth": "Fit width",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "references": "References",
+      "folders": "Copy to folder",
+      "referenceEntry": "Book no. <ref>{{ref}}</ref> dated <date>{{date}}</date>"
+    },
+    "editor": {
+      "fonts": {
+        "sakkalMajalla": "Sakkal Majalla",
+        "calibri": "Calibri",
+        "universNextArabic": "Univers Next Arabic",
+        "notoNaskhArabic": "Noto Naskh Arabic"
+      },
+      "styles": {
+        "mainTitle": "Main title",
+        "subtitle": "Subtitle",
+        "sectionHeading": "Section heading",
+        "paragraph": "Paragraph",
+        "note": "Note",
+        "justified": "Justified paragraph",
+        "centeredLine": "Centred bold line"
+      },
+      "tables": {
+        "menu": "Ready-made tables",
+        "numbered": "Numbered table",
+        "names": "Names table",
+        "dated": "Table with dates",
+        "details": "Details table (item and value)"
+      }
+    },
+    "actions": {
+      "sign": "Sign",
+      "signConfirmTitle": "Sign this Ledger Book?",
+      "signConfirmDescription": "Your saved signature will be applied and this revision will be locked.",
+      "signed": "Book signed.",
+      "return": "Return",
+      "returnTitle": "Return to writer",
+      "returnNote": "Return note",
+      "returnNoteRequired": "Enter a return note.",
+      "returned": "Book returned to the writer.",
+      "changeSigner": "Change signer",
+      "changeSignerTitle": "Change signing manager",
+      "signerRequired": "Choose a signing manager.",
+      "signerChanged": "Signing manager changed.",
+      "resubmit": "Resubmit for signature",
+      "resubmitted": "Book resubmitted for signature.",
+      "createOutlookDraft": "Create Outlook draft",
+      "outlookDraftCreated": "Draft created. Open Outlook Drafts to review and send it.",
+      "correctionConfirmTitle": "Start a correction?",
+      "correctionConfirmDescription": "A new unsigned revision will be created from the signed one for you to edit. The signed revision stays on record.",
+      "resubmitConfirmTitle": "Resubmit for signature?",
+      "resubmitConfirmDescription": "The book will be sent back to the signing manager to sign.",
+      "outlookConfirmTitle": "Create an Outlook draft?",
+      "outlookConfirmDescription": "A draft email with the signed paper attached will be created in your Outlook Drafts. Nothing is sent until you send it from Outlook."
+    },
+    "composer": {
+      "newButton": "New Ledger Book",
+      "creating": "Creating…",
+      "title": "Ledger Book",
+      "draftLabel": "DRAFT {{number}}",
+      "back": "Back to Ledger",
+      "loading": "Loading…",
+      "loadFailed": "This could not be loaded.",
+      "retry": "Retry",
+      "preset": {
+        "label": "Paper format",
+        "normal": "Book",
+        "report": "Report",
+        "openingHint": "The salutation is printed on the paper. Delivery recipients are selected separately."
+      },
+      "ccRules": {
+        "secretReason": "Requires Secret clearance.",
+        "removeBeforeSend": "Remove CC recipients before Save & Send.",
+        "removeAll": "Remove all CC recipients"
+      },
+      "references": {
+        "label": "References",
+        "search": "Search by book reference or subject",
+        "selected": "Selected references",
+        "remove": "Remove reference {{ref}}",
+        "limit": "{{count}} of {{max}} references",
+        "empty": "No matching books."
+      },
+      "folders": {
+        "label": "Copy to folder",
+        "limit": "{{count}} of {{max}} outgoing folders",
+        "empty": "No outgoing folders are available.",
+        "unavailable": "Folder #{{id}} is unavailable. Uncheck to remove."
+      },
+      "fields": {
+        "kind": "Destination",
+        "internal": "Internal",
+        "external": "External",
+        "to": "Send to",
+        "addressedTo": "Addressed to",
+        "printedCc": "Printed CC",
+        "printedCcHint": "Names printed under CC on the paper only. Select delivery recipients separately. Up to 20 names.",
+        "cc": "CC",
+        "signer": "Signing manager",
+        "signerPlaceholder": "Choose a linked manager",
+        "addRecipient": "Add recipient",
+        "selected": "{{role}} recipients",
+        "removeRecipient": "Remove {{name}} from {{role}}",
+        "tab": "Tab",
+        "tabPlaceholder": "Choose a tab",
+        "tabOption": "{{tab}} — {{name}}",
+        "gradeBanner": "{{label}}: {{grade}}"
+      },
+      "errors": {
+        "addressedToRequired": "Enter the printed salutation.",
+        "printedCcLimit": "Select up to 20 printed CC names.",
+        "addressedToTooLong": "Keep the salutation within 500 characters.",
+        "toRequired": "Choose at least one recipient in Send to.",
+        "signerRequired": "Choose a signing manager.",
+        "addresseeInvalid": "One or more recipients are unavailable or not cleared for this grade. Choose the recipients again.",
+        "addresseeOnlyCc": "Addressee Only books cannot include CC recipients.",
+        "referenceInvalid": "One or more references are unavailable. Choose the references again.",
+        "folderInvalid": "One or more folders are unavailable in the outgoing box. Choose the folders again.",
+        "gradeBelowFloor": "The references require a grade of at least {{min}}. Raise the grade before Save & Send.",
+        "signerInvalid": "Choose an active manager linked to a user account."
+      },
+      "subjects": {
+        "legend": "Subject lines",
+        "hint": "The first line is the subject. Up to {{max}} lines.",
+        "line": "Subject line {{n}}",
+        "add": "Add line",
+        "remove": "Remove line {{n}}",
+        "moveUp": "Move line {{n}} up",
+        "moveDown": "Move line {{n}} down"
+      },
+      "body": {
+        "label": "Body"
+      },
+      "save": {
+        "pending": "Unsaved changes",
+        "saving": "Saving…",
+        "saved": "Saved",
+        "failed": "Not saved. Your next change tries again."
+      },
+      "navigation": {
+        "title": "Save changes before leaving",
+        "body": "Your changes could not be saved. Retry to save them before leaving, or cancel to keep editing."
+      },
+      "preview": {
+        "show": "Preview",
+        "hide": "Hide preview"
+      },
+      "paper": {
+        "title": "Ledger Book paper"
+      },
+      "send": {
+        "button": "Save & Send",
+        "confirmTitle": "Save & Send this Ledger Book?",
+        "confirmBody": "A reference number is allocated now. The manager signs first, then To and CC receive the book.",
+        "sent": "Ledger Book {{ref}} sent to the manager for signature."
+      },
+      "delete": {
+        "button": "Delete draft",
+        "confirmTitle": "Delete this draft?",
+        "confirmBody": "The draft and its images are removed. This cannot be undone.",
+        "deleted": "Draft deleted."
+      },
+      "drafts": {
+        "place": "Drafts",
+        "title": "My drafts",
+        "empty": "No drafts.",
+        "noSubject": "No subject yet",
+        "updated": "Updated {{date}}",
+        "delete": "Delete {{label}}"
+      },
+      "book": {
+        "print": "Print",
+        "startCorrection": "Start correction",
+        "editContent": "Edit content",
+        "revisions": "Revision",
+        "revisionOption": "Revision {{n}}",
+        "revisionLocked": "Revision {{n}} (signed)",
+        "correctionStarted": "Correction Revision {{n}} started."
+      },
+      "content": {
+        "title": "Edit {{ref}}",
+        "save": "Save",
+        "saved": "Saved.",
+        "cancel": "Cancel",
+        "locked": "This Revision is signed and locked. Start a correction to change it.",
+        "revisionChanged": "This Revision is no longer editable or a newer Revision is available. Your text is still here, but cannot be saved. Copy any text you need before leaving, then reopen the book to continue.",
+        "imagesNote": "Images already in the body stay; new images can only be added in a draft.",
+        "discardTitle": "Discard unsaved changes?",
+        "discardBody": "Your changes to this book are not saved. Leaving now discards them.",
+        "discardConfirm": "Discard changes",
+        "keepEditing": "Keep editing"
+      }
+    }
+  },
   "ledger": {
     "title": "Ledger",
     "tabs": {
@@ -3912,12 +4132,15 @@
         "subject": "Subject",
         "createdBy": "Created by",
         "state": "Status",
-        "papers": "Papers"
+        "papers": "Papers",
+        "category": "Category",
+        "progress": "Progress"
       },
       "state": {
         "unread": "New",
         "read": "Read",
-        "archived": "Archived"
+        "archived": "Archived",
+        "sent": "Sent"
       },
       "openInRecords": "Open in Records",
       "details": "Details",
@@ -3932,7 +4155,7 @@
       "created": "Created",
       "notDone": "Not done",
       "note": "Sender note",
-      "confidentiality": "Confidentiality",
+      "grade": "Grade",
       "untitled": "No subject",
       "noMatches": "No matching books",
       "searchHint": "Try a reference, a name or a word from the note, or clear the search.",
@@ -3966,13 +4189,18 @@
       "folders": {
         "navigation": "Book folders",
         "folder": "Folder",
-        "personal": "My folders",
-        "team": "Team folders",
-        "addPersonal": "New personal folder",
-        "addTeam": "New team folder",
-        "emptyPersonal": "Create a folder, then drag books onto it.",
-        "emptyPersonalTouch": "Create a folder to organize your books.",
-        "emptyTeam": "No team folders yet.",
+        "inBox": "Folders in {{box}}",
+        "newInBox": "New folder in {{box}}",
+        "emptyBox": "No folders yet. Create one, then drag books from this box onto it.",
+        "emptyBoxTouch": "No folders yet.",
+        "box": "Box",
+        "shareWithTeam": "Share with the team",
+        "sharedName": "{{name}}, shared folder",
+        "sharedNameCount": "{{name}} {{count}}, shared folder",
+        "sharedWithEveryone": "Shared with everyone",
+        "moved": "Folder moved",
+        "errorBoxMismatch": "This book is not in that folder's box. File it into a folder of a box it is in.",
+        "noneForBook": "No folders in this book's boxes yet. Create one in the side rail.",
         "name": "Folder name",
         "nameHint": "Use 1–80 characters. Enter saves; Escape cancels.",
         "new": "New folder",
@@ -3987,7 +4215,6 @@
         "saveError": "Could not save the folder",
         "deleteError": "Could not delete the folder",
         "loadError": "Could not load folders.",
-        "createFirst": "Create a folder in the side rail first",
         "filed": "Book added to folder",
         "filedInto": "Book added to “{{name}}”",
         "unfiled": "Book removed from folder",
@@ -4028,7 +4255,6 @@
       },
       "to": "To",
       "signer": "Signatory",
-      "urgent": "Urgent",
       "noteShort": "Note",
       "doneOn": "Done on",
       "openedOf": "Opened by {{count}} of {{total}}",
@@ -4760,6 +4986,20 @@
       "signerMismatch": "The signer must be the employee linked to your account.",
       "stagedImportOwner": "This staged import belongs to another user."
     },
+    "ledger": {
+      "chainOnly": "Ledger Books are approved and signed only through their branch chain.",
+      "revisionLocked": "This revision is signed and locked. Start a correction to change it.",
+      "revisionNotSigned": "A correction can only start from a signed revision.",
+      "draftTabRequired": "Choose the tab (classification) first.",
+      "draftSubjectRequired": "Write at least one subject.",
+      "draftBodyRequired": "Write the letter body first.",
+      "contentOnly": "Edit Ledger Book subjects in the Ledger content editor.",
+      "contentConflict": "This book changed in another session. Your edits are still here. Copy any text you need, then reopen the book before saving.",
+      "signingContentConflict": "This book changed after you opened it. Review the updated paper before signing again.",
+      "imageEmpty": "The image is empty.",
+      "imageTooLarge": "The image is too large (5 MB at most).",
+      "imageTypeUnsupported": "Only PNG, JPEG, GIF and WebP images are accepted."
+    },
     "boundary": {
       "bodyLead": "This screen lost its connection.",
       "bodyReassure": "Nothing you did is lost",
@@ -5229,11 +5469,14 @@
     "submitterManagementStub": "Submitter management — coming soon.",
     "searchRecipients": "Search recipients…",
     "addRecipient": "Add recipient",
+    "recipientAdded": "Recipient added",
+    "clearRecipient": "Clear recipient",
     "manageRecipients": "Manage recipients",
     "recipientManagementTitle": "Recipient management",
     "recipientNamePlaceholder": "Recipient name",
     "recipientNameArPlaceholder": "Name (Arabic, optional)",
     "pickerLoadError": "Could not load list",
+    "savedNameLength": "Some saved names are unavailable here. Names must contain 1–{{max}} characters.",
     "groups": {
       "Applicant": "Applicant",
       "Manager": "Manager",

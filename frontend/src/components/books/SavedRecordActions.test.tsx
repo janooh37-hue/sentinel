@@ -7,12 +7,17 @@ import i18n from 'i18next'
 
 import ar from '@/locales/ar.json'
 import { api, type BookRead } from '@/lib/api'
+import type * as AuthModule from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { SavedRecordActions } from './SavedRecordActions'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: vi.fn() }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn() }))
+vi.mock('@/lib/authContext', async (original) => ({
+  ...await original<typeof AuthModule>(),
+  useAuth: () => ({ user: { id: 1 } }),
+}))
 vi.mock('./SubmitForApprovalDialog', () => ({
   SubmitForApprovalDialog: ({ bookId }: { bookId: number }) => (
     <div data-testid="approval-dialog">dialog:{bookId}</div>
@@ -28,6 +33,11 @@ function makeBook(overrides: Partial<BookRead> = {}): BookRead {
     ref_number: 'REF-42',
     approval_state: 'none',
     can_write: true,
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
+    can_change_grade: false,
+    urgency: 'Normal',
     versions: [{ pdf_url: '/current.pdf' }],
     ...overrides,
   } as BookRead

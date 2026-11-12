@@ -1,4 +1,4 @@
-"""Record render paths stamp the stored confidentiality level into DOCX headers."""
+"""Record render paths stamp the stored grade into DOCX headers."""
 
 from pathlib import Path
 from xml.etree import ElementTree
@@ -31,7 +31,18 @@ def render_settings(db_session, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("authoring", ["word", "report", "generated"])
-def test_secret_record_docx_has_level_mark(db_session, admin_user, render_settings, authoring):
+@pytest.mark.parametrize(
+    "grade, text",
+    [
+        ("unclassified", None),
+        ("secret", "سري"),
+        ("top_secret", "سري للغاية"),
+        ("addressee_only", "سري للغاية — لعنايته فقط"),
+    ],
+)
+def test_record_docx_has_grade_mark(
+    db_session, admin_user, render_settings, authoring, grade, text
+):
     if authoring == "word":
         result = word_book_service.create_word_book(
             db_session,
@@ -41,7 +52,7 @@ def test_secret_record_docx_has_level_mark(db_session, admin_user, render_settin
             subject="اختبار السرية",
             cc=[],
             manager_id=None,
-            confidentiality="secret",
+            grade=grade,
         )
         session = db_session.query(BookEditSession).filter_by(book_id=result.book_id).one()
         docx_path = Path(session.working_path)
@@ -54,7 +65,7 @@ def test_secret_record_docx_has_level_mark(db_session, admin_user, render_settin
             date=None,
             signer_employee_id="G-1001",
             sign=False,
-            confidentiality="secret",
+            grade=grade,
         )
         session = db_session.query(BookEditSession).filter_by(book_id=result.book_id).one()
         docx_path = Path(session.working_path)
@@ -67,13 +78,13 @@ def test_secret_record_docx_has_level_mark(db_session, admin_user, render_settin
             commit=True,
             current_user=admin_user,
             classification_code="5/1",
-            confidentiality="secret",
+            grade=grade,
             converter=lambda path: None,
         )
         docx_path = result.documents[0].docx_path
 
-    assert db_session.get(Book, result.book_id).confidentiality == "secret"
-    _assert_level_mark(docx_path, "سري")
+    assert db_session.get(Book, result.book_id).grade == grade
+    _assert_level_mark(docx_path, text)
 
 
 def _assert_level_mark(docx_path, text):
@@ -99,9 +110,17 @@ def _assert_level_mark(docx_path, text):
 
 
 @pytest.mark.parametrize("leave_type, count", [("Annual Leave", 2), ("Sick Leave", 1)])
-@pytest.mark.parametrize("level, text", [("secret", "سري"), ("personal", "شخصي")])
-def test_leave_primary_and_companion_keep_record_level_on_revision(
-    db_session, admin_user, render_settings, leave_type, count, level, text
+@pytest.mark.parametrize(
+    "grade, text",
+    [
+        ("unclassified", None),
+        ("secret", "سري"),
+        ("top_secret", "سري للغاية"),
+        ("addressee_only", "سري للغاية — لعنايته فقط"),
+    ],
+)
+def test_leave_primary_and_companion_keep_record_grade_on_revision(
+    db_session, admin_user, render_settings, leave_type, count, grade, text
 ):
     fields = {
         "leave_type": leave_type,
@@ -115,7 +134,7 @@ def test_leave_primary_and_companion_keep_record_level_on_revision(
         template_id="Leave Application Form",
         fields=fields,
         current_user=admin_user,
-        confidentiality=level,
+        grade=grade,
         converter=lambda _path: None,
     )
     assert len(initial.documents) == count
@@ -128,12 +147,12 @@ def test_leave_primary_and_companion_keep_record_level_on_revision(
         fields=fields,
         current_user=admin_user,
         revise_of_book_id=initial.book_id,
-        confidentiality="general",
+        grade="unclassified",
         converter=lambda _path: None,
     )
 
     assert revised.book_id == initial.book_id
-    assert db_session.get(Book, initial.book_id).confidentiality == level
+    assert db_session.get(Book, initial.book_id).grade == grade
     assert len(revised.documents) == count
     for document in revised.documents:
         _assert_level_mark(document.docx_path, text)
@@ -141,10 +160,16 @@ def test_leave_primary_and_companion_keep_record_level_on_revision(
 
 @pytest.mark.parametrize("authoring", ["word", "generated"])
 @pytest.mark.parametrize(
-    "level, text", [("personal", "شخصي"), ("general", None), ("directed", None)]
+    "grade, text",
+    [
+        ("unclassified", None),
+        ("secret", "سري"),
+        ("top_secret", "سري للغاية"),
+        ("addressee_only", "سري للغاية — لعنايته فقط"),
+    ],
 )
-def test_signing_uses_current_record_level_and_preserves_submitter_footer(
-    db_session, admin_user, render_settings, tmp_path, authoring, level, text
+def test_signing_uses_current_record_grade_and_preserves_submitter_footer(
+    db_session, admin_user, render_settings, tmp_path, authoring, grade, text
 ):
     from PIL import Image
 
@@ -159,7 +184,7 @@ def test_signing_uses_current_record_level_and_preserves_submitter_footer(
             subject="اختبار السرية",
             cc=[],
             manager_id=None,
-            confidentiality="secret",
+            grade="secret",
         )
         session = db_session.query(BookEditSession).filter_by(book_id=result.book_id).one()
         session.last_put_at = session.created_at
@@ -175,7 +200,7 @@ def test_signing_uses_current_record_level_and_preserves_submitter_footer(
             fields={"subject": "اختبار السرية", "body": "<p>نص سري</p>"},
             current_user=admin_user,
             classification_code="5/1",
-            confidentiality="secret",
+            grade="secret",
             converter=lambda _path: None,
         )
         book = db_session.get(Book, result.book_id)
@@ -189,7 +214,7 @@ def test_signing_uses_current_record_level_and_preserves_submitter_footer(
             for name in archive.namelist()
             if name.startswith("word/footer") and name.endswith(".xml")
         }
-    book.confidentiality = level
+    book.grade = grade
     db_session.commit()
     signature = tmp_path / "signature.png"
     Image.new("RGBA", (100, 40), (0, 0, 0, 255)).save(signature)

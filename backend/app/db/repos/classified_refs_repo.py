@@ -1,4 +1,4 @@
-"""Atomic serial allocator for classified General Book refs (1/{tab}/GSSG/{serial}).
+"""Atomic serial allocator for classified General Book refs (1/{tab}/{serial}).
 
 Mirrors :mod:`app.db.repos.refs_repo` BEGIN-IMMEDIATE / bounded-retry structure,
 operating on the single-row ``ClassifiedRefSequence`` (id=1).  Caller owns the

@@ -157,7 +157,13 @@ def test_inbox_confidential_single_is_neutral_even_with_details_present():
 
 
 def test_inbox_general_single_includes_record_and_sender():
-    book = Book(id=5, ref_number="HR-0409", subject="Annual leave", confidentiality="general")
+    book = Book(
+        id=5,
+        ref_number="HR-0409",
+        subject="Annual leave",
+        grade="unclassified",
+        distribution="organization",
+    )
     item = ns.inbox_item(book, BookRecipient(id=12), "Ali")
     assert (item.kind, item.ref, item.label) == ("inbox", "send:12", "HR-0409")
     assert not item.confidential
@@ -167,9 +173,20 @@ def test_inbox_general_single_includes_record_and_sender():
     assert url == "/books/5"
 
 
-@pytest.mark.parametrize("level", ["personal", "secret", "directed"])
-def test_inbox_item_redacts_non_general_record(level):
-    book = Book(id=5, ref_number="HR-0409", subject="Private memo", confidentiality=level)
+CLOSED_RECORDS = [
+    ("unclassified", "named"),
+    ("secret", "organization"),
+    ("secret", "named"),
+    ("top_secret", "named"),
+    ("addressee_only", "named"),
+]
+
+
+@pytest.mark.parametrize(("level", "distribution"), CLOSED_RECORDS)
+def test_inbox_item_redacts_non_open_record(level, distribution):
+    book = Book(
+        id=5, ref_number="HR-0409", subject="Private memo", grade=level, distribution=distribution
+    )
     item = ns.inbox_item(book, BookRecipient(id=12), "Ali")
     assert item.subject is None
     assert item.requester is None
@@ -190,10 +207,15 @@ def test_inbox_multiple_summarizes_without_any_record_details():
     assert url == section
 
 
-@pytest.mark.parametrize("level", ["general", "personal", "secret", "directed"])
-def test_record_actionable_items_redact_non_general_subjects(api_db, monkeypatch, level):
+@pytest.mark.parametrize(
+    ("level", "distribution"), [("unclassified", "organization"), *CLOSED_RECORDS]
+)
+def test_record_actionable_items_redact_non_open_subjects(api_db, monkeypatch, level, distribution):
     user = make_user(api_db, role="manager")
-    book = Book(id=5, ref_number="HR-0409", subject="Private memo", confidentiality=level)
+    book = Book(
+        id=5, ref_number="HR-0409", subject="Private memo", grade=level, distribution=distribution
+    )
+    is_open = (level, distribution) == ("unclassified", "organization")
     monkeypatch.setattr(ns.book_service, "list_awaiting", lambda *a, **kw: [book])
     monkeypatch.setattr(ns.book_service, "list_awaiting_scan", lambda *a, **kw: [book])
     items = [
@@ -202,10 +224,10 @@ def test_record_actionable_items_redact_non_general_subjects(api_db, monkeypatch
     assert {item.kind for item in items} == {"approval", "scanback"}
     for item in items:
         assert item.label == book.ref_number
-        assert item.subject == (book.subject if level == "general" else None)
+        assert item.subject == (book.subject if is_open else None)
         messages, _ = ss._build_push(item.kind, [item], "/section")
         for lang in ("en", "ar"):
-            assert (book.subject in messages[lang][1]) == (level == "general")
+            assert (book.subject in messages[lang][1]) == is_open
 
 
 def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db, monkeypatch):
@@ -213,14 +235,23 @@ def test_inbox_counts_and_items_only_include_visible_unread_active_sends(api_db,
     sender = make_user(api_db, email="sender@test.ae")
     api_db.add(BookCategory(id="HR", name_en="HR", prefix="HR"))
     rows = []
-    for n, level in enumerate(
-        ["general", "directed", "general", "general", "secret", "general"], 1
+    for n, (level, distribution) in enumerate(
+        [
+            ("unclassified", "organization"),
+            ("unclassified", "named"),
+            ("unclassified", "organization"),
+            ("unclassified", "organization"),
+            ("secret", "organization"),
+            ("unclassified", "organization"),
+        ],
+        1,
     ):
         book = Book(
             category_id="HR",
             ref_number=f"HR-{n}",
             subject=f"Subject {n}",
-            confidentiality=level,
+            grade=level,
+            distribution=distribution,
             created_by_user_id=sender.id,
             deleted_at=datetime(2026, 1, 1) if n == 6 else None,
         )

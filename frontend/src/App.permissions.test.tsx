@@ -163,6 +163,11 @@ const routes = [
   ['/holdings/store/disposals', ['store.view'], 'store-disposals-page'],
 ] as const
 
+function visit(path: string): void {
+  window.history.pushState({}, '', path)
+  window.dispatchEvent(new PopStateEvent('popstate'))
+}
+
 beforeEach(() => {
   capabilityState.allowed = new Set()
   capabilityState.isLoading = false
@@ -171,12 +176,20 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
-  window.history.pushState({}, '', '/')
+  visit('/')
 })
 
 describe('App route capability gates', () => {
+  it('does not create browser-history listeners while rendering in StrictMode', () => {
+    const listen = vi.spyOn(window, 'addEventListener')
+    render(<React.StrictMode><App /></React.StrictMode>)
+    const historyListeners = listen.mock.calls.filter(([event]) => event === 'popstate')
+    listen.mockRestore()
+    expect(historyListeners).toHaveLength(0)
+  })
+
   it.each(routes)('denies %s without its required capabilities', async (path) => {
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     const denialCopy =
@@ -190,7 +203,7 @@ describe('App route capability gates', () => {
     ['/employees', "You don't have access to this page"],
     ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
   ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     expect(await screen.findByText(copy)).toBeVisible()
@@ -199,7 +212,7 @@ describe('App route capability gates', () => {
 
   it.each(routes)('renders %s with all required capabilities', async (path, capabilities, pageText) => {
     capabilityState.allowed = new Set(capabilities)
-    window.history.pushState({}, '', path)
+    visit(path)
     render(<App />)
 
     expect(await screen.findByText(pageText)).toBeVisible()
@@ -209,7 +222,7 @@ describe('App route capability gates', () => {
     'denies /services when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/services')
+      visit('/services')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -221,7 +234,7 @@ describe('App route capability gates', () => {
     'denies /scan-back when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/scan-back')
+      visit('/scan-back')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -233,7 +246,7 @@ describe('App route capability gates', () => {
     'denies /vehicles/edit when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/vehicles/edit')
+      visit('/vehicles/edit')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -245,7 +258,7 @@ describe('App route capability gates', () => {
     'denies delivery scan when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/holdings/store/deliveries/scan')
+      visit('/holdings/store/deliveries/scan')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -257,7 +270,7 @@ describe('App route capability gates', () => {
     'denies /assets/store/counts/new when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/holdings/store/counts/new')
+      visit('/holdings/store/counts/new')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -266,14 +279,14 @@ describe('App route capability gates', () => {
   )
 
   it('renders /books/approvals for an authenticated user with no capabilities — plain authenticated, not capability-gated', async () => {
-    window.history.pushState({}, '', '/books/approvals')
+    visit('/books/approvals')
     render(<App />)
 
     expect(await screen.findByText('approvals-page')).toBeVisible()
   })
 
   it('renders an assigned-record route for an authenticated user without book capabilities', async () => {
-    window.history.pushState({}, '', '/books/42')
+    visit('/books/42')
     render(<App />)
 
     expect(await screen.findByText('book-record-page')).toBeVisible()
@@ -281,7 +294,7 @@ describe('App route capability gates', () => {
   })
 
   it('renders the signature-placement route for an authenticated user without book capabilities', async () => {
-    window.history.pushState({}, '', '/documents/9/signature-placement')
+    visit('/documents/9/signature-placement')
     render(<App />)
 
     expect(await screen.findByText('signature-placement-page')).toBeVisible()
@@ -290,7 +303,7 @@ describe('App route capability gates', () => {
 
   it('keeps the global books register denied with books.approve alone', async () => {
     capabilityState.allowed = new Set(['books.approve'])
-    window.history.pushState({}, '', '/books')
+    visit('/books')
     render(<App />)
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -306,7 +319,7 @@ describe('App Assets landing route', () => {
     { caps: [], pathname: '/holdings/store', page: "You don't have access to this page" },
   ])('chooses the viewable default section for $caps', async ({ caps, pathname, page }) => {
     capabilityState.allowed = new Set(caps)
-    window.history.pushState({}, '', '/holdings')
+    visit('/holdings')
     render(<App />)
 
     expect(await screen.findByText(page)).toBeVisible()
@@ -321,13 +334,13 @@ describe('App Assets landing route', () => {
 
   it('waits for capabilities before choosing the Uniform-only destination', async () => {
     capabilityState.isLoading = true
-    window.history.pushState({}, '', '/holdings')
-    const view = render(<App />)
+    visit('/holdings')
+    render(<App />)
 
     expect(window.location.pathname).toBe('/holdings')
     capabilityState.allowed = new Set(['uniform.view'])
     capabilityState.isLoading = false
-    view.rerender(<App />)
+    visit('/holdings')
 
     expect(await screen.findByText('uniform-page')).toBeVisible()
     expect(window.location.pathname).toBe('/holdings/uniform')
@@ -338,7 +351,7 @@ describe('App Assets landing route', () => {
     { caps: ['store.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
   ])('keeps the other child protected for $caps', async ({ caps, pathname, page }) => {
     capabilityState.allowed = new Set(caps)
-    window.history.pushState({}, '', pathname)
+    visit(pathname)
     render(<App />)
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -347,7 +360,7 @@ describe('App Assets landing route', () => {
   })
 
   it('preserves the default Store access request when neither section is viewable', async () => {
-    window.history.pushState({}, '', '/holdings')
+    visit('/holdings')
     render(<App />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Request access' }))
@@ -370,7 +383,7 @@ describe('App legacy links', () => {
     ],
   ] as const)('sends the delivered link %s to its service URL', async (legacy, pathname, search) => {
     capabilityState.allowed = new Set(['documents.generate', 'books.view'])
-    window.history.pushState({}, '', legacy)
+    visit(legacy)
     render(<App />)
 
     expect(await screen.findByText('application-page')).toBeVisible()
@@ -381,7 +394,7 @@ describe('App legacy links', () => {
 
 describe('App unknown paths', () => {
   it('shows Not found at the requested URL instead of the dashboard', async () => {
-    window.history.pushState({}, '', '/nope')
+    visit('/nope')
     render(<App />)
 
     expect(await screen.findByRole('heading', { level: 1, name: /page not found/i })).toBeVisible()

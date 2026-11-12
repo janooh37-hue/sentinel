@@ -152,7 +152,7 @@ def test_bookread_builds_with_sms_field():
             "stamp_style": None,
             "created_at": "2026-07-06T00:00:00",
             "deleted_at": None,
-            "priority": "Normal",
+            "urgency": "Normal",
             "approval_state": "none",
         }
     )

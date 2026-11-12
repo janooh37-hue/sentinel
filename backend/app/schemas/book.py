@@ -6,7 +6,14 @@ from datetime import datetime
 from typing import Annotated, ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, computed_field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    computed_field,
+    model_validator,
+)
 
 from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
@@ -22,8 +29,12 @@ BookStampStyle = Literal[
     "Watermark Style",
 ]
 
-# Record level (Book.confidentiality) and direct-send purpose.
-BookConfidentiality = Literal["general", "personal", "secret", "directed"]
+# Record grade + distribution (app.core.grades, ADR 0007), urgency, Ledger Book
+# importance (ADR 0008), send purpose.
+BookGrade = Literal["unclassified", "secret", "top_secret", "addressee_only"]
+BookDistribution = Literal["organization", "named"]
+BookUrgency = Literal["Normal", "High", "Very High"]
+BookImportance = Literal["medium", "high"]
 SendPurpose = Literal["info", "action", "reply", "circulate"]
 
 
@@ -40,13 +51,28 @@ class BookCategoryRead(ORMBase):
     requires_approval: bool
 
 
+# The desk box a folder sits in; one per desk scope.
+BookFolderBox = Literal["incoming", "outgoing", "done", "archived"]
+FolderName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+
+
 class BookFolderCreate(BaseModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    name: FolderName
+    box: BookFolderBox
     team: bool = False
 
 
 class BookFolderUpdate(BaseModel):
-    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=80)]
+    """Rename and/or move a folder to another box; filed books stay filed."""
+
+    name: FolderName | None = None
+    box: BookFolderBox | None = None
+
+    @model_validator(mode="after")
+    def _one_change(self) -> BookFolderUpdate:
+        if self.name is None and self.box is None:
+            raise ValueError("Give a new name or box.")
+        return self
 
 
 class BookFolderShareUser(BaseModel):
@@ -77,6 +103,7 @@ class BookFolderSharesUpdate(BaseModel):
 class BookFolderRead(BaseModel):
     id: int
     name: str
+    box: BookFolderBox
     team: bool
     count: int
     can_manage: bool
@@ -104,7 +131,7 @@ class BookCreate(BaseModel):
     direction: BookDirection = "incoming"
     stamp_style: BookStampStyle = "Header Text (Ref: XX-0000)"
     doc_id: int | None = None  # optional link to a Document row
-    confidentiality: BookConfidentiality = "general"
+    grade: BookGrade = "unclassified"
 
 
 class BookUpdate(BaseModel):
@@ -116,7 +143,7 @@ class BookUpdate(BaseModel):
 
 
 class BookSubmitRequest(BaseModel):
-    priority: Literal["Normal", "High"] = "Normal"
+    urgency: BookUrgency = "Normal"
     # When None, the server routes to the doc's linked manager
     # (Book.doc_manager_id → Manager.user_id). An explicit id wins.
     approver_user_id: int | None = None
@@ -325,7 +352,7 @@ class WordBookCreate(BaseModel):
     manager_id: int | None = None
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
-    confidentiality: BookConfidentiality = "general"
+    grade: BookGrade = "unclassified"
     attachments: list[GenerateAttachmentSpec] | None = None
     # Report path only: present ⇒ create a Report (no classification/ref). `sign`
     # embeds the signer's signature at Finish; `date` is the report's document date.
@@ -474,8 +501,6 @@ class BookSendRequest(BaseModel):
     user_ids: list[int] = Field(min_length=1, max_length=50)
     purpose: SendPurpose
     note: str | None = Field(default=None, max_length=500)
-    # Personal records only: switch the level to directed in the same send.
-    make_directed: bool = False
     include_references: bool = True
 
 
@@ -486,7 +511,7 @@ class BookSendSkipped(BaseModel):
 
 class BookReferenceSkipped(BaseModel):
     user_id: int
-    reason: Literal["not_cleared", "personal", "already_recipient", "self"]
+    reason: Literal["not_cleared", "writer_only", "already_recipient", "self"]
 
 
 class BookReferenceSendResult(BaseModel):
@@ -504,7 +529,7 @@ class BookSendResponse(BaseModel):
 
 class BookDeriveRequest(BaseModel):
     kind: Literal["reply", "based_on"]
-    confidentiality: BookConfidentiality | None = None
+    grade: BookGrade | None = None
     attach_reference: bool = True
     classification_code: str | None = None
 
@@ -517,7 +542,8 @@ class BookThreadItem(ORMBase):
     book_id: int
     ref_number: str
     subject: str | None
-    confidentiality: BookConfidentiality
+    grade: BookGrade
+    distribution: BookDistribution
     created_at: datetime
     approval_state: str
     direction: Literal["outgoing", "incoming"]
@@ -531,8 +557,14 @@ class BookThreadItem(ORMBase):
     LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
 
 
-class BookConfidentialityUpdate(BaseModel):
-    confidentiality: BookConfidentiality
+class BookGradeUpdate(BaseModel):
+    grade: BookGrade
+
+
+class BookDistributionRestore(BaseModel):
+    """Admin correction of a legacy Personal record (ADR 0007, D5)."""
+
+    reason: str = Field(min_length=1, max_length=500)
 
 
 class RecipientCandidateRead(BaseModel):
@@ -581,16 +613,23 @@ class BookRead(ORMBase):
     imported_doc: ImportedDocRead | None = None
     created_at: datetime
     deleted_at: datetime | None
-    priority: str | None
+    urgency: str | None
+    # Stored Ledger Book importance; None for every non-Ledger record (D7 maps
+    # urgency for display in the frontend only).
+    importance: BookImportance | None = None
     approval_state: str
     access_scope: Literal["full", "assigned_revision"] = "full"
-    confidentiality: BookConfidentiality = "general"
+    grade: BookGrade = "unclassified"
+    distribution: BookDistribution = "organization"
+    # Admin list row of a Top Secret / Addressee Only record it is not named on:
+    # ref, tab, grade and dates only; the subject and content stay hidden.
+    metadata_only: bool = False
     # Full record write access; clients must also check the action's capability.
     can_write: bool = False
     # Caller may direct-send / forward this record (full access).
     can_send: bool = False
-    # Caller may relabel the level (creator, manager, or admin with full access).
-    can_change_confidentiality: bool = False
+    # Caller may change the grade (creator or admin with full access).
+    can_change_grade: bool = False
     # The caller's newest active received send of this record, if any.
     my_inbox: BookInboxRead | None = None
     selected_version_id: int | None = None
@@ -763,7 +802,7 @@ class ApprovalLogItem(ORMBase):
     # real approved/returned/rejected outcome so the UI can label it.
     record_status: str | None = None
     # Null when historical metadata is unavailable for a restricted revision.
-    priority: str | None = "Normal"
+    urgency: str | None = "Normal"
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
     submitted_by_name_ar: str | None = None
@@ -793,6 +832,7 @@ class ApprovalLogItem(ORMBase):
     assignment_version_no: int | None = None
     assigned_signer_user_id: int | None = None
     access_scope: Literal["full", "assigned_revision"] = "full"
+    template: str | None = None
 
 
 class ApprovalLogResponse(BaseModel):

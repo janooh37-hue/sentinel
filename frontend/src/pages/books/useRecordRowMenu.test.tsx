@@ -13,13 +13,13 @@ import { RecordRowMenu } from './RecordRowMenu'
 
 const { hasCapability } = vi.hoisted(() => ({ hasCapability: vi.fn() }))
 
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'admin' } }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: hasCapability }) }))
 vi.mock('@/components/books/DeriveRecordDialog', () => ({
   DeriveRecordDialog: ({ book, kind }: { book: BookRead; kind: string }) => <output>{kind}:{book.id}</output>,
 }))
 vi.mock('@/components/books/SendRecordDialog', () => ({ SendRecordDialog: () => null }))
-vi.mock('@/components/books/ChangeConfidentialityDialog', () => ({ ChangeConfidentialityDialog: () => null }))
+vi.mock('@/components/books/ChangeGradeDialog', () => ({ ChangeGradeDialog: () => null }))
 vi.mock('@/lib/api', async (original) => {
   const actual = await original<typeof ApiModule>()
   return {
@@ -37,10 +37,11 @@ vi.mock('@/lib/api', async (original) => {
 
 function book(id: number, overrides: Partial<BookRead> = {}): BookRead {
   return {
-    id, ref_number: `GS-000${id}`, subject: `Record ${id}`, confidentiality: 'general',
+    id, ref_number: `GS-000${id}`, subject: `Record ${id}`, grade: 'unclassified', distribution: 'named', metadata_only: false,
     service_id: 'General Book', approval_state: 'pending', versions: [], attachment_paths: [],
-    imported_doc: null, can_send: false, can_change_confidentiality: false, my_inbox: null,
+    imported_doc: null, can_send: false, can_change_grade: false, my_inbox: null,
     access_scope: 'full',
+    urgency: 'Normal',
     ...overrides,
   } as BookRead
 }
@@ -90,18 +91,35 @@ beforeEach(() => {
 })
 
 describe('Record row actions', () => {
+  it.each(['top_secret', 'addressee_only'] as const)('only lets the creator send a %s record', async (grade) => {
+    const row = book(2, { grade, can_send: true, created_by_user_id: 9 })
+    vi.mocked(api.getBook).mockResolvedValue(row)
+    setup(row)
+    await openMenu()
+    await waitFor(() => expect(api.getBook).toHaveBeenCalled())
+    expect(screen.queryByRole('menuitem', { name: /Send to/ })).toBeNull()
+  })
+
+  it.each(['top_secret', 'addressee_only'] as const)('lets the creator send their %s record', async (grade) => {
+    const row = book(2, { grade, can_send: true, created_by_user_id: 1 })
+    vi.mocked(api.getBook).mockResolvedValue(row)
+    setup(row)
+    await openMenu()
+    expect(await screen.findByRole('menuitem', { name: /Send to/ })).toBeInTheDocument()
+  })
+
   it('does not reuse fresh preview or record detail data for a menu peek', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } })
     const cached = book(2, { subject: 'Already read', can_send: true })
     client.setQueryData(['books', 'detail', 2], cached)
     client.setQueryData(['books', 'detail', 2, null], cached)
-    const peek = book(2, { subject: 'Unread peek', can_change_confidentiality: true })
+    const peek = book(2, { subject: 'Unread peek', can_change_grade: true })
     vi.mocked(api.getBook).mockResolvedValue(peek)
     setup(book(2), ['books', 'detail', 2], client)
 
     await openMenu()
 
-    await screen.findByRole('menuitem', { name: /Change level/ })
+    await screen.findByRole('menuitem', { name: /Change grade/ })
     expect(api.getBook).toHaveBeenCalledExactlyOnceWith(2, undefined, { markRead: false })
     expect(screen.queryByRole('menuitem', { name: /Send to/ })).toBeNull()
     expect(client.getQueryData(['books', 'detail-peek', 2])).toEqual(peek)
@@ -148,15 +166,15 @@ describe('Record row actions', () => {
   })
 
   it('fetches a read-free peek only on menu entry, then offers its relevant tools and reply descriptors', async () => {
-    vi.mocked(api.getBook).mockResolvedValue(book(2, { can_send: true, can_change_confidentiality: true }))
+    vi.mocked(api.getBook).mockResolvedValue(book(2, { can_send: true, can_change_grade: true }))
     const client = setup(book(2))
     expect(api.getBook).not.toHaveBeenCalled()
     await openMenu()
     await screen.findByRole('menuitem', { name: /Send to/ })
     expect(api.getBook).toHaveBeenCalledWith(2, undefined, { markRead: false })
-    expect(client.getQueryData(['books', 'detail-peek', 2])).toEqual(book(2, { can_send: true, can_change_confidentiality: true }))
+    expect(client.getQueryData(['books', 'detail-peek', 2])).toEqual(book(2, { can_send: true, can_change_grade: true }))
     expect(client.getQueryData(['books', 'detail', 2])).toBeUndefined()
-    expect(screen.getByRole('menuitem', { name: /Change level/ })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /Change grade/ })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Download PDF' })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: 'Print' })).toBeNull()
     expect(screen.queryByRole('menuitem', { name: 'Mark as done' })).toBeNull()

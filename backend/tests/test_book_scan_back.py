@@ -204,7 +204,7 @@ def test_scan_back_directed_recipient_cannot_write_but_creator_can(
         api_db.add_all([creator, recipient])
         api_db.commit()
         book = _book(api_db)
-        book.confidentiality = "directed"
+        book.distribution = "named"
         book.created_by_user_id = creator.id
         version = book.versions[0]
         version.created_by_user_id = creator.id
@@ -282,7 +282,7 @@ def test_scan_back_hides_non_awaiting_state_from_directed_recipient(
         api_db.add_all([creator, recipient])
         api_db.commit()
         book = _book(api_db, state="none")
-        book.confidentiality = "directed"
+        book.distribution = "named"
         book.created_by_user_id = creator.id
         version = book.versions[0]
         version.created_by_user_id = creator.id

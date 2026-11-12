@@ -32,6 +32,7 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
+import { canSendBook } from '../canSendBook'
 import { deleteBlockReason, deleteReasonKey } from '../recordDelete'
 import type { NextStep } from '../recordNextStep'
 import { useRecordPrint } from '../useRecordPrintMode'
@@ -186,7 +187,7 @@ export function RecordMoreSheet({
       onSelect: () => openOverlay('papers'),
     })
   }
-  if (book.can_send) {
+  if (canSendBook(book, view.userId)) {
     documentRows.push({
       id: 'send',
       icon: iconOf(Send),
@@ -208,12 +209,12 @@ export function RecordMoreSheet({
       onSelect: () => { if (canEdit && book.access_scope === 'full') openOverlay('link') },
     })
   }
-  if (book.can_change_confidentiality) {
+  if (book.can_change_grade) {
     documentRows.push({
       id: 'level',
       icon: iconOf(Lock),
-      label: t('books.confidentiality.menu'),
-      hint: t(`books.confidentiality.levels.${book.confidentiality}`),
+      label: t('books.grade.menu'),
+      hint: t(`books.grade.levels.${book.grade}`),
       testId: 'record-more-level',
       onSelect: () => openOverlay('level'),
     })

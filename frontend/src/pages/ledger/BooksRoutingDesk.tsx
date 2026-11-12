@@ -1,17 +1,22 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DragEvent, ReactNode } from 'react'
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, Eye, FileText, Flag,
-  Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, Search, Send, X,
+  Archive, ArrowDownUp, ArrowLeft, BookText, Check, CheckCheck, ChevronDown, ChevronUp, FileText,
+  Folder, FolderPlus, Maximize2, MessageSquareText, Minimize2, NotebookPen, Search, Send, X,
 } from 'lucide-react'
 import { CheckboxItem, ItemIndicator } from '@radix-ui/react-dropdown-menu'
 import { toast } from '@/lib/toast'
-import { useTranslation } from 'react-i18next'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Trans, useTranslation } from 'react-i18next'
+import { Link, useLocation, useSearchParams } from 'react-router-dom'
 
-import { ConfidentialityMark } from '@/components/books/ConfidentialityChip'
+import { GradeMark } from '@/components/books/GradeChip'
+import { LedgerBookActions } from '@/components/books/LedgerBookActions'
+import { LedgerDraftsList } from '@/components/books/LedgerDraftsList'
+import { LedgerPaperPdf } from '@/components/books/LedgerPaperPdf'
+import { deskBookUrl, ledgerBookKey } from '@/components/books/ledgerBookKeys'
 import { DocumentState } from '@/components/books/DocumentState'
+import { ImportanceMark, importanceOf } from '@/components/books/ImportanceMark'
 import { PurposeMark } from '@/components/books/PurposeMark'
 import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
@@ -26,6 +31,7 @@ import { Kbd } from '@/components/ui/kbd'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { BookInboxRead, BookListResponse, BookRead, BookRecipientRead, BookSortKey, SendPurpose } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -36,13 +42,16 @@ import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
+import { canSendBook, isLedgerBookRecord } from '@/pages/books/canSendBook'
 import { inboxSummaryKey } from '@/pages/books/useInboxCount'
 import { defaultPaperKey, paperCountOf, paperKey, papersOf } from '@/pages/books/recordPapers'
 import type { PaperKey } from '@/pages/books/recordPapers'
+import { RestrictedHint } from '@/pages/books/RestrictedRowNote'
+import { useRestrictedRowLabel } from '@/pages/books/useRestrictedRowLabel'
 import { BookFolderHeader } from './BookFolderHeader'
-import { BooksRail, ScopeIcon } from './BooksRail'
+import { BooksRail, FolderGlyph, ScopeIcon } from './BooksRail'
 import type { Scope } from './BooksRail'
-import { BOOK_DRAG_TYPE, toastFolderError, useBookFolders } from './useBookFolders'
+import { BOOK_DRAG_TYPE, FOLDER_BOXES, bookBoxDragType, toastFolderError, useBookFolders } from './useBookFolders'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -50,29 +59,42 @@ type ListScope = Scope | 'any' | 'folder'
 const INBOX_BY_SCOPE: Record<Exclude<ListScope, 'folder'>, 'received' | 'done' | 'sent' | 'archived' | 'any'> = {
   incoming: 'received', done: 'done', outgoing: 'sent', archived: 'archived', any: 'any',
 }
-type SortColumn = 'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'
+type SortColumn = 'date' | 'ref' | 'subject' | 'purpose' | 'grade' | 'status'
 const SORT_LABEL: Record<SortColumn, string> = {
   date: 'ledger.booksDesk.sent', ref: 'ledger.booksDesk.columns.ref', subject: 'ledger.booksDesk.columns.subject',
-  purpose: 'books.send.purpose', confidentiality: 'ledger.booksDesk.confidentiality', status: 'ledger.booksDesk.columns.state',
+  purpose: 'books.send.purpose', grade: 'ledger.booksDesk.grade', status: 'ledger.booksDesk.columns.state',
 }
-const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-confidentiality', 'status']
+const MOBILE_SORTS: readonly BookSortKey[] = ['-date', 'date', 'ref', 'subject', 'purpose', '-grade', 'status']
 const PAGE_SIZE = 50
+/** 44px hit area on touch screens; the desktop (fine pointer) sizes stay as they are. */
+const TOUCH = 'pointer-coarse:h-11 pointer-coarse:min-w-11'
 
 function BookDate({ value }: { value: string }): React.JSX.Element {
   return <time dateTime={value} dir="ltr" className="font-mono tabular-nums">{formatDmy(value.slice(0, 10))}</time>
 }
 
-function Person({ label, name, title, className, tooltip, extra }: {
-  label: string; name: string; title?: string | null; className?: string; tooltip?: string; extra?: ReactNode
+/**
+ * A people cell: the designation shows, the name lives in the tooltip and the
+ * accessible name. `role="img"` keeps it non-focusable inside the row button,
+ * like the marks; a person without a designation shows the name.
+ */
+function Person({ label, people, column, className }: {
+  label: string; people: { name: string; title: string | null }[]; column: string; className?: string
 }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const sep = i18n.language.startsWith('ar') ? '، ' : ', '
+  const entries = people.map(({ name, title }) => title ? `${title} (${name})` : name)
+  // The tooltip provider lives at the app root; one per cell would mount ~150 of them.
   return (
-    <span className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1 xl:block', className)} title={tooltip ?? (title ? `${title} (${name})` : name)}>
-      <span className="shrink-0 xl:sr-only">{label}: </span>
-      <span className="min-w-0">
-        <span className="text-foreground xl:line-clamp-2 xl:break-words"><bdi>{title || name}</bdi>{extra}</span>
-        {title && <span className="text-xs text-muted-foreground xl:mt-0.5 xl:block"><span className="xl:hidden"> (</span><bdi>{name}</bdi><span className="xl:hidden">)</span></span>}
-      </span>
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span role="img" data-column={column} aria-label={`${label}: ${entries.join(sep)}`} className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)}>
+          <span className="shrink-0 xl:sr-only">{label}:</span>
+          <span className="min-w-0 truncate text-foreground"><bdi>{people[0].title || people[0].name}</bdi>{people.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: people.length - 1 })}</bdi></>}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>{entries.map((entry, index) => <span key={index}>{index > 0 && sep}<bdi>{entry}</bdi></span>)}</TooltipContent>
+    </Tooltip>
   )
 }
 
@@ -85,9 +107,9 @@ function scopeOf(book: BookRead): Scope {
 
 
 // One template for the header and every row so columns align from xl up; below xl rows stack.
-// purpose | ref | subject (+ type, level) | from | to | signatory | status | date.
+// purpose | grade | importance (one centred mark each) | ref | subject | from | to | signatory | status | date.
 // Subject takes a double share of the spare width; the three people columns one share each.
-const DESK_GRID = 'xl:grid-cols-[7rem_5rem_minmax(11rem,2fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_minmax(7.5rem,1fr)_6.5rem_5rem]'
+const DESK_GRID = 'xl:grid-cols-[4rem_4rem_4rem_5rem_minmax(11rem,2fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_minmax(6.5rem,1fr)_6.5rem_5rem]'
 
 function DeskLoading(): React.JSX.Element {
   return <div className="space-y-4 p-5" aria-busy="true"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-1/2" /></div>
@@ -118,21 +140,26 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const isMobile = useIsMobile()
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
+  const location = useLocation()
   const rawScope = params.get('scope')
   const scope: Scope = rawScope === 'done' || rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
   const rawFolder = params.get('folder') ?? ''
   const folderId = /^\d+$/.test(rawFolder) && Number(rawFolder) > 0 ? Number(rawFolder) : null
+  // The Drafts place: my Ledger Book drafts instead of a box list.
+  const draftsPlace = rawScope === 'drafts' && folderId === null
   const folders = useBookFolders()
   const [folderDrawerOpen, setFolderDrawerOpen] = useState(false)
   const [rawSort, setSort] = useSearchParam('sort', { fallback: '-date' })
-  const sort: BookSortKey = /^-?(date|ref|subject|purpose|confidentiality|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
-  const [bookParam, setBookParam] = useSearchParam('book')
+  const sort: BookSortKey = /^-?(date|ref|subject|purpose|grade|status)$/.test(rawSort) ? rawSort as BookSortKey : '-date'
+  const [bookParam] = useSearchParam('book')
   // Opening pushes, so the toolbar Back and the browser Back both return to the list.
-  const bookPage = useUrlOverlay('book', ['view'])
+  const bookPage = useUrlOverlay('book', ['view', 'rev'])
   const [view, setView] = useSearchParam('view')
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [lastOpenedId, setLastOpenedId] = useState(selectedId)
   if (selectedId !== null && selectedId !== lastOpenedId) setLastOpenedId(selectedId)
+  const openPage = bookPage.open
+  const openBook = useCallback((id: number): void => openPage(String(id)), [openPage])
   const deskRef = useRef<HTMLElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const [search, setSearch] = useState('')
@@ -144,6 +171,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   }, [search])
   // A search looks through every place at once; each hit shows where it lives.
   const listScope: ListScope = query ? 'any' : folderId ? 'folder' : scope
+  const showDrafts = draftsPlace && !query
   const open = selectedId !== null
   useShortcutAction('focusSearch', useCallback(() => {
     if (open || !searchRef.current) return false
@@ -162,6 +190,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
     queryKey: ['books', 'routing', listScope, query, sort, offset, listScope === 'folder' ? folderId : null],
     queryFn: () => api.listBooks({ ...(listScope === 'folder' ? { folder_id: folderId! } : { inbox: INBOX_BY_SCOPE[listScope] }), q: query || undefined, sort, limit: PAGE_SIZE, offset }),
     staleTime: 30_000,
+    enabled: !showDrafts,
     placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === listScope && previousQuery.queryKey[6] === (listScope === 'folder' ? folderId : null) ? keepPreviousData(previous) : undefined,
   })
   const detail = useQuery({
@@ -184,7 +213,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
     placeholderData: () => list.data?.items.find((book) => book.id === selectedId),
   })
 
-  function selectPlace(value: Scope | number): void {
+  function selectPlace(value: Scope | 'drafts' | number): void {
     setOffset(0)
     setSearch('')
     setQuery('')
@@ -195,6 +224,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
       next.set(typeof value === 'number' ? 'folder' : 'scope', String(value))
       next.delete('book')
       next.delete('view')
+      next.delete('rev')
       return next
     }, { replace: true })
   }
@@ -204,7 +234,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   }
   function sortHeader(column: SortColumn): ReactNode {
     const active = sort.replace('-', '') === column
-    const next: BookSortKey = active ? (sort.startsWith('-') ? column : `-${column}`) : column === 'date' || column === 'confidentiality' ? `-${column}` : column
+    const next: BookSortKey = active ? (sort.startsWith('-') ? column : `-${column}`) : column === 'date' || column === 'grade' ? `-${column}` : column
     const descending = sort.startsWith('-')
     return (
       <button type="button" className={cn('inline-flex items-center gap-1 text-start hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring', column === 'date' && 'justify-end')} aria-pressed={active} aria-label={t('ledger.booksDesk.sortBy', { column: t(SORT_LABEL[column]), direction: t(`ledger.booksDesk.${next.startsWith('-') ? 'descending' : 'ascending'}`) })} onClick={() => changeSort(next)}>
@@ -221,8 +251,15 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
       // Work the queue: open the next book in place, or return to the empty list.
       const index = list.data?.items.findIndex((row) => row.id === id) ?? 0
       const next = remaining[index] ?? remaining[0]
-      if (next) setBookParam(String(next.id))
-      else bookPage.close()
+      if (next) {
+        // The next book starts at its own newest Revision.
+        setParams((previous) => {
+          const params = new URLSearchParams(previous)
+          params.set('book', String(next.id))
+          params.delete('rev')
+          return params
+        }, { replace: true, state: location.state })
+      } else bookPage.close()
     }
     qc.setQueryData<BookRead>(['books', 'detail', id, null], (previous) => previous && ({ ...previous, my_inbox: inbox }))
     for (const [key] of qc.getQueriesData<BookListResponse>({ queryKey: ['books', 'routing'] })) {
@@ -243,8 +280,8 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
   const searching = listScope === 'any'
   const asSent = !searching && !folderId && scope === 'outgoing'
   const activeFolder = !searching && folderId ? folders.data?.find((folder) => folder.id === folderId) : undefined
-  const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : scopeLabel(scope)
-  const rail = <BooksRail scope={searching || folderId ? null : scope} folderId={searching ? null : folderId} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} />
+  const placeLabel = folderId ? folders.data?.find((folder) => folder.id === folderId)?.name ?? t('ledger.booksDesk.folders.folder') : draftsPlace ? t('ledgerBook.composer.drafts.place') : scopeLabel(scope)
+  const rail = <BooksRail scope={searching || folderId || draftsPlace ? null : scope} folderId={searching ? null : folderId} drafts={showDrafts} switcher={!isMobile ? switcher : undefined} onSelectScope={selectPlace} onSelectFolder={selectPlace} onSelectDrafts={() => selectPlace('drafts')} />
 
   return (
     <section ref={deskRef} dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
@@ -254,7 +291,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
           <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
             {switcher}
             <Sheet open={folderDrawerOpen} onOpenChange={setFolderDrawerOpen}>
-              <SheetTrigger asChild><Button variant="ghost" size="sm" className="min-w-0">{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
+              <SheetTrigger asChild><Button variant="ghost" size="sm" className={cn('min-w-0', TOUCH)}>{folderId ? <Folder className="h-4 w-4 shrink-0" aria-hidden /> : draftsPlace ? <NotebookPen className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden /> : <ScopeIcon scope={scope} />}<span className="truncate">{placeLabel}</span></Button></SheetTrigger>
               <SheetContent dir={i18n.dir()} className="w-[260px] bg-rail p-0 pt-10" aria-describedby={undefined}>
                 <SheetTitle className="sr-only">{t('ledger.booksDesk.folders.navigation')}</SheetTitle>
                 {rail}
@@ -316,7 +353,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
           {searching && list.data && (
             <p role="status" className="border-b border-hairline px-4 py-2 text-xs text-muted-foreground lg:px-6">{t('ledger.booksDesk.results', { count: list.data.total })}</p>
           )}
-          {list.isPending ? <DeskLoading /> : list.isError ? (
+          {showDrafts ? <LedgerDraftsList className="px-2 py-2 lg:px-4" /> : list.isPending ? <DeskLoading /> : list.isError ? (
             <div role="alert" className="px-4 py-8 text-sm text-destructive lg:px-6"><p>{apiErrorMessage(list.error)}</p><Button variant="outline" className="mt-3" onClick={() => void list.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
           ) : rows.length === 0 ? (
             <div className="max-w-prose px-4 py-10 text-sm lg:px-6">
@@ -326,30 +363,32 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
             </div>
           ) : (
             <>
-              <div className={cn('sticky top-0 z-10 hidden gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground xl:grid', DESK_GRID)}>
-                {sortHeader('purpose')}
-                {sortHeader('ref')}
-                <span className="flex flex-wrap items-center gap-x-3">{sortHeader('subject')}{sortHeader('confidentiality')}</span>
-                <span>{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
-                <span>{t('ledger.booksDesk.to')}</span>
-                <span>{t('ledger.booksDesk.signer')}</span>
-                {asSent ? <span>{t('ledger.booksDesk.columns.state')}</span> : sortHeader('status')}
-                {sortHeader('date')}
+              <div data-desk-header className={cn('sticky top-0 z-10 hidden items-center gap-x-3 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground xl:grid', DESK_GRID)}>
+                <span data-column="purpose" className="flex text-center leading-tight xl:justify-center">{sortHeader('purpose')}</span>
+                <span data-column="grade" className="flex text-center leading-tight xl:justify-center">{sortHeader('grade')}</span>
+                <span data-column="importance" className="flex text-center leading-tight xl:justify-center">{t('books.importance.label')}</span>
+                <span data-column="ref">{sortHeader('ref')}</span>
+                <span data-column="subject">{sortHeader('subject')}</span>
+                <span data-column="from">{t(asSent ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
+                <span data-column="to">{t('ledger.booksDesk.to')}</span>
+                <span data-column="signer">{t('ledger.booksDesk.signer')}</span>
+                <span data-column="state">{asSent ? t('ledger.booksDesk.columns.state') : sortHeader('status')}</span>
+                <span data-column="date" className="flex justify-end">{sortHeader('date')}</span>
               </div>
               <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : placeLabel}>
                 {rows.map((book) => (
                   <li key={book.id}>
-                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} onOpen={() => bookPage.open(String(book.id))} />
+                    <BookRow book={book} asSent={asSent} showScope={searching} inFolder={listScope === 'folder'} current={book.id === lastOpenedId} draggable={!isMobile} dragBox={listScope === 'folder' || listScope === 'any' ? undefined : listScope} onOpen={openBook} />
                   </li>
                 ))}
               </ul>
             </>
           )}
         </div>
-        {(offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
+        {!showDrafts && (offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
           <div className="flex shrink-0 justify-between gap-2 border-t border-hairline px-4 py-3 lg:px-6">
-            <Button variant="outline" size="sm" disabled={offset === 0 || list.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{t('ledger.booksDesk.previous')}</Button>
-            <Button variant="outline" size="sm" disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>
+            <Button variant="outline" size="sm" className={TOUCH} disabled={offset === 0 || list.isFetching} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>{t('ledger.booksDesk.previous')}</Button>
+            <Button variant="outline" size="sm" className={TOUCH} disabled={offset + PAGE_SIZE >= (list.data?.total ?? 0) || list.isFetching} onClick={() => setOffset(offset + PAGE_SIZE)}>{t('ledger.booksDesk.next')}</Button>
           </div>
         )}
         </div>
@@ -369,7 +408,7 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex shrink-0 items-center border-b border-border bg-surface-raised px-3 py-2 lg:px-4">
-              <Button variant="ghost" size="sm" onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
+              <Button variant="ghost" size="sm" className={TOUCH} onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
             </div>
             {detail.isError
               ? <div role="alert" className="px-4 py-8 text-destructive lg:px-6"><p>{apiErrorMessage(detail.error)}</p><Button variant="outline" className="mt-3" onClick={() => void detail.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
@@ -382,11 +421,12 @@ export function BooksRoutingDesk({ switcher }: { switcher?: ReactNode } = {}): R
 }
 
 /**
- * One book on the desk: enough to decide before opening it. From lg it is a
- * table row under the column header; below lg it stacks: purpose, then
- * subject + note, then a labelled meta line, with date and status at the end.
+ * One book on the desk: enough to decide before opening it; detail (category,
+ * recipients' progress) lives in the record. From xl it is a one-line table row
+ * under the column header: one centred mark per mark column. Below xl it
+ * stacks: marks and ref, then subject with my state, then designations.
  */
-function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen }: {
+const BookRow = memo(function BookRow({ book, asSent, showScope, inFolder, current, draggable, dragBox, onOpen }: {
   book: BookRead
   /** Outgoing tab: show my send even when I also received this book. */
   asSent: boolean
@@ -395,10 +435,25 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
   current: boolean
   /** Desktop: drag the row onto a rail folder to file it. */
   draggable: boolean
-  onOpen: () => void
+  /** The box list the row is dragged from; folder and search lists use the book's own box. */
+  dragBox?: Scope
+  /** Stable across renders, so typing in the search box does not re-render every row. */
+  onOpen: (id: number) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const me = useAuth().user?.id
+  const restrictedLabel = useRestrictedRowLabel()
+  if (book.metadata_only) {
+    return (
+      <div data-book-id={book.id} role="group" aria-label={restrictedLabel(book.ref_number)} className="flex flex-wrap items-center gap-3 px-4 py-3 text-sm lg:px-6">
+        <bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
+        {book.classification_code && <bdi dir="ltr" className="text-muted-foreground">{book.classification_code}</bdi>}
+        {book.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeMark level={book.grade} showLabel />}
+        <span className="text-muted-foreground"><BookDate value={book.created_at} /></span>
+        <RestrictedHint />
+      </div>
+    )
+  }
   const name = (en: string | null | undefined, ar: string | null | undefined): string => pickEmployeeName({ name_en: en ?? '', name_ar: ar }, i18n.language)
   const title = (en?: string | null, ar?: string | null): string | null => (i18n.language.startsWith('ar') ? ar || en : en || ar) || null
   const inbox = asSent ? null : book.my_inbox
@@ -410,99 +465,80 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
   const purpose: SendPurpose | undefined = inbox?.purpose ?? mine[0]?.purpose
   const note = inbox ? inbox.note : mine.find((row) => row.note)?.note
   const sentAt = inbox?.sent_at ?? mine.at(-1)?.created_at ?? book.created_at
-  const toNames = toRows.map((row) => name(row.user_name, row.user_name_ar))
-  const toTitles = toRows.map((row) => title(row.user_title, row.user_title_ar))
-  const listSep = i18n.language.startsWith('ar') ? '، ' : ', '
   const papers = paperCountOf(book, { inmateReporter: false })
-  const category = book.category ? (i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en : null
+  const subject = book.subject || t('ledger.booksDesk.untitled')
   const signer = book.signer_name || book.signer_name_ar ? name(book.signer_name, book.signer_name_ar) : null
-  const opened = mine.filter((row) => row.read_at).length
-  const done = mine.filter((row) => row.done_at).length
-  // xl: every cell pins to its header column on row 1 (the meta wrapper dissolves via xl:contents).
+  const noteLabel = note ? `${t('ledger.booksDesk.noteShort')}: ${note}` : ''
+  // xl: every cell pins to its header column on row 1 (the stacking wrappers dissolve via xl:contents).
   const cell = 'xl:row-start-1 xl:text-sm'
+  const markCell = 'flex items-center empty:hidden xl:row-start-1 xl:justify-center xl:empty:flex'
   return (
     <button
       type="button"
       data-book-id={book.id}
       aria-current={current ? 'true' : undefined}
       draggable={draggable}
-      onDragStart={draggable ? (event) => startBookDrag(event, book.id, book.ref_number, book.subject || t('ledger.booksDesk.untitled'), i18n.dir()) : undefined}
-      onClick={onOpen}
+      onDragStart={draggable ? (event) => startBookDrag(event, book.id, dragBox ?? place, book.ref_number, subject, i18n.dir()) : undefined}
+      onClick={() => onOpen(book.id)}
       className={cn(
-        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
+        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6 xl:py-2.5',
         DESK_GRID,
         current && 'bg-primary-soft hover:bg-primary-soft',
       )}
     >
-      <span className="col-start-1 row-start-1 flex flex-col items-start gap-1 empty:hidden xl:col-start-1 xl:empty:block">
-        {purpose && <PurposeMark purpose={purpose} />}
-        {showScope && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
+      <span className="col-start-1 row-start-1 flex min-w-0 items-center gap-3 xl:contents">
+        <span data-column="purpose" className={cn(markCell, 'xl:col-start-1')}>{purpose && <PurposeMark purpose={purpose} />}</span>
+        <span data-column="grade" className={cn(markCell, 'xl:col-start-2')}><GradeMark level={book.grade} /></span>
+        <span data-column="importance" className={cn(markCell, 'xl:col-start-3')}><ImportanceMark importance={importanceOf(book)} /></span>
+        <span data-column="ref" title={book.ref_number} className="min-w-0 truncate text-xs text-muted-foreground xl:col-start-4 xl:row-start-1">
+          <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
+        </span>
       </span>
-      <span className="col-start-1 row-start-2 min-w-0 xl:col-start-3 xl:row-start-1">
-        <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
-          {papers > 1 && <PaperCount count={papers} />}
-          {book.priority === 'High' && (
-            <span className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-warning">
-              <Flag className="h-3.5 w-3.5 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />{t('ledger.booksDesk.urgent')}
-            </span>
-          )}
-        </span>
-        <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
-          {category && <bdi className="min-w-0 truncate">{category}</bdi>}
-          <ConfidentialityMark level={book.confidentiality} />
-        </span>
+      <span data-column="subject" className="col-start-1 row-start-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 xl:col-start-5 xl:row-start-1 xl:flex-nowrap">
+        {showScope && <span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
+        <span dir="auto" title={subject} className={cn('min-w-0 break-words xl:truncate', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{subject}</span>
+        {papers > 1 && <PaperCount count={papers} />}
+        {note && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span role="img" aria-label={noteLabel} className="inline-flex shrink-0 items-center text-muted-foreground">
+                <MessageSquareText className="h-4 w-4 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs whitespace-pre-wrap break-words">{t('ledger.booksDesk.noteShort')}: <bdi>{note}</bdi></TooltipContent>
+          </Tooltip>
+        )}
         {inFolder && (book.filed_by_name || book.filed_by_name_ar || book.filed_at) && (
-          <span className="mt-1 block text-xs text-muted-foreground">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
             {t('ledger.booksDesk.folders.filedBy', { name: bidi(name(book.filed_by_name, book.filed_by_name_ar) || t('ledger.booksDesk.folders.unknownPerson')) })}
             {book.filed_at && <> · <BookDate value={book.filed_at} /></>}
           </span>
         )}
-        {note && (
-          <span className="mt-1 flex min-w-0 items-start gap-1.5 text-muted-foreground">
-            <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
-            <span className="sr-only">{t('ledger.booksDesk.noteShort')}: </span>
-            <bdi className="line-clamp-2 min-w-0 break-words">{note}</bdi>
-          </span>
-        )}
       </span>
-      <span className="col-start-1 row-start-3 mt-0.5 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground xl:contents">
-        <span title={book.ref_number} className="min-w-0 truncate xl:col-start-2 xl:row-start-1 xl:text-xs">
-          <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
-        </span>
+      <span className="col-span-2 col-start-1 row-start-3 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground xl:contents">
         {inbox
-          ? <Person label={t('ledger.booksDesk.from')} name={name(inbox.sent_by_name, inbox.sent_by_name_ar)} title={title(inbox.sent_by_title, inbox.sent_by_title_ar)} className={cn(cell, 'xl:col-start-4')} />
-          : <Person label={t('ledger.booksDesk.columns.createdBy')} name={name(book.created_by_name, book.created_by_name_ar)} title={title(book.created_by_title, book.created_by_title_ar)} className={cn(cell, 'xl:col-start-4')} />}
-        {toNames.length > 0 && (
-          <Person label={t('ledger.booksDesk.to')} name={toNames[0]} title={toTitles[0]} tooltip={toNames.map((value, index) => toTitles[index] ? `${toTitles[index]} (${value})` : value).join(listSep)} className={cn(cell, 'xl:col-start-5')}
-            extra={toNames.length > 1 && <>{' '}<bdi dir="ltr" className="text-xs text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 1 })}</bdi></>} />
+          ? <Person column="from" label={t('ledger.booksDesk.from')} people={[{ name: name(inbox.sent_by_name, inbox.sent_by_name_ar), title: title(inbox.sent_by_title, inbox.sent_by_title_ar) }]} className={cn(cell, 'xl:col-start-6')} />
+          : <Person column="from" label={t('ledger.booksDesk.columns.createdBy')} people={[{ name: name(book.created_by_name, book.created_by_name_ar), title: title(book.created_by_title, book.created_by_title_ar) }]} className={cn(cell, 'xl:col-start-6')} />}
+        {toRows.length > 0 && (
+          <Person column="to" label={t('ledger.booksDesk.to')} people={toRows.map((row) => ({ name: name(row.user_name, row.user_name_ar), title: title(row.user_title, row.user_title_ar) }))} className={cn(cell, 'xl:col-start-7')} />
         )}
-        {signer && <Person label={t('ledger.booksDesk.signer')} name={signer} title={title(book.signer_title, book.signer_title_ar)} className={cn(cell, 'xl:col-start-6')} />}
+        {signer && <Person column="signer" label={t('ledger.booksDesk.signer')} people={[{ name: signer, title: title(book.signer_title, book.signer_title_ar) }]} className={cn(cell, 'xl:col-start-8')} />}
       </span>
-      <span className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground xl:col-start-7 xl:justify-start', cell)}>
-        {inbox ? <InboxState inbox={inbox} /> : mine.length > 0 && (
-          <span className="inline-flex items-center gap-3 font-mono tabular-nums">
-            <span className="inline-flex items-center gap-1" title={t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}>
-              <Eye className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /><bdi dir="ltr" aria-hidden>{opened}/{mine.length}</bdi>
-              <span className="sr-only">{t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}</span>
-            </span>
-            <span className={cn('inline-flex items-center gap-1', done === mine.length && 'text-success')} title={t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}>
-              <CheckCheck className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden /><bdi dir="ltr" aria-hidden>{done}/{mine.length}</bdi>
-              <span className="sr-only">{t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}</span>
-            </span>
-          </span>
-        )}
+      <span data-column="state" className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground xl:col-start-9 xl:justify-start', cell)}>
+        {inbox ? <InboxState inbox={inbox} /> : mine.length > 0 && <span className="inline-flex items-center gap-1.5"><Send className="h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.state.sent')}</span>}
       </span>
-      <span className="col-start-2 row-start-1 text-end text-xs text-muted-foreground xl:col-start-8 xl:row-start-1">
+      <span data-column="date" className="col-start-2 row-start-1 text-end text-xs text-muted-foreground xl:col-start-10 xl:row-start-1">
         <span className="sr-only">{t(inbox || mine.length ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={sentAt} />
       </span>
     </button>
   )
-}
+})
 
 /** Carry the book id and show a compact chip under the pointer, not the whole wide row. */
-function startBookDrag(event: DragEvent<HTMLElement>, id: number, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
+function startBookDrag(event: DragEvent<HTMLElement>, id: number, box: Scope, ref: string, subject: string, dir: 'ltr' | 'rtl'): void {
   event.dataTransfer.setData(BOOK_DRAG_TYPE, String(id))
+  // Only types are readable during dragover, so the source box travels as its own type.
+  event.dataTransfer.setData(bookBoxDragType(box), '')
   event.dataTransfer.effectAllowed = 'copy'
   const chip = document.createElement('div')
   chip.dir = dir
@@ -522,7 +558,8 @@ function startBookDrag(event: DragEvent<HTMLElement>, id: number, ref: string, s
   requestAnimationFrame(() => chip.remove())
 }
 
-function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolean }): React.JSX.Element {
+/** Files the open book: only folders of the boxes it is in for me (F7), grouped by box. */
+function BookFolderMenu({ bookId, boxes, disabled }: { bookId: number; boxes: readonly Scope[]; disabled: boolean }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -544,25 +581,31 @@ function BookFolderMenu({ bookId, disabled }: { bookId: number; disabled: boolea
   })
   return (
     <DropdownMenu open={open} onOpenChange={setOpen} dir={i18n.dir()}>
-      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" disabled={disabled}><FolderPlus className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.folders.folder')}</Button></DropdownMenuTrigger>
+      <DropdownMenuTrigger asChild><Button variant="outline" size="sm" className={TOUCH} disabled={disabled}><FolderPlus className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.folders.folder')}</Button></DropdownMenuTrigger>
       <DropdownMenuContent className="max-h-80 max-w-xs overflow-y-auto" align="start">
         {folders.isPending ? <DropdownMenuItem disabled>{t('common.loading')}</DropdownMenuItem> : folders.isError ? (
           <DropdownMenuItem onSelect={(event) => { event.preventDefault(); void folders.refetch() }}>{t('ledger.booksDesk.folders.loadError')} {t('ledger.booksDesk.retry')}</DropdownMenuItem>
-        ) : !folders.data?.length ? <DropdownMenuItem disabled>{t('ledger.booksDesk.folders.createFirst')}</DropdownMenuItem> : (
-          [false, true].map((team) => {
-            const group = folders.data.filter((folder) => folder.team === team)
-            return group.length > 0 && <div key={String(team)}>
-              <p className="px-2.5 py-2 text-xs font-medium text-muted-foreground">{t(team ? 'ledger.booksDesk.folders.team' : 'ledger.booksDesk.folders.personal')}</p>
-              {group.map((folder) => (
+        ) : (() => {
+          // Folders the book is already in stay listed so it can be taken out after it moves box.
+          const groups = FOLDER_BOXES
+            .map((box) => ({ box, items: (folders.data ?? []).filter((folder) => folder.box === box && (boxes.includes(box) || folder.has_book)) }))
+            .filter((group) => group.items.length > 0)
+          if (groups.length === 0) return <DropdownMenuItem disabled>{t('ledger.booksDesk.folders.noneForBook')}</DropdownMenuItem>
+          return groups.map(({ box, items }) => (
+            <div key={box} role="group" aria-label={t(`ledger.booksDesk.${box}`)}>
+              <p aria-hidden className="flex items-center gap-1.5 px-2.5 py-2 text-xs font-medium text-muted-foreground"><ScopeIcon scope={box} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${box}`)}</p>
+              {items.map((folder) => (
                 <CheckboxItem key={folder.id} checked={!!folder.has_book} disabled={filing.isPending} onSelect={(event) => event.preventDefault()} onCheckedChange={() => filing.mutate({ id: folder.id, hasBook: !!folder.has_book })}
+                  aria-label={folder.team ? t('ledger.booksDesk.folders.sharedName', { name: folder.name }) : undefined}
                   className="relative flex cursor-pointer items-center gap-2 rounded-lg py-2 pe-3 ps-8 text-sm outline-none focus:bg-surface-tinted data-[disabled]:pointer-events-none data-[disabled]:opacity-50">
                   <ItemIndicator className="absolute start-2"><Check className="h-4 w-4" aria-hidden /></ItemIndicator>
+                  <FolderGlyph team={folder.team} className={folder.team ? 'text-info' : 'text-muted-foreground'} />
                   <bdi className="break-words">{folder.name}</bdi>
                 </CheckboxItem>
               ))}
             </div>
-          })
-        )}
+          ))
+        })()}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -578,6 +621,26 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   onInboxUpdated: (id: number, inbox: BookInboxRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const userId = useAuth().user?.id
+  const isLedgerBook = isLedgerBookRecord(book)
+  const canSend = canSendBook(book, userId)
+  // A Ledger Book's paper, JSON and actions need only the id and Revision the list row already
+  // carries (they are separate reads from `getBook`, whose read receipt they do not depend on),
+  // so they start in parallel with the detail. A restricted (metadata-only) row never opens them.
+  const ledgerReady = isLedgerBook && !book.metadata_only
+  // The shown Revision (`version_id`) stays in the URL; empty = the newest I may read.
+  const [rawRev, setRev] = useSearchParam('rev')
+  const revision = isLedgerBook && /^\d+$/.test(rawRev) ? Number(rawRev) : undefined
+  const ledgerBook = useQuery({
+    queryKey: ledgerBookKey(book.id, revision),
+    queryFn: () => api.getLedgerBook(book.id, revision),
+    enabled: ledgerReady,
+  })
+  const paperUrl = ledgerBook.data
+    ? api.ledgerBookPaperPdfUrl(book.id, ledgerBook.data.selected_version_id, ledgerBook.data.content_sha256) : null
+  const [readyPaperUrl, setReadyPaperUrl] = useState<string | null>(null)
+  const reviewedPaper = paperUrl !== null && readyPaperUrl === paperUrl && ledgerBook.data
+    ? { versionId: ledgerBook.data.selected_version_id, contentHash: ledgerBook.data.content_sha256 } : null
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
@@ -586,6 +649,8 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   const inboxActions = useInboxActions(loading ? null : book, onInboxUpdated)
   const reply = useReplyActions(loading ? null : book)
   const inbox = book.my_inbox
+  // Same query as the recipients panel below, so the list is fetched once.
+  const recipients = useQuery({ queryKey: ['books', 'recipients', book.id], queryFn: () => api.listBookRecipients(book.id), enabled: !loading })
   const facts: { label: string; value: ReactNode }[] = inbox ? [
     { label: t('ledger.booksDesk.from'), value: <bdi>{pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)}</bdi> },
     { label: t('ledger.booksDesk.sent'), value: <BookDate value={inbox.sent_at} /> },
@@ -595,33 +660,52 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
     { label: t('ledger.booksDesk.columns.createdBy'), value: <bdi>{pickEmployeeName({ name_en: book.created_by_name ?? '', name_ar: book.created_by_name_ar }, i18n.language)}</bdi> },
     { label: t('ledger.booksDesk.created'), value: <BookDate value={book.created_at} /> },
   ]
+  if (book.category) facts.push({ label: t('ledger.booksDesk.columns.category'), value: <bdi>{(i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en || book.category.name_ar}</bdi> })
+  // My sends' progress: the row shows only my state, so the opened/done counts live here.
+  const mine = (recipients.data ?? []).filter((row) => row.sent_by_user_id === userId && !row.revoked_at)
+  if (mine.length > 0) {
+    const opened = mine.filter((row) => row.read_at).length
+    const done = mine.filter((row) => row.done_at).length
+    facts.push({ label: t('ledger.booksDesk.columns.progress'), value: <span className="block space-y-0.5"><span className="block">{t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}</span><span className={cn('block', done === mine.length && 'text-success')}>{t('ledger.booksDesk.doneOf', { count: done, total: mine.length })}</span></span> })
+  }
+  // The boxes this book is in for me: the same scopes as the desk lists (incoming = received).
+  const boxes: Scope[] = [...(inbox ? [scopeOf(book)] : []), ...(mine.length > 0 ? ['outgoing' as const] : [])]
   facts.push({ label: t('ledger.booksDesk.columns.papers'), value: <bdi dir="ltr" className="font-mono tabular-nums">{papers.length}</bdi> })
   const titleId = `book-title-${book.id}`
   return (
     <article aria-labelledby={titleId} className={cn('flex min-h-0 min-w-0 flex-1 flex-col', isMobile && 'overflow-y-auto')}>
       <div className={cn('flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-surface-raised px-3 py-2 lg:px-4', isMobile && 'sticky top-0 z-10')}>
-        <Button variant="ghost" size="sm" className="shrink-0" onClick={onBack}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
+        <Button variant="ghost" size="sm" className={cn('shrink-0', TOUCH)} onClick={onBack}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.booksDesk.backToList')}</Button>
         <span aria-hidden className="mx-1 hidden h-5 w-px shrink-0 bg-border sm:block" />
-        {inboxActions.map((action) => <Button key={action.key} className="shrink-0" variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        {book.can_send && <Button className="shrink-0" variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
-        {reply.actions.map((action) => <Button key={action.key} className="shrink-0" variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        <BookFolderMenu bookId={book.id} disabled={loading} />
+        {inboxActions.map((action) => <Button key={action.key} className={cn('shrink-0', TOUCH)} variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+        {canSend && <Button className={cn('shrink-0', TOUCH)} variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4 rtl:-scale-x-100" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
+        {ledgerReady && <LedgerBookActions className="min-w-0 max-w-full" bookId={book.id} revision={revision} reviewedPaper={reviewedPaper} onRevisionChange={(versionId) => setRev(String(versionId))} />}
+        {reply.actions.map((action) => <Button key={action.key} className={cn('shrink-0', TOUCH)} variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+        <BookFolderMenu bookId={book.id} boxes={boxes} disabled={loading} />
         <div className="ms-auto flex shrink-0 items-center gap-1 ps-2">
-          {!isMobile && <Button variant="ghost" size="sm" onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
-          <Link to={`/books/${book.id}`} className={buttonVariants({ variant: 'ghost', size: 'sm' })}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>
+          {!isMobile && <Button variant="ghost" size="sm" className={TOUCH} onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
+          <Link to={`/books/${book.id}`} className={cn(buttonVariants({ variant: 'ghost', size: 'sm' }), TOUCH)}><BookText className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.openInRecords')}</Link>
         </div>
       </div>
       <header className="shrink-0 border-b border-hairline px-4 py-4 lg:px-6">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
-          {inbox && <PurposeMark purpose={inbox.purpose} />}
+          {inbox && <PurposeMark purpose={inbox.purpose} showLabel />}
           <bdi dir="ltr" className="font-mono text-xs tabular-nums text-muted-foreground">{book.ref_number}</bdi>
-          <ConfidentialityMark level={book.confidentiality} />
+          <GradeMark level={book.grade} showLabel />
+          <ImportanceMark importance={importanceOf(book)} interactive />
         </div>
         <h2 id={titleId} className="mt-2 max-w-[75ch] break-words text-xl font-semibold leading-snug tracking-tight"><bdi>{book.subject || t('ledger.booksDesk.untitled')}</bdi></h2>
       </header>
       <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
         <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
-          {loading ? <DeskLoading /> : papers.length === 0 ? (
+          {loading && !ledgerReady ? <DeskLoading /> : isLedgerBook && ledgerBook.isError && !ledgerBook.data ? (
+            <DocumentState kind="error" body={apiErrorMessage(ledgerBook.error)} onRetry={() => void ledgerBook.refetch()} />
+          ) : isLedgerBook ? (
+            <>
+              {ledgerBook.isError && <div role="alert" className="shrink-0 px-4 py-3 text-sm text-destructive"><p>{apiErrorMessage(ledgerBook.error)}</p><Button variant="outline" className="mt-3" onClick={() => void ledgerBook.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>}
+              <LedgerPaperPdf url={paperUrl} onReady={() => setReadyPaperUrl(paperUrl)} className="min-h-0 flex-1 rounded-none border-0" />
+            </>
+          ) : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
           ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}
         </div>
@@ -636,11 +720,30 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3 text-sm">
               {facts.map(({ label, value }) => <div key={label} className="contents"><dt className="text-muted-foreground">{label}</dt><dd className="min-w-0 break-words font-medium">{value}</dd></div>)}
             </dl>
+            {!!ledgerBook.data?.references.length && (
+              <section aria-label={t('ledgerBook.paper.references')} className="mt-6 min-w-0">
+                <h3 className="text-xs font-medium text-muted-foreground">{t('ledgerBook.paper.references')}</h3>
+                <ul className="mt-2 space-y-2 text-sm [overflow-wrap:anywhere]">
+                  {ledgerBook.data.references.map((reference) => {
+                    const entry = <Trans i18nKey="ledgerBook.paper.referenceEntry" values={{ ref: reference.ref, date: formatDmy(reference.date) }} components={{ ref: <bdi dir="ltr" className="font-mono tabular-nums" />, date: <bdi dir="ltr" className="font-mono tabular-nums" /> }} />
+                    return <li key={reference.book_id}>{reference.can_open ? <Link to={deskBookUrl(reference.book_id)} className="rounded-sm text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{entry}</Link> : <span>{entry}</span>}</li>
+                  })}
+                </ul>
+              </section>
+            )}
+            {!!ledgerBook.data?.folders.length && (
+              <section aria-label={t('ledgerBook.paper.folders')} className="mt-6 min-w-0">
+                <h3 className="text-xs font-medium text-muted-foreground">{t('ledgerBook.paper.folders')}</h3>
+                <ul className="mt-2 space-y-2 text-sm [overflow-wrap:anywhere]">
+                  {ledgerBook.data.folders.map((folder) => <li key={folder.id}><bdi>{folder.name}</bdi></li>)}
+                </ul>
+              </section>
+            )}
             {!loading && <div className="mt-6 space-y-6"><RecordRecipientsPanel bookId={book.id} bookRef={book.ref_number} /><RecordThreadSection book={book} /></div>}
           </aside>
         )}
       </div>
-      {book.can_send && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
+      {canSend && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
       {reply.dialog}
     </article>
   )

@@ -5,7 +5,7 @@
  */
 
 import { ArrowDownLeft, ArrowUpRight, BookOpen, Inbox, Send, Trash2 } from 'lucide-react'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
@@ -32,8 +32,13 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
-import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
+import { isLedgerBookRecord } from './canSendBook'
+import { RestrictedHint } from './RestrictedRowNote'
+import { useRestrictedRowLabel } from './useRestrictedRowLabel'
+import { GradeChip } from '@/components/books/GradeChip'
 import { newRecordHref } from './newRecordHref'
+import { subjectEmployeePart } from './formKind'
+import { useServiceLabel } from './serviceLabels'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf } from './recordPapers'
@@ -50,6 +55,8 @@ export interface BooksMobileListProps {
   isError: boolean
   onRetry: () => void
   rows: BookRead[]
+  /** The server holds more records than were fetched; the record navigator says "n of N+". */
+  moreAvailable?: boolean
   hasFilters: boolean
   isAr: boolean
   isInmateReporter: boolean
@@ -70,6 +77,7 @@ export function BooksMobileList({
   isError,
   onRetry,
   rows,
+  moreAvailable = false,
   hasFilters,
   isAr,
   isInmateReporter,
@@ -88,7 +96,7 @@ export function BooksMobileList({
   // BooksPage already hides rows whose delete is pending (Undo brings them back).
   const { scheduleDelete } = useRecordDelete()
   const mobileRows = rows
-  const queue = useMemo(() => mobileRows.map((row) => row.id), [mobileRows])
+  const queue = useMemo(() => mobileRows.filter((row) => !row.metadata_only).map((row) => row.id), [mobileRows])
 
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
@@ -100,7 +108,7 @@ export function BooksMobileList({
   if ([...picked].some((id) => !mobileRows.some((row) => row.id === id))) {
     setPicked(new Set([...picked].filter((id) => mobileRows.some((row) => row.id === id))))
   }
-  const pickedRows = mobileRows.filter((row) => picked.has(row.id))
+  const pickedRows = mobileRows.filter((row) => !row.metadata_only && picked.has(row.id))
   const deletableRows = canDelete
     ? pickedRows.filter(
         (row) => deleteBlockReason(row, { has, isInmateReporter }) === null,
@@ -112,13 +120,13 @@ export function BooksMobileList({
     setSelectMode(on)
     setPicked(new Set())
   }
-  const togglePick = (id: number): void =>
+  const togglePick = useCallback((id: number): void =>
     setPicked((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
-    })
+    }), [])
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const bulkDelete = (): void => {
@@ -164,17 +172,22 @@ export function BooksMobileList({
 
   const from = `${location.pathname}${location.search}`
   // Render-time links carry no offset; a plain tap reads the live one at click.
-  const linkNav: RecordNavState = { from, queue, scrollY: 0 }
-  const navFor = (): RecordNavState => ({ ...linkNav, scrollY: scrollerRef.current?.scrollTop ?? 0 })
-  const handleLinkClick = (id: number) => (e: React.MouseEvent<HTMLAnchorElement>): void => {
+  const linkNav = useMemo<RecordNavState>(() => ({ from, queue, scrollY: 0, ...(moreAvailable ? { more: true } : {}) }), [from, queue, moreAvailable])
+  const handleLinkClick = useCallback((id: number, e: React.MouseEvent<HTMLAnchorElement>): void => {
     // Plain taps carry the live scroll offset; modified clicks (new tab) keep the
     // <Link>'s own href + state.
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
     e.preventDefault()
-    openRecord(navigate, id, navFor())
-  }
+    openRecord(navigate, id, { ...linkNav, scrollY: scrollerRef.current?.scrollTop ?? 0 })
+  }, [navigate, linkNav])
+  // The page's submit callback changes identity per render; cards get a stable one.
+  const submitRef = useRef(submitBook)
+  useLayoutEffect(() => {
+    submitRef.current = submitBook
+  })
+  const handleSubmit = useCallback((id: number): void => submitRef.current(id), [])
 
-  const showSelectToggle = canBulk && !isPending && !isError && mobileRows.length > 0
+  const showSelectToggle = canBulk && !isPending && !isError && mobileRows.some((row) => !row.metadata_only)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -234,7 +247,7 @@ export function BooksMobileList({
                     row={row}
                     isAr={isAr}
                     canSubmit={
-                      row.can_write && (isInmateReporter
+                      row.can_write && !isLedgerBookRecord(row) && (isInmateReporter
                         ? inmateReporterActionFor(row, userId) === 'edit-submit'
                         : canSubmit)
                     }
@@ -242,10 +255,10 @@ export function BooksMobileList({
                     selectMode={selectMode}
                     picked={picked.has(row.id)}
                     paperCount={paperCountOf(row, { inmateReporter: isInmateReporter })}
-                    link={recordLinkProps(row.id, linkNav)}
-                    onLinkClick={handleLinkClick(row.id)}
-                    onTogglePick={() => togglePick(row.id)}
-                    onSubmit={() => submitBook(row.id)}
+                    linkNav={linkNav}
+                    onLinkClick={handleLinkClick}
+                    onTogglePick={togglePick}
+                    onSubmit={handleSubmit}
                   />
                 ))}
               </div>
@@ -402,13 +415,14 @@ interface BookMobileCardProps {
   selectMode: boolean
   picked: boolean
   paperCount: number
-  link: { to: string; state: RecordNavState }
-  onLinkClick: (e: React.MouseEvent<HTMLAnchorElement>) => void
-  onTogglePick: () => void
-  onSubmit: () => void
+  linkNav: RecordNavState
+  onLinkClick: (id: number, e: React.MouseEvent<HTMLAnchorElement>) => void
+  onTogglePick: (id: number) => void
+  onSubmit: (id: number) => void
 }
 
-function BookMobileCard({
+// Memoised: ticking one card re-renders that card, not all of them.
+const BookMobileCard = memo(function BookMobileCard({
   row,
   isAr,
   canSubmit,
@@ -416,16 +430,31 @@ function BookMobileCard({
   selectMode,
   picked,
   paperCount,
-  link,
+  linkNav,
   onLinkClick,
   onTogglePick,
   onSubmit,
 }: BookMobileCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const serviceLabel = useServiceLabel()
+  const restrictedLabel = useRestrictedRowLabel()
+  const label = serviceLabel(row.service_id)
+  const detail = subjectEmployeePart(row.subject, { classified: !!row.classification_code }) || row.subject
   const category = row.category
   const catLabel = isAr
     ? (category?.name_ar ?? category?.name_en)
     : (category?.name_en ?? category?.name_ar)
+  if (row.metadata_only) {
+    return (
+      <div data-id={row.id} data-book-id={row.id} role="group" aria-label={restrictedLabel(row.ref_number)} className="flex flex-wrap items-center gap-2 rounded-2xl border border-hairline bg-surface p-3.5 text-[0.85em]">
+        <bdi dir="ltr" className="font-mono font-semibold tabular-nums">{row.ref_number}</bdi>
+        {row.classification_code && <bdi dir="ltr" className="text-muted-foreground">{row.classification_code}</bdi>}
+        {row.grade === 'unclassified' ? <span>{t('books.grade.levels.unclassified')}</span> : <GradeChip level={row.grade} />}
+        <bdi dir="ltr" className="font-mono text-muted-foreground tabular-nums">{formatDate(row.created_at)}</bdi>
+        <RestrictedHint />
+      </div>
+    )
+  }
   const Wrapper = selectMode ? 'label' : 'div'
   return (
     <Wrapper
@@ -433,6 +462,8 @@ function BookMobileCard({
       data-book-id={row.id}
       className={cn(
         'relative flex gap-3 rounded-2xl border border-hairline bg-surface p-3.5 transition-colors motion-reduce:transition-none',
+        // Off-screen cards skip layout and paint; `auto` remembers the measured height.
+        '[contain-intrinsic-size:auto_7rem] [content-visibility:auto]',
         selectMode && 'cursor-pointer',
         (highlighted || picked) && 'bg-accent-soft',
       )}
@@ -441,7 +472,7 @@ function BookMobileCard({
         <input
           type="checkbox"
           checked={picked}
-          onChange={onTogglePick}
+          onChange={() => onTogglePick(row.id)}
           aria-label={t('books.list.selectRef', { ref: bidi(row.ref_number) })}
           className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
         />
@@ -455,9 +486,9 @@ function BookMobileCard({
               <bdi dir="ltr">{row.ref_number}</bdi>
             ) : (
               <Link
-                {...link}
-                onClick={onLinkClick}
-                className="rounded-sm after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-ring"
+                {...recordLinkProps(row.id, linkNav)}
+                onClick={(e) => onLinkClick(row.id, e)}
+                className="rounded-sm after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring"
               >
                 <bdi dir="ltr">{row.ref_number}</bdi>
               </Link>
@@ -477,7 +508,7 @@ function BookMobileCard({
               {canSubmit && !selectMode ? (
                 <button
                   type="button"
-                  onClick={onSubmit}
+                  onClick={() => onSubmit(row.id)}
                   className={cn(
                     'relative z-10 inline-flex min-h-11 shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-[0.72em] font-medium transition-colors motion-reduce:transition-none',
                     'border border-hairline text-muted-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -496,9 +527,14 @@ function BookMobileCard({
         </div>
 
         {/* subject */}
-        {row.subject ? (
-          <p className="line-clamp-2 text-[0.85em] leading-snug text-foreground" dir="auto">
-            {row.subject}
+        {/* The form name is translated like the desktop row; the stored subject
+            ("<form> — <name>") is generated in English, so only its name part shows. */}
+        <p className="line-clamp-2 text-[0.85em] font-semibold leading-snug text-foreground" dir="auto">
+          {label}
+        </p>
+        {detail ? (
+          <p className="line-clamp-2 text-[0.8em] leading-snug text-muted-foreground" dir="auto">
+            {detail}
           </p>
         ) : null}
 
@@ -510,7 +546,7 @@ function BookMobileCard({
             </span>
           ) : null}
           {row.direction && <DirectionPill direction={row.direction} t={t} />}
-          <ConfidentialityChip level={row.confidentiality} />
+          <GradeChip level={row.grade} />
         </div>
 
         {/* creator · date · papers */}
@@ -537,4 +573,4 @@ function BookMobileCard({
       </div>
     </Wrapper>
   )
-}
+})

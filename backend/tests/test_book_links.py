@@ -1,4 +1,4 @@
-"""Reply, derivation, live references, confidentiality floors and reference sends."""
+"""Reply, derivation, live references, grade floors and reference sends."""
 
 from __future__ import annotations
 
@@ -113,12 +113,21 @@ def links_api(
     )
     api_db.commit()
     records = {}
-    for index, level in enumerate(("general", "directed", "personal", "secret")):
+    for index, (name, grade, distribution) in enumerate(
+        (
+            ("open", "unclassified", "organization"),
+            ("named", "unclassified", "named"),
+            ("creator_only", "unclassified", "named"),
+            ("secret", "secret", "organization"),
+            ("top_secret", "top_secret", "named"),
+        )
+    ):
         record = Book(
             category_id="HR",
-            ref_number=f"HR-links-{level}",
+            ref_number=f"HR-links-{name}",
             subject="موضوع أصلي",
-            confidentiality=level,
+            grade=grade,
+            distribution=distribution,
             created_by_user_id=users["creator"].id,
             created_at=datetime(2026, 9, 21) + timedelta(days=index),
             classification_code="5/1",
@@ -126,7 +135,7 @@ def links_api(
         document = Document(
             template_id="General Book",
             ref_number=record.ref_number,
-            submission_id=f"links-{level}",
+            submission_id=f"links-{name}",
         )
         api_db.add_all([record, document])
         api_db.flush()
@@ -141,7 +150,7 @@ def links_api(
                 created_by_user_id=users["creator"].id,
             )
         )
-        records[level] = record
+        records[name] = record
     api_db.commit()
     settings = Settings(data_dir=tmp_path / "data", templates_dir=TEMPLATES)
     for service in (word_book_service, artifact_service, document_service):
@@ -158,8 +167,8 @@ def links_api(
 @pytest.mark.parametrize("actor", ["sender", "reporter"])
 def test_links_require_edit_capability(links_api: LinkApi, actor: str) -> None:
     api = links_api
-    source, target = api.records["general"], api.records["directed"]
-    target.confidentiality = "general"
+    source, target = api.records["open"], api.records["named"]
+    target.distribution = "organization"
     row = BookLink(book_id=source.id, target_book_id=target.id, kind="reference", attached=True)
     api.db.add(row)
     api.db.commit()
@@ -178,11 +187,11 @@ def test_links_require_edit_capability(links_api: LinkApi, actor: str) -> None:
 
 
 @pytest.mark.parametrize("kind", ["reference", "reply"])
-@pytest.mark.parametrize("hidden", ["personal", "secret", "directed", "deleted"])
+@pytest.mark.parametrize("hidden", ["creator_only", "secret", "named", "deleted"])
 def test_unlink_hidden_target_preserves_link(links_api: LinkApi, kind: str, hidden: str) -> None:
     api = links_api
-    source = api.records["general"]
-    target = api.records["directed" if hidden == "deleted" else hidden]
+    source = api.records["open"]
+    target = api.records["named" if hidden == "deleted" else hidden]
     if hidden == "deleted":
         target.deleted_at = datetime(2026, 10, 1)
     row = BookLink(book_id=source.id, target_book_id=target.id, kind=kind, attached=True)
@@ -199,8 +208,8 @@ def test_unlink_hidden_target_preserves_link(links_api: LinkApi, kind: str, hidd
 def test_link_hidden_target_and_read_only_source(links_api: LinkApi) -> None:
     api = links_api
     api.as_user("receiver")
-    source = api.records["general"]
-    for level in ("personal", "secret", "directed"):
+    source = api.records["open"]
+    for level in ("creator_only", "secret", "named"):
         _error(
             api.client.post(
                 f"{API}/{source.id}/links", json={"target_book_id": api.records[level].id}
@@ -208,20 +217,20 @@ def test_link_hidden_target_and_read_only_source(links_api: LinkApi) -> None:
             404,
             "BOOK_NOT_FOUND",
         )
-    directed = api.records["directed"]
+    named = api.records["named"]
     api.db.add(
         BookRecipient(
-            book_id=directed.id,
+            book_id=named.id,
             user_id=api.actor.id,
             sent_by_user_id=api.users["sender"].id,
             purpose="info",
         )
     )
     api.db.commit()
-    assert api.client.get(f"{API}/{directed.id}/thread").status_code == 200
+    assert api.client.get(f"{API}/{named.id}/thread").status_code == 200
     for response in (
-        api.client.post(f"{API}/{directed.id}/links", json={"target_book_id": source.id}),
-        api.client.delete(f"{API}/{directed.id}/links/{source.id}"),
+        api.client.post(f"{API}/{named.id}/links", json={"target_book_id": source.id}),
+        api.client.delete(f"{API}/{named.id}/links/{source.id}"),
     ):
         _error(response, 404, "BOOK_NOT_FOUND")
     assert api.db.scalar(select(BookLink)) is None
@@ -229,7 +238,7 @@ def test_link_hidden_target_and_read_only_source(links_api: LinkApi) -> None:
 
 def test_thread_filters_hidden_both_directions_and_orders_records(links_api: LinkApi) -> None:
     api = links_api
-    root = api.records["general"]
+    root = api.records["open"]
     api.db.add_all(
         [
             BookLink(
@@ -239,13 +248,13 @@ def test_thread_filters_hidden_both_directions_and_orders_records(links_api: Lin
                 attached=True,
             ),
             BookLink(
-                book_id=api.records["personal"].id,
+                book_id=api.records["creator_only"].id,
                 target_book_id=root.id,
                 kind="based_on",
                 attached=True,
             ),
             BookLink(
-                book_id=api.records["directed"].id,
+                book_id=api.records["named"].id,
                 target_book_id=root.id,
                 kind="reply",
                 attached=False,
@@ -256,7 +265,7 @@ def test_thread_filters_hidden_both_directions_and_orders_records(links_api: Lin
     api.as_user("admin")
     items = api.thread(root.id)
     assert [item["book_id"] for item in items] == [
-        api.records[level].id for level in ("directed", "personal", "secret")
+        api.records[level].id for level in ("named", "creator_only", "secret")
     ]
     assert [item["direction"] for item in items] == ["incoming", "incoming", "outgoing"]
     assert [item["can_unlink"] for item in items] == [False, False, True]
@@ -266,20 +275,20 @@ def test_thread_filters_hidden_both_directions_and_orders_records(links_api: Lin
     assert api.thread(root.id) == []
     api.db.add(
         BookRecipient(
-            book_id=api.records["directed"].id,
+            book_id=api.records["named"].id,
             user_id=api.actor.id,
             sent_by_user_id=api.users["creator"].id,
             purpose="info",
         )
     )
     api.db.commit()
-    assert [item["book_id"] for item in api.thread(root.id)] == [api.records["directed"].id]
-    assert api.thread(api.records["directed"].id)[0]["can_unlink"] is False
+    assert [item["book_id"] for item in api.thread(root.id)] == [api.records["named"].id]
+    assert api.thread(api.records["named"].id)[0]["can_unlink"] is False
 
 
 def test_link_errors_delete_and_reattach_preserve_derivation(links_api: LinkApi) -> None:
     api = links_api
-    source, target = api.records["general"], api.records["directed"]
+    source, target = api.records["open"], api.records["named"]
     url = f"{API}/{source.id}/links"
     _error(api.client.post(url, json={"target_book_id": source.id}), 422, "LINK_SELF")
     response = api.client.post(url, json={"target_book_id": target.id})
@@ -290,7 +299,7 @@ def test_link_errors_delete_and_reattach_preserve_derivation(links_api: LinkApi)
     assert api.thread(source.id) == []
     _error(api.client.delete(f"{url}/{target.id}"), 404, "LINK_NOT_FOUND")
     # A detached reply is not deleted from the thread, and reattaching retains its kind.
-    source.confidentiality = "directed"
+    source.distribution = "named"
     api.db.add(BookLink(book_id=source.id, target_book_id=target.id, kind="reply", attached=True))
     api.db.commit()
     assert api.client.delete(f"{url}/{target.id}").status_code == 204
@@ -302,91 +311,105 @@ def test_link_errors_delete_and_reattach_preserve_derivation(links_api: LinkApi)
     assert response.json()["kind"] == "reply" and response.json()["attached"] is True
 
 
-@pytest.mark.parametrize("kind", ["reply", "based_on"])
-@pytest.mark.parametrize(
-    ("original", "level", "attached", "minimum"),
-    [
-        ("directed", "general", False, "directed"),
-        ("personal", "general", True, "directed"),
-        ("secret", "general", False, "directed"),
-        ("secret", "directed", True, "secret"),
-        ("secret", "personal", True, "secret"),
-    ],
-)
-def test_derive_floor_saves_nothing(
-    links_api: LinkApi, kind: str, original: str, level: str, attached: bool, minimum: str
+@pytest.mark.parametrize("original", ["secret", "top_secret"])
+@pytest.mark.parametrize("attached", [True, False])
+def test_reply_inherits_source_grade_even_when_payload_requests_another(
+    links_api: LinkApi, original: str, attached: bool
+) -> None:
+    api = links_api
+    response = api.derive(original, grade="unclassified", attach_reference=attached)
+    assert response.status_code == 201, response.text
+    book_id = response.json()["book_id"]
+    assert api.db.get(Book, book_id).grade == original
+    assert api.thread(book_id)[0]["grade"] == original
+
+
+@pytest.mark.parametrize("original", ["secret", "top_secret"])
+@pytest.mark.parametrize("requested", [None, "unclassified", "secret", "addressee_only"])
+def test_based_on_defaults_to_source_grade_and_honours_explicit_grade_without_reference(
+    links_api: LinkApi, original: str, requested: str | None
+) -> None:
+    api = links_api
+    payload = {} if requested is None else {"grade": requested}
+    response = api.derive(original, kind="based_on", attach_reference=False, **payload)
+    assert response.status_code == 201, response.text
+    book_id = response.json()["book_id"]
+    assert api.db.get(Book, book_id).grade == (requested or original)
+    # Neither derivation relation imposes a floor without an attached reference.
+    response = api.client.put(f"{API}/{book_id}/grade", json={"grade": "unclassified"})
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize("original", ["secret", "top_secret"])
+def test_attached_classified_reference_floor_saves_nothing(
+    links_api: LinkApi, original: str
 ) -> None:
     api = links_api
     ids_before = set(api.db.scalars(select(Book.id)))
     error = _error(
-        api.derive(original, kind=kind, confidentiality=level, attach_reference=attached),
+        api.derive(original, kind="based_on", grade="unclassified", attach_reference=True),
         422,
-        "LEVEL_BELOW_FLOOR",
+        "GRADE_BELOW_FLOOR",
     )
-    assert error["details"] == {"min": minimum}
+    assert error["details"] == {"min": "secret"}
     assert set(api.db.scalars(select(Book.id))) == ids_before
     assert api.db.scalar(select(BookLink)) is None
 
 
+@pytest.mark.parametrize("kind", ["reply", "based_on"])
 @pytest.mark.parametrize("attached", [True, False])
-def test_secret_derive_and_later_relabel_floor(links_api: LinkApi, attached: bool) -> None:
+def test_classified_derive_regrade_floor_only_while_reference_attached(
+    links_api: LinkApi, kind: str, attached: bool
+) -> None:
     api = links_api
-    level = "secret" if attached else "directed"
-    response = api.derive("secret", confidentiality=level, attach_reference=attached)
+    response = api.derive("secret", kind=kind, attach_reference=attached)
     assert response.status_code == 201, response.text
     book_id = response.json()["book_id"]
-    assert api.db.get(Book, book_id).confidentiality == level
-    url = f"{API}/{book_id}/confidentiality"
-    error = _error(
-        api.client.put(url, json={"confidentiality": "general"}),
-        422,
-        "LEVEL_BELOW_FLOOR",
-    )
-    assert error["details"] == {"min": "secret" if attached else "directed"}
+    url = f"{API}/{book_id}/grade"
     if attached:
-        _error(api.client.put(url, json={"confidentiality": "directed"}), 422, "LEVEL_BELOW_FLOOR")
+        error = _error(
+            api.client.put(url, json={"grade": "unclassified"}), 422, "GRADE_BELOW_FLOOR"
+        )
+        assert error["details"] == {"min": "secret"}
         assert (
             api.client.delete(f"{API}/{book_id}/links/{api.records['secret'].id}").status_code
             == 204
         )
-    response = api.client.put(url, json={"confidentiality": "directed"})
+    response = api.client.put(url, json={"grade": "unclassified"})
     assert response.status_code == 200, response.text
-    _error(api.client.put(url, json={"confidentiality": "general"}), 422, "LEVEL_BELOW_FLOOR")
-    # Reattaching the secret original is also floor-checked and leaves the row detached.
     error = _error(
         api.client.post(
             f"{API}/{book_id}/links", json={"target_book_id": api.records["secret"].id}
         ),
         422,
-        "LEVEL_BELOW_FLOOR",
+        "GRADE_BELOW_FLOOR",
     )
     assert error["details"] == {"min": "secret"}
     assert api.thread(book_id)[0]["attached"] is False
 
 
-def test_attaching_secret_floor_is_atomic_and_relabel_respects_reference(
-    links_api: LinkApi,
+@pytest.mark.parametrize("target_grade", ["secret", "top_secret"])
+def test_attaching_classified_floor_is_atomic_and_regrade_respects_reference(
+    links_api: LinkApi, target_grade: str
 ) -> None:
     api = links_api
-    source, target = api.records["general"], api.records["secret"]
+    source, target = api.records["open"], api.records[target_grade]
     url = f"{API}/{source.id}/links"
     error = _error(
-        api.client.post(url, json={"target_book_id": target.id}), 422, "LEVEL_BELOW_FLOOR"
+        api.client.post(url, json={"target_book_id": target.id}), 422, "GRADE_BELOW_FLOOR"
     )
     assert error["details"] == {"min": "secret"}
     assert api.db.scalar(select(BookLink)) is None
-    source.confidentiality = "secret"
+    source.grade = "secret"
     api.db.commit()
     assert api.client.post(url, json={"target_book_id": target.id}).status_code == 201
     _error(
-        api.client.put(f"{API}/{source.id}/confidentiality", json={"confidentiality": "personal"}),
+        api.client.put(f"{API}/{source.id}/grade", json={"grade": "unclassified"}),
         422,
-        "LEVEL_BELOW_FLOOR",
+        "GRADE_BELOW_FLOOR",
     )
     assert api.client.delete(f"{url}/{target.id}").status_code == 204
-    response = api.client.put(
-        f"{API}/{source.id}/confidentiality", json={"confidentiality": "general"}
-    )
+    response = api.client.put(f"{API}/{source.id}/grade", json={"grade": "unclassified"})
     assert response.status_code == 200, response.text
 
 
@@ -395,7 +418,7 @@ def test_reply_prefill_arabic_addressee_link_audit_and_printed_reference(
     links_api: LinkApi, received: bool
 ) -> None:
     api = links_api
-    original = api.records["general"]
+    original = api.records["open"]
     api.as_user("receiver")
     if received:
         api.db.add_all(
@@ -418,18 +441,18 @@ def test_reply_prefill_arabic_addressee_link_audit_and_printed_reference(
             ]
         )
         api.db.commit()
-    response = api.derive("general")
+    response = api.derive("open")
     assert response.status_code == 201, response.text
     new_id = response.json()["book_id"]
     book = api.db.get(Book, new_id)
     assert book.subject == "رد: موضوع أصلي"
     assert book.classification_code == original.classification_code
-    assert book.confidentiality == original.confidentiality
+    assert book.grade == original.grade
     assert book.created_by_user_id == api.actor.id
     addressee = api.users["sender" if received else "creator"]
     text = "\n".join(p.text for p in api.working_document(new_id).paragraphs)
     assert f"اسم {'sender' if received else 'creator'}" in text
-    assert "المرجع: HR-links-general في 21-09-2026" in text
+    assert "المرجع: HR-links-open في 21-09-2026" in text
     assert "نص أصلي للاقتباس" not in text, "Reply does not copy the original body"
     item = api.thread(new_id)[0]
     assert item["kind"] == "reply" and item["attached"] is True
@@ -455,22 +478,22 @@ def test_reply_subject_has_one_prefix_without_case_folding(
     links_api: LinkApi, subject: str
 ) -> None:
     api = links_api
-    api.records["general"].subject = subject
+    api.records["open"].subject = subject
     api.db.commit()
-    response = api.derive("general")
+    response = api.derive("open")
     assert response.status_code == 201, response.text
     assert api.db.get(Book, response.json()["book_id"]).subject == "رد: Mixed Case"
 
 
 def test_based_on_copies_structured_general_book_body(links_api: LinkApi) -> None:
     api = links_api
-    response = api.derive("general", kind="based_on", attach_reference=False)
+    response = api.derive("open", kind="based_on", attach_reference=False)
     assert response.status_code == 201, response.text
     book_id = response.json()["book_id"]
-    assert api.db.get(Book, book_id).subject == api.records["general"].subject
+    assert api.db.get(Book, book_id).subject == api.records["open"].subject
     text = "\n".join(p.text for p in api.working_document(book_id).paragraphs)
     assert "نص أصلي للاقتباس" in text
-    assert "المرجع: HR-links-general في 21-09-2026" in text
+    assert "المرجع: HR-links-open في 21-09-2026" in text
     item = api.thread(book_id)[0]
     assert item["kind"] == "based_on" and item["attached"] is False
     assert item["addressee_user_id"] is None
@@ -489,7 +512,7 @@ def test_based_on_copies_word_authored_body_tables_images_and_links(
     from PIL import Image
 
     api = links_api
-    response = api.derive("general")
+    response = api.derive("open")
     assert response.status_code == 201, response.text
     source_id = response.json()["book_id"]
     session = api.db.scalar(select(BookEditSession).where(BookEditSession.book_id == source_id))
@@ -579,13 +602,13 @@ def test_based_on_copies_word_authored_body_tables_images_and_links(
 
 def test_based_on_non_general_book_copies_subject_only(links_api: LinkApi) -> None:
     api = links_api
-    version = api.records["general"].versions[-1]
+    version = api.records["open"].versions[-1]
     version.template_id = "Report"
     api.db.commit()
-    response = api.derive("general", kind="based_on")
+    response = api.derive("open", kind="based_on")
     assert response.status_code == 201, response.text
     new_id = response.json()["book_id"]
-    assert api.db.get(Book, new_id).subject == api.records["general"].subject
+    assert api.db.get(Book, new_id).subject == api.records["open"].subject
     assert "نص أصلي للاقتباس" not in "\n".join(
         p.text for p in api.working_document(new_id).paragraphs
     )
@@ -600,7 +623,7 @@ def test_reference_fallback_uses_local_creation_date(
             return super().astimezone(tz or timezone(timedelta(hours=4)))
 
     api = links_api
-    original = api.records["general"]
+    original = api.records["open"]
     version = original.versions[-1]
     version.template_id = "Report"
     version.fields = {"date": paper_date}
@@ -608,10 +631,10 @@ def test_reference_fallback_uses_local_creation_date(
     # Exercise the local midnight rollover without depending on the host timezone.
     original.created_at = OfficeDatetime(2026, 9, 21, 22, 30)
     assert original.created_at.replace(tzinfo=UTC).astimezone().day == 22
-    response = api.derive("general", kind="based_on")
+    response = api.derive("open", kind="based_on")
     assert response.status_code == 201, response.text
     text = "\n".join(p.text for p in api.working_document(response.json()["book_id"]).paragraphs)
-    assert "المرجع: HR-links-general في 22-09-2026" in text
+    assert "المرجع: HR-links-open في 22-09-2026" in text
 
 
 @pytest.mark.parametrize("kind", ["reply", "based_on"])
@@ -621,7 +644,7 @@ def test_word_original_reference_uses_printed_date_not_creation_date(
     from app.core.docx_engine import DocxEngine
 
     api = links_api
-    original = api.records["general"]
+    original = api.records["open"]
     authored = tmp_path / "authored.docx"
     DocxEngine(TEMPLATES).fill(
         "General Book",
@@ -639,51 +662,44 @@ def test_word_original_reference_uses_printed_date_not_creation_date(
     version.fields = {}
     api.db.get(Document, version.document_id).docx_path = str(authored)
     api.db.commit()
-    response = api.derive("general", kind=kind)
+    response = api.derive("open", kind=kind)
     assert response.status_code == 201, response.text
     text = "\n".join(p.text for p in api.working_document(response.json()["book_id"]).paragraphs)
-    assert "المرجع: HR-links-general في 12-08-2025" in text
+    assert "المرجع: HR-links-open في 12-08-2025" in text
 
 
-def test_send_personal_to_directed_transition_respects_secret_reference_floor(
-    links_api: LinkApi,
-) -> None:
+def test_sending_named_record_preserves_grade_and_distribution(links_api: LinkApi) -> None:
     api = links_api
-    main, reference = api.records["personal"], api.records["secret"]
-    reference.confidentiality = "general"
-    api.db.commit()
-    response = api.client.post(f"{API}/{main.id}/links", json={"target_book_id": reference.id})
-    assert response.status_code == 201, response.text
-    reference.confidentiality = "secret"
-    api.db.commit()
-    error = _error(
-        api.client.post(
-            f"{API}/{main.id}/send",
-            json={"user_ids": [api.users["receiver"].id], "purpose": "info", "make_directed": True},
-        ),
-        422,
-        "LEVEL_BELOW_FLOOR",
+    main = api.records["creator_only"]
+    response = api.client.post(
+        f"{API}/{main.id}/send",
+        json={"user_ids": [api.users["receiver"].id], "purpose": "info"},
     )
-    assert error["details"] == {"min": "secret"}
-    assert api.db.get(Book, main.id).confidentiality == "personal"
-    assert api.db.scalar(select(BookRecipient)) is None
+    assert response.status_code == 200, response.text
+    api.db.refresh(main)
+    assert (main.grade, main.distribution) == ("unclassified", "named")
+    assert api.db.scalar(select(BookRecipient).where(BookRecipient.book_id == main.id)) is not None
 
 
 def test_derive_access_create_clearance_and_classification_checks(links_api: LinkApi) -> None:
     api = links_api
     api.as_user("receiver")
     _error(api.derive("secret"), 404, "BOOK_NOT_FOUND")
-    _error(api.derive("general", confidentiality="secret"), 403, "SECRET_CLEARANCE_REQUIRED")
+    _error(
+        api.derive("open", kind="based_on", grade="secret"),
+        403,
+        "SECRET_CLEARANCE_REQUIRED",
+    )
     perm_service.set_user_override(api.db, api.actor.id, "books.create", "deny")
-    _error(api.derive("general"), 403, "FORBIDDEN")
+    _error(api.derive("open"), 403, "FORBIDDEN")
     api.as_user("creator")
-    api.records["general"].classification_code = None
+    api.records["open"].classification_code = None
     api.db.commit()
-    _error(api.derive("general"), 422, "CLASSIFICATION_REQUIRED")
-    response = api.derive("general", classification_code="5/1")
+    _error(api.derive("open"), 422, "CLASSIFICATION_REQUIRED")
+    response = api.derive("open", classification_code="5/1")
     assert response.status_code == 201, response.text
     api.as_user("reporter")
-    _error(api.derive("general"), 403, "FORBIDDEN")
+    _error(api.derive("open"), 403, "FORBIDDEN")
 
 
 @pytest.mark.parametrize(
@@ -699,7 +715,7 @@ def test_read_grant_does_not_bypass_general_book_creation_permissions(
 ) -> None:
     api = links_api
     api.as_user("receiver")
-    original = api.records["directed"]
+    original = api.records["named"]
     api.db.add(
         BookRecipient(
             book_id=original.id,
@@ -710,14 +726,14 @@ def test_read_grant_does_not_bypass_general_book_creation_permissions(
     )
     perm_service.set_user_override(api.db, api.actor.id, capability, "deny")
     ids_before = set(api.db.scalars(select(Book.id)))
-    _error(api.derive("directed"), 403, error_code)
+    _error(api.derive("named"), 403, error_code)
     assert set(api.db.scalars(select(Book.id))) == ids_before
     assert api.db.scalar(select(BookLink)) is None
 
 
 def test_thread_omits_soft_deleted_links_and_deleted_root_is_hidden(links_api: LinkApi) -> None:
     api = links_api
-    root, target = api.records["general"], api.records["directed"]
+    root, target = api.records["open"], api.records["named"]
     response = api.client.post(f"{API}/{root.id}/links", json={"target_book_id": target.id})
     assert response.status_code == 201, response.text
     target.deleted_at = datetime(2026, 10, 1)
@@ -726,22 +742,32 @@ def test_thread_omits_soft_deleted_links_and_deleted_root_is_hidden(links_api: L
     _error(api.client.get(f"{API}/{target.id}/thread"), 404, "BOOK_NOT_FOUND")
 
 
-def test_send_references_skips_uncleared_personal_existing_and_self(links_api: LinkApi) -> None:
+def test_send_references_skips_uncleared_writer_only_existing_and_self(links_api: LinkApi) -> None:
     api = links_api
-    main, reference = api.records["general"], api.records["secret"]
-    # The original can become secret after a general record has referenced it.
-    reference.confidentiality = "general"
+    main, reference = api.records["open"], api.records["secret"]
+    # References can be regraded after being attached to an open record.
+    reference.grade = "unclassified"
     api.db.commit()
-    for target in (reference, api.records["personal"], api.records["directed"]):
+    for target in (reference, api.records["creator_only"], api.records["named"]):
         response = api.client.post(f"{API}/{main.id}/links", json={"target_book_id": target.id})
         assert response.status_code == 201, response.text
-    response = api.client.put(
-        f"{API}/{reference.id}/confidentiality", json={"confidentiality": "secret"}
+    restricted = api.records["creator_only"]
+    restricted.grade = "top_secret"
+    restricted.distribution = "named"
+    restricted.created_by_user_id = api.users["sender"].id
+    api.db.add(
+        BookRecipient(
+            book_id=restricted.id,
+            user_id=api.actor.id,
+            sent_by_user_id=api.users["sender"].id,
+            purpose="info",
+        )
     )
+    response = api.client.put(f"{API}/{reference.id}/grade", json={"grade": "secret"})
     assert response.status_code == 200, response.text
     api.db.add(
         BookRecipient(
-            book_id=api.records["directed"].id,
+            book_id=api.records["named"].id,
             user_id=api.users["receiver"].id,
             sent_by_user_id=api.actor.id,
             purpose="info",
@@ -763,13 +789,17 @@ def test_send_references_skips_uncleared_personal_existing_and_self(links_api: L
         {"user_id": api.users["receiver"].id, "reason": "not_cleared"},
         {"user_id": api.actor.id, "reason": "self"},
     ]
-    personal = references[api.records["personal"].id]
-    assert personal["sent_user_ids"] == []
-    assert [skip["reason"] for skip in personal["skipped"]] == ["personal", "personal", "self"]
-    directed = references[api.records["directed"].id]
-    assert directed["sent_user_ids"] == [api.users["cleared"].id]
-    assert [skip["reason"] for skip in directed["skipped"]] == ["already_recipient", "self"]
-    for book_id in (reference.id, api.records["directed"].id):
+    restricted_result = references[restricted.id]
+    assert restricted_result["sent_user_ids"] == []
+    assert [skip["reason"] for skip in restricted_result["skipped"]] == [
+        "writer_only",
+        "writer_only",
+        "self",
+    ]
+    named = references[api.records["named"].id]
+    assert named["sent_user_ids"] == [api.users["cleared"].id]
+    assert [skip["reason"] for skip in named["skipped"]] == ["already_recipient", "self"]
+    for book_id in (reference.id, api.records["named"].id):
         sent = api.db.scalar(
             select(BookRecipient).where(
                 BookRecipient.book_id == book_id,
@@ -781,8 +811,8 @@ def test_send_references_skips_uncleared_personal_existing_and_self(links_api: L
 
 def test_send_reference_opt_out_and_hidden_sender_references(links_api: LinkApi) -> None:
     api = links_api
-    main = api.records["general"]
-    for target in (api.records["directed"], api.records["personal"]):
+    main = api.records["open"]
+    for target in (api.records["named"], api.records["creator_only"]):
         assert (
             api.client.post(
                 f"{API}/{main.id}/links", json={"target_book_id": target.id}
@@ -810,7 +840,7 @@ def test_send_reference_opt_out_and_hidden_sender_references(links_api: LinkApi)
 
 def test_detached_derivation_stays_in_thread_but_is_not_sent(links_api: LinkApi) -> None:
     api = links_api
-    response = api.derive("general", attach_reference=False)
+    response = api.derive("open", attach_reference=False)
     assert response.status_code == 201, response.text
     draft_id = response.json()["book_id"]
     response = api.client.post(
@@ -823,7 +853,7 @@ def test_detached_derivation_stays_in_thread_but_is_not_sent(links_api: LinkApi)
     assert (
         api.db.scalar(
             select(BookRecipient).where(
-                BookRecipient.book_id == api.records["general"].id,
+                BookRecipient.book_id == api.records["open"].id,
             )
         )
         is None

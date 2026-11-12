@@ -28,7 +28,7 @@ def _book(subject: str | None, versions: list[BookVersionRead]) -> BookRead:
         direction="outgoing",
         stamp_style=None,
         deleted_at=None,
-        priority="Normal",
+        urgency="Normal",
         approval_state="none",
         created_at=datetime(2026, 7, 30, tzinfo=UTC),
         versions=versions,

@@ -326,7 +326,7 @@ def test_stage_from_record_copies_readable_source(api_db, tmp_path, source):
 
 def test_stage_from_record_rejects_unreadable_record(api_db, tmp_path):
     book, _version, _document, creator, _viewer = _record(api_db, tmp_path)
-    book.confidentiality = "secret"
+    book.grade = "secret"
     api_db.commit()
     response = _client(api_db, creator).post(
         "/api/v1/documents/attachments/stage-from-record",

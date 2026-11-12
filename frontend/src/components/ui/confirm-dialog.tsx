@@ -44,6 +44,12 @@ interface ConfirmDialogProps {
   destructive?: boolean
   /** Explicit return target for controlled dialogs that do not render a Radix trigger. */
   returnFocusRef?: React.RefObject<HTMLElement | null>
+  /**
+   * Put initial focus on Cancel, so a stray Enter cannot run the action.
+   * Defaults to `destructive`; pass `true` for an irreversible action that is
+   * not styled destructive (e.g. issuing a reference number and sending).
+   */
+  focusCancel?: boolean
 }
 
 export function ConfirmDialog({
@@ -55,6 +61,7 @@ export function ConfirmDialog({
   onConfirm,
   destructive = false,
   returnFocusRef,
+  focusCancel = destructive,
 }: ConfirmDialogProps): React.JSX.Element {
   const { t } = useTranslation()
   const label = confirmLabel ?? t('common.confirm')
@@ -64,7 +71,7 @@ export function ConfirmDialog({
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent
         onOpenAutoFocus={(event) => {
-          if (!destructive) return
+          if (!focusCancel) return
           event.preventDefault()
           document.getElementById(cancelId)?.focus()
         }}

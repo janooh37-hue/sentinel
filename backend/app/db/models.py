@@ -43,6 +43,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
 
+from app.core import grades
 from app.core.clock import utcnow
 from app.db.base import Base
 
@@ -201,7 +202,7 @@ class BookRefSequence(Base):
 
 
 class ClassifiedRefSequence(Base):
-    """Single-row counter for classified refs (1/{tab}/GSSG/{serial}); id always 1."""
+    """Single-row counter for classified refs (1/{tab}/{serial}); id always 1."""
 
     __tablename__ = "classified_ref_sequence"
 
@@ -262,9 +263,13 @@ class Book(Base):
     doc_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    priority: Mapped[str] = mapped_column(
+    # Urgency (الاستعجال): Normal | High (Urgent) | Very High (Very Urgent).
+    urgency: Mapped[str] = mapped_column(
         String(16), nullable=False, default="Normal", server_default="Normal"
     )
+    # Ledger Book Importance (الأهمية, ADR 0008): medium | high | None. Always
+    # None for non-Ledger records; Ledger Books keep urgency at Normal.
+    importance: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # none | pending | approved | rejected | returned
     approval_state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="none", server_default="none"
@@ -283,15 +288,21 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Record level (migration 0102): general | personal | secret | directed.
-    # Gates who can open the record; see book_service.user_visibility_clause.
-    confidentiality: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="general", server_default="general"
+    # Record grade + distribution (migration 0119, ADR 0007; app.core.grades).
+    # Gate who can open the record; see book_service.user_visibility_clause.
+    grade: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unclassified", server_default="unclassified"
+    )
+    distribution: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="organization", server_default="organization"
     )
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
     doc_manager_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    external: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     attachment_paths: Mapped[list[str]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
@@ -307,6 +318,9 @@ class Book(Base):
     # Normalised search corpus (migration 0057) — populated by Task 15.
     # FTS5 external-content table books_fts indexes this column.
     search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The Ledger Book draft this record was Saved & Sent from (ADR 0007). No FK:
+    # the draft row is deleted at Save & Send, so the id is provenance only.
+    source_draft_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     category: Mapped[BookCategory] = relationship(back_populates="books")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
@@ -325,10 +339,10 @@ class Book(Base):
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
         Index("ix_books_created_by_user_id", "created_by_user_id"),
-        CheckConstraint(
-            "confidentiality IN ('general', 'personal', 'secret', 'directed')",
-            name="ck_books_confidentiality",
-        ),
+        CheckConstraint(grades.GRADE_CHECK, name="ck_books_grade"),
+        CheckConstraint(grades.DISTRIBUTION_CHECK, name="ck_books_distribution"),
+        CheckConstraint(grades.URGENCY_CHECK, name="ck_books_urgency"),
+        CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_books_importance"),
     )
 
 
@@ -427,6 +441,10 @@ class BookVersion(Base):
     signature_revision: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
+    # Ledger Revisions only: the paper preset and the renderer layout pinned
+    # at issue, so a later layout change never alters an issued book.
+    paper_preset: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    paper_layout: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     book: Mapped[Book] = relationship(back_populates="versions")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
@@ -449,6 +467,110 @@ class BookVersion(Base):
         UniqueConstraint("book_id", "version_no", name="uq_book_versions_book_version"),
         Index("ix_book_versions_book", "book_id"),
     )
+
+
+class BookDraft(Base):
+    """A private Ledger Book draft (ADR 0007): no number until Save & Send.
+
+    Only ``owner_user_id`` sees it. No FK on the owner, same SQLite batch-ALTER
+    reason as ``Book.created_by_user_id``.
+    """
+
+    __tablename__ = "book_drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    owner_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # The التبويب tab (1..15) the number will be allocated under.
+    tab: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    grade: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unclassified", server_default="unclassified"
+    )
+    importance: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    external: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    signer_manager_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    addressees: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    subjects: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    printed_cc: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    addressed_to: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="", server_default=""
+    )
+    body_html: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+    paper_preset: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="normal", server_default="normal"
+    )
+    # Bottom block selections, applied at Save & Send.
+    reference_book_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    folder_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+
+    __table_args__ = (
+        Index("ix_book_drafts_owner_user_id", "owner_user_id"),
+        CheckConstraint("tab IS NULL OR (tab BETWEEN 1 AND 15)", name="ck_book_drafts_tab"),
+        CheckConstraint(grades.GRADE_CHECK, name="ck_book_drafts_grade"),
+        CheckConstraint(grades.IMPORTANCE_CHECK, name="ck_book_drafts_importance"),
+        CheckConstraint("paper_preset IN ('normal', 'report')", name="ck_book_drafts_paper_preset"),
+        # Never reuse a deleted draft's id: draft numbers and image URLs carry it.
+        {"sqlite_autoincrement": True},
+    )
+
+
+class BookAddressee(Base):
+    """Ordered issue-time names and destinations, not access grants."""
+
+    __tablename__ = "book_addressees"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"))
+    role: Mapped[str] = mapped_column(String(2), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    contact_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    name_ar: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    name_en: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("role IN ('to', 'cc')", name="ck_book_addressees_role"),
+        Index("ix_book_addressees_book_id", "book_id"),
+    )
+
+
+class LedgerBookSave(Base):
+    """One tracked edit of a Ledger Book Revision (ADR 0008): append-only.
+
+    The Revision's current content is its newest save.
+    """
+
+    __tablename__ = "ledger_book_saves"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("book_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    saved_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    saved_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
+    )
+    subjects: Mapped[list[str]] = mapped_column(JSON, nullable=False)
+    body_html: Mapped[str] = mapped_column(Text, nullable=False)
+    printed_cc: Mapped[list[str] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    addressed_to: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    content_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+
+    __table_args__ = (Index("ix_ledger_book_saves_version_id", "version_id"),)
 
 
 class BookRevisionAccess(Base):
@@ -573,12 +695,19 @@ class BookFolder(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     name: Mapped[str] = mapped_column(String(80), nullable=False)
+    # The desk box (scope) the folder sits in; books are filed only from that box.
+    box: Mapped[str] = mapped_column(String(10), nullable=False, server_default="incoming")
     created_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
     )
 
-    __table_args__ = (Index("ix_book_folders_owner_user_id", "owner_user_id"),)
+    __table_args__ = (
+        Index("ix_book_folders_owner_user_id", "owner_user_id"),
+        CheckConstraint(
+            "box IN ('incoming', 'outgoing', 'done', 'archived')", name="ck_book_folders_box"
+        ),
+    )
 
 
 class BookFolderShare(Base):

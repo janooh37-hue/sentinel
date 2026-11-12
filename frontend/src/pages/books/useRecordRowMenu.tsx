@@ -11,13 +11,15 @@ import { toast } from '@/lib/toast'
 
 import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
 import { cn } from '@/lib/utils'
-import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
+import { ChangeGradeDialog } from '@/components/books/ChangeGradeDialog'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
 import type { RowMenuItem } from './RecordRowMenu'
+import { canSendBook } from './canSendBook'
 import { defaultPaperKey, downloadPaper, paperKey, papersOf } from './recordPapers'
 
 const icon = 'h-3.5 w-3.5'
@@ -40,6 +42,7 @@ export function useRecordRowMenu({
   onMenuOpen: (book: BookRead) => void
 } {
   const { t } = useTranslation()
+  const userId = useAuth().user?.id
   const navigate = useNavigate()
   const [dialog, setDialog] = useState<{ kind: 'send' | 'level'; book: BookRead } | null>(null)
   const [menuBook, setMenuBook] = useState<BookRead | null>(null)
@@ -53,6 +56,7 @@ export function useRecordRowMenu({
   const inbox = useInboxActions(target)
 
   const itemsFor = (row: BookRead): RowMenuItem[] => {
+    if (row.metadata_only) return []
     if (menuBook?.id === row.id && detail.isError) return []
     const book = target?.id === row.id ? target : row
     const papers = papersOf(book, { inmateReporter: isInmateReporter })
@@ -71,15 +75,15 @@ export function useRecordRowMenu({
         icon: <SquareArrowOutUpRight className={cn(icon, 'rtl:-scale-x-100')} aria-hidden />,
         onSelect: () => window.open(`/books/${book.id}`, '_blank', 'noopener'),
       },
-      book.can_send === true && {
+      canSendBook(book, userId) && {
         key: 'send',
         label: t('books.send.menu'),
         icon: <Send className={icon} aria-hidden />,
         onSelect: () => setDialog({ kind: 'send', book }),
       },
-      book.can_change_confidentiality === true && {
+      book.can_change_grade === true && {
         key: 'level',
-        label: t('books.confidentiality.menu'),
+        label: t('books.grade.menu'),
         icon: <Lock className={icon} aria-hidden />,
         onSelect: () => setDialog({ kind: 'level', book }),
       },
@@ -127,7 +131,7 @@ export function useRecordRowMenu({
       {dialog && (
         <>
           <SendRecordDialog book={dialog.book} open={dialog.kind === 'send'} onOpenChange={close} />
-          <ChangeConfidentialityDialog book={dialog.book} open={dialog.kind === 'level'} onOpenChange={close} />
+          <ChangeGradeDialog book={dialog.book} open={dialog.kind === 'level' && dialog.book.can_change_grade} onOpenChange={close} />
         </>
       )}
     </>

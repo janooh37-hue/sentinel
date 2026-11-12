@@ -1,4 +1,4 @@
-"""Live record references, derivation, and confidentiality floors."""
+"""Live record references, derivation, and the attached-reference grade floor."""
 
 from __future__ import annotations
 
@@ -11,50 +11,44 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, NotFoundError
+from app.core import grades
 from app.core.subject import _PREFIX_RE
 from app.db.models import AuditLog, Book, BookEditSession, BookLink, BookRecipient, User
-from app.schemas.book import BookConfidentiality, BookDeriveRequest, BookThreadItem
+from app.schemas.book import BookDeriveRequest, BookDistribution, BookGrade, BookThreadItem
 from app.services import book_service, document_service, perm_service, word_book_service
 
 
-def require_level_floor(
+def require_grade_floor(
     db: Session,
     book: Book | None,
-    level: str,
+    grade: str,
     *,
     target: Book | None = None,
-    kind: str = "reference",
     attached: bool = True,
 ) -> None:
-    """Check outgoing links, plus a proposed link before it is persisted."""
-    links = (
+    """A record with an attached classified reference is at least Secret.
+
+    Checks the outgoing links, plus a proposed link before it is persisted.
+    """
+    targets = (
         list(
-            db.execute(
-                select(BookLink.kind, BookLink.attached, Book.confidentiality)
-                .join(Book, Book.id == BookLink.target_book_id)
-                .where(BookLink.book_id == book.id)
+            db.scalars(
+                select(Book.grade)
+                .join(BookLink, Book.id == BookLink.target_book_id)
+                .where(BookLink.book_id == book.id, BookLink.attached.is_(True))
             )
         )
         if book is not None
         else []
     )
-    if target is not None:
-        links.append((kind, attached, target.confidentiality))
-    minimum = None
-    if any(is_attached and target_level == "secret" for _, is_attached, target_level in links):
-        if level != "secret":
-            minimum = "secret"
-    elif level == "general" and any(
-        link_kind in ("reply", "based_on") and target_level != "general"
-        for link_kind, _, target_level in links
-    ):
-        minimum = "directed"
-    if minimum:
+    if target is not None and attached:
+        targets.append(target.grade)
+    if grade == grades.UNCLASSIFIED and any(t != grades.UNCLASSIFIED for t in targets):
         raise AppError(
-            "LEVEL_BELOW_FLOOR",
-            "The level cannot be lower than the linked records require.",
+            "GRADE_BELOW_FLOOR",
+            "A record with an attached classified reference must be at least Secret.",
             http_status=422,
-            details={"min": minimum},
+            details={"min": grades.SECRET},
         )
 
 
@@ -90,7 +84,8 @@ def _item(
         book_id=linked.id,
         ref_number=linked.ref_number,
         subject=linked.subject,
-        confidentiality=cast(BookConfidentiality, linked.confidentiality),
+        grade=cast(BookGrade, linked.grade),
+        distribution=cast(BookDistribution, linked.distribution),
         created_at=linked.created_at,
         approval_state=linked.approval_state,
         direction="outgoing" if outgoing else "incoming",
@@ -131,6 +126,7 @@ def thread(db: Session, user: User, book: Book) -> list[BookThreadItem]:
 
 def link(db: Session, user: User, book: Book, target_id: int) -> BookThreadItem:
     book_service.require_full_book_access(db, user, book, write=True)
+    book_service.require_ledger_revision_unlocked(db, book)
     target = book_service.get_book(db, target_id)
     book_service.require_full_book_access(db, user, target)
     if target.id == book.id:
@@ -140,7 +136,7 @@ def link(db: Session, user: User, book: Book, target_id: int) -> BookThreadItem:
     )
     if existing is not None and (existing.kind == "reference" or existing.attached):
         raise AppError("LINK_EXISTS", "The reference already exists.", http_status=409)
-    require_level_floor(db, book, book.confidentiality, target=target)
+    require_grade_floor(db, book, book.grade, target=target)
     if existing is None:
         existing = BookLink(
             book_id=book.id,
@@ -158,6 +154,7 @@ def link(db: Session, user: User, book: Book, target_id: int) -> BookThreadItem:
 
 def unlink(db: Session, user: User, book: Book, target_id: int) -> None:
     book_service.require_full_book_access(db, user, book, write=True)
+    book_service.require_ledger_revision_unlocked(db, book)
     target = db.get(Book, target_id)
     if target is None or target.deleted_at is not None:
         raise NotFoundError("LINK_NOT_FOUND", "Reference not found")
@@ -177,13 +174,18 @@ def unlink(db: Session, user: User, book: Book, target_id: int) -> None:
     db.commit()
 
 
+def derived_grade(original: Book, payload: BookDeriveRequest) -> str:
+    """A reply inherits the source grade; create-from defaults to it (ADR 0007, D7)."""
+    if payload.kind == "reply" or payload.grade is None:
+        return original.grade
+    return payload.grade
+
+
 def derive(
     db: Session, user: User, original: Book, payload: BookDeriveRequest
 ) -> word_book_service.WordSessionInfo:
-    level = payload.confidentiality or cast(BookConfidentiality, original.confidentiality)
-    require_level_floor(
-        db, None, level, target=original, kind=payload.kind, attached=payload.attach_reference
-    )
+    grade = derived_grade(original, payload)
+    require_grade_floor(db, None, grade, target=original, attached=payload.attach_reference)
     recipient_id = addressee_user_id(db, original, user.id)
     recipient_name = ""
     if recipient_id is not None:
@@ -257,7 +259,7 @@ def derive(
         subject=subject,
         cc=[],
         manager_id=None,
-        confidentiality=level,
+        grade=grade,
         body_html=body_html,
         body_docx=(
             source_docx

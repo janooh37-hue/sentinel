@@ -43,7 +43,7 @@ from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.schemas.book import BookConfidentiality, GenerateAttachmentSpec
+from app.schemas.book import BookGrade, GenerateAttachmentSpec
 from app.schemas.signature_placement import (
     LegacyCandidateRead,
     SignatureEditorRead,
@@ -149,10 +149,10 @@ class DocumentGenerateRequest(BaseModel):
     attachments: list[GenerateAttachmentSpec] | None = None
     # General Book only: government classification (التبويب) code, e.g. "5/1".
     # Required on commit — every General Book ref is now allocated from the
-    # classified register (1/{tab}/GSSG/{serial}); the legacy GS-#### counter
+    # classified register (1/{tab}/{serial}); the legacy GS-#### counter
     # is retired for this form.
     classification_code: str | None = None
-    confidentiality: BookConfidentiality = "general"
+    grade: BookGrade = "unclassified"
     # Per-book notify switch. The generation preview shows it seeded from the
     # event's default (`msgdefault.<event>`); True/False is the operator's
     # explicit choice for THIS book, None applies the event default. ANDed
@@ -292,7 +292,7 @@ def _run_generation(
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
             classification_code=request.classification_code,
-            confidentiality=request.confidentiality,
+            grade=request.grade,
             notify_employee=notify_employee,
         )
         # Best-effort automatic employee SMS for generated service forms.
@@ -373,7 +373,7 @@ def generate_document(
             revise_book = None
         book_service.require_revise_access(db, user, revise_book)
     else:
-        book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
+        book_service.require_grade_clearance(db, user, payload.grade)
     # Refuse a duplicate of a live record's leave now, with its reference number,
     # rather than as a failed job (the job re-checks it).
     document_service.plan_gated_leave(

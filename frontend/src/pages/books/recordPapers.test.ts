@@ -258,7 +258,7 @@ describe('approvalItemPapers', () => {
       book_id: 1,
       ref_number: 'HR-1',
       status: 'pending',
-      priority: 'Normal',
+      urgency: 'Normal',
       access_scope: 'full',
       document_id: 7,
       version_id: 4,

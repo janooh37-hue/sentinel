@@ -1,19 +1,24 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import ar from '@/locales/ar.json'
-import type { BookFolderRead, BookRead } from '@/lib/api'
+import en from '@/locales/en.json'
+import type { BookFolderRead, BookRead, LedgerBookRead, LedgerDraftRead } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
+const authReads = vi.hoisted(() => ({ count: 0 }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => { authReads.count += 1; return { user: { id: 1, role: 'employee' } } } }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: vi.fn(() => false) }))
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({ papers }: { papers: { url: string }[] }) => <div role="document" data-url={papers[0]?.url} />,
+}))
+vi.mock('@/components/books/LedgerPaperPdf', () => ({
+  LedgerPaperPdf: ({ url, onReady }: { url: string | null; onReady?: () => void }) => <div role="document" data-url={url}><button onClick={onReady}>Preview loaded</button></div>,
 }))
 vi.mock('@/lib/api', async (original) => {
   const actual = await original<typeof ApiModule>()
@@ -21,14 +26,15 @@ vi.mock('@/lib/api', async (original) => {
 })
 
 import { api } from '@/lib/api'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { BooksRoutingDesk } from './BooksRoutingDesk'
 
 const BOOK: BookRead = {
   id: 7, ref_number: 'GS-7', subject: 'Staff instruction', category_id: null,
   direction: 'incoming', stamp_style: null, created_at: '2026-10-12T09:00:00Z',
-  deleted_at: null, priority: null, approval_state: 'none', access_scope: 'full',
-  confidentiality: 'general', can_write: false, can_send: false,
-  can_change_confidentiality: false, can_sign: false, can_review: false, is_draft: false,
+  deleted_at: null, urgency: 'Normal', approval_state: 'none', access_scope: 'full',
+  grade: 'unclassified', distribution: 'named', metadata_only: false, can_write: false, can_send: false,
+  can_change_grade: false, can_sign: false, can_review: false, is_draft: false,
   doc_manager_has_signature: false, is_word_book: false,
   included_papers_revision: 0, included_papers_fixed_page_count: 0,
   included_papers_total_page_count: 0, current_template_id: null, service_id: 'General Book',
@@ -36,7 +42,7 @@ const BOOK: BookRead = {
 }
 
 const FOLDER: BookFolderRead = {
-  id: 3, name: 'Personnel', team: false, count: 2, can_manage: true,
+  id: 3, name: 'Personnel', box: 'incoming', team: false, count: 2, can_manage: true,
   created_by_name: 'Khalid', created_by_name_ar: 'خالد',
   everyone: false, shared_users: [], shared_departments: [],
 }
@@ -49,7 +55,7 @@ function RouterControls(): React.JSX.Element {
 
 function mount(url = '/ledger?tab=books'): QueryClient {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[url]}><BooksRoutingDesk /><RouterControls /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={qc}><MemoryRouter initialEntries={[url]}><TooltipProvider><BooksRoutingDesk /><RouterControls /></TooltipProvider></MemoryRouter></QueryClientProvider>)
   return qc
 }
 beforeEach(() => {
@@ -59,10 +65,506 @@ beforeEach(() => {
   vi.spyOn(api, 'getInboxSummary').mockResolvedValue({ unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 } })
   vi.spyOn(api, 'listBookRecipients').mockResolvedValue([])
   vi.spyOn(api, 'getBookThread').mockResolvedValue([])
+  vi.spyOn(api, 'listLedgerDrafts').mockResolvedValue([])
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
+
+describe('Books routing desk: Ledger Books', () => {
+  const DRAFT = {
+    id: 12, draft_number: '000012', grade: 'unclassified', importance: null, tab: null, subjects: ['Leave plan'], body_html: '',
+    created_at: '2026-10-28T08:00:00Z', updated_at: '2026-10-28T08:00:00Z',
+    paper_preset: 'normal', reference_book_ids: [], folder_ids: [],
+  } as unknown as LedgerDraftRead
+  const LEDGER_BOOK = {
+    id: 7, ref_number: '1/2/7', grade: 'unclassified', importance: null, tab: 2, classification_code: '2/1',
+    paper_date: '28-10-2026', approval_state: 'none', created_by_user_id: 1, voided: false,
+    revisions: [
+      { version_id: 71, version_no: 1, trigger: 'initial', created_at: '2026-10-28T08:00:00Z', signed_at: null, superseded: false, locked: false },
+      { version_id: 72, version_no: 2, trigger: 'correction', created_at: '2026-10-28T09:00:00Z', signed_at: null, superseded: false, locked: false },
+    ],
+    selected_version_id: 72, subjects: ['Leave plan'], body_html: '<p>x</p>', content_sha256: 'abc',
+    paper_preset: 'normal', references: [], folders: [],
+  } as unknown as LedgerBookRead
+
+  // W2
+  it('shows my drafts in the list pane for ?scope=drafts, without the column header or folders', async () => {
+    vi.mocked(api.listLedgerDrafts).mockResolvedValue([DRAFT])
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
+    mount('/ledger?tab=books&scope=drafts')
+    const list = await screen.findByRole('region', { name: 'My drafts' })
+    expect(within(list).getByRole('link', { name: /Leave plan/ })).toHaveAttribute('href', '/ledger/compose/12')
+    expect(document.querySelector('[data-desk-header]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Drafts 1' })).toHaveAttribute('aria-current', 'page')
+    expect(api.listBooks).not.toHaveBeenCalled()
+    expect(screen.queryByRole('group', { name: /Folders in/ })).toBeNull()
+  })
+
+  it('selecting Drafts in the rail puts scope=drafts in the URL', async () => {
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Drafts' }))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('scope=drafts')
+    expect(await screen.findByText('No drafts.')).toBeInTheDocument()
+  })
+
+  it('hides cached Incoming pagination in Drafts while preserving book pagination', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 75, limit: 50, offset: 0 })
+    mount()
+    const next = await screen.findByRole('button', { name: 'Next' })
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled()
+    await userEvent.click(next)
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'received', offset: 50 })))
+    expect(screen.getByRole('button', { name: 'Previous' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled())
+    await userEvent.click(screen.getByRole('button', { name: 'Drafts' }))
+    await screen.findByText('No drafts.')
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Previous' })).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['en', false], ['en', true], ['ar', false], ['ar', true],
+  ] as const)('retries a failed Ledger paper metadata read in %s (mobile=%s)', async (lng, mobile) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(lng)
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const ledger = vi.spyOn(api, 'getLedgerBook').mockRejectedValue(new TypeError('offline'))
+    mount('/ledger?tab=books&book=7')
+    const retry = await screen.findByRole('button', { name: i18n.t('common.retry') })
+    expect(screen.getByText(i18n.t('errors.network'))).toBeInTheDocument()
+    expect(api.getBook).toHaveBeenCalledWith(7)
+    expect(screen.queryByRole('document')).not.toBeInTheDocument()
+    ledger.mockResolvedValue(LEDGER_BOOK)
+    await userEvent.click(retry)
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc')))
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).not.toBeInTheDocument()
+    await i18n.changeLanguage('en')
+  })
+
+  it('keeps the accepted paper mounted after a background metadata read fails', async () => {
+    await i18n.changeLanguage('en')
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const ledger = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    const qc = mount('/ledger?tab=books&book=7')
+    const paper = await screen.findByRole('document')
+    await waitFor(() => expect(paper).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc')))
+    await userEvent.click(within(paper).getByRole('button', { name: 'Preview loaded' }))
+    expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled()
+    ledger.mockRejectedValue(new TypeError('offline'))
+    await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 7] }))
+    expect(screen.getByRole('document')).toBe(paper)
+    expect(paper).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 72, 'abc'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeDisabled())
+    expect(screen.getByText(i18n.t('errors.network'))).toBeInTheDocument()
+    ledger.mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('ledger.booksDesk.retry') }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+    expect(screen.getByRole('document')).toBe(paper)
+    expect(screen.queryByRole('button', { name: i18n.t('ledger.booksDesk.retry') })).not.toBeInTheDocument()
+  })
+
+  // W3
+  it.each([false, true])('shows a Ledger Book PDF at ?rev with its actions (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.stubGlobal('innerWidth', mobile ? 390 : 1280)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book', can_send: true })
+    vi.spyOn(api, 'getLedgerBook').mockImplementation(async (_id, revision) => ({ ...LEDGER_BOOK, selected_version_id: revision ?? 72 }))
+    mount('/ledger?tab=books&book=7&rev=71')
+    const paper = await screen.findByRole('document')
+    await waitFor(() => expect(paper).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=71&v=abc'))
+    if (mobile) expect(paper.parentElement).toHaveClass('h-[65dvh]', 'min-w-0')
+    expect(document.querySelector('iframe')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Print' })).toBeInTheDocument()
+    await waitFor(() => expect(api.getLedgerBook).toHaveBeenCalledWith(7, 71))
+    const picker = screen.getByRole('combobox', { name: 'Revision' })
+    expect(picker).toHaveValue('71')
+    await userEvent.selectOptions(picker, '72')
+    expect(screen.getByLabelText('URL')).toHaveTextContent('rev=72')
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=abc'))
+  })
+
+  it.each([
+    ['en', false], ['en', true], ['ar', false], ['ar', true],
+  ] as const)('shows accessible references and snapshot folder names in %s (mobile=%s)', async (lng, mobile) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(lng)
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.stubGlobal('innerWidth', mobile ? 390 : 1280)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue({
+      ...LEDGER_BOOK,
+      references: [
+        { book_id: 22, ref: 'GS-22', date: '2026-11-01', can_open: true },
+        { book_id: 23, ref: 'GS-23', date: '2026-11-02', can_open: false },
+      ],
+      folders: [{ id: 4, name: 'ملف الموظفين / Personnel' }],
+    })
+    mount('/ledger?tab=books&book=7&rev=71')
+    const references = await screen.findByRole('region', { name: lng === 'ar' ? 'إشارة إلى' : 'References' })
+    const link = within(references).getByRole('link', { name: /GS-22/ })
+    expect(link).toHaveAttribute('href', '/ledger?tab=books&book=22')
+    expect(within(references).getByText('GS-22')).toHaveAttribute('dir', 'ltr')
+    expect(within(references).getByText('01/11/2026')).toHaveAttribute('dir', 'ltr')
+    expect(within(references).getByText('GS-23')).toBeInTheDocument()
+    expect(within(references).queryByRole('link', { name: /GS-23/ })).toBeNull()
+    expect(screen.getByRole('region', { name: lng === 'ar' ? 'نسخة إلى الملف' : 'Copy to folder' })).toHaveTextContent('ملف الموظفين / Personnel')
+    await i18n.changeLanguage('en')
+  })
+
+  it.each([false, true])('T-F3 mounts manager Sign and Return on the shared desk toolbar (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, can_return: true })
+    const sign = vi.spyOn(api, 'signLedgerBook').mockResolvedValue(LEDGER_BOOK)
+    const genericSign = vi.spyOn(api, 'signBook')
+    // The action writes the server's answer into the cache (no refetch); keep both actions in it so the sequence continues.
+    const sendBack = vi.spyOn(api, 'returnLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, can_return: true })
+    mount('/ledger?tab=books&book=7')
+    const signButton = await screen.findByRole('button', { name: 'Sign' })
+    expect(signButton.parentElement).toBe(screen.getByRole('button', { name: 'Print' }).parentElement)
+    await userEvent.click(screen.getByRole('button', { name: 'Return' }))
+    const dialog = screen.getByRole('dialog', { name: 'Return to writer' })
+    await userEvent.type(within(dialog).getByRole('textbox', { name: 'Return note' }), 'Correct the addressees.')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Return' }))
+    await waitFor(() => expect(sendBack).toHaveBeenCalledWith(7, 'Correct the addressees.'))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Sign' }))
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Sign this Ledger Book?' })).getByRole('button', { name: 'Sign' }))
+    await waitFor(() => expect(sign).toHaveBeenCalledWith(7, { expected_version_id: 72, expected_content_sha256: 'abc' }))
+    expect(genericSign).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])('requires the refreshed paper to load before signing (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    const get = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ ...LEDGER_BOOK, can_sign: true })
+    const qc = mount('/ledger?tab=books&book=7')
+    expect(await screen.findByRole('button', { name: 'Sign' })).toBeDisabled()
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=abc'))
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+    get.mockResolvedValue({ ...LEDGER_BOOK, can_sign: true, content_sha256: 'changed' })
+    await act(() => qc.invalidateQueries({ queryKey: ['ledger', 'books', 7] }))
+    await waitFor(() => expect(screen.getByRole('document')).toHaveAttribute('data-url', '/api/v1/ledger/books/7/paper.pdf?revision=72&v=changed'))
+    expect(screen.getByRole('button', { name: 'Sign' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview loaded' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sign' })).toBeEnabled())
+  })
+
+  it.each([false, true])('T-F3 mounts writer Change signer and Resubmit after Return (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue({
+      ...LEDGER_BOOK, can_change_signer: true, can_resubmit: true, return_note: 'Update the subject.',
+    })
+    vi.spyOn(api, 'listManagers').mockResolvedValue([
+      { id: 3, name_en: 'Manager', name_ar: 'المدير', user_id: 10, active: true, title: 'Director', has_signature: true },
+    ])
+    const change = vi.spyOn(api, 'changeLedgerSigner').mockResolvedValue({ ...LEDGER_BOOK, can_change_signer: true, can_resubmit: true, return_note: 'Update the subject.' })
+    const resubmit = vi.spyOn(api, 'resubmitLedgerBook').mockResolvedValue(LEDGER_BOOK)
+    mount('/ledger?tab=books&book=7')
+    expect(await screen.findByText('Update the subject.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Change signer' }))
+    const dialog = screen.getByRole('dialog', { name: 'Change signing manager' })
+    await within(dialog).findByRole('option', { name: 'Manager · Director' })
+    await userEvent.selectOptions(within(dialog).getByRole('combobox', { name: 'Signing manager' }), '3')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(change).toHaveBeenCalledWith(7, 3))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    await userEvent.click(await screen.findByRole('button', { name: 'Resubmit for signature' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Resubmit for signature?' })).getByRole('button', { name: 'Resubmit for signature' }))
+    await waitFor(() => expect(resubmit).toHaveBeenCalledWith(7))
+  })
+
+  it.each([false, true])('T-F3 mounts writer Outlook draft for a signed external book (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.spyOn(api, 'getBook').mockResolvedValue({ ...BOOK, current_template_id: 'Ledger Book' })
+    vi.spyOn(api, 'getLedgerBook').mockResolvedValue({
+      ...LEDGER_BOOK, external: true, can_create_outlook_draft: true,
+      revisions: LEDGER_BOOK.revisions.map((revision) => ({ ...revision, locked: true, signed_at: '2026-10-28T10:00:00Z' })),
+    })
+    const draft = vi.spyOn(api, 'createLedgerOutlookDraft').mockResolvedValue({ id: 7 })
+    mount('/ledger?tab=books&book=7')
+    await userEvent.click(await screen.findByRole('button', { name: 'Create Outlook draft' }))
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Create an Outlook draft?' })).getByRole('button', { name: 'Create Outlook draft' }))
+    await waitFor(() => expect(draft).toHaveBeenCalledWith(7))
+    expect(screen.queryByRole('button', { name: 'Change signer' })).not.toBeInTheDocument()
+  })
+
+  // W3
+  it('keeps a Word book in the PDF viewer with no Ledger Book actions', async () => {
+    const word = { ...BOOK, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
+    vi.spyOn(api, 'getBook').mockResolvedValue(word)
+    const getLedgerBook = vi.spyOn(api, 'getLedgerBook')
+    mount('/ledger?tab=books&book=7')
+    expect(await screen.findByRole('document')).toBeInTheDocument()
+    expect(screen.queryByTitle('Ledger Book paper')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Print' })).toBeNull()
+    expect(getLedgerBook).not.toHaveBeenCalled()
+  })
+
+  // W4
+  it('reaches New Ledger Book and Drafts from the mobile rail sheet', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    vi.mocked(api.listLedgerDrafts).mockResolvedValue([DRAFT])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Incoming' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByRole('button', { name: 'New Ledger Book' })).toBeInTheDocument()
+    await userEvent.click(await within(sheet).findByRole('button', { name: 'Drafts 1' }))
+    expect(screen.getByLabelText('URL')).toHaveTextContent('scope=drafts')
+    expect(await screen.findByRole('region', { name: 'My drafts' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Drafts' })).toBeInTheDocument()
+  })
+})
+
+// W4
+describe('Books routing desk: Ledger Books (Arabic)', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => { await i18n.changeLanguage('en') })
+
+  it.each([false, true])('names New Ledger Book and Drafts in Arabic (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    mount('/ledger?tab=books&scope=drafts')
+    if (mobile) await userEvent.click(await screen.findByRole('button', { name: 'المسودات' }))
+    const nav = await screen.findByRole('navigation')
+    expect(within(nav).getByRole('button', { name: 'كتاب سجل جديد' })).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'المسودات' })).toHaveAttribute('aria-current', 'page')
+    expect(await screen.findByText('لا توجد مسودات.')).toBeInTheDocument()
+    expect(en.ledgerBook.composer.drafts.place).toBe('Drafts')
+  })
+})
 
 describe('Books routing desk', () => {
+  it.each(['grade', '-grade'])('passes the %s grade sort to the server', async (sort) => {
+    mount(`/ledger?tab=books&sort=${sort}`)
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ sort })))
+  })
+
+  it.each([false, true])('keeps metadata-only rows nonopenable and nondraggable (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const getBook = vi.spyOn(api, 'getBook')
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, metadata_only: true, grade: 'top_secret', classification_code: '7/2',
+      subject: 'Hidden subject', created_by_name: 'Hidden creator',
+      can_send: true, can_change_grade: true,
+    }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const ref = await screen.findByText('GS-7')
+    const row = ref.closest('[data-book-id]') as HTMLElement
+    expect(within(row).getByText('7/2')).toBeInTheDocument()
+    expect(within(row).getByTestId('grade-mark')).toHaveTextContent('Top Secret')
+    expect(row).not.toHaveTextContent(/Hidden|Khalid|For action/)
+    expect(row.querySelector('a,button,input,[draggable="true"]')).toBeNull()
+    expect(row.tagName).not.toBe('BUTTON')
+    await userEvent.click(row)
+    fireEvent.keyDown(row, { key: 'Enter' })
+    fireEvent.doubleClick(row)
+    expect(getBook).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('URL')).not.toHaveTextContent('book=')
+  })
+
+  const LEDGER = { ...BOOK, current_template_id: 'Ledger Book' }
+  const before = (a: Element, b: Element): boolean => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+  // T-R2 (D7: a Ledger Book shows its own importance)
+  it.each([
+    ['high', 'Importance: High', 'text-destructive'],
+    ['medium', 'Importance: Medium', 'text-caution'],
+  ] as const)('marks a Ledger Book row by its own %s importance, whatever its urgency', async (importance, name, tone) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, urgency: 'Normal', importance }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(within(row).getByRole('img', { name })).toHaveClass(tone)
+    expect(row).toHaveAccessibleName(expect.stringContaining(name))
+  })
+
+  // T-R2
+  it('leaves a Ledger Book row without importance unmarked, even when very urgent', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, urgency: 'Very High', importance: null }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-importance]')).toBeNull()
+  })
+
+  // T-R2 (D7: any other record maps urgency)
+  it.each([
+    ['Normal', 'Importance: Medium'], ['High', 'Importance: Medium'], ['Very High', 'Importance: High'], [null, null],
+  ] as const)('maps another record\'s %s urgency to its importance mark, without the old urgency flag', async (urgency, name) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, urgency, importance: 'high' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    if (name) expect(within(row).getByRole('img', { name })).toBeInTheDocument()
+    else expect(row.querySelector('[data-importance]')).toBeNull()
+    expect(row).not.toHaveTextContent(/Urgent/)
+  })
+
+  // T-R1
+  it.each([false, true])('orders Purpose · Grade · Importance in the row and the record header (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const book = { ...LEDGER, grade: 'secret' as const, importance: 'high' as const }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [book], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const [purpose, grade, importance] = [within(row).getByRole('img', { name: 'For action' }), within(row).getByTestId('grade-mark'), within(row).getByRole('img', { name: 'Importance: High' })]
+    expect(before(purpose, grade) && before(grade, importance)).toBe(true)
+    await userEvent.click(row)
+    const header = (await screen.findByRole('heading', { name: 'Staff instruction' })).closest('header')!
+    const mark = within(header).getByRole('button', { name: 'Importance: High' })
+    expect(before(within(header).getByText('For action'), within(header).getByTestId('grade-mark'))).toBe(true)
+    expect(before(within(header).getByTestId('grade-mark'), mark)).toBe(true)
+    mark.focus()
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Importance: High')
+  })
+
+  // T-L2
+  it.each([false, true])('draws Purpose, Grade and Importance at one shared size (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, grade: 'secret', importance: 'medium' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const glyphs = ['For action', 'Record grade: Secret', 'Importance: Medium'].map((name) => within(row).getByRole('img', { name }).querySelector('svg')!)
+    for (const glyph of glyphs) expect(glyph).toHaveClass('h-5', 'w-5')
+    expect(new Set(glyphs.map((glyph) => glyph.getAttribute('stroke-width'))).size).toBe(1)
+  })
+
+  // T-L7 (O-3)
+  it.each(['secret', 'top_secret', 'addressee_only'] as const)('marks the %s grade with an icon only, named by its level', async (grade) => {
+    const level = { secret: 'Secret', top_secret: 'Top Secret', addressee_only: 'Addressee Only' }[grade]
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, grade }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const mark = within(row).getByRole('img', { name: `Record grade: ${level}` })
+    expect(mark).not.toHaveAttribute('tabindex')
+    expect(row).not.toHaveTextContent(level)
+    expect(row).toHaveAccessibleName(expect.stringContaining(`Record grade: ${level}`))
+    await userEvent.hover(mark)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(`Record grade: ${level}`)
+  })
+
+  // T-L7 (O-3)
+  it('shows no grade mark for an unclassified record', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, grade: 'unclassified' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(within(row).queryByRole('img', { name: /Record grade/ })).toBeNull()
+    expect(row).not.toHaveTextContent('Unclassified')
+  })
+
+  const columns = (root: Element): (string | null)[] => Array.from(root.querySelectorAll(':scope > [data-column], :scope > * > [data-column]'), (cell) => cell.getAttribute('data-column'))
+
+  // T-L1 (O-5)
+  it('gives Purpose, Grade and Importance their own centred columns before Ref, in the header and the row', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...LEDGER, grade: 'secret', importance: 'high' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    const header = screen.getByRole('button', { name: /^Sort by Purpose/ }).closest('[data-desk-header]')!
+    const order = ['purpose', 'grade', 'importance', 'ref', 'subject', 'from', 'to', 'signer', 'state', 'date']
+    expect(columns(header)).toEqual(order)
+    expect(columns(row).slice(0, 5)).toEqual(order.slice(0, 5))
+    for (const [column, name] of [['purpose', 'For action'], ['grade', 'Record grade: Secret'], ['importance', 'Importance: High']]) {
+      const cell = row.querySelector(`[data-column="${column}"]`) as HTMLElement
+      expect(within(cell).getAllByRole('img')).toHaveLength(1)
+      expect(within(cell).getByRole('img', { name })).toBeInTheDocument()
+      expect(cell).toHaveClass('xl:justify-center')
+      expect(header.querySelector(`[data-column="${column}"]`)).toHaveClass('xl:justify-center')
+    }
+    // The grade left the Subject header for its own column.
+    expect(header.querySelector('[data-column="subject"]')).not.toHaveTextContent('Grade')
+    expect(header.querySelector('[data-column="importance"]')).toHaveTextContent('Importance')
+  })
+
+  // T-L3
+  it.each([false, true])('leaves the category out of the row (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, category } as BookRead], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row).not.toHaveTextContent('General correspondence')
+  })
+
+  // T-L4
+  it.each([
+    [{ read_at: null }, 'New'],
+    [{ read_at: '2026-10-13T09:00:00Z' }, 'Read'],
+    [{ read_at: '2026-10-13T09:00:00Z', done_at: '2026-10-14T09:00:00Z' }, 'Done'],
+    [{ read_at: '2026-10-13T09:00:00Z', archived_at: '2026-10-14T09:00:00Z' }, 'Archived'],
+  ])('shows only my own state in the state cell (%o)', async (inbox, state) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, ...inbox } }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(new RegExp(`^${state}$`))
+  })
+
+  // T-L4 (O-4)
+  it.each([false, true])('shows a simple Sent state for a book I sent, without opened/done counters (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: null, recipients: [
+      { id: 2, user_id: 2, user_name: 'Khalid', sent_by_user_id: 1, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: true, read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' },
+      { id: 3, user_id: 3, user_name: 'Salim', sent_by_user_id: 1, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: true },
+    ] }], total: 1, limit: 50, offset: 0 })
+    mount('/ledger?tab=books&scope=outgoing')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^Sent$/)
+    expect(row).not.toHaveTextContent(/(^|[^\d/])[0-2]\/2($|[^\d/])/)
+    expect(row).not.toHaveAccessibleName(expect.stringMatching(/Opened by|Done by/))
+  })
+
+  // T-L6
+  it.each([false, true])('shows people by designation, with the name only in the tooltip and accessible name (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, signer_name: 'Juma Saadi', signer_title: 'Director',
+      my_inbox: { ...BOOK.my_inbox!, sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات' },
+      recipients: [{ id: 2, user_id: 2, user_name: 'Aisha', user_title: 'HR officer', sent_by_user_id: 2, purpose: 'action', created_at: '2026-10-12T09:00:00Z', can_recall: false }],
+    }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    for (const [label, title, name] of [['From', 'Operations manager', 'Khalid'], ['To', 'HR officer', 'Aisha'], ['Signatory', 'Director', 'Juma Saadi']]) {
+      expect(row).toHaveTextContent(title)
+      expect(row).not.toHaveTextContent(name)
+      const person = within(row).getByRole('img', { name: `${label}: ${title} (${name})` })
+      expect(person).not.toHaveAttribute('tabindex')
+      expect(row).toHaveAccessibleName(expect.stringContaining(name))
+    }
+    await userEvent.hover(within(row).getByRole('img', { name: /^From:/ }))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Operations manager (Khalid)')
+  })
+
+  // T-L5
+  it('lists the category and my recipients\' opened/done progress in the record details', async () => {
+    const recipient = (id: number, extra: object = {}) => ({ id, user_id: id, user_name: `R${id}`, sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra })
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    const recipients = [
+      recipient(2, { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
+      recipient(3, { read_at: '2026-10-12T10:00:00Z' }),
+      recipient(4),
+      { ...recipient(5), sent_by_user_id: 2 },
+      recipient(6, { revoked_at: '2026-10-12T12:00:00Z' }),
+    ]
+    const book = { ...BOOK, my_inbox: null, category } as BookRead
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...book, recipients }], total: 1, limit: 50, offset: 0 })
+    // The record itself carries no recipients; the details read them from the record's recipients list.
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(recipients)
+    mount('/ledger?tab=books&scope=outgoing')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    const details = await screen.findByRole('complementary', { name: 'Details' })
+    expect(details).toHaveTextContent(/Category\s*General correspondence/)
+    await waitFor(() => expect(details).toHaveTextContent('Opened by 2 of 3'))
+    expect(details).toHaveTextContent('Done by 1 of 3')
+  })
+
   it.each([
     ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
@@ -84,7 +586,7 @@ describe('Books routing desk', () => {
   })
 
   it('selects a folder without retaining the scope filter', async () => {
-    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER])
+    vi.mocked(api.listBookFolders).mockResolvedValue([{ ...FOLDER, box: 'done' }])
     mount('/ledger?tab=books&scope=done')
     await userEvent.click(await screen.findByRole('button', { name: /^Personnel/ }))
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ folder_id: 3, sort: '-date' })))
@@ -160,26 +662,60 @@ describe('Books routing desk', () => {
     mount('/ledger?tab=books&folder=3')
     const row = await screen.findByRole('button', { name: /GS-7/ })
     expect(row).toHaveTextContent('Filed by \u2068Aisha\u2069 · 15/10/2026')
-    const subject = within(row).getByText('Staff instruction').parentElement!.parentElement!
+    const subject = row.querySelector('[data-column="subject"]')!
     expect(subject).toHaveTextContent('Filed by \u2068Aisha\u2069')
   })
 
-  it('shows the sender designation with the name below it', async () => {
-    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات' } }], total: 1, limit: 50, offset: 0 })
-    mount()
-    const row = await screen.findByRole('button', { name: /GS-7/ })
-    const cell = within(row).getByTitle('Operations manager (Khalid)')
-    expect(within(cell).getByText('Operations manager')).toBeInTheDocument()
-    expect(within(cell).getByText('Khalid')).toBeInTheDocument()
-  })
 
-  it('creates a personal folder inline with Enter', async () => {
+  it('creates a folder inline with Enter in the box it was started from', async () => {
     vi.spyOn(api, 'createBookFolder').mockResolvedValue({ ...FOLDER, id: 4, name: 'Planning', count: 0 })
     mount()
-    await userEvent.click(screen.getByRole('button', { name: 'New personal folder' }))
+    await userEvent.click(screen.getByRole('button', { name: 'New folder in Incoming' }))
     const input = screen.getByRole('textbox', { name: 'Folder name' })
     await userEvent.type(input, 'Planning{Enter}')
-    await waitFor(() => expect(api.createBookFolder).toHaveBeenCalledWith({ name: 'Planning', team: false }))
+    await waitFor(() => expect(api.createBookFolder).toHaveBeenCalledWith({ name: 'Planning', box: 'incoming', team: false }))
+  })
+
+  // T-FR5
+  const SEND = { id: 1, user_id: 4, sent_by_user_id: 1, purpose: 'info' as const, created_at: '2026-10-12T10:00:00Z', revoked_at: null }
+  it.each([
+    ['a done book', { ...BOOK, my_inbox: { ...BOOK.my_inbox!, done_at: '2026-10-13T09:00:00Z' } }, [], ['Done']],
+    ['a book I received and sent on', BOOK, [SEND], ['Incoming', 'Outgoing']],
+    ['a book I only sent', { ...BOOK, my_inbox: null }, [SEND], ['Outgoing']],
+  ])('offers %s only the folders of its boxes, grouped by box', async (_label, book, sends, boxes) => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [book], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(sends as never)
+    vi.mocked(api.listBookFolders).mockResolvedValue([
+      { ...FOLDER, id: 11, name: 'In tray', has_book: false },
+      { ...FOLDER, id: 12, name: 'Sent tray', box: 'outgoing', team: true, everyone: true, has_book: false },
+      { ...FOLDER, id: 13, name: 'Done tray', box: 'done', has_book: false },
+      { ...FOLDER, id: 14, name: 'Old tray', box: 'archived', has_book: false },
+    ])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await waitFor(() => expect(api.listBookRecipients).toHaveBeenCalled())
+    await userEvent.click(await screen.findByRole('button', { name: 'Folder' }))
+    const menu = await screen.findByRole('menu')
+    await waitFor(() => expect(within(menu).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual(boxes))
+    const trays = { Incoming: 'In tray', Outgoing: 'Sent tray', Done: 'Done tray', Archived: 'Old tray' }
+    expect(within(menu).getAllByRole('menuitemcheckbox').map((item) => item.textContent)).toEqual(boxes.map((box) => trays[box as keyof typeof trays]))
+    expect(within(menu).queryByText('Personal')).toBeNull()
+    expect(within(menu).queryByText('Team folders')).toBeNull()
+    if (boxes.includes('Outgoing')) expect(within(menu).getByRole('menuitemcheckbox', { name: 'Sent tray, shared folder' }).querySelector('.lucide-folder-users')).not.toBeNull()
+  })
+
+  // T-FR8
+  it('shows the same box tree in the mobile sheet', async () => {
+    vi.mocked(useIsMobile).mockReturnValue(true)
+    vi.mocked(api.listBookFolders).mockResolvedValue([FOLDER, { ...FOLDER, id: 5, name: 'Closed', box: 'done' }])
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: 'Incoming' }))
+    const sheet = await screen.findByRole('dialog')
+    const incoming = await within(sheet).findByRole('group', { name: 'Folders in Incoming' })
+    expect(within(incoming).getByRole('button', { name: /^Personnel/ })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: 'Folders in Done' })).toHaveAttribute('aria-expanded', 'false')
+    expect(within(sheet).getByRole('button', { name: 'New folder in Archived' })).toBeInTheDocument()
   })
 
   it('files and unfiles an opened book without changing its inbox state', async () => {
@@ -344,20 +880,24 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
-  it('marks each purpose with its own glyph and label, apart from the confidentiality mark', async () => {
+  it('marks each purpose with its own glyph and label, apart from the grade mark', async () => {
     const purposes = ['info', 'action', 'reply', 'circulate'] as const
     vi.mocked(api.listBooks).mockResolvedValue({
-      items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, confidentiality: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
+      items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, grade: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
       total: 4, limit: 50, offset: 0,
     })
     mount()
     for (const [index, label] of ['For information', 'For action', 'For reply', 'For circulation'].entries()) {
       const row = await screen.findByRole('button', { name: new RegExp(`GS-${index + 1}`) })
-      const mark = within(row).getByText(label)
+      // Icon only in the row: no visible label, but the purpose names the mark and joins the row's name.
+      expect(row).not.toHaveTextContent(label)
+      expect(row).toHaveAccessibleName(expect.stringContaining(label))
+      const mark = within(row).getByRole('img', { name: label })
       expect(mark).toHaveAttribute('data-purpose', purposes[index])
+      expect(mark).not.toHaveAttribute('tabindex')
       expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
-      expect(mark.closest('[data-testid="confidentiality-mark"]')).toBeNull()
-      expect(within(row).getByTestId('confidentiality-mark')).toHaveTextContent('Secret')
+      expect(mark.closest('[data-testid="grade-mark"]')).toBeNull()
+      expect(within(row).getByTestId('grade-mark')).toHaveAccessibleName('Record grade: Secret')
     }
     const glyphs = purposes.map((purpose) => document.querySelector(`[data-purpose="${purpose}"] svg`)!.getAttribute('class'))
     expect(new Set(glyphs).size).toBe(4)
@@ -385,14 +925,14 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
-  it('shows an outgoing book with its recipients, my note and their read/done progress', async () => {
+  it('shows an outgoing book with its recipients and my note, leaving their progress to the record', async () => {
     const recipient = (id: number, name: string, extra: object = {}) => ({
       id, user_id: id, user_name: name, sent_by_user_id: 1, purpose: 'action' as const, note: 'Count by Thursday',
       created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra,
     })
     vi.mocked(api.listBooks).mockResolvedValue({
       // I also received this book (my_inbox set): the Outgoing tab still shows my send.
-      items: [{ ...BOOK, priority: 'High', signer_name: 'Juma Saadi', recipients: [
+      items: [{ ...BOOK, urgency: 'High', signer_name: 'Juma Saadi', recipients: [
         recipient(2, 'Khalid', { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
         recipient(3, 'Salim', { read_at: '2026-10-12T10:00:00Z' }),
         recipient(4, 'Aisha'),
@@ -404,11 +944,11 @@ describe('Books routing desk', () => {
     const row = await screen.findByRole('button', { name: /GS-7/ })
     expect(row).toHaveTextContent('Khalid +2')
     expect(row).not.toHaveTextContent('Forwarded')
-    expect(row).toHaveTextContent('Count by Thursday')
+    // The note keeps the row to one line: an icon whose name carries the text.
+    expect(within(row).getByRole('img', { name: 'Note: Count by Thursday' })).toBeInTheDocument()
     expect(row).toHaveTextContent('Juma Saadi')
-    expect(row).toHaveTextContent('Urgent')
-    expect(within(row).getByText('Opened by 2 of 3')).toBeInTheDocument()
-    expect(within(row).getByText('Done by 1 of 3')).toBeInTheDocument()
+    expect(within(row).getByRole('img', { name: 'Importance: Medium' })).toBeInTheDocument()
+    expect(row).not.toHaveTextContent(/Opened by|Done by|(^|[^\d/])[0-3]\/3($|[^\d/])/)
   })
 })
 
@@ -454,7 +994,7 @@ describe('Books routing desk (Arabic)', () => {
   })
 
   it('renders the list and the open book without any English', async () => {
-    const arabic = { ...BOOK, subject: 'تعليمات الموظفين', confidentiality: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
+    const arabic = { ...BOOK, subject: 'تعليمات الموظفين', grade: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
     const purposes = ['info', 'action', 'reply', 'circulate'] as const
     const items = purposes.map((purpose, index) => ({
       ...arabic, id: index + 1, ref_number: `GS-${index + 1}`,
@@ -465,11 +1005,106 @@ describe('Books routing desk (Arabic)', () => {
     mount()
     const desk = screen.getByRole('region', { name: 'الكتب' })
     await screen.findByRole('button', { name: /GS-1/ })
-    for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByText(label)).toBeInTheDocument()
+    for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByRole('img', { name: label })).toBeInTheDocument()
+    expect(within(desk).getAllByRole('img', { name: 'الأهمية: متوسطة' })).toHaveLength(4)
     expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
     await userEvent.click(screen.getByRole('button', { name: /GS-2/ }))
     await screen.findByRole('button', { name: 'العودة إلى الكتب' })
     await screen.findByRole('complementary', { name: 'التفاصيل' })
     expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
+  })
+
+  // T-R3
+  it('names every importance level in Arabic on rows and the header, with the same keys as English', async () => {
+    expect(Object.keys(ar.books.importance).sort()).toEqual(Object.keys(en.books.importance).sort())
+    expect(Object.values(ar.books.importance).every((value) => value && !/[A-Za-z]/.test(value))).toBe(true)
+    const ledger = { ...BOOK, current_template_id: 'Ledger Book' }
+    const items = [
+      { ...ledger, importance: 'high' as const },
+      { ...ledger, id: 8, ref_number: 'GS-8', importance: 'medium' as const },
+      { ...BOOK, id: 9, ref_number: 'GS-9', urgency: 'Very High' },
+    ]
+    vi.mocked(api.listBooks).mockResolvedValue({ items, total: 3, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(items[0])
+    mount()
+    expect(within(await screen.findByRole('button', { name: /GS-7/ })).getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /GS-8/ })).getByRole('img', { name: 'الأهمية: متوسطة' })).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: /GS-9/ })).getByRole('img', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /GS-7/ }))
+    expect(await screen.findByRole('button', { name: 'الأهمية: عالية' })).toBeInTheDocument()
+  })
+
+  // T-L8
+  it.each([false, true])('lays out the Arabic row right to left with the same columns, Arabic mark names and designations (mobile=%s)', async (mobile) => {
+    vi.mocked(useIsMobile).mockReturnValue(mobile)
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{
+      ...BOOK, current_template_id: 'Ledger Book', importance: 'high', grade: 'secret', subject: 'تعليمات الموظفين', category,
+      my_inbox: { ...BOOK.my_inbox!, sent_by_name_ar: 'خالد', sent_by_title: 'Operations manager', sent_by_title_ar: 'مدير العمليات', read_at: '2026-10-13T09:00:00Z' },
+    } as BookRead], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(screen.getByRole('region', { name: 'الكتب' })).toHaveAttribute('dir', 'rtl')
+    const order = Array.from(row.querySelectorAll('[data-column]'), (cell) => cell.getAttribute('data-column'))
+    expect(order.slice(0, 5)).toEqual(['purpose', 'grade', 'importance', 'ref', 'subject'])
+    for (const name of ['للتنفيذ', 'درجة سرية المعاملة: سري', 'الأهمية: عالية', 'من: مدير العمليات (خالد)']) expect(within(row).getByRole('img', { name })).toBeInTheDocument()
+    expect(row).toHaveTextContent('مدير العمليات')
+    expect(row).not.toHaveTextContent(/خالد|المراسلات العامة|سري/)
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^مقروء$/)
+    if (!mobile) expect(document.querySelector('[data-desk-header] [data-column="importance"]')).toHaveTextContent('الأهمية')
+  })
+
+  // T-L8
+  it('shows an Arabic Sent state in the row and the Arabic category and progress in the record details', async () => {
+    const category = { id: 'GC', name_en: 'General correspondence', name_ar: 'المراسلات العامة', prefix: 'GC', requires_approval: false }
+    const recipients = [
+      { id: 2, user_id: 2, user_name: 'Aisha', user_name_ar: 'عائشة', sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true, read_at: '2026-10-12T10:00:00Z' },
+      { id: 3, user_id: 3, user_name: 'Salim', user_name_ar: 'سالم', sent_by_user_id: 1, purpose: 'action' as const, created_at: '2026-10-12T09:00:00Z', can_recall: true },
+    ]
+    const book = { ...BOOK, subject: 'تعليمات الموظفين', my_inbox: null, category, created_by_name_ar: 'أحمد' } as BookRead
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...book, recipients }], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockResolvedValue(book)
+    vi.mocked(api.listBookRecipients).mockResolvedValue(recipients)
+    mount('/ledger?tab=books&scope=outgoing')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row.querySelector('[data-column="state"]')).toHaveTextContent(/^مرسل$/)
+    await userEvent.click(row)
+    const details = await screen.findByRole('complementary', { name: 'التفاصيل' })
+    expect(details).toHaveTextContent(/الفئة\s*المراسلات العامة/)
+    await waitFor(() => expect(details).toHaveTextContent('فتحه 1 من 2'))
+    expect(details).toHaveTextContent('أنجزه 0 من 2')
+  })
+})
+describe('Books routing desk: list rows and the dossier head start', () => {
+  const LEDGER_ROW = { ...BOOK, current_template_id: 'Ledger Book' }
+
+  it('starts a Ledger Book paper and JSON from the list row, before the record detail answers', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [LEDGER_ROW], total: 1, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockReturnValue(new Promise(() => undefined))
+    const getLedgerBook = vi.spyOn(api, 'getLedgerBook').mockResolvedValue({ selected_version_id: 71, content_sha256: 'reviewed-hash', revisions: [], references: [], folders: [] } as unknown as LedgerBookRead)
+    mount('/ledger?tab=books')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    expect(await screen.findByRole('document')).toHaveAttribute('data-url', api.ledgerBookPaperPdfUrl(7, 71, 'reviewed-hash'))
+    await waitFor(() => expect(getLedgerBook).toHaveBeenCalledWith(7, undefined))
+    expect(api.getBook).toHaveBeenCalled()
+  })
+
+  it('names a restricted row and says why it cannot be opened', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...BOOK, metadata_only: true, grade: 'secret' }], total: 1, limit: 50, offset: 0 })
+    mount()
+    const row = await screen.findByRole('group', { name: /Restricted record/ })
+    expect(row).toHaveTextContent('Restricted')
+    expect(within(row).queryByRole('button')).toBeNull()
+  })
+
+  it('does not re-render the rows while typing in the search box', async () => {
+    const rows = [1, 2, 3, 4, 5].map((id) => ({ ...BOOK, id, ref_number: `GS-${id}` }))
+    vi.mocked(api.listBooks).mockResolvedValue({ items: rows, total: 5, limit: 50, offset: 0 })
+    mount()
+    await screen.findByRole('button', { name: /GS-5/ })
+    const before = authReads.count
+    await userEvent.type(screen.getByRole('searchbox'), 'S')
+    // Only the rail and the box update; a row re-render would add one read per row.
+    expect(authReads.count - before).toBeLessThan(rows.length)
   })
 })

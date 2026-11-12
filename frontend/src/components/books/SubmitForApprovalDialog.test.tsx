@@ -21,6 +21,11 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       getBook: vi.fn().mockResolvedValue({
         id: 48,
+        grade: 'unclassified',
+        distribution: 'named',
+        metadata_only: false,
+        can_change_grade: true,
+        urgency: 'Normal',
         can_write: true,
         doc_manager_user_id: null,
         doc_manager_name: null,
@@ -87,6 +92,20 @@ describe('SubmitForApprovalDialog — submit reason', () => {
     await waitFor(() => expect(api.submitBook).toHaveBeenCalledTimes(1))
   })
 
+  it('submits the selected Very Urgent urgency', async () => {
+    renderDialog()
+    await userEvent.selectOptions(await screen.findByRole('combobox'), 'Manager Khalid')
+    const veryUrgent = screen.getByRole('button', { name: 'Very Urgent' })
+    await userEvent.click(veryUrgent)
+    expect(veryUrgent).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Normal' })).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(screen.getByRole('button', { name: 'Send for approval' }))
+    await waitFor(() => expect(api.submitBook).toHaveBeenCalledWith(48, expect.objectContaining({
+      urgency: 'Very High',
+      approver_user_id: 2,
+    })))
+  })
+
   it('requires a distinct branch signer only for Administrative Leave and submits both accounts', async () => {
     vi.mocked(api.getBook).mockResolvedValue({
       id: 48, can_write: true,
@@ -106,7 +125,7 @@ describe('SubmitForApprovalDialog — submit reason', () => {
     await userEvent.selectOptions(branch, '3')
     await userEvent.click(submit)
     await waitFor(() => expect(api.submitBook).toHaveBeenCalledWith(48, {
-      priority: 'Normal', approver_user_id: 2, branch_approver_user_id: 3, reviewer_user_ids: [],
+      urgency: 'Normal', approver_user_id: 2, branch_approver_user_id: 3, reviewer_user_ids: [],
     }))
   })
 

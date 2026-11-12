@@ -256,7 +256,7 @@ def test_approval_preserves_employee_signature_choice(
             book.id,
             submitted_by_user_id=signer.id,
             approver_user_id=signer.id,
-            priority="Normal",
+            urgency="Normal",
             reviewer_user_ids=[],
         )
         signed = book_service.sign_book(

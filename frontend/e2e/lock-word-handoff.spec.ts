@@ -79,7 +79,13 @@ interface SyntheticBook {
   doc_id: null
   created_at: string
   deleted_at: null
-  priority: 'Normal'
+  urgency: 'Normal'
+  grade: 'unclassified'
+  distribution: 'named'
+  metadata_only: false
+  can_write: true
+  can_send: true
+  can_change_grade: true
   approval_state: 'none'
   classification_code: string
   voided_at: string | null
@@ -275,7 +281,13 @@ class SyntheticApi {
       doc_id: null,
       created_at: '2026-09-12T08:00:00.000Z',
       deleted_at: null,
-      priority: 'Normal',
+      urgency: 'Normal',
+      grade: 'unclassified',
+      distribution: 'named',
+      metadata_only: false,
+      can_write: true,
+      can_send: true,
+      can_change_grade: true,
       approval_state: 'none',
       classification_code: CLASSIFICATION_CODE,
       voided_at: null,

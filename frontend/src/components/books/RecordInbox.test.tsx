@@ -34,13 +34,14 @@ vi.mock('./useReplyActions', () => ({ useReplyActions: () => ({ actions: [], dia
 vi.mock('@/lib/toast', () => ({
   toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(() => 'toast-1'), dismiss: vi.fn() },
 }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 } }) }))
 
 const INBOX: BookInboxRead = {
   id: 9, purpose: 'circulate', sent_by_user_id: 2,
   sent_by_name: 'Khalid Sender', sent_by_name_ar: 'خالد المرسل',
   sent_at: '2026-10-12T09:00:00Z', read_at: null, done_at: null, archived_at: null,
 }
-const BOOK = { id: 7, ref_number: 'GS-7', confidentiality: 'general', my_inbox: INBOX } as BookRead
+const BOOK = { id: 7, ref_number: 'GS-7', grade: 'unclassified', urgency: 'Normal', distribution: 'named', metadata_only: false, can_change_grade: false, my_inbox: INBOX } as BookRead
 
 function setup() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })

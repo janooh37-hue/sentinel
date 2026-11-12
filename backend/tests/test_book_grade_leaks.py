@@ -45,12 +45,13 @@ def records(api_db):
     api_db.add_all([employee, BookCategory(id="GS", prefix="GS", name_en="General Records")])
     api_db.flush()
     books, documents, logs = [], [], []
-    for number, level in ((42, "personal"), (43, "general")):
+    for number, level in ((42, "named"), (43, "general")):
         book = Book(
             category_id="GS",
             ref_number=f"GS-{number:04d}",
             subject=f"{level} record",
-            confidentiality=level,
+            grade="unclassified",
+            distribution="named" if level == "named" else "organization",
             created_by_user_id=creator.id,
             employee_id=employee.id,
             direction="outgoing",
@@ -105,7 +106,7 @@ def records(api_db):
         other=other,
         admin=admin,
         employee=employee,
-        personal=books[0],
+        named=books[0],
         general=books[1],
         documents=documents,
         logs=logs,
@@ -122,13 +123,13 @@ def viewer(records, request):
 
 
 def test_shared_ledger_log_and_entry_do_not_leak(records, viewer):
-    _, can_open_personal = viewer
-    expected = records.logs if can_open_personal else records.logs[1:]
+    _, can_open_named = viewer
+    expected = records.logs if can_open_named else records.logs[1:]
     response = records.client.get("/api/v1/ledger/log")
     assert response.status_code == 200, response.text
     assert {row["id"] for row in response.json()["items"]} == {row.id for row in expected}
     assert response.json()["total"] == len(expected)
-    for log, visible in zip(records.logs, [can_open_personal, True], strict=True):
+    for log, visible in zip(records.logs, [can_open_named, True], strict=True):
         for path in (f"/api/v1/ledger/log/{log.id}", f"/api/v1/ledger/{log.id}"):
             response = records.client.get(path)
             assert response.status_code == (200 if visible else 404), response.text
@@ -142,14 +143,14 @@ def test_shared_ledger_log_and_entry_do_not_leak(records, viewer):
 
 
 def test_employee_activity_hides_document_and_ledger(records, viewer):
-    _, can_open_personal = viewer
+    _, can_open_named = viewer
     response = records.client.get(
         "/api/v1/employees/activity", params={"employee_id": records.employee.id}
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    documents = records.documents if can_open_personal else records.documents[1:]
-    logs = records.logs if can_open_personal else records.logs[1:]
+    documents = records.documents if can_open_named else records.documents[1:]
+    logs = records.logs if can_open_named else records.logs[1:]
     assert {(row["kind"], row["source_id"]) for row in body["items"]} == {
         *(("document", row.id) for row in documents),
         *(("ledger", row.id) for row in logs),
@@ -161,11 +162,11 @@ def test_employee_activity_hides_document_and_ledger(records, viewer):
 
 
 def test_employee_detail_hides_documents_ledger_and_stats(records, viewer):
-    user, can_open_personal = viewer
+    user, can_open_named = viewer
     detail = employee_detail_service.get_employee_detail(records.db, records.employee.id, user=user)
     assert detail is not None
-    documents = records.documents if can_open_personal else records.documents[1:]
-    logs = records.logs if can_open_personal else records.logs[1:]
+    documents = records.documents if can_open_named else records.documents[1:]
+    logs = records.logs if can_open_named else records.logs[1:]
     assert {row.id for row in detail.recent_documents} == {row.id for row in documents}
     assert {row.ref_number for row in detail.recent_documents} == {
         row.ref_number for row in documents
@@ -177,8 +178,8 @@ def test_employee_detail_hides_documents_ledger_and_stats(records, viewer):
 
 
 def test_scan_reference_only_matches_visible_records(records, viewer):
-    user, can_open_personal = viewer
-    for book, visible in ((records.personal, can_open_personal), (records.general, True)):
+    user, can_open_named = viewer
+    for book, visible in ((records.named, can_open_named), (records.general, True)):
         read = DocumentRead(text=f"Ref: {book.ref_number}", text_source="ocr")
         result = classify_text(read, db=records.db, employees=[], user=user)
         if visible:
@@ -193,7 +194,7 @@ def test_scan_reference_only_matches_visible_records(records, viewer):
 
 
 def test_announcement_cannot_send_hidden_record(records, viewer, monkeypatch):
-    user, can_open_personal = viewer
+    user, can_open_named = viewer
     records.db.add(UserPermission(user_id=user.id, capability="messages.broadcast", effect="grant"))
     records.db.commit()
     groups = Mock(return_value=[SimpleNamespace(id="test@g.us", name="Test Group")])
@@ -206,7 +207,7 @@ def test_announcement_cannot_send_hidden_record(records, viewer, monkeypatch):
     monkeypatch.setattr(announce_service, "groups_available", groups)
     monkeypatch.setattr(announce_service, "resolve_book_pdf", pdf)
     monkeypatch.setattr(announce_service, "send_announcement", send)
-    for book, visible in ((records.personal, can_open_personal), (records.general, True)):
+    for book, visible in ((records.named, can_open_named), (records.general, True)):
         groups.reset_mock()
         pdf.reset_mock()
         send.reset_mock()
@@ -227,8 +228,8 @@ def test_announcement_cannot_send_hidden_record(records, viewer, monkeypatch):
 
 @pytest.mark.parametrize("kind", ["permit", "item_permit"])
 def test_permit_read_redacts_hidden_letter(records, viewer, kind):
-    user, can_open_personal = viewer
-    for book, visible in ((records.personal, can_open_personal), (records.general, True)):
+    user, can_open_named = viewer
+    for book, visible in ((records.named, can_open_named), (records.general, True)):
         if kind == "permit":
             row = Permit(
                 company="Test Company",
@@ -259,11 +260,11 @@ def test_permit_read_redacts_hidden_letter(records, viewer, kind):
         )
 
 
-def test_permit_api_redacts_another_users_personal_letter(records):
+def test_permit_api_redacts_another_users_named_letter(records):
     row = Permit(
         company="Test Company",
         zones=["green"],
-        book_id=records.personal.id,
+        book_id=records.named.id,
         start_date=date(2026, 8, 10),
         end_date=date(2026, 8, 10),
         validity_value=1,
@@ -278,7 +279,7 @@ def test_permit_api_redacts_another_users_personal_letter(records):
     assert (body["book_id"], body["book_ref"], body["approval_state"]) == (None, None, None)
 
 
-def test_employee_detail_api_hides_another_users_personal_document(records):
+def test_employee_detail_api_hides_another_users_named_document(records):
     response = records.client.get(f"/api/v1/employees/{records.employee.id}/detail")
     assert response.status_code == 200, response.text
     body = response.json()
@@ -287,12 +288,12 @@ def test_employee_detail_api_hides_another_users_personal_document(records):
     assert body["stats"]["documents"] == 1
 
 
-@pytest.mark.parametrize("level", ("personal", "secret", "directed"))
-def test_non_general_violation_never_queues_or_delivers_whatsapp(records, monkeypatch, level):
+@pytest.mark.parametrize("grade", ("unclassified", "secret", "top_secret", "addressee_only"))
+def test_named_violation_never_queues_or_delivers_whatsapp(records, monkeypatch, grade):
     from app.services import inmate_violation_whatsapp as whatsapp
 
-    book = records.personal
-    book.confidentiality = level
+    book = records.named
+    book.grade = grade
     version = book.versions[0]
     version.template_id = whatsapp.TEMPLATE_ID
     version.status = "approved"
@@ -322,7 +323,7 @@ def test_register_redacts_hidden_sources_without_changing_counts(
     from app.db.models import InmateViolationPeriod
     from app.services import inmate_statistics_service as register
 
-    for book in (records.personal, records.general):
+    for book in (records.named, records.general):
         version = book.versions[0]
         version.template_id = register.TEMPLATE_ID
         version.fields = {
@@ -331,7 +332,7 @@ def test_register_redacts_hidden_sources_without_changing_counts(
             "imported_approved": True,
             "completion": {
                 "inmates": [{"name": "Counted inmate", "nationality": "India", "wing": "A"}],
-                "violation_details": f"<p>{book.confidentiality} violation content</p>",
+                "violation_details": f"<p>{book.distribution} violation content</p>",
             },
         }
     records.db.commit()
@@ -356,7 +357,7 @@ def test_register_redacts_hidden_sources_without_changing_counts(
     body = response.json()
     assert body["counts"]["total"] == 2
     hidden = next(
-        entry for entry in body["entries"] if entry["id"].startswith(f"{records.personal.id}:")
+        entry for entry in body["entries"] if entry["id"].startswith(f"{records.named.id}:")
     )
     assert hidden["details_text"] == ""
     assert hidden["source_ref_number"] is None
@@ -365,7 +366,7 @@ def test_register_redacts_hidden_sources_without_changing_counts(
     visible = next(
         entry for entry in body["entries"] if entry["source_book_id"] == records.general.id
     )
-    assert visible["details_text"] == "general violation content"
+    assert visible["details_text"] == "organization violation content"
     assert (
         body["projection_fingerprint"]
         == register.build_month(records.db, 2026, 8).projection_fingerprint
@@ -376,15 +377,15 @@ def test_register_redacts_hidden_sources_without_changing_counts(
     cells = [
         cell.value for sheet in workbook.worksheets for row in sheet.iter_rows() for cell in row
     ]
-    assert "personal violation content" not in cells
-    assert "general violation content" in cells
+    assert "named violation content" not in cells
+    assert "organization violation content" in cells
     assert cells.count("Counted inmate") == 2
     records.actor["user"] = records.creator
     creator = records.client.get(path)
     assert creator.status_code == 200, creator.text
     assert creator.json()["counts"]["total"] == 2
     assert {entry["source_book_id"] for entry in creator.json()["entries"]} == {
-        records.personal.id,
+        records.named.id,
         records.general.id,
     }
 
@@ -396,7 +397,7 @@ def test_hidden_import_completion_requires_write_access(records):
     with pytest.raises(NotFoundError) as exc:
         register.complete_import(
             records.db,
-            records.personal.id,
+            records.named.id,
             actor=records.other,
             report_time="09:00",
             reporter_id=records.employee.id,

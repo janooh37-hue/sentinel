@@ -26,7 +26,10 @@ const rows = vi.hoisted(() =>
     is_draft: false,
     voided_at: null,
     classification_code: null,
-    confidentiality: 'general',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
+    urgency: 'Normal',
     edit_session: null,
     signing_path: null,
     versions: [],
@@ -35,7 +38,7 @@ const rows = vi.hoisted(() =>
     created_by_name: 'Sara',
     my_inbox: null,
     can_send: id !== 1,
-    can_change_confidentiality: false,
+    can_change_grade: false,
   })),
 )
 

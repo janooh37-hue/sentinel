@@ -318,7 +318,7 @@ def test_word_invalid_attachment_does_not_allocate_reference(
     db.add(sequence)
     db.commit()
     if invalid_source == "record_document":
-        book = Book(category_id="GS", ref_number="PRIVATE", confidentiality="secret")
+        book = Book(category_id="GS", ref_number="PRIVATE", grade="secret")
         db.add(book)
         db.commit()
         spec = GenerateAttachmentSpec(source="record_document", book_id=book.id)

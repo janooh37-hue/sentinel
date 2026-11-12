@@ -6,7 +6,7 @@ import { ExternalLink, Forward, Printer, Send } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
-import { ConfidentialityChip } from './ConfidentialityChip'
+import { GradeChip } from './GradeChip'
 import { SendRecordDialog } from './SendRecordDialog'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
@@ -17,6 +17,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { AuthContext } from '@/lib/authContext'
 import { serviceHref } from '@/lib/quickActions'
+import { isWriterOnlyGrade } from './grades'
 
 export type NotificationChoice = 'enabled' | 'skipped'
 
@@ -110,7 +111,7 @@ export function SavedRecordActions({
     </span>
   ) : null
 
-  const sendButton = bookQuery.data?.can_send ? (
+  const sendButton = bookQuery.data?.can_send && !bookQuery.data.metadata_only && (!isWriterOnlyGrade(bookQuery.data.grade) || bookQuery.data.created_by_user_id === user?.id) ? (
     <button
       type="button"
       onClick={() => setSendOpen(true)}
@@ -145,8 +146,8 @@ export function SavedRecordActions({
         <p className="text-sm text-muted-foreground">
           {t('books.completion.reference', { ref: bidi(refNumber) })}
         </p>
-        {bookQuery.data && bookQuery.data.confidentiality !== 'general' && (
-          <ConfidentialityChip level={bookQuery.data.confidentiality} className="self-start" />
+        {bookQuery.data && bookQuery.data.grade !== 'unclassified' && (
+          <GradeChip level={bookQuery.data.grade} className="self-start" />
         )}
         {detail && <p className="text-sm text-muted-foreground">{detail}</p>}
         {notification === 'enabled' && (

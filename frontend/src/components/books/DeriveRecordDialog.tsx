@@ -4,13 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
-import { api, ApiError, apiErrorMessage, type BookRead, type Confidentiality } from '@/lib/api'
+import { api, ApiError, apiErrorMessage, type BookRead, type Grade } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useDialogReturnFocus } from './useDialogReturnFocus'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { ClassificationField } from '@/components/application/fields/ClassificationField'
-import { ConfidentialitySelect } from './ConfidentialitySelect'
-import { deriveLevels } from './derive-levels'
+import { GradeSelect } from './GradeSelect'
+import { deriveGrades } from './derive-grade'
 
 interface Props {
   book: BookRead
@@ -20,38 +21,39 @@ interface Props {
 }
 
 const ERROR_KEYS: Record<string, string | undefined> = {
-  LEVEL_BELOW_FLOOR: 'books.thread.errors.levelFloor',
+  GRADE_BELOW_FLOOR: 'books.thread.errors.levelFloor',
   CLASSIFICATION_REQUIRED: 'books.thread.errors.classificationRequired',
   SECRET_CLEARANCE_REQUIRED: 'books.thread.errors.secretClearance',
   FORBIDDEN: 'books.thread.errors.forbidden',
 }
 
 export function DeriveRecordDialog({ book, kind, open, onOpenChange }: Props): React.JSX.Element | null {
+  const returnFocus = useDialogReturnFocus(open)
   const { user } = useAuth()
   const { has } = useCapabilities()
   if (!user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view')) return null
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      {open && <Body key={`${book.id}-${kind}`} book={book} kind={kind} close={() => onOpenChange(false)} />}
+      {open && <Body key={`${book.id}-${kind}`} book={book} kind={kind} close={() => onOpenChange(false)} returnFocus={returnFocus} />}
     </DialogRoot>
   )
 }
 
-function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () => void }): React.JSX.Element {
+function Body({ book, kind, close, returnFocus }: Pick<Props, 'book' | 'kind'> & { close: () => void; returnFocus: (event: Event) => void }): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [level, setLevel] = useState<Confidentiality>(book.confidentiality)
+  const [level, setLevel] = useState<Grade>(book.grade)
   const [attached, setAttached] = useState(true)
   const [classification, setClassification] = useState<string | null>(book.classification_code ?? null)
-  const allowedLevels = deriveLevels(book.confidentiality, attached)
-  const selectedLevel = allowedLevels.includes(level) ? level : book.confidentiality
+  const allowedLevels = deriveGrades(book.grade, attached)
+  const selectedLevel = allowedLevels.includes(level) ? level : 'secret'
   const title = t(kind === 'reply' ? 'books.thread.reply' : 'books.thread.createFrom')
   const mutation = useMutation({
     mutationFn: () => api.deriveBook(book.id, {
       kind,
-      confidentiality: selectedLevel,
+      ...(kind === 'based_on' ? { grade: selectedLevel } : {}),
       attach_reference: attached,
       classification_code: classification,
     }),
@@ -68,18 +70,18 @@ function Body({ book, kind, close }: Pick<Props, 'book' | 'kind'> & { close: () 
     },
   })
   return (
-    <DialogContent data-print-hide className="bottom-sheet !inset-x-0 !bottom-0 !top-auto !max-h-[92dvh] !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:!max-h-[80dvh] md:!-translate-x-1/2 md:!-translate-y-1/2 md:rounded-b-2xl rtl:md:!translate-x-1/2">
+    <DialogContent data-print-hide onCloseAutoFocus={returnFocus} className="bottom-sheet !inset-x-0 !bottom-0 !top-auto !max-h-[92dvh] !translate-x-0 !translate-y-0 rounded-b-none md:!inset-x-auto md:!start-1/2 md:!bottom-auto md:!top-1/2 md:!max-h-[80dvh] md:!-translate-x-1/2 md:!-translate-y-1/2 md:rounded-b-2xl rtl:md:!translate-x-1/2">
       <DialogHeader className="pe-12">
         <DialogTitle>{title}</DialogTitle>
         <DialogDescription><bdi dir="ltr" className="font-mono">{book.ref_number}</bdi></DialogDescription>
       </DialogHeader>
       <div className="space-y-4 overflow-y-auto px-4 py-4">
-        <ConfidentialitySelect value={selectedLevel} onChange={setLevel} allowedLevels={allowedLevels} disabled={mutation.isPending} />
+        {kind === 'based_on' && <GradeSelect value={selectedLevel} onChange={setLevel} allowedLevels={allowedLevels} disabled={mutation.isPending} />}
         <label className="flex min-h-10 items-center gap-2 text-[0.84em]">
           <input type="checkbox" checked={attached} disabled={mutation.isPending} className="h-4 w-4 accent-primary" onChange={(e) => {
             const checked = e.target.checked
             setAttached(checked)
-            if (checked && book.confidentiality === 'secret') setLevel('secret')
+            if (checked && book.grade !== 'unclassified' && level === 'unclassified') setLevel('secret')
           }} />
           {t('books.thread.attachOriginal')}
         </label>

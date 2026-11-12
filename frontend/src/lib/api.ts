@@ -888,11 +888,14 @@ export type BookRead = components['schemas']['BookRead'] & {
   imported_doc?: ImportedDocRead | null
 }
 export type BookFolderRead = components['schemas']['BookFolderRead']
+export type BookFolderCreate = components['schemas']['BookFolderCreate']
+export type BookFolderUpdate = components['schemas']['BookFolderUpdate']
+export type BookFolderBox = BookFolderRead['box']
 export type BookFolderShareUser = components['schemas']['BookFolderShareUser']
 export type BookFolderShareOption = components['schemas']['BookFolderShareOption']
 export type BookFolderShareOptions = components['schemas']['BookFolderShareOptions']
 export type BookFolderSharesUpdate = components['schemas']['BookFolderSharesUpdate']
-export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'confidentiality' | 'status'}`
+export type BookSortKey = `${'' | '-'}${'date' | 'ref' | 'subject' | 'purpose' | 'grade' | 'status'}`
 export type IncludedPaperProposal = components['schemas']['IncludedPaperProposal']
 export type IncludedPaperRead = components['schemas']['IncludedPaperRead']
 export type IncludedPaperReplacementRead = components['schemas']['IncludedPaperReplacementRead']
@@ -913,9 +916,8 @@ export type ApprovalStatusParam = 'pending' | 'returned' | 'approved' | 'rejecte
 export type ApprovalSortParam = 'oldest' | 'newest'
 export type RetainedDecisionRead = components['schemas']['RetainedDecisionRead']
 export type BookRevisionAccessRead = components['schemas']['BookRevisionAccessRead']
-// Record levels + direct send (record classification, Phase 1).
-export type Confidentiality = components['schemas']['BookConfidentialityUpdate']['confidentiality']
-export const CONFIDENTIALITY_LEVELS = ['general', 'personal', 'secret', 'directed'] as const satisfies readonly Confidentiality[]
+// Fixed record grades and direct sends.
+export type Grade = components['schemas']['BookGradeUpdate']['grade']
 export type BookSendRequest = components['schemas']['BookSendRequest']
 export type SendPurpose = BookSendRequest['purpose']
 export const SEND_PURPOSES = ['info', 'action', 'reply', 'circulate'] as const satisfies readonly SendPurpose[]
@@ -923,6 +925,19 @@ export type BookSendResult = components['schemas']['BookSendResponse']
 export type BookRecipientRead = components['schemas']['BookRecipientRead']
 export type BookInboxRead = components['schemas']['BookInboxRead']
 export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
+// Ledger Books: private drafts, issued books and their Revisions.
+export type LedgerDraftRead = components['schemas']['LedgerDraftRead']
+export type LedgerDraftCreate = components['schemas']['LedgerDraftCreate']
+export type LedgerDraftUpdate = components['schemas']['LedgerDraftUpdate']
+export type LedgerDraftImageRead = components['schemas']['LedgerDraftImageRead']
+export type LedgerBookRead = components['schemas']['LedgerBookRead']
+export type LedgerAddresseeIn = components['schemas']['LedgerAddresseeIn']
+export type LedgerRevisionRead = components['schemas']['LedgerRevisionRead']
+export type LedgerContentUpdate = components['schemas']['LedgerContentUpdate']
+export type LedgerSignRequest = components['schemas']['LedgerSignRequest']
+export type LedgerPaperPreset = LedgerDraftRead['paper_preset']
+export type LedgerReferenceRead = components['schemas']['LedgerReferenceRead']
+export type LedgerFolderRead = components['schemas']['LedgerFolderRead']
 export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
 export type BookThreadItem = components['schemas']['BookThreadItem']
 export type BookLinkCreate = components['schemas']['BookLinkCreate']
@@ -947,7 +962,7 @@ export interface BookAnnotationRead {
 // Approval — hand-mirrored from backend/app/schemas/books.py (submit request).
 // BookApproverSpec deleted (Task 10): single approver_user_id + reviewer_user_ids replaces the array.
 export interface BookSubmitRequest {
-  priority: 'Normal' | 'High'
+  urgency: 'Normal' | 'High' | 'Very High'
   approver_user_id?: number | null
   branch_approver_user_id?: number | null
   reviewer_user_ids?: number[]
@@ -1134,11 +1149,35 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   ACCOUNT_LOCKED: 'auth.errLocked',
   DOCX_LOCKED_AFTER_SIGNING: 'errors.forbidden.docxLockedAfterSigning',
   SECRET_CLEARANCE_REQUIRED: 'errors.forbidden.secretClearance',
+  WRITER_ONLY_SEND: 'books.send.errors.writerOnly',
+  DISTRIBUTION_NOT_NAMED: 'books.distribution.errors.notNamed',
+  GRADE_BELOW_FLOOR: 'books.thread.errors.levelFloor',
   RECORD_TYPE_FORBIDDEN: 'errors.forbidden.recordType',
   INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
   WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
   INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
+  LEDGER_BOOK_CHAIN_ONLY: 'errors.ledger.chainOnly',
+  LEDGER_BOOK_CONTENT_ONLY: 'errors.ledger.contentOnly',
+  CONTENT_CONFLICT: 'errors.ledger.contentConflict',
+  SIGNING_CONTENT_CONFLICT: 'errors.ledger.signingContentConflict',
+  REVISION_LOCKED: 'errors.ledger.revisionLocked',
+  REVISION_NOT_SIGNED: 'errors.ledger.revisionNotSigned',
+  DRAFT_TAB_REQUIRED: 'errors.ledger.draftTabRequired',
+  DRAFT_SUBJECT_REQUIRED: 'errors.ledger.draftSubjectRequired',
+  DRAFT_BODY_REQUIRED: 'errors.ledger.draftBodyRequired',
+  ADDRESSEE_INVALID: 'ledgerBook.composer.errors.addresseeInvalid',
+  ADDRESSED_TO_REQUIRED: 'ledgerBook.composer.errors.addressedToRequired',
+  ADDRESSEE_ONLY_CC_NOT_ALLOWED: 'ledgerBook.composer.errors.addresseeOnlyCc',
+  REFERENCE_INVALID: 'ledgerBook.composer.errors.referenceInvalid',
+  FOLDER_INVALID: 'ledgerBook.composer.errors.folderInvalid',
+  SIGNER_INVALID: 'ledgerBook.composer.errors.signerInvalid',
+  DRAFT_TO_REQUIRED: 'ledgerBook.composer.errors.toRequired',
+  DRAFT_SIGNER_REQUIRED: 'ledgerBook.composer.errors.signerRequired',
+  NO_SIGNATURE: 'books.approval.noSignatureDescription',
+  IMAGE_EMPTY: 'errors.ledger.imageEmpty',
+  IMAGE_TOO_LARGE: 'errors.ledger.imageTooLarge',
+  IMAGE_TYPE_UNSUPPORTED: 'errors.ledger.imageTypeUnsupported',
   EMPLOYEE_ID_INVALID: 'employees.idChange.invalid',
   EMPLOYEE_ID_SAME: 'employees.idChange.same',
   EMPLOYEE_ID_TAKEN: 'employees.idChange.takenError',
@@ -1155,6 +1194,10 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
 export function apiErrorMessage(err: unknown, codeKey?: (code: string) => string | null | undefined): string {
   if (!(err instanceof ApiError)) {
     return i18n.t(err instanceof TypeError ? 'errors.network' : 'errors.generic')
+  }
+  const minimum = err.details.min
+  if (err.code === 'GRADE_BELOW_FLOOR' && (minimum === 'unclassified' || minimum === 'secret' || minimum === 'top_secret' || minimum === 'addressee_only')) {
+    return i18n.t('ledgerBook.composer.errors.gradeBelowFloor', { min: i18n.t(`books.grade.levels.${minimum}`) })
   }
   const moduleKey = codeKey?.(err.code)
   if (moduleKey && i18n.exists(moduleKey)) return i18n.t(moduleKey)
@@ -2283,10 +2326,11 @@ export const api = {
     request<BookFolderShareOptions>('GET', '/books/folders/share-options'),
   updateBookFolderShares: (folderId: number, body: BookFolderSharesUpdate) =>
     request<BookFolderRead>('PUT', `/books/folders/${folderId}/shares`, body),
-  createBookFolder: (body: { name: string; team?: boolean }) =>
+  createBookFolder: (body: BookFolderCreate) =>
     request<BookFolderRead>('POST', '/books/folders', body),
-  renameBookFolder: (id: number, name: string) =>
-    request<BookFolderRead>('PATCH', `/books/folders/${id}`, { name }),
+  /** Rename a folder and/or move it to another box; filed books stay filed. */
+  updateBookFolder: (id: number, body: BookFolderUpdate) =>
+    request<BookFolderRead>('PATCH', `/books/folders/${id}`, body),
   deleteBookFolder: (id: number) =>
     request<void>('DELETE', `/books/folders/${id}`),
   addBookToFolder: (bookId: number, folderId: number) =>
@@ -2317,6 +2361,42 @@ export const api = {
   /** GET /books/classifications — full government classification list. */
   listBookClassifications: () =>
     request<components['schemas']['ClassificationListResponse']>('GET', '/books/classifications'),
+  // --- Ledger Books (drafts are private to their writer) ---
+  listLedgerDrafts: () => request<LedgerDraftRead[]>('GET', '/ledger/drafts'),
+  createLedgerDraft: (body: LedgerDraftCreate) => request<LedgerDraftRead>('POST', '/ledger/drafts', body),
+  getLedgerDraft: (id: number) => request<LedgerDraftRead>('GET', `/ledger/drafts/${id}`),
+  /** PATCH only the changed fields; `importance: null` clears it. */
+  updateLedgerDraft: (id: number, body: LedgerDraftUpdate) =>
+    request<LedgerDraftRead>('PATCH', `/ledger/drafts/${id}`, body),
+  deleteLedgerDraft: (id: number) => request<void>('DELETE', `/ledger/drafts/${id}`),
+  uploadLedgerDraftImage: (id: number, file: Blob, filename?: string) => {
+    const form = new FormData()
+    form.append('file', file, filename)
+    return multipart<LedgerDraftImageRead>(`/ledger/drafts/${id}/images`, form)
+  },
+  /** Allocates the reference number and consumes the draft. */
+  saveAndSendLedgerDraft: (id: number) =>
+    request<LedgerBookRead>('POST', `/ledger/drafts/${id}/save-and-send`),
+  /** `revision` is a Revision's `version_id`; omitted = the newest the caller may read. */
+  getLedgerBook: (id: number, revision?: number) =>
+    request<LedgerBookRead>('GET', `/ledger/books/${id}${qs({ revision })}`),
+  updateLedgerBookContent: (id: number, body: LedgerContentUpdate) =>
+    request<LedgerBookRead>('PUT', `/ledger/books/${id}/content`, body),
+  /** Opens a new correction Revision under the same reference (latest must be signed). */
+  startLedgerCorrection: (id: number) =>
+    request<LedgerBookRead>('POST', `/ledger/books/${id}/corrections`),
+  signLedgerBook: (id: number, body: LedgerSignRequest) => request<LedgerBookRead>('POST', `/ledger/books/${id}/sign`, body),
+  returnLedgerBook: (id: number, note: string) => request<LedgerBookRead>('POST', `/ledger/books/${id}/return`, { note }),
+  resubmitLedgerBook: (id: number) => request<LedgerBookRead>('POST', `/ledger/books/${id}/resubmit`),
+  changeLedgerSigner: (id: number, managerId: number) => request<LedgerBookRead>('PUT', `/ledger/books/${id}/signer`, { manager_id: managerId }),
+  createLedgerOutlookDraft: (id: number) => request<components['schemas']['LedgerOutlookDraftRead']>('POST', `/ledger/books/${id}/outlook-draft`),
+  /** Draft paper as real PDF pages (owner only). `ts` (the draft's updated_at)
+   *  busts the cache after autosave; DocPdfCanvas appends encoding=base64 itself. */
+  ledgerDraftPaperPdfUrl: (id: number, ts: string) =>
+    `${BASE}/ledger/drafts/${id}/paper.pdf?ts=${encodeURIComponent(ts)}`,
+  /** A Revision's paper as PDF; `revision` omitted = the newest the caller may read. */
+  ledgerBookPaperPdfUrl: (id: number, revision?: number, contentHash?: string) =>
+    `${BASE}/ledger/books/${id}/paper.pdf${qs({ revision, v: contentHash })}`,
   /** POST /books/word-sessions — create a draft book + open-in-Word session.
    *  Returns WordSessionRead with a word_url for WebDAV/Word Direct Access. */
   createWordBook: (body: components['schemas']['WordBookCreate']) =>
@@ -2497,13 +2577,10 @@ export const api = {
       'DELETE',
       `/books/${bookId}/versions/${versionId}/annotations/${annotationId}`,
     ),
-  /** PUT /books/{id}/confidentiality — relabel the record's level (creator,
-   *  manager, or admin). Secret needs `books.secret` (SECRET_CLEARANCE_REQUIRED). */
-  setBookConfidentiality: (id: number, confidentiality: Confidentiality) =>
-    request<BookRead>('PUT', `/books/${id}/confidentiality`, { confidentiality }),
-  /** POST /books/{id}/send — send or forward the record. Repeat or self
-   *  recipients come back in `skipped`. Errors: PERSONAL_REQUIRES_DIRECTED (409),
-   *  RECIPIENT_NOT_CLEARED / RECIPIENT_INVALID (422). */
+  /** Relabel a record's grade (creator or admin); Secret needs clearance. */
+  setBookGrade: (id: number, grade: Grade) =>
+    request<BookRead>('PUT', `/books/${id}/grade`, { grade }),
+  /** Send or forward a record. Restricted grades are writer-only. */
   sendBook: (id: number, body: BookSendRequest) =>
     request<BookSendResult>('POST', `/books/${id}/send`, body),
   /** GET /books/{id}/recipients — the send rows the caller may see. */
@@ -2521,8 +2598,8 @@ export const api = {
   unarchiveBookInbox: (id: number) =>
     request<BookInboxRead>('DELETE', `/books/${id}/inbox/archive`),
   /** GET /books/recipient-candidates — active users to send to; Secret → cleared only. */
-  listRecipientCandidates: (confidentiality?: Confidentiality) =>
-    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ confidentiality })}`),
+  listRecipientCandidates: (grade?: Grade) =>
+    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ grade })}`),
   /** GET /books/inbox/summary — my received sends (unread, by purpose) and my sent count (B2). */
   getInboxSummary: () =>
     request<components['schemas']['InboxSummaryRead']>('GET', '/books/inbox/summary'),

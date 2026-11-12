@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { BooksMobileList, type BooksMobileListProps } from './BooksMobileList'
 
@@ -54,7 +55,11 @@ function book(id: number, over: Partial<BookRead> = {}): BookRead {
     approval_state: 'none',
     created_at: '2026-07-01T00:00:00Z',
     deleted_at: null,
-    priority: 'Normal',
+    urgency: 'Normal',
+    grade: 'unclassified',
+    distribution: 'named',
+    metadata_only: false,
+    can_change_grade: false,
     is_draft: false,
     voided_at: null,
     edit_session: null,
@@ -140,6 +145,24 @@ beforeEach(() => {
 })
 
 describe('BooksMobileList cards', () => {
+  it('renders metadata-only cards without links, selection or submit actions', async () => {
+    const view = renderList({ canSubmit: true, rows: [book(1, {
+      metadata_only: true, grade: 'top_secret', classification_code: '7/2',
+      subject: 'Hidden subject', created_by_name: 'Hidden creator',
+    })] })
+    const row = document.querySelector('[data-book-id="1"]') as HTMLElement
+    expect(within(row).getByText('G-2026-001')).toBeInTheDocument()
+    expect(within(row).getByText('7/2')).toBeInTheDocument()
+    expect(within(row).getByText('2026-07-01')).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('Hidden')
+    expect(row.querySelector('a,button,input')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'books.list.select' })).toBeNull()
+    await userEvent.click(row)
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByTestId('loc')).toHaveTextContent('/books?mine=1')
+    expect(view.onSubmit).not.toHaveBeenCalled()
+  })
+
   it('opens a record through a real link carrying { from, queue }', async () => {
     renderList({ rows: [book(1), book(3)] })
     const link = screen.getByRole('link', { name: 'G-2026-003' })
@@ -251,6 +274,24 @@ describe('BooksMobileList select mode', () => {
   it('is unavailable to inmate reporters', () => {
     renderList({ isInmateReporter: true })
     expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
+  })
+})
+
+describe('BooksMobileList titles and restricted cards', () => {
+  it('titles a generated-form card with the translated form name, not the English stored subject', async () => {
+    vi.spyOn(api, 'listTemplates').mockResolvedValue({
+      items: [{ id: 'Leave Form', name_en: 'Leave Application Form', name_ar: 'طلب إجازة' }],
+    } as unknown as Awaited<ReturnType<typeof api.listTemplates>>)
+    renderList({ rows: [book(1, { service_id: 'Leave Form', subject: 'Leave Application Form — AHMED AL-ALI' })] })
+    expect(await screen.findByText('طلب إجازة')).toBeInTheDocument()
+    expect(screen.getByText('AHMED AL-ALI')).toBeInTheDocument()
+    expect(screen.queryByText(/Leave Application Form/)).not.toBeInTheDocument()
+  })
+
+  it('explains a restricted card with a visible hint and an accessible name', () => {
+    renderList({ rows: [book(1, { metadata_only: true })] })
+    expect(screen.getByText('books.restricted.hint')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /books\.restricted\.rowLabel/ })).toBeInTheDocument()
   })
 })
 

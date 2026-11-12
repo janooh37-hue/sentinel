@@ -146,7 +146,7 @@ def submit(env, book):
         branch_approver_user_id=(
             env.branch.id if book.versions[-1].template_id == "Administrative Leave Form" else None
         ),
-        priority="Normal",
+        urgency="Normal",
         reviewer_user_ids=[],
     )
 

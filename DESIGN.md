@@ -66,6 +66,7 @@ Other pages will be appended under §4 as they're documented.
 5. Animation appendix
 6. Not yet documented
 7. Ledger Books workspace
+   7.1  Ledger Book composer
 ```
 
 ---
@@ -2430,7 +2431,8 @@ will trip over them.
 ## 7. Ledger Books workspace
 
 **Sources:** `pages/ledger/LedgerPage.tsx`, `pages/ledger/BooksRoutingDesk.tsx`,
-`components/books/PurposeMark.tsx`.
+`components/books/PurposeMark.tsx`, `components/books/GradeChip.tsx` (`GradeMark`),
+`components/books/ImportanceMark.tsx`, `components/books/markSize.ts`.
 
 - Books is the first Ledger tab and the landing tab. Email opens for
   `?tab=email`, `?mail=` or `?action=`; the resolved tab is pinned in the URL
@@ -2440,27 +2442,76 @@ will trip over them.
 - Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
   the caller marked their received book done; Archived takes precedence over
   Incoming and Done. Incoming shows the unread count as plain mono text.
+- **New Ledger Book** (`NewLedgerBookButton`, default variant, `w-full`) tops the rail, above Drafts and the boxes, in the desktop rail and the mobile rail sheet; it creates a draft and opens `/ledger/compose/:id`.
+- **Drafts** sits under New and above the boxes: a rail place (`NotebookPen`, "Drafts" / "المسودات", count when > 0, `aria-current` when selected) at `?scope=drafts`; the list pane shows `LedgerDraftsList` with no column header and no folders.
+- **Folders live in the boxes** (`pages/ledger/BooksRail.tsx`). The rail is a
+  tree in the box order Incoming, Done, Outgoing, Archived; there are no
+  separate "My folders" / "Team folders" sections. Each box row is the box
+  button (icon, label; Incoming adds the unread badge), a chevron button (`aria-expanded`, named
+  "Folders in {box}"; `ChevronDown`, turned `-rotate-90 rtl:rotate-90` when
+  closed, no transition under reduced motion) and a `Plus` "New folder in
+  {box}". The selected box, or the box of the selected folder, is open;
+  selecting a box opens it and closes the others, and the chevron opens or
+  closes a box without navigating. A box's folders are a `role="group"` nested
+  with `ps-4` (logical padding only), personal and shared mixed and sorted by
+  name. The mobile sheet shows the same tree.
+- **Shared (team) folders** differ by shape and text, never colour alone:
+  `FolderUsers` instead of `Folder`, a `text-blue-grad-a` glyph and a
+  `bg-blue-grad-a/10` row tint, an accessible name "{name}, shared folder", and
+  a tooltip on hover and focus naming who it is shared with ("Shared with
+  everyone" or the people and departments). The same glyph and name mark
+  shared folders in the record's Folder menu.
+- **Filing follows the box** (F7). The record's Folder menu groups folders by
+  box and lists only the boxes the book is in for me (incoming = received,
+  done, outgoing = I sent it, archived); folders already holding the book stay
+  listed so it can be taken out. While a desk row is dragged, folders of the
+  row's box show a dashed outline and accept the drop; other boxes' folders
+  show `cursor-not-allowed` at half opacity and refuse it. Filing is a label:
+  the book stays in its box list. Create forms open in the box they were
+  started from (managers add "Share with the team"); the rename form adds a
+  Box select that moves the folder, keeping its books.
 - **List.** One full-width list, no placeholder pane. Scope tabs and the search
-  field share one bar. From `lg` up, a sticky `aria-hidden` header and every row
-  share one grid template (`RECEIVED_GRID`):
-  `9.5rem` purpose, `10.5rem` reference, `1fr` subject, `minmax(7rem,12rem)`
-  sender, `6.5rem` confidentiality, `6rem` status, `6rem` sent date (end
-  aligned). Outgoing (`OUTGOING_GRID`) drops purpose and status and shows the
-  creator and created date. Below `lg` the same row stacks in three lines:
-  purpose, reference and date; subject; sender, confidentiality and status.
-  Rows are `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset
-  focus ring. Unread subjects are `font-semibold`. A paper count (`FileText` +
-  mono number + sr-only plural) follows the subject only when there is more
-  than one paper.
-- **Status** is text plus shape, never colour alone: New = `h-2 w-2` primary dot +
-  `font-semibold`; Read = muted text; Done = `CheckCheck` + `text-success`;
-  Archived = `Archive` icon.
-- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8) +
-  label, no background, no border, no radius. It sits in a fixed column so it
-  never competes with the confidentiality chip, which keeps its existing pill
-  (`ConfidentialityChip`, uppercase, tinted background; General renders nothing).
-  The glyph shape and label carry the meaning; the tone only helps scanning.
-  No new tokens.
+  field share one bar. From `xl` up, a sticky header and every row share one
+  grid template (`DESK_GRID`), in this order: three equal `4rem` mark columns
+  (Purpose · Grade · Importance, each mark centred in its cell, one mark per
+  cell), `5rem` reference, `minmax(11rem,2fr)` subject, three
+  `minmax(6.5rem,1fr)` people columns (From or Created by, To, Signatory),
+  `6.5rem` status, `5rem` date (end aligned). Purpose, Grade, Reference,
+  Subject, Status and Date headers sort; Importance does not.
+- **Rows are one line on desktop** (`xl:py-2.5`, `items-center`): the subject
+  truncates (full text in `title` and the accessible name), and a sender note
+  is a `MessageSquareText` glyph whose text is in its accessible name and
+  tooltip. Detail belongs to the record, not the row: no category line, no
+  recipient progress. Below `xl` the same row stacks in three lines: marks and
+  reference with the date; subject with my status; designations. Rows are
+  `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset focus
+  ring, never with a focusable child. Unread subjects are `font-semibold`. A
+  paper count (`FileText` + mono number + sr-only plural) follows the subject
+  only when there is more than one paper.
+- **People cells** show the designation (title) only; the name lives in the
+  tooltip and the accessible name ("From: Operations manager (Khalid)"). The
+  cell is a non-focusable `role="img"`, like the marks. A person without a
+  designation shows the name; extra recipients show as `+n`.
+- **Status** shows my own state only, as text plus shape, never colour alone:
+  New = `h-2 w-2` primary dot + `font-semibold`; Read = muted text; Done =
+  `CheckCheck` + `text-success`; Archived = `Archive` icon. A book I sent (no
+  inbox row for me) shows Sent (`Send` glyph). The recipients' opened/done
+  progress shows in the record details, not the row.
+- **Mark size.** Purpose, Grade and Importance share one glyph size and stroke:
+  `MARK_ICON_CLASS` = `h-5 w-5` and `MARK_STROKE_WIDTH` = 1.8
+  (`components/books/markSize.ts`), in rows, stacked mobile rows and the title
+  band. Never size a mark locally.
+- **Grade mark** (`GradeMark`): icon only in rows — `role="img"` named "Record
+  grade: Secret" / "درجة سرية المعاملة: سري" with a hover tooltip. Secret and
+  Top Secret are `text-destructive` (`Lock`, `ShieldAlert`), Addressee Only
+  muted (`UserRound`); Unclassified renders nothing. The title band and
+  metadata-only rows add the visible level (`showLabel`).
+- **Purpose mark** (`PurposeMark`): bare lucide glyph at the shared mark size,
+  no background, no border, no radius. In rows it is icon only: `role="img"`
+  named by the purpose label (the name joins the row button's accessible name)
+  with a hover tooltip. The record title band shows the glyph + label
+  (`showLabel`). The glyph shape carries the meaning; the tone only helps
+  scanning. No new tokens.
 
   | Purpose     | Glyph                | Glyph tone              | Label weight    | RTL                |
   | ----------- | -------------------- | ----------------------- | --------------- | ------------------ |
@@ -2470,7 +2521,25 @@ will trip over them.
   | `circulate` | `Megaphone`          | `text-success`          | `font-medium`   | `rtl:-scale-x-100` |
 
   Glyphs avoid `Flag` (Email follow-up) and the chip icons (`Lock`, `UserRound`,
-  `Send`).
+  `Send`). The label weight applies only where the label shows.
+- **Importance mark** (`ImportanceMark`): bare glyph at the shared mark size,
+  shape plus tone, never colour alone. Order everywhere (row, stacked mobile
+  row, title band): Purpose · Grade · Importance.
+
+  | Importance | Glyph           | Tone               | Motion                                              |
+  | ---------- | --------------- | ------------------ | --------------------------------------------------- |
+  | `high`     | `TriangleAlert` | `text-destructive` | `gssg-importance-pulse`, opacity 1→0.45, 2s/cycle; steady under reduced motion |
+  | `medium`   | `CircleAlert`   | `text-caution`     | static                                              |
+  | none       | —               | —                  | renders nothing                                     |
+
+  Display mapping (`importanceOf`, frontend only): a Ledger Book
+  (`current_template_id === 'Ledger Book'`) shows its own `importance`; any
+  other record maps `urgency` Normal/High → medium, Very High → high, else none.
+  The accessible name is "Importance: High" / "الأهمية: عالية". Inside a row
+  `<button>` the mark is `role="img"` + `aria-label` with a hover tooltip (no
+  nested interactive content). In the title band it is a focusable `<button>`
+  tooltip trigger that opens on hover, focus and tap. It replaces the old
+  `Flag` urgency label on rows.
 - **Book view.** Clicking a row pushes `?book=` (`useUrlOverlay('book', ['view'])`)
   and replaces the list and the Ledger tabs with a full-page view; the list stays
   mounted but hidden. Toolbar Back and browser Back both pop to the list, which
@@ -2482,14 +2551,16 @@ will trip over them.
      only `default` button), Send / Forward, reply actions; then at the inline
      end Expand / Collapse (desktop) and Open in Records (ghost link,
      `BookText`). On mobile the toolbar is sticky and wraps.
-  2. Title band `px-4 py-4 lg:px-6`: purpose mark, mono reference, confidentiality
-     chip, then the subject as `h2 text-xl font-semibold` (`max-w-[75ch]`,
+  2. Title band `px-4 py-4 lg:px-6`: purpose mark (with label), mono reference,
+     confidentiality chip, importance mark, then the subject as
+     `h2 text-xl font-semibold` (`max-w-[75ch]`,
      wrapped in `<bdi>` so it aligns to the page start).
   3. Body: the reused `RecordPaperViewer` (`mode="pane"`, `compact`,
      `initialFit="width"`, capped at actual size) beside a Details aside
      (`w-80 xl:w-96`, `border-s`, own scroll) holding the sender note, a
-     two-column `dl` (From, Sent, Opened, Done, Papers; outgoing books show
-     Created by, Created, Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
+     two-column `dl` (From, Sent, Opened, Done; outgoing books show Created
+     by, Created; then Category, Progress — my recipients' "Opened by n of m"
+     and "Done by n of m", revoked sends excluded — and Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
      (min `24rem`) document area and scrolls as a page.
 - Expand toggles `view=reader` with replace (not a history step) and hides the
   Details aside so the document takes the full width.
@@ -2499,6 +2570,60 @@ will trip over them.
   book in place (replace), or return to the list when the scope is empty.
 - Dates are `DD/MM/YYYY` with Western digits (`formatDmy`, `dir="ltr"` mono) in
   both languages, per §1.7.
+
+### 7.1 Ledger Book composer
+
+- Routes: `/ledger/compose` creates one private draft and replaces the URL with
+  `/ledger/compose/:draftId`; `/ledger/books/:bookId/edit` is the content editor
+  for an issued book. Code: `pages/ledger/composer/`; desk-facing pieces in
+  `components/books/` (`NewLedgerBookButton`, `LedgerDraftsList`,
+  `LedgerPaperPdf`, `LedgerBookActions`).
+- Header: Back to Ledger (ghost link, arrow mirrored in RTL), `h1` "Ledger Book
+  · DRAFT / مسودة {n}" (`<bdi>`), the save state (`role="status"`: Saving… /
+  Saved / Not saved in `text-destructive`), then Preview, Delete draft and
+  Save & Send (the only `default` button). On mobile the actions wrap to their
+  own row and Save & Send grows.
+- A grade banner follows the header in the grade's `GRADE_META` tone with its
+  icon and text ("Grade: Secret"); Unclassified is `bg-muted`.
+- Fields: Tab (native select, "{tab} — {name}" in the UI language), Grade
+  (`GradeSelect`), Importance (radio group None / Medium / High; Medium and High
+  carry the `ImportanceMark` glyphs, never colour alone), ordered Subject lines
+  (numbered; move up/down and remove are 40 px icon buttons; Add line stops at
+  20; one line always stays; the first line is the subject and is bold), Body in
+  HugeRTE (fills the column, minimum 600 px). Paper: a Book / Report segmented
+  control (`paper_preset`, default Book; Report hides the To opening hint but
+  keeps To for delivery), References («إشارة إلى», debounced book search by ref
+  or subject, LTR-isolated ref + date chips, max 20), Copy to folder («نسخة إلى
+  الملف», outgoing-box folders the writer may file into, max 10). Addressee Only
+  hides CC and blocks Save & Send until existing CC rows are removed; Secret
+  shows uncleared users disabled with the reason.
+- Printed direction («التوجيه») and Printed CC («نسخة إلى») precede delivery
+  recipients. Both reuse General Book's searchable saved designation list and
+  its `books.edit`-gated management dialog/inline save. Direction also accepts
+  free text; CC stores up to 20 canonical names as removable chips. Arrow keys,
+  Enter and Escape operate the list while focus stays in the input. Printed
+  values survive paper-preset and internal/external changes independently of
+  delivery users. Corrections show legacy CC snapshots until explicitly saved.
+- Autosave: 800 ms after the last change, PATCH only the changed fields. A
+  failed save keeps them pending and the next change sends them again.
+- Preview shows the real server PDF pages in `LedgerPaperPdf` (lazy
+  `DocPdfCanvas`: scrollable pages, "Page n of m", fit-width, zoom, loading and
+  error states) beside the form on `lg` and in a full-viewport Sheet on phones.
+  The draft `paper.pdf` URL is busted by the last accepted autosave, debounced
+  so it never reloads while the writer is typing.
+- Save & Send and Delete draft confirm with `ConfirmDialog`. Save & Send
+  refusals (`DRAFT_TAB_REQUIRED`, `DRAFT_SUBJECT_REQUIRED`,
+  `DRAFT_BODY_REQUIRED`) show their translated message under the field
+  (`role="alert"`, `aria-invalid`, `aria-describedby`); other errors toast.
+- Issued books: the desk shows the Revision's `paper.pdf?revision=` in
+  `LedgerPaperPdf`, then References (linked only when `can_open`, plain text
+  otherwise) and Folders. `LedgerBookActions` holds Print (opens the HTML
+  paper in the `ledger-book-<id>` window and prints it), the Revision picker
+  ("Revision n", "(signed)" when locked) and, for the writer only, Edit content
+  (latest Revision unsigned) or Start correction (latest Revision signed). The
+  content editor shows a locked Revision read-only as its PDF with a `Lock` note.
+- Logical properties only (`ms/me/ps/pe`, `start/end`); the composer test
+  rejects physical direction utilities.
 
 ## 8. Store delivery-note scanning
 
