@@ -196,13 +196,15 @@ function Rebuild([string[]] $Names) {
     Set-Preview $kept
     $changed = @(git diff --name-only $before HEAD)
     if (-not $changed) { Write-Host 'dev already matches main + the previewed branches.' -ForegroundColor Green; return }
-    if ($NoPublish) { Write-Host 'Rebuilt (-NoPublish): run dev-channel.ps1 publish to see it on the dev URL.' -ForegroundColor Yellow; return }
+    # Dependencies are synced even with -NoPublish: a later `publish` does not
+    # install them, and the next rebuild no longer sees these files as changed.
     if ($changed -contains 'requirements.txt') {
         Invoke-Native { & $Py -m pip install -q --disable-pip-version-check -r requirements.txt }
     }
     if ($changed -match '^frontend/(package\.json|pnpm-lock\.yaml)$') {
         Invoke-Native { pnpm -C frontend install --frozen-lockfile }
     }
+    if ($NoPublish) { Write-Host 'Rebuilt (-NoPublish): run dev-channel.ps1 publish to see it on the dev URL.' -ForegroundColor Yellow; return }
     Publish ([bool]($changed -like 'frontend/*'))
 }
 
