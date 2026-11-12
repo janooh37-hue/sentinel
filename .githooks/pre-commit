@@ -3,6 +3,8 @@
 # under test (scripts/dev-channel.ps1). Every rebuild resets it, so a commit made
 # here is lost, and the branch that goes to main would not contain it.
 # Merges are how branches arrive on dev, so a merge in progress may be committed.
+# Edits added to such a merge are still lost on rebuild; dev-channel.ps1 detects
+# a merge that differs from the automatic one and refuses to rebuild over it.
 # Enabled per clone with: git config core.hooksPath .githooks
 [ "$(git branch --show-current)" = dev ] || exit 0
 git rev-parse -q --verify MERGE_HEAD >/dev/null && exit 0

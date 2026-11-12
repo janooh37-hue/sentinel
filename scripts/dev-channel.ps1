@@ -12,6 +12,8 @@
     dev-channel.ps1 status               main, previewed branches, stray work, server health
 
     preview/drop/sync take -NoPublish to rebuild the branch without building or restarting.
+    What that leaves undone (or a failed build leaves undone) is remembered, and the
+    next preview, drop, sync or publish finishes it.
 
     A feature branch is cut from origin/main and goes to main through its own PR.
     `dev` is never promoted, pushed, or committed to: every rebuild resets it to
@@ -96,15 +98,53 @@ function Test-AddsNothing([string] $Sha) {
     $tree -eq (git rev-parse 'origin/main^{tree}')
 }
 
-# Commits made on dev itself (direct commits and cherry-picks), which a rebuild would discard.
-function Get-Stray { @(git log --first-parent --no-merges --format='%h %s' origin/main..HEAD) }
+# Commits made on dev itself, which a rebuild would discard: direct commits,
+# cherry-picks, and merges that carry edits of their own. A merge is only safe to
+# discard when its tree is exactly the automatic merge of its two parents; one
+# committed with extra edits or a hand-resolved conflict holds work found nowhere else.
+function Get-Stray {
+    foreach ($line in @(git rev-list --first-parent --parents origin/main..HEAD)) {
+        $sha, $parents = $line -split ' '
+        if (@($parents).Count -eq 2) {
+            $auto = git merge-tree --write-tree $parents[0] $parents[1]
+            if (-not $LASTEXITCODE -and $auto -eq (git rev-parse "$sha^{tree}")) { continue }
+        }
+        git log -1 --format='%h %s' $sha
+    }
+}
 
 function Assert-NoStray([string] $Consequence) {
-    $stray = Get-Stray
+    $stray = @(Get-Stray)
     if ($stray) {
         throw ("dev holds $($stray.Count) commit(s) that are on no feature branch; $Consequence`n  " +
             ($stray -join "`n  ") +
-            "`nMove each one to the branch it belongs to (cherry-pick it in that branch's worktree and push), then run: git reset --hard origin/main; dev-channel.ps1 sync")
+            "`nMove each one to the branch it belongs to (cherry-pick it in that branch's worktree and push; for a merge listed here, recreate the edits it added there), then run: git reset --hard origin/main; dev-channel.ps1 sync")
+    }
+}
+
+# -- Unfinished steps (git config devchannel.pending, one value per step) ------
+# A rebuild records what the new tree still needs: pip, pnpm, frontend (a build),
+# publish (migrate + restart). Each is cleared only when it succeeds, so a later
+# run finishes what -NoPublish deferred or a failure cut short, even though the
+# tree no longer differs from the one before.
+function Get-Pending { @(git config --local --get-all devchannel.pending) | Where-Object { $_ } }
+
+function Add-Pending([string] $Step) {
+    if ((Get-Pending) -notcontains $Step) { Invoke-Native { git config --local --add devchannel.pending $Step } }
+}
+
+function Clear-Pending([string] $Step) {
+    if ((Get-Pending) -contains $Step) { Invoke-Native { git config --local --unset-all devchannel.pending "^$Step`$" } }
+}
+
+function Install-Pending {
+    if ((Get-Pending) -contains 'pip') {
+        Invoke-Native { & $Py -m pip install -q --disable-pip-version-check -r requirements.txt }
+        Clear-Pending 'pip'
+    }
+    if ((Get-Pending) -contains 'pnpm') {
+        Invoke-Native { pnpm -C frontend install --frozen-lockfile }
+        Clear-Pending 'pnpm'
     }
 }
 
@@ -151,14 +191,17 @@ function Start-Server {
 function Restart-Server { Stop-Server; Start-Server }
 
 function Publish([bool] $Frontend = $true) {
-    if ($Frontend) {
+    Install-Pending
+    if ($Frontend -or (Get-Pending) -contains 'frontend') {
         Invoke-Native { pnpm -C frontend run build --logLevel warn }
         Remove-Item (Join-Path $Root 'backend\app\static\assets') -Recurse -Force -ErrorAction SilentlyContinue
         Copy-Item (Join-Path $Root 'frontend\dist\*') (Join-Path $Root 'backend\app\static') -Recurse -Force
+        Clear-Pending 'frontend'
     }
     # Dev data is a throwaway snapshot; restore a fresh one if this ever goes wrong.
     Invoke-Native { & $Py -m alembic upgrade head }
     Restart-Server
+    Clear-Pending 'publish'
 }
 
 # -- Rebuild -------------------------------------------------------------------
@@ -194,18 +237,19 @@ function Rebuild([string[]] $Names) {
         $kept += $n
     }
     Set-Preview $kept
+    # Record what this tree still needs before doing any of it. The diff below is
+    # empty on the next run, so the record is what lets that run finish the job.
     $changed = @(git diff --name-only $before HEAD)
-    if (-not $changed) { Write-Host 'dev already matches main + the previewed branches.' -ForegroundColor Green; return }
-    # Dependencies are synced even with -NoPublish: a later `publish` does not
-    # install them, and the next rebuild no longer sees these files as changed.
-    if ($changed -contains 'requirements.txt') {
-        Invoke-Native { & $Py -m pip install -q --disable-pip-version-check -r requirements.txt }
-    }
-    if ($changed -match '^frontend/(package\.json|pnpm-lock\.yaml)$') {
-        Invoke-Native { pnpm -C frontend install --frozen-lockfile }
-    }
-    if ($NoPublish) { Write-Host 'Rebuilt (-NoPublish): run dev-channel.ps1 publish to see it on the dev URL.' -ForegroundColor Yellow; return }
-    Publish ([bool]($changed -like 'frontend/*'))
+    if ($changed) { Add-Pending 'publish' }
+    if ($changed -contains 'requirements.txt') { Add-Pending 'pip' }
+    if ($changed -match '^frontend/(package\.json|pnpm-lock\.yaml)$') { Add-Pending 'pnpm' }
+    if ($changed -like 'frontend/*') { Add-Pending 'frontend' }
+    if (-not (Get-Pending)) { Write-Host 'dev already matches main + the previewed branches, and it is published.' -ForegroundColor Green; return }
+    # Dependencies are synced even with -NoPublish, so the tree is runnable as it stands.
+    Install-Pending
+    if ($NoPublish) { Write-Host 'Not published (-NoPublish): run dev-channel.ps1 publish to see it on the dev URL.' -ForegroundColor Yellow; return }
+    # Builds the frontend only if a rebuild since the last successful build changed it.
+    Publish $false
 }
 
 function Get-BranchArg {

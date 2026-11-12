@@ -53,7 +53,7 @@ When the user says "put it on dev", "add this to the worktree too", or "make the
 - **`preview` refuses with conflicts.** dev is left as it was. Either the branch is behind main (`git merge origin/main` in its worktree) or it overlaps another previewed branch: preview them one at a time with `drop`, or merge the first PR and bring main into the second.
 - **Two previewed branches each add a migration.** dev gets two Alembic heads and `publish` fails. Preview one at a time. The branch that merges second takes main in and renumbers with the `new-migration` skill.
 - **A dropped branch had a migration.** The dev database is now ahead of the code; restore a fresh snapshot (`docs/dev-channel.md`).
-- **`status` reports stray commits or edits on dev.** Someone worked there. Cherry-pick each commit into the worktree of the branch it belongs to, or recreate the edit there, and push. Then `git reset --hard origin/main` in the dev worktree and `sync`. The `.githooks/pre-commit` hook blocks plain commits on dev; cherry-picks get past it, which is why `sync` and `publish` also refuse.
+- **`status` reports stray commits or edits on dev.** Someone worked there. Cherry-pick each commit into the worktree of the branch it belongs to, or recreate the edit there, and push. Then `git reset --hard origin/main` in the dev worktree and `sync`. The `.githooks/pre-commit` hook blocks plain commits on dev; cherry-picks and edits added while committing a merge get past it, which is why `sync` and `publish` also refuse.
 - **New work depends on an unmerged branch.** Cut it from that branch, say so in the PR, and merge `origin/main` in once the first PR lands.
 
 ## Routing audit before the PR

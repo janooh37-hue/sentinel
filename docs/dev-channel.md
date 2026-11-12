@@ -15,9 +15,9 @@ The worktree `.worktrees\160-laptop-dev` holds branch `dev`. It is a preview, ne
 | `publish` | Build the frontend, migrate, restart. |
 | `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show main, the previewed branches, stray work and server health. |
 
-`preview`, `drop` and `sync` take `-NoPublish` to rebuild the branch without building or restarting; changed dependencies are still installed, so a later `publish` runs against them. The preview list is kept in git config (`git config --get-all devchannel.preview`).
+`preview`, `drop` and `sync` take `-NoPublish` to rebuild the branch without building or restarting; changed dependencies are still installed. The script records the steps a rebuild still owes (dependency install, frontend build, migrate and restart) in git config (`devchannel.pending`) and clears each only when it succeeds, so the next `preview`, `drop`, `sync` or `publish` finishes what `-NoPublish` deferred or a failure cut short. The preview list is kept in git config (`git config --get-all devchannel.preview`).
 
-Rebuilds and `publish` refuse when `dev` holds commits of its own or the worktree has uncommitted edits, because that work is on no feature branch and would be lost or left out of the PR. The committed `.githooks/pre-commit` hook also rejects plain commits on `dev`; the script enables it for this clone (`core.hooksPath`).
+Rebuilds and `publish` refuse when `dev` holds commits of its own (including a merge committed with edits beyond the automatic merge of its parents) or the worktree has uncommitted edits, because that work is on no feature branch and would be lost or left out of the PR. The committed `.githooks/pre-commit` hook also rejects plain commits on `dev`; the script enables it for this clone (`core.hooksPath`).
 
 The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
 
