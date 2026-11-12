@@ -90,12 +90,22 @@ function Resolve-Tip([string] $Name) {
     throw "$Name has different commits on desk and on origin, and neither contains the other. Make them agree on dtop (pull, then push), then retry."
 }
 
-# True when merging the commit into origin/main would change nothing: the branch
-# is merged (by merge commit, squash or rebase) or has no work yet.
+# True when the branch is merged (by merge commit, squash or rebase) or has no
+# work yet: at some commit main has reached since the branch forked, merging the
+# branch in would have changed nothing. Looking only at main's tip is not enough:
+# once main changes the same lines again after a squash merge, the old branch tip
+# conflicts with today's main and would look like unmerged work forever.
 function Test-AddsNothing([string] $Sha) {
-    $tree = git merge-tree --write-tree origin/main $Sha
-    if ($LASTEXITCODE) { return $false }   # conflicts with main, so it still carries work
-    $tree -eq (git rev-parse 'origin/main^{tree}')
+    git merge-base --is-ancestor $Sha origin/main
+    if (-not $LASTEXITCODE) { return $true }
+    $base = git merge-base origin/main $Sha
+    if ($LASTEXITCODE) { return $false }   # unrelated history
+    # Newest first, so the usual case (main's tip) is answered by the first merge.
+    foreach ($c in @(git rev-list --first-parent --max-count=300 "$base..origin/main")) {
+        $tree = git merge-tree --write-tree $c $Sha
+        if (-not $LASTEXITCODE -and $tree -eq (git rev-parse "$c^{tree}")) { return $true }
+    }
+    $false
 }
 
 # Commits made on dev itself, which a rebuild would discard: direct commits,
