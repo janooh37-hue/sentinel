@@ -4256,7 +4256,24 @@
         "subtitle": "عنوان فرعي",
         "sectionHeading": "عنوان قسم",
         "paragraph": "فقرة",
-        "note": "ملاحظة"
+        "note": "ملاحظة",
+        "justified": "فقرة بمحاذاة الطرفين",
+        "centeredLine": "سطر غامق في الوسط"
+      },
+      "tables": {
+        "menu": "جداول جاهزة",
+        "numbered": "قائمة مرقّمة",
+        "names": "قائمة أسماء",
+        "dated": "قائمة بتواريخ",
+        "details": "بيانات (العنوان والقيمة)",
+        "columns": {
+          "number": "م",
+          "statement": "البيان",
+          "name": "الاسم",
+          "employeeNumber": "الرقم الوظيفي",
+          "date": "التاريخ",
+          "notes": "ملاحظات"
+        }
       }
     },
     "actions": {

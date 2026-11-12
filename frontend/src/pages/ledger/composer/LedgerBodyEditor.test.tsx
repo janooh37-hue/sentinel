@@ -19,6 +19,11 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'em
 // regressions. Only the browser engine is substituted (jsdom has no layout).
 // Native iframe/event-receiver and toolbar rendering require real Chromium;
 // this seam intentionally does not claim to exercise those browser internals.
+interface MenuButtonSpec {
+  tooltip: string
+  fetch: (done: (items: { text: string, onAction: () => void }[]) => void) => void
+}
+
 function installEngine(defer = false) {
   const documents: Document[] = []
   let initialize = () => {}
@@ -45,6 +50,8 @@ function installEngine(defer = false) {
     setDirty: vi.fn(),
     mode: { set: vi.fn() },
     remove: vi.fn(),
+    insertContent: vi.fn<(html: string) => void>(),
+    ui: { registry: { addMenuButton: vi.fn<(name: string, spec: MenuButtonSpec) => void>() } },
   }
   const init = vi.fn((options: {
     target: HTMLTextAreaElement
@@ -71,6 +78,8 @@ function installEngine(defer = false) {
       for (const handler of listeners.get('SetContent') ?? []) handler()
     },
     remove: editor.remove,
+    addMenuButton: editor.ui.registry.addMenuButton,
+    insertContent: editor.insertContent,
     type: (html: string) => {
       content = html
       for (const handler of listeners.get('change') ?? []) handler()
@@ -271,9 +280,18 @@ it('configures the full paper editor without external links, media or source cod
   expect(options).toMatchObject({
     menubar: 'edit view insert format table tools',
     // The real React wrapper normalizes ledgerPlugins' string before engine.init.
-    plugins: ['lists', 'advlist', 'table', 'charmap', 'searchreplace', 'visualblocks', 'fullscreen', 'wordcount', 'pagebreak', 'directionality'],
-    toolbar: 'undo redo | blocks styles | fontfamily fontsize | bold italic underline strikethrough forecolor backcolor | alignright aligncenter alignleft alignjustify | rtl ltr | numlist bullist outdent indent | table | pagebreak | removeformat | fullscreen',
+    plugins: ['lists', 'advlist', 'table', 'charmap', 'searchreplace', 'visualblocks', 'fullscreen', 'wordcount', 'pagebreak', 'nonbreaking', 'insertdatetime', 'quickbars', 'directionality'],
+    toolbar: 'undo redo | blocks styles | fontfamily fontsize lineheight | bold italic underline strikethrough forecolor backcolor | alignright aligncenter alignleft alignjustify | rtl ltr | numlist bullist outdent indent | ledgertables table | pagebreak | removeformat | fullscreen',
     font_size_formats: '10pt 11pt 12pt 14pt 16pt 18pt 20pt 24pt',
+    line_height_formats: '1 1.15 1.5 1.6 2',
+    // h5, h6 and pre are unwrapped by the sanitizer, so they are not offered.
+    block_formats: 'Paragraph=p; Heading 1=h1; Heading 2=h2; Heading 3=h3; Heading 4=h4',
+    nonbreaking_wrap: false,
+    // Tables show the paper's solid rule, not HugeRTE's dashed visual aid.
+    visual: false,
+    insertdatetime_formats: ['%d/%m/%Y', '%Y-%m-%d', '%H:%M'],
+    quickbars_insert_toolbar: false,
+    quickbars_image_toolbar: false,
     table_sizing_mode: 'relative',
     pagebreak_separator: '<div style="break-after:page;page-break-after:always"></div>',
     paste_data_images: false,
@@ -286,13 +304,49 @@ it('configures the full paper editor without external links, media or source cod
   for (const rule of ['direction: rtl', 'font-size: 16pt', 'line-height: 1.6', 'table-layout: fixed', '0.2mm solid #000', 'max-inline-size: calc(210mm - 13.2mm - 14.3mm)']) {
     expect(css).toContain(rule)
   }
+  const plugins = options.plugins as string[]
+  for (const banned of ['link', 'autolink', 'media', 'code', 'autosave', 'visualchars']) expect(plugins).not.toContain(banned)
+  expect(String(options.quickbars_selection_toolbar)).not.toMatch(/link|image/)
+})
+
+it('offers ready-made tables that use only markup the sanitizer keeps', () => {
+  const engine = installEngine()
+  render(<LedgerBodyEditor value="" onChange={() => {}} label="Body" />)
+  expect(engine.addMenuButton).toHaveBeenCalledTimes(1)
+  const [name, spec] = engine.addMenuButton.mock.calls[0]
+  expect(name).toBe('ledgertables')
+  expect(spec.tooltip).toBe('Ready-made tables')
+  let items: { text: string, onAction: () => void }[] = []
+  spec.fetch((fetched) => { items = fetched })
+  expect(items.map((item) => item.text)).toEqual(['Numbered list', 'Names list', 'List with dates', 'Details (label and value)'])
+
+  const allowedStyles = new Set(['width', 'table-layout', 'border-collapse', 'margin-inline', 'background-color', 'font-weight', 'text-align'])
+  for (const item of items) item.onAction()
+  expect(engine.insertContent).toHaveBeenCalledTimes(items.length)
+  for (const [html] of engine.insertContent.mock.calls) {
+    const node = document.createElement('div')
+    node.innerHTML = html
+    for (const element of node.querySelectorAll('*')) {
+      expect(['TABLE', 'THEAD', 'TBODY', 'TR', 'TH', 'TD', 'P']).toContain(element.tagName)
+      expect(element.getAttributeNames().filter((attribute) => attribute !== 'style')).toEqual([])
+      const declared = (element.getAttribute('style') ?? '').split(';').filter(Boolean).map((rule) => rule.split(':')[0])
+      expect(declared.filter((property) => !allowedStyles.has(property))).toEqual([])
+    }
+  }
+  // The header is a real <thead>, so the paper repeats it on every page.
+  const names = document.createElement('div')
+  names.innerHTML = engine.insertContent.mock.calls[1][0]
+  expect([...names.querySelectorAll('thead th')].map((cell) => cell.textContent)).toEqual(['No.', 'Name', 'Employee No.', 'Notes'])
+  expect([...names.querySelectorAll('tbody tr')].map((row) => row.firstElementChild?.textContent)).toEqual(['1', '2', '3'])
 })
 
 it('offers paper heading presets as inline styles', () => {
   const presets = renderEditor().style_formats
   expect(presets.map((preset) => [preset.block, preset.styles['font-size']])).toEqual([
-    ['h2', '18pt'], ['h3', '16pt'], ['h4', '14pt'], ['p', '16pt'], ['p', '12pt'],
+    ['h2', '18pt'], ['h3', '16pt'], ['h4', '14pt'], ['p', '16pt'], ['p', '12pt'], ['p', '16pt'], ['p', '16pt'],
   ])
+  expect(presets[5].styles).toMatchObject({ 'text-align': 'justify' })
+  expect(presets[6].styles).toMatchObject({ 'text-align': 'center', 'font-weight': 'bold' })
   expect(presets[0].styles).toMatchObject({ 'text-align': 'center', 'font-weight': 'bold' })
   expect(presets[2].styles).toMatchObject({ 'text-decoration': 'underline' })
 })

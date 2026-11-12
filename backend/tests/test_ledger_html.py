@@ -266,3 +266,26 @@ def test_editor_pagebreak_separator_survives_unchanged() -> None:
     assert (
         clean(f"<p>a</p>{PAGEBREAK_SEPARATOR}<p>b</p>") == f"<p>a</p>{PAGEBREAK_SEPARATOR}<p>b</p>"
     )
+
+
+# The markup the editor's ready-made tables and text presets emit
+# (frontend ledgerEditorConfig.ts). Keep the two in step.
+PRESET_TABLE = "width:100%;table-layout:fixed;border-collapse:collapse;margin-inline:auto"
+PRESET_HEAD = "background-color:#d9d9d9;font-weight:bold;text-align:center"
+PRESET_BODIES = [
+    f'<table style="{PRESET_TABLE}"><thead><tr>'
+    f'<th style="width:8%;{PRESET_HEAD}">م</th><th style="{PRESET_HEAD}">الاسم</th>'
+    f'<th style="width:22%;{PRESET_HEAD}">الرقم الوظيفي</th></tr></thead>'
+    '<tbody><tr><td style="text-align:center">1</td><td>x</td><td>G-1</td></tr></tbody></table>',
+    f'<table style="{PRESET_TABLE}"><tbody><tr>'
+    '<td style="width:30%;background-color:#f2f2f2;font-weight:bold">a</td><td>b</td>'
+    "</tr></tbody></table>",
+    '<p style="font-size:16pt;text-align:justify">x</p>',
+    '<p style="font-size:16pt;font-weight:bold;text-align:center">x</p>',
+    '<p style="line-height:1.15">x</p>',
+]
+
+
+@pytest.mark.parametrize("body", PRESET_BODIES)
+def test_editor_presets_survive_unchanged(body: str) -> None:
+    assert clean(body) == body

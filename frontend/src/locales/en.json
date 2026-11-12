@@ -3938,7 +3938,24 @@
         "subtitle": "Subtitle",
         "sectionHeading": "Section heading",
         "paragraph": "Paragraph",
-        "note": "Note"
+        "note": "Note",
+        "justified": "Justified paragraph",
+        "centeredLine": "Centred bold line"
+      },
+      "tables": {
+        "menu": "Ready-made tables",
+        "numbered": "Numbered list",
+        "names": "Names list",
+        "dated": "List with dates",
+        "details": "Details (label and value)",
+        "columns": {
+          "number": "No.",
+          "statement": "Description",
+          "name": "Name",
+          "employeeNumber": "Employee No.",
+          "date": "Date",
+          "notes": "Notes"
+        }
       }
     },
     "actions": {

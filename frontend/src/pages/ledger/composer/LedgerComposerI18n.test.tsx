@@ -73,6 +73,13 @@ it('T-C9 English and Arabic carry the same ledgerBook.composer keys, none empty'
   expect(enKeys.filter((key) => String(arText(key)).trim() === '')).toEqual([])
 })
 
+it('English and Arabic carry the same ledgerBook.editor keys, none empty', () => {
+  const enKeys = leafKeys(en.ledgerBook.editor).sort()
+  expect(leafKeys(ar.ledgerBook.editor).sort()).toEqual(enKeys)
+  const arText = (key: string): unknown => key.split('.').reduce<unknown>((node, part) => (node as Record<string, unknown>)[part], ar.ledgerBook.editor)
+  expect(enKeys.filter((key) => String(arText(key)).trim() === '')).toEqual([])
+})
+
 it('T-C9 English surfaces use only logical direction utilities', async () => {
   const container = mountAll()
   await screen.findByRole('heading', { name: /DRAFT 000012/ })

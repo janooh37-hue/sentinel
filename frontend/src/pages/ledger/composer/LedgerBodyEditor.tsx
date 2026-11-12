@@ -17,11 +17,15 @@ import { useTranslation } from 'react-i18next'
 
 import { apiErrorMessage } from '@/lib/api'
 import {
+  LEDGER_BLOCK_FORMATS,
   LEDGER_CONTENT_STYLE,
+  LEDGER_DATETIME_FORMATS,
   LEDGER_EDITOR_MIN_HEIGHT,
   LEDGER_FONT_SIZE_FORMATS,
+  LEDGER_LINE_HEIGHT_FORMATS,
   LEDGER_MENUBAR,
   LEDGER_PAGEBREAK_SEPARATOR,
+  LEDGER_SELECTION_TOOLBAR,
   LEDGER_TABLE_DEFAULT_ATTRIBUTES,
   LEDGER_TABLE_DEFAULT_STYLES,
   ledgerFontFamilyFormats,
@@ -29,6 +33,7 @@ import {
   ledgerPlugins,
   ledgerStyleFormats,
   ledgerToolbar,
+  registerLedgerTablePresets,
 } from './ledgerEditorConfig'
 
 interface BlobInfo { blob: () => Blob; filename: () => string }
@@ -91,6 +96,7 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
       editor.on('SetContent', () => accessibilityRef.current(editor))
       editor.on('remove', () => { if (editorRef.current === editor) editorRef.current = null })
     },
+    setup: (editor: HugeEditor) => registerLedgerTablePresets(editor, t),
     base_url: '/hugerte',
     suffix: '.min',
     menubar: LEDGER_MENUBAR,
@@ -106,11 +112,24 @@ export function LedgerBodyEditor({ value, onChange, label, onUploadImage, invali
     min_height: LEDGER_EDITOR_MIN_HEIGHT,
     font_family_formats: ledgerFontFamilyFormats(t),
     font_size_formats: LEDGER_FONT_SIZE_FORMATS,
+    line_height_formats: LEDGER_LINE_HEIGHT_FORMATS,
+    block_formats: LEDGER_BLOCK_FORMATS,
     style_formats: ledgerStyleFormats(t),
     table_default_styles: LEDGER_TABLE_DEFAULT_STYLES,
     table_default_attributes: LEDGER_TABLE_DEFAULT_ATTRIBUTES,
     table_sizing_mode: 'relative' as const,
+    // Visual aids repaint attribute-less table borders as grey dashes, hiding
+    // the solid rule the paper prints.
+    visual: false,
     pagebreak_separator: LEDGER_PAGEBREAK_SEPARATOR,
+    // A plain &nbsp;: the wrapper span's class would be stripped on save.
+    nonbreaking_wrap: false,
+    insertdatetime_formats: LEDGER_DATETIME_FORMATS,
+    quickbars_selection_toolbar: LEDGER_SELECTION_TOOLBAR,
+    // No empty-line or image popups: quick image skips the upload switch and
+    // image alignment does not survive the sanitizer.
+    quickbars_insert_toolbar: false,
+    quickbars_image_toolbar: false,
     content_style: LEDGER_CONTENT_STYLE,
     paste_postprocess: ledgerPastePostprocess,
     // HugeRTE's own menus and dialogs; `ar` loads /hugerte/langs/ar.js.
