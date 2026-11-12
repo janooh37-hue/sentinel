@@ -21,7 +21,17 @@ git log --oneline <that commit>..origin/main
 git diff --stat <that commit>..origin/main -- backend/app/db/migrations frontend requirements.txt
 ```
 
-Summarise it for the user: the commits, whether a migration runs, whether the frontend rebuilds. If the server is already on `origin/main` there is nothing to deploy; say so and stop.
+Summarise it for the user: the commits, whether a migration runs, whether the frontend rebuilds.
+
+If the server's checkout is already on `origin/main`, there is nothing to pull, but that does not prove the service runs that code: an aborted `mng update` moves the checkout and restarts nothing. Compare when the checkout last moved with when the service started:
+
+```
+ssh gssgit "git -C C:/Users/Admin/sentinel reflog -1 --date=iso --format=%gd"
+ssh gssgit "mng status"
+```
+
+- Service **Running**, health **ok**, and started (now minus **Uptime**) after the checkout moved: the last deploy finished. Say there is nothing to deploy and stop.
+- Service started before the checkout moved, or it is not healthy: the last update did not finish and the old build is still running. Tell the user, do step 3, then recover with `ssh gssgit "mng deploy"` in place of step 4, and verify (step 5).
 
 ## 3. Check the server's tree
 
@@ -37,7 +47,7 @@ Untracked files are fine. Modified tracked files are usually `backend/templates/
 ssh gssgit "mng update"
 ```
 
-It takes a few minutes when the frontend rebuilds. If it prints `DEPLOY ABORTED`, the checkout moved but the service still runs the old build: report the error; do not retry blindly.
+It takes a few minutes when the frontend rebuilds. If it prints `DEPLOY ABORTED`, the checkout moved but the service still runs the old build: report the error; do not retry blindly. Once the cause is fixed, finish with `ssh gssgit "mng deploy"`; `mng update` would now find nothing to pull and deploy nothing.
 
 ## 5. Verify
 
