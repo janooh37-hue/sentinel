@@ -1,69 +1,65 @@
 ---
 name: "deploy"
-description: "Deploy GSSG Manager safely after the user explicitly asks: inspect changes, commit and push origin/main, build, restart, and verify health."
+description: "Deploy GSSG Manager to the production server (GSSGIT) after the user explicitly asks: confirm the work is merged to origin/main, show what will ship, run mng update on the server, and verify health."
 ---
 
-# /deploy — ship local changes to the live GSSG Manager service
+# /deploy
 
-**This working copy is the production server.** `mng update` does `git pull
---ff-only` then rebuilds — so any local change that is not committed and pushed
-to `origin/main` is at risk of being blown away on the next update. Never deploy
-work that only exists in the working tree.
+Production is the Windows server `GSSGIT`. Its checkout (`C:\Users\Admin\sentinel`) only ever moves by `mng update`, which pulls `origin/main`, syncs dependencies, builds the frontend if it changed, migrates, smoke-checks and restarts. So a change ships by being merged to `origin/main` first. Nothing is edited, committed or built by hand on the server.
 
-Run these steps in order. Stop and report if any step fails; do not paper over
-a failure.
+Deploy from the laptop (`GSSGLT`): `ssh gssgit` works there with a key, and the session is already administrator. The desktop (`dtop`) has no key for the server. Run the steps in order; stop and report on any failure.
 
-## 1. Show what will ship
-```
-git status
-git --no-pager diff --stat
-```
-Summarise the pending changes for the user. If the tree is clean and `HEAD` is
-already on `origin/main`, skip to step 4 (nothing to commit — just a rebuild).
+## 1. Confirm it is merged
 
-## 2. Commit (only if there are changes)
-- Confirm the changes are intended to go live now. If anything looks like
-  churn (e.g. `backend/templates/*.docx` re-saved by the running service /
-  Word — a known gotcha), revert that noise before committing.
-- Commit with a clear message following the repo's footer convention.
-- Do **not** commit secrets or `data/` (already gitignored) — sanity-check the
-  staged list.
+The PR is merged and `origin/main` contains it: `git fetch origin && git log --oneline -5 origin/main`. Unmerged work does not deploy; finish the `dev-cycle` first.
 
-## 3. Push to origin/main (the invariant)
-```
-git push origin main
-```
-This must succeed before the deploy is considered durable. If the push is
-rejected (remote ahead), stop and resolve — do not force-push a production
-branch.
+## 2. Show what will ship
 
-## 4. Build + restart the live service
-Local code changes are applied by `mng deploy` (build frontend → copy into
-`backend/app/static` → restart the `GSSGManager` service). It auto-elevates via
-UAC when needed.
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\mng.ps1 deploy
+ssh gssgit "git -C C:/Users/Admin/sentinel rev-parse HEAD"
+git log --oneline <that commit>..origin/main
+git diff --stat <that commit>..origin/main -- backend/app/db/migrations frontend requirements.txt
 ```
-- `mng deploy` uses the **committed** `api.types.ts` and does **not** regenerate
-  OpenAPI types. If this change altered backend request/response schemas, run
-  `/sync-api-types` FIRST (or `scripts\build.ps1`), commit the regenerated
-  `api.types.ts`, then deploy — otherwise the frontend ships against stale types.
 
-## 5. Verify it came back healthy
+Summarise it for the user: the commits, whether a migration runs, whether the frontend rebuilds.
+
+If the server's checkout is already on `origin/main`, there is nothing to pull, but that does not prove the service runs that code: an aborted `mng update` moves the checkout and restarts nothing. Compare when the checkout last moved with when the service started:
+
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\mng.ps1 status
+ssh gssgit "git -C C:/Users/Admin/sentinel reflog -1 --date=iso --format=%gd"
+ssh gssgit "mng status"
 ```
-Confirm: service **Running**, health **ok**, and the version bumped as expected.
-Report the final status to the user. If health is not `ok` within the wait
-window, tail the log to diagnose:
+
+- Service **Running**, health **ok**, and started (now minus **Uptime**) after the checkout moved: the last deploy finished. Say there is nothing to deploy and stop.
+- Service started before the checkout moved, or it is not healthy: the last update did not finish and the old build is still running. Tell the user, do step 3, then recover with `ssh gssgit "mng deploy"` in place of step 4, and verify (step 5).
+
+## 3. Check the server's tree
+
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\mng.ps1 logs -Stderr -Tail 60
+ssh gssgit "git -C C:/Users/Admin/sentinel status --short"
 ```
+
+Untracked files are fine. Modified tracked files are usually `backend/templates/*.docx` re-saved by Word; they can block the pull. Show them to the user and ask before reverting anything on the server.
+
+## 4. Deploy
+
+```
+ssh gssgit "mng update"
+```
+
+It takes a few minutes when the frontend rebuilds. If it prints `DEPLOY ABORTED`, the checkout moved but the service still runs the old build: report the error; do not retry blindly. Once the cause is fixed, finish with `ssh gssgit "mng deploy"`; `mng update` would now find nothing to pull and deploy nothing.
+
+## 5. Verify
+
+```
+ssh gssgit "mng status"
+```
+
+Service **Running**, health **ok**. If not: `ssh gssgit "mng logs -Stderr -Tail 60"` and report.
 
 ## Notes
-- `mng deploy` applies LOCAL code; `mng update` pulls first. On this box you
-  normally use `deploy` (you already have the code) — the git push in step 3 is
-  what protects that local code from being overwritten later, it is not what
-  ships it.
-- Never skip the push. A deployed-but-unpushed production is a landmine.
 
+- On GSSGIT itself, the same steps without `ssh gssgit`: `mng status`, `mng update`.
+- `mng deploy` rebuilds from the server's local checkout without pulling. It is for recovering from an aborted update, not for shipping changes.
+- `mng update` uses the committed `frontend/src/lib/api.types.ts`. Route or schema changes must have gone through the `sync-api-types` skill before the PR merged.
+- Rollback is a revert on `main` through a PR, then `mng update` again.

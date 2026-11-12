@@ -15,6 +15,14 @@ onto the office server, so every fix must be committed **and pushed to
 `origin/main`** or the next pull silently overwrites it. Test on a branch; merge
 to `main` when ready.
 
+**One branch owns a change.** Cut it from `origin/main`, commit every edit on
+it, and open its PR to `main`. Branch `dev` (the laptop dev channel) is only a
+preview of `origin/main` plus the branches under test: never edit, commit, or
+cherry-pick there, and never copy commits between `dev` and a feature branch.
+Follow `.agents/skills/dev-cycle/SKILL.md`; parallel agents and heavy test runs
+go to the desktop per `.agents/skills/dtop-writers/SKILL.md`; shipping to the
+production server is `.agents/skills/deploy/SKILL.md`.
+
 ## Commands
 
 All Python runs through the repo venv (`venv/Scripts/...`, forward slashes: bash
@@ -100,6 +108,11 @@ one). SQLite-specific rules live in `backend/app/db/migrations/CLAUDE.md`.
 - **Agent tooling** is committed: reviewer agents in `.codex/agents/`, skills in
   `.agents/skills/`, hook scripts in `.claude/hooks/` and `.codex/hooks/`.
   Hooks load at session start — reload after editing them.
+- **Skills load in both tools.** Each skill is written once in
+  `.agents/skills/<name>/SKILL.md` (Codex: `$<name>`). `.claude/skills/<name>/`
+  holds a generated pointer so `/<name>` works in Claude Code. After adding,
+  renaming, or re-describing a skill run
+  `venv/Scripts/python.exe scripts/sync_claude_skills.py` (CI runs `--check`).
 - Strict gates are real: mypy is `strict`, pytest runs with `filterwarnings=error`.
 
 ## Planning artifacts

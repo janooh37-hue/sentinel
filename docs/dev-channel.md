@@ -4,15 +4,20 @@ One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-de
 
 ## Daily channel
 
-The worktree `.worktrees\160-laptop-dev` holds branch `dev`, whose upstream is `origin/main`, so `git status -sb` shows unpromoted work (ahead) and new main commits (behind). `scripts\dev-channel.ps1` drives it:
+The worktree `.worktrees\160-laptop-dev` holds branch `dev`. It is a preview, never a place to work: `origin/main` plus one merge commit per feature branch under test. Each rebuild resets it to `origin/main` and merges those branches again, so nothing is committed on it and it is never pushed or promoted. A feature branch reaches `main` through its own PR (see `.agents/skills/dev-cycle/SKILL.md`). `scripts\dev-channel.ps1` drives it:
 
 | Verb | Effect |
 | --- | --- |
 | `open` (default) | Sync if behind and clean, start the server if down, launch the agent (`-Agent omp`, `claude`, or `codex`) in the worktree. |
-| `sync` | Rebase `dev` on `origin/main`; reinstall deps if `requirements.txt`/lockfile changed; rebuild the frontend if `frontend/` changed; `alembic upgrade head`; restart. Refuses on uncommitted changes and aborts on conflicts. |
-| `publish` | Build the frontend, migrate, restart. Use after local edits. |
-| `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show branch and server health. |
-| `promote` | Push `dev` commits to `origin/main` after confirmation. Refuses if main moved since the last sync. Then run `scripts\mng.ps1 update` on GSSGIT. |
+| `preview <branch>` | Fetch the branch from dtop (remote `desk`) and `origin`, add it to the preview, rebuild and publish. Run again to pick up new commits. Refuses, leaving `dev` unchanged, if the branch does not merge cleanly. |
+| `drop <branch>` | Take a branch off the preview, rebuild and publish. |
+| `sync` | Rebuild on the latest `origin/main` and the latest tip of every previewed branch; branches already in main or deleted leave the preview. Reinstalls deps if `requirements.txt`/lockfile changed; rebuilds the frontend if `frontend/` changed; `alembic upgrade head`; restart. |
+| `publish` | Build the frontend, migrate, restart. |
+| `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show main, the previewed branches, stray work and server health. |
+
+`preview`, `drop` and `sync` take `-NoPublish` to rebuild the branch without building or restarting; changed dependencies are still installed. The script records the steps a rebuild still owes (dependency install, frontend build, migrate and restart) in git config (`devchannel.pending`) and clears each only when it succeeds, so the next `preview`, `drop`, `sync` or `publish` finishes what `-NoPublish` deferred or a failure cut short. The preview list is kept in git config (`git config --get-all devchannel.preview`).
+
+Rebuilds and `publish` refuse when `dev` holds commits of its own (including a merge committed with edits beyond the automatic merge of its parents) or the worktree has uncommitted edits, because that work is on no feature branch and would be lost or left out of the PR. The committed `.githooks/pre-commit` hook also rejects plain commits on `dev`; the script enables it for this clone (`core.hooksPath`).
 
 The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
 

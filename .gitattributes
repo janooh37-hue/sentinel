@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Git runs hooks with sh on every host; CRLF breaks the shebang line.
+.githooks/* text eol=lf
