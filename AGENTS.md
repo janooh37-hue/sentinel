@@ -61,6 +61,8 @@ scripts/mng.ps1 logs
 
 ## Project skills
 
+Each skill is written once in `.agents/skills/<name>/SKILL.md`: `$<name>` in Codex. `.claude/skills/<name>/SKILL.md` is a generated pointer to it so `/<name>` works in Claude Code; after adding, renaming, or re-describing a skill, run `python scripts/sync_claude_skills.py` (CI runs it with `--check`).
+
 - `dev-cycle`: the path of every fix or feature, from a branch off `origin/main` through the dev preview to its PR.
 - `dtop-writers`: start, brief, and collect writer agents and full test runs on the desktop.
 - `deploy`: ship merged `origin/main` to the production server and verify the live service.

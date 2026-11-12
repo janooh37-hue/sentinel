@@ -108,6 +108,11 @@ one). SQLite-specific rules live in `backend/app/db/migrations/CLAUDE.md`.
 - **Agent tooling** is committed: reviewer agents in `.codex/agents/`, skills in
   `.agents/skills/`, hook scripts in `.claude/hooks/` and `.codex/hooks/`.
   Hooks load at session start — reload after editing them.
+- **Skills load in both tools.** Each skill is written once in
+  `.agents/skills/<name>/SKILL.md` (Codex: `$<name>`). `.claude/skills/<name>/`
+  holds a generated pointer so `/<name>` works in Claude Code. After adding,
+  renaming, or re-describing a skill run
+  `venv/Scripts/python.exe scripts/sync_claude_skills.py` (CI runs `--check`).
 - Strict gates are real: mypy is `strict`, pytest runs with `filterwarnings=error`.
 
 ## Planning artifacts
