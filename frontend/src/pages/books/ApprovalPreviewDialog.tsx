@@ -135,8 +135,11 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                 </Dialog.Close>
               </header>
 
-              <div className="h-[70dvh] min-h-0 flex-1 overflow-hidden bg-[rgba(10,14,24,0.78)] px-2 py-3 md:px-5 md:py-5">
-                <div className="relative mx-auto h-full w-full max-w-[760px]">
+              {/* A flex chain, not `h-full`: the dialog only has a max-height, so a
+                  percentage height here resolves to auto, the viewer grows to the
+                  whole document and its scroll area never overflows. */}
+              <div className="flex h-[70dvh] min-h-0 shrink flex-col overflow-hidden bg-[rgba(10,14,24,0.78)] px-2 py-3 md:px-5 md:py-5">
+                <div className="relative mx-auto flex min-h-0 w-full max-w-[760px] flex-1 flex-col">
                   {papers.length > 0 ? (
                     <Suspense fallback={<DocumentState kind="loading" className="text-white/80" />}>
                       {/* The viewer opens at Fit (its container width), so the paper fills a phone screen. */}
