@@ -477,6 +477,8 @@ export function RichEditor({
       resize: false,
       height: editorHeight,
       ...(fillHeight ? { min_height: minHeightPx } : {}),
+      // HugeRTE's own menus, tooltips and dialogs; `ar` loads /hugerte/langs/ar.js.
+      language: isAr ? 'ar' : 'en',
       directionality: (isAr ? 'rtl' : 'ltr') as 'rtl' | 'ltr',
       content_style: contentStyle,
       browser_spellcheck: true,
@@ -520,7 +522,9 @@ export function RichEditor({
               className="min-h-[240px] w-full rounded-md border border-border bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           ) : (
+            // HugeRTE reads init once: remount so a language switch relabels its UI.
             <HugeRTEEditor
+              key={isAr ? 'ar' : 'en'}
               hugerteScriptSrc="/hugerte/hugerte.min.js"
               value={(field.value as string | undefined) ?? ''}
               onEditorChange={(html) => field.onChange(html)}
