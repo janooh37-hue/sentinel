@@ -167,13 +167,20 @@ function Publish([bool] $Frontend = $true) {
 # merge cleanly aborts the whole rebuild and puts dev back as it was.
 function Rebuild([string[]] $Names) {
     Assert-NothingToLose 'a rebuild'
-    $before = git rev-parse HEAD
-    Invoke-Native { git reset -q --hard origin/main }
-    $kept = @()
-    foreach ($n in $Names) {
+    # Resolve every tip before touching dev: Resolve-Tip throws on a branch whose
+    # desk and origin copies have diverged, and that refusal must leave dev as it was.
+    $plan = @(foreach ($n in $Names) {
         $tip = Resolve-Tip $n
         if (-not $tip) { Write-Warning "$n is gone from desk and origin; taken off the preview."; continue }
         if (Test-AddsNothing $tip.Sha) { Write-Host "$n adds nothing to main (merged, or no commits yet); taken off the preview." -ForegroundColor DarkGray; continue }
+        [pscustomobject]@{ Name = $n; Tip = $tip }
+    })
+    $before = git rev-parse HEAD
+    Invoke-Native { git reset -q --hard origin/main }
+    $kept = @()
+    foreach ($p in $plan) {
+        $n = $p.Name
+        $tip = $p.Tip
         git merge -q --no-ff -m "preview: $n" $tip.Sha
         if ($LASTEXITCODE) {
             $files = @(git diff --name-only --diff-filter=U)
