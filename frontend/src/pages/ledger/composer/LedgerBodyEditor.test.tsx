@@ -318,7 +318,7 @@ it('offers ready-made tables that use only markup the sanitizer keeps', () => {
   expect(spec.tooltip).toBe('Ready-made tables')
   let items: { text: string, onAction: () => void }[] = []
   spec.fetch((fetched) => { items = fetched })
-  expect(items.map((item) => item.text)).toEqual(['Numbered list', 'Names list', 'List with dates', 'Details (label and value)'])
+  expect(items.map((item) => item.text)).toEqual(['Numbered table', 'Names table', 'Table with dates', 'Details table (item and value)'])
 
   const allowedStyles = new Set(['width', 'table-layout', 'border-collapse', 'margin-inline', 'background-color', 'font-weight', 'text-align'])
   for (const item of items) item.onAction()
@@ -333,10 +333,11 @@ it('offers ready-made tables that use only markup the sanitizer keeps', () => {
       expect(declared.filter((property) => !allowedStyles.has(property))).toEqual([])
     }
   }
-  // The header is a real <thead>, so the paper repeats it on every page.
+  // The header is a real <thead>, so the paper repeats it on every page. Its
+  // text is Arabic even in the English interface: the paper is always Arabic.
   const names = document.createElement('div')
   names.innerHTML = engine.insertContent.mock.calls[1][0]
-  expect([...names.querySelectorAll('thead th')].map((cell) => cell.textContent)).toEqual(['No.', 'Name', 'Employee No.', 'Notes'])
+  expect([...names.querySelectorAll('thead th')].map((cell) => cell.textContent)).toEqual(['م', 'الاسم', 'الرقم الوظيفي', 'ملاحظات'])
   expect([...names.querySelectorAll('tbody tr')].map((row) => row.firstElementChild?.textContent)).toEqual(['1', '2', '3'])
 })
 

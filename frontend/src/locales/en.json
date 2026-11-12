@@ -3944,18 +3944,10 @@
       },
       "tables": {
         "menu": "Ready-made tables",
-        "numbered": "Numbered list",
-        "names": "Names list",
-        "dated": "List with dates",
-        "details": "Details (label and value)",
-        "columns": {
-          "number": "No.",
-          "statement": "Description",
-          "name": "Name",
-          "employeeNumber": "Employee No.",
-          "date": "Date",
-          "notes": "Notes"
-        }
+        "numbered": "Numbered table",
+        "names": "Names table",
+        "dated": "Table with dates",
+        "details": "Details table (item and value)"
       }
     },
     "actions": {

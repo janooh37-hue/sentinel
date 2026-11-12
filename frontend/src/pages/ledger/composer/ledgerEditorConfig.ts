@@ -88,14 +88,26 @@ const LABEL_CELL_STYLE = 'width:30%;background-color:#f2f2f2;font-weight:bold'
 const NUMBER_WIDTH = '8%'
 const PRESET_ROWS = 3
 
-type ColumnKey = 'number' | 'statement' | 'name' | 'employeeNumber' | 'date' | 'notes'
-type Column = readonly [key: ColumnKey, width?: string]
+/**
+ * Header text is document content, not interface text: the paper is always
+ * Arabic and right-to-left, so it stays Arabic whatever the app language.
+ */
+const COLUMN_HEADINGS = {
+  number: 'م',
+  statement: 'البيان',
+  name: 'الاسم',
+  employeeNumber: 'الرقم الوظيفي',
+  date: 'التاريخ',
+  notes: 'ملاحظات',
+} as const
+
+type Column = readonly [key: keyof typeof COLUMN_HEADINGS, width?: string]
 
 /** A ruled table whose header row is a real `<thead>`, so it repeats on every printed page. */
-function headedTable(t: TFunction, columns: readonly Column[]): string {
+function headedTable(columns: readonly Column[]): string {
   const head = columns.map(([key, width]) => {
     const style = width ? `width:${width};${HEAD_CELL_STYLE}` : HEAD_CELL_STYLE
-    return `<th style="${style}">${t(`ledgerBook.editor.tables.columns.${key}`)}</th>`
+    return `<th style="${style}">${COLUMN_HEADINGS[key]}</th>`
   }).join('')
   const rows = Array.from({ length: PRESET_ROWS }, (_, row) => {
     const cells = columns.map(([key]) => (key === 'number' ? `<td style="text-align:center">${row + 1}</td>` : '<td>&nbsp;</td>')).join('')
@@ -116,9 +128,9 @@ export function ledgerTablePresets(t: TFunction): LedgerTablePreset[] {
   const number: Column = ['number', NUMBER_WIDTH]
   const preset = (key: string, html: string): LedgerTablePreset => ({ key, title: t(`ledgerBook.editor.tables.${key}`), html })
   return [
-    preset('numbered', headedTable(t, [number, ['statement'], ['notes', '25%']])),
-    preset('names', headedTable(t, [number, ['name'], ['employeeNumber', '22%'], ['notes', '25%']])),
-    preset('dated', headedTable(t, [number, ['statement'], ['date', '20%'], ['notes', '22%']])),
+    preset('numbered', headedTable([number, ['statement'], ['notes', '25%']])),
+    preset('names', headedTable([number, ['name'], ['employeeNumber', '22%'], ['notes', '25%']])),
+    preset('dated', headedTable([number, ['statement'], ['date', '20%'], ['notes', '22%']])),
     preset('details', detailsTable()),
   ]
 }
