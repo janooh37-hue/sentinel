@@ -38,7 +38,7 @@ from app.core.scoped_roles import scoped_role
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
-from app.services import identity_service, perm_service, user_signature_service
+from app.services import identity_service, manager_service, perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -440,7 +440,8 @@ def set_line_manager(
 
     422 ``LINE_MANAGER_NOT_APPLICABLE`` for any other role; 422
     ``LINE_MANAGER_NOT_ELIGIBLE`` unless the manager is another active
-    account holding ``books.approve``.
+    account holding ``books.approve`` and linked to exactly one active
+    ``Manager`` (signer) row.
     """
     user = _require_user(db, user_id)
     scoped = scoped_role(user.role)
@@ -454,10 +455,12 @@ def set_line_manager(
         or manager.id == user.id
         or manager.status != "active"
         or not perm_service.has_capability(db, manager, "books.approve")
+        or manager_service.sole_active_manager_id(db, manager.id) is None
     ):
         raise ValidationFailedError(
             "LINE_MANAGER_NOT_ELIGIBLE",
-            "The line manager must be another active account allowed to approve.",
+            "The line manager must be another active account allowed to approve, "
+            "linked to exactly one active signing manager.",
         )
     user.line_manager_user_id = line_manager_user_id
     _audit(
