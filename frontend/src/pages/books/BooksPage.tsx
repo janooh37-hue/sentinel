@@ -143,6 +143,7 @@ function BooksRegister(): React.JSX.Element {
   const { has } = useCapabilities()
   const { user } = useAuth()
   const isScopedRole = scopedRoleOf(user) !== null
+  const isInmateReporter = scopedRoleOf(user) === 'inmate_reporter'
   const canDelete = has('books.delete')
   const canSubmit = has('books.submit')
   const navigate = useNavigate()
@@ -166,7 +167,7 @@ function BooksRegister(): React.JSX.Element {
   const [openParam, setOpenParam] = useSearchParam('open')
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
   // "Created by me" is hidden for inmate reporters, so its param is ignored.
-  const mine = mineParam === '1' && !isScopedRole
+  const mine = mineParam === '1' && !isInmateReporter
   const filters = useMemo<BooksFilters>(
     () => ({
       categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
@@ -284,7 +285,7 @@ function BooksRegister(): React.JSX.Element {
     queryKey: booksFacetsKey(mine),
     queryFn: () => api.getBookFacets(serverScope),
   })
-  const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isScopedRole })
+  const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
 
 
   // Dashboard links must filter before the server's 500-row page window.
@@ -686,7 +687,7 @@ function BooksRegister(): React.JSX.Element {
     autoSelectedRef.current = null
   }, [drawerTier, paneOpen, selectedId, setOpenParam])
 
-  const mineToggle = isScopedRole
+  const mineToggle = isInmateReporter
     ? undefined
     : {
         pressed: mine,
@@ -826,7 +827,7 @@ function BooksRegister(): React.JSX.Element {
                   <FiltersPopover filters={filters} categories={categories} onChange={setFilters} />
                 )}
                 {mineToggle && (
-                  <span className="contents @5xl/page:hidden">
+                  <span className={cn('contents', !isScopedRole && '@5xl/page:hidden')}>
                     <MineChip {...mineToggle} variant="chip" />
                   </span>
                 )}
@@ -1092,6 +1093,7 @@ function BooksRegister(): React.JSX.Element {
             hasFilters={hasFilters}
             isAr={isAr}
             isScopedRole={isScopedRole}
+            mine={isScopedRole ? mineToggle : undefined}
             newRecordPath={newRecordHref(scopedRoleOf(user) === 'inmate_reporter')}
             canSubmit={canSubmit}
             userId={user?.id}

@@ -178,6 +178,17 @@ describe('BooksMobileList cards', () => {
     await userEvent.click(screen.getByRole('button', { name: 'books.filters.clear' }))
     expect(props.onClearFilters).toHaveBeenCalledTimes(1)
   })
+
+  it('offers the fleet own-papers filter without bulk selection', async () => {
+    const onToggle = vi.fn()
+    renderList({ isScopedRole: true, mine: { pressed: true, count: 4, onToggle } })
+    const chip = screen.getByRole('button', { name: /books.list.createdByMe/ })
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    expect(chip).toHaveTextContent('4')
+    expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
+    await userEvent.click(chip)
+    expect(onToggle).toHaveBeenCalledOnce()
+  })
 })
 
 describe('BooksMobileList select mode', () => {

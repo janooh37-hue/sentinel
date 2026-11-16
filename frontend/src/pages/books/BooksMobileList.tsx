@@ -37,6 +37,7 @@ import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf } from './recordPapers'
 import { buildRecordBasketItem } from './recordsBasket'
+import { MineChip, type MineToggleState } from './FormRail'
 import { openRecord, recordLinkProps, useListReturnFocus } from './useRecordNavContext'
 import type { RecordNavState } from './useRecordNavContext'
 
@@ -61,6 +62,8 @@ export interface BooksMobileListProps {
   onClearFilters: () => void
   /** Search box rendered beside "Select", above the cards. */
   search?: React.ReactNode
+  /** Own-papers filter for the compact scoped-role Records shell. */
+  mine?: MineToggleState
 }
 
 const FLASH_MS = 1800
@@ -80,6 +83,7 @@ export function BooksMobileList({
   onSubmit: submitBook,
   onClearFilters,
   search,
+  mine,
 }: BooksMobileListProps): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -179,9 +183,10 @@ export function BooksMobileList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {search || showSelectToggle ? (
-        <div className="flex shrink-0 items-center gap-2 px-6 pb-2">
+      {search || mine || showSelectToggle ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 px-6 pb-2">
           {search}
+          {mine && <MineChip {...mine} variant="chip" />}
           {showSelectToggle ? (
             <button
               type="button"

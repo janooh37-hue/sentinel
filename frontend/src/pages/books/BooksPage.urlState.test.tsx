@@ -25,7 +25,8 @@ vi.mock('./StatusSpine', () => ({ StatusSpine: ({ active, onChange }: { active: 
 vi.mock('./FormRail', () => ({
   FormRail: ({ mine }: { mine?: { pressed: boolean; onToggle: () => void } }) =>
     mine ? <button aria-label="mine-toggle" aria-pressed={mine.pressed} onClick={mine.onToggle} /> : null,
-  MineChip: () => null,
+  MineChip: ({ pressed, count, onToggle }: { pressed: boolean; count: number | null; onToggle: () => void }) =>
+    <button aria-label="mine-chip" aria-pressed={pressed} onClick={onToggle}>{count}</button>,
 }))
 vi.mock('./RecordsList', () => ({ RecordsList: () => null }))
 vi.mock('./RecordPane', () => ({ RecordPane: ({ book }: { book: { id: number } | null }) => <div data-testid="record-pane">{book?.id ?? 'none'}</div> }))
@@ -182,13 +183,41 @@ describe('Books URL state', () => {
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
   })
 
-  it('never scopes inmate reporters to "created by me": no badge query, no scoped list, even with mine=1', async () => {
+  it.each([false, true])('honors fleet mine=1 and offers its toggle (mobile=%s)', async (mobile) => {
+    viewport.role = 'fleet_reporter'
+    viewport.mobile = mobile
+    setup('/books?mine=1&q=abc')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ q: 'abc', limit: 500, created_by_me: true }))
+    expect(api.listBooks).toHaveBeenCalledWith({ limit: 500, created_by_me: true })
+    expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
+    expect(api.getBookFacets).not.toHaveBeenCalledWith({})
+    const toggle = await screen.findByLabelText('mine-chip')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(toggle).toHaveTextContent('1')
+    await userEvent.click(toggle)
+    expect(new URLSearchParams(screen.getByTestId('url').textContent?.split('?')[1]).get('mine')).toBeNull()
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ q: 'abc', limit: 500 }))
+  })
+
+  it('loads the fleet own-papers badge while viewing all visible records', async () => {
+    viewport.role = 'fleet_reporter'
+    setup('/books')
+    await waitFor(() => expect(api.getBookFacets).toHaveBeenCalledWith({}))
+    expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
+    await waitFor(() => expect(screen.getByLabelText('mine-chip')).toHaveTextContent('1'))
+    expect(screen.getByLabelText('mine-chip')).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it.each([false, true])('keeps inmate mine=1 unchanged: no badge query or scoped list (mobile=%s)', async (mobile) => {
     viewport.role = 'inmate_reporter'
+    viewport.mobile = mobile
     setup('/books?mine=1')
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
     await waitFor(() => expect(api.getBookFacets).toHaveBeenCalledWith({}))
     expect(api.getBookFacets).not.toHaveBeenCalledWith({ created_by_me: true })
     expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ created_by_me: true }))
+    expect(screen.queryByLabelText('mine-chip')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('mine-filter')).not.toBeInTheDocument()
   })
 
   it('phone filters survive a remount', async () => {

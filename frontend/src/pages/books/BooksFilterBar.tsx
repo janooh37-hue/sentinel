@@ -41,7 +41,8 @@ export function BooksFilterBar({
   const { has } = useCapabilities()
   const { user } = useAuth()
   const isScopedRole = scopedRoleOf(user) !== null
-  const { count: myCount } = useMyRecordsCount({ enabled: !isScopedRole })
+  const isInmateReporter = scopedRoleOf(user) === 'inmate_reporter'
+  const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
@@ -261,7 +262,7 @@ export function BooksFilterBar({
       <div className="hidden h-5 w-px bg-hairline md:block" />
 
       {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
-      {!isScopedRole && (
+      {!isInmateReporter && (
         <button
           type="button"
           data-testid="mine-filter"

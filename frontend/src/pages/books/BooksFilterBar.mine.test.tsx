@@ -94,6 +94,17 @@ describe('BooksFilterBar — Created by me', () => {
     expect(screen.queryByRole('button', { name: /بانتظار النسخة الممسوحة/ })).not.toBeInTheDocument()
   })
 
+  it('lets fleet reporters filter their own papers and shows the count', async () => {
+    state.role = 'fleet_reporter'
+    const { onChange } = setup()
+    const chip = screen.getByRole('button', { name: /من إنشائي/ })
+    expect(chip).toHaveTextContent('7')
+    expect(chip).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(chip)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ mine: true }))
+    expect(screen.queryByRole('button', { name: /بانتظار النسخة الممسوحة/ })).not.toBeInTheDocument()
+  })
+
   it('Clear appears when only mine is on and resets it', async () => {
     const { onChange } = setup({ mine: true })
     await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
