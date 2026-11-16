@@ -4760,6 +4760,13 @@
       "signerMismatch": "The signer must be the employee linked to your account.",
       "stagedImportOwner": "This staged import belongs to another user."
     },
+    "fleet": {
+      "lineManagerRequired": "Ask an administrator to set your line manager.",
+      "lineManagerNotApplicable": "Only fleet reporter accounts have a line manager.",
+      "lineManagerNotEligible": "Choose another active account that can approve records.",
+      "branchApproverNotEligible": "Choose an active approver other than the author and the line manager.",
+      "notLineManagerStage": "This record is no longer waiting for your approval as line manager. Reload to see its current stage."
+    },
     "boundary": {
       "bodyLead": "This screen lost its connection.",
       "bodyReassure": "Nothing you did is lost",
@@ -6430,7 +6437,8 @@
       "admin": "Admin",
       "manager": "Manager",
       "operator": "Operator",
-      "inmate_reporter": "Inmate violation reporter"
+      "inmate_reporter": "Inmate violation reporter",
+      "fleet_reporter": "Fleet reporter"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",

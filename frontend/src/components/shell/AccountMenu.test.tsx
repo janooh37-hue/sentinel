@@ -26,6 +26,7 @@ const USER: SessionUser = {
   department: 'Operations',
   photo_url: null,
   role: 'operator',
+  scoped_role: null,
   status: 'active',
   is_admin: false,
   is_manager: false,

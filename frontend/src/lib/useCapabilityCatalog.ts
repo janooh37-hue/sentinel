@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api, type CapabilityRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 
-const ROLES = new Set(['operator', 'manager', 'admin', 'inmate_reporter'])
+const ROLES = new Set(['operator', 'manager', 'admin', 'inmate_reporter', 'fleet_reporter'])
 const EMPTY_CATALOG: readonly CapabilityRead[] = []
 
 function invalidCatalog(): never {
