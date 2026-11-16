@@ -145,6 +145,14 @@ class BookSignRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class BookForwardToBranchRequest(BaseModel):
+    """The line manager approves their stage and hands the paper to a branch manager."""
+
+    version_id: int = Field(gt=0)
+    branch_approver_user_id: int = Field(gt=0)
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class BookStateOverrideRequest(BaseModel):
     """Admin state override (``books.override_state``). ``state`` spans the six
     approval states plus ``voided`` — the discarded-draft marker, which reads as
@@ -596,6 +604,9 @@ class BookRead(ORMBase):
     selected_version_id: int | None = None
     can_sign: bool = False
     can_review: bool = False
+    # The caller is the assignee of the pending line-manager step of a
+    # fleet-reporter paper and may forward it to a branch manager.
+    can_forward_to_branch: bool = False
     # Government classification code, e.g. "5/1"; None for plain books.
     classification_code: str | None = None
     # Non-None when a manager discarded the draft (ref stays in register).
