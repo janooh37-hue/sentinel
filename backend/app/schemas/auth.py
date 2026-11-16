@@ -60,6 +60,8 @@ class SessionUser(BaseModel):
     status: str
     is_admin: bool = False
     is_manager: bool = False
+    # The scoped role (core.scoped_roles): "inmate_reporter", "fleet_reporter" or null.
+    scoped_role: str | None = None
     has_signature: bool = False
     idle_lock_seconds: int = 1800
     lock_layout: str = "band"
@@ -99,7 +101,7 @@ class AdminUserCreateRequest(BaseModel):
     email: str = Field(min_length=3, max_length=256)
     employee_id: str | None = Field(max_length=16)
     display_name: str | None = Field(default=None, max_length=256)
-    role: Literal["operator", "manager", "admin", "inmate_reporter"] = "operator"
+    role: Literal["operator", "manager", "admin", "inmate_reporter", "fleet_reporter"] = "operator"
 
 
 class AdminUserCreateResult(BaseModel):

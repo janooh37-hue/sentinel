@@ -27,7 +27,14 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError, ValidationFailedError
 from app.config import get_settings
 from app.core import security
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
+from app.core.roles import (
+    ADMIN_ROLE,
+    FLEET_REPORTER_ROLE,
+    INMATE_REPORTER_ROLE,
+    MANAGER_ROLE,
+    OPERATOR_ROLE,
+)
+from app.core.scoped_roles import scoped_role
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
@@ -43,7 +50,7 @@ LOCKOUT_MINUTES = 15
 SESSION_TTL = timedelta(days=7)
 # Refresh ``last_seen_at`` at most this often to avoid a commit on every request.
 SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
-_VALID_ROLES = (OPERATOR_ROLE, MANAGER_ROLE, ADMIN_ROLE, INMATE_REPORTER_ROLE)
+_VALID_ROLES = (OPERATOR_ROLE, MANAGER_ROLE, ADMIN_ROLE, INMATE_REPORTER_ROLE, FLEET_REPORTER_ROLE)
 
 
 def _utcnow() -> datetime:
@@ -735,6 +742,7 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         status=user.status,
         is_admin=user.role == ADMIN_ROLE,
         is_manager=user.role in (ADMIN_ROLE, MANAGER_ROLE),
+        scoped_role=user.role if scoped_role(user.role) is not None else None,
         has_signature=user_signature_service.resolve_signature(user) is not None,
         idle_lock_seconds=user.idle_lock_seconds,
         lock_layout=user.lock_layout,

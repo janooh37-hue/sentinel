@@ -16,7 +16,13 @@ from typing import Final
 
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
+from app.core.roles import (
+    ADMIN_ROLE,
+    FLEET_REPORTER_ROLE,
+    INMATE_REPORTER_ROLE,
+    MANAGER_ROLE,
+    OPERATOR_ROLE,
+)
 
 SERVICE_CAP_PREFIX: Final[str] = "books.service."
 SERVICE_RECORDS_CAP_PREFIX: Final[str] = "books.servicerecords."
@@ -733,11 +739,38 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         f"{SERVICE_RECORDS_CAP_PREFIX}Report",
     }
 )
+# Fleet reporter: runs the fleet hub (no deletions) and authors General Books
+# under 7/1 or 11/1, Reports, and the vehicle letters. Like the inmate role it
+# holds no generic books.create/books.edit; its own-paper authoring is a scoped
+# runtime rule (book_service.require_fleet_write_access).
+_FLEET_REPORTER_SERVICES: Final[tuple[str, ...]] = (
+    "General Book",
+    "Report",
+    "Vehicle Fines",
+    "Vehicle Accident Report",
+    # Generating the mileage log is a vehicles.edit action (odometer form).
+    "Vehicle Mileage Log",
+)
+FLEET_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
+    {
+        "app.access",
+        "documents.generate",
+        "books.view",
+        "books.submit",
+        "vehicles.view",
+        "vehicles.edit",
+        f"{CATEGORY_CAP_PREFIX}7/1",
+        f"{CATEGORY_CAP_PREFIX}11/1",
+        *(f"{SERVICE_CAP_PREFIX}{service}" for service in _FLEET_REPORTER_SERVICES),
+        *(f"{SERVICE_RECORDS_CAP_PREFIX}{service}" for service in _FLEET_REPORTER_SERVICES),
+    }
+)
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {
     OPERATOR_ROLE: _OPERATOR_CAPS,
     MANAGER_ROLE: _MANAGER_CAPS,
     ADMIN_ROLE: ALL_CAPABILITIES,
     INMATE_REPORTER_ROLE: INMATE_REPORTER_CAPS,
+    FLEET_REPORTER_ROLE: FLEET_REPORTER_CAPS,
 }
 
 
@@ -754,6 +787,7 @@ __all__ = [
     "CAPABILITY_IDS",
     "CATEGORY_CAP_PREFIX",
     "CLASSIFICATION_CATEGORY_CAPABILITY_IDS",
+    "FLEET_REPORTER_CAPS",
     "INMATE_REPORTER_CAPS",
     "OPT_IN_SERVICE_IDS",
     "ROLE_DEFAULTS",

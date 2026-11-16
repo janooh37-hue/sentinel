@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.scoped_roles import SCOPED_ROLES
 from app.db.models import Book, BookFolder, BookFolderItem, BookFolderShare, Employee, User
 from app.schemas.book import (
     BookFolderRead,
@@ -214,7 +214,7 @@ def share_options(db: Session, user: User) -> BookFolderShareOptions:
         for account, employee in db.execute(
             select(User, Employee)
             .outerjoin(Employee, User.employee_id == Employee.id)
-            .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
+            .where(User.status == "active", User.role.not_in(SCOPED_ROLES))
         )
     ]
     users.sort(key=lambda option: (option.name.casefold(), option.id))
@@ -249,7 +249,7 @@ def update_shares(
                 select(User.id).where(
                     User.id.in_(user_ids),
                     User.status == "active",
-                    User.role != INMATE_REPORTER_ROLE,
+                    User.role.not_in(SCOPED_ROLES),
                 )
             )
         )

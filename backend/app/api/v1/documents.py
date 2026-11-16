@@ -39,7 +39,8 @@ from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
+from app.core.roles import ADMIN_ROLE
+from app.core.scoped_roles import is_scoped_role
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -271,12 +272,10 @@ def _run_generation(
         # now-closed request session; re-fetch so a role/link change made
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
-        # inmate_reporter's private saves never notify regardless of the request
-        # flag (server-enforced, not just a UI default), and log no skipped row.
+        # A scoped role's saves never notify regardless of the request flag
+        # (server-enforced, not just a UI default), and log no skipped row.
         notify_employee: nf.NotifyChoice = (
-            "silent"
-            if actor is not None and actor.role == INMATE_REPORTER_ROLE
-            else request.notify_employee
+            "silent" if actor is not None and is_scoped_role(actor) else request.notify_employee
         )
         result = document_service.generate_document(
             db,
@@ -508,7 +507,7 @@ def get_job_status(
     user: Annotated[User, Depends(require_capability("documents.generate"))],
 ) -> JobStatusResponse:
     job = get_job(job_id)
-    if job is None or (user.role == INMATE_REPORTER_ROLE and job.owner_user_id != user.id):
+    if job is None or (is_scoped_role(user) and job.owner_user_id != user.id):
         raise NotFoundError("JOB_NOT_FOUND", f"Job {job_id!r} not found", job_id=job_id)
     pydantic_docs: list[JobDocumentItem] | None = None
     if job.documents:
@@ -518,7 +517,7 @@ def get_job_status(
                 template_id=d.template_id,
                 role=d.role,
                 ref_number=d.ref_number,
-                docx_url=("" if user.role == INMATE_REPORTER_ROLE else d.docx_url),
+                docx_url=("" if is_scoped_role(user) else d.docx_url),
                 pdf_url=d.pdf_url,
             )
             for d in job.documents
@@ -615,7 +614,7 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
-    if user.role == INMATE_REPORTER_ROLE and (format != "pdf" or original):
+    if is_scoped_role(user) and (format != "pdf" or original):
         raise AppError(
             "FORBIDDEN",
             "This role can only download the current PDF.",
@@ -628,7 +627,7 @@ def download_document(
     artifact = document_service.resolve_document_artifact(
         db, document_id, format=format, original=original, version=version
     )
-    if user.role == INMATE_REPORTER_ROLE and artifact.ext != ".pdf":
+    if is_scoped_role(user) and artifact.ext != ".pdf":
         # The signed-lock resolver falls back to the retained DOCX when PDF
         # conversion failed at sign time (existing behavior other roles rely
         # on) — this role must never receive Word bytes, so treat that
