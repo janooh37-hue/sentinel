@@ -445,6 +445,10 @@ def stage_attachment_from_record(
 async def inspect_approved_violation(
     upload: Annotated[UploadFile, File(alias="file")],
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    # Same service gate the commit route checks; keeps other scoped roles out.
+    _service: Annotated[
+        User, Depends(require_capability("books.service.Inmate Conduct Violations"))
+    ],
 ) -> ApprovedViolationInspectionRead:
     data = await upload.read(book_service.MAX_ATTACHMENT_BYTES + 1)
     inspected = await anyio.to_thread.run_sync(

@@ -43,10 +43,10 @@ def _letter_result(
     )
 
 
-def _existing_accident_letter(
-    db: Session,
-    book_id: int,
-) -> LetterResult:
+def _existing_accident_letter(db: Session, book_id: int, user: User) -> LetterResult:
+    """The accident's linked letter, returned only to a caller who may read it."""
+    from app.services import book_service
+
     book = db.get(Book, book_id)
     if book is None or book.category_id != "VA":
         raise AppError(
@@ -54,6 +54,14 @@ def _existing_accident_letter(
             "The accident's linked vehicle accident book does not exist.",
             details={"book_id": book_id},
         )
+    try:
+        book_service.resolve_book_read_access(db, user, book)
+    except AppError as exc:
+        raise AppError(
+            "ACCIDENT_LETTER_NOT_VISIBLE",
+            "This accident already has a letter you cannot open.",
+            http_status=409,
+        ) from exc
 
     primary = db.scalar(
         select(Document)
@@ -170,7 +178,7 @@ def generate_accident_letter(
     document_service.authorize_interactive_generation(db, user, "Vehicle Accident Report")
 
     if accident.letter_book_id is not None:
-        return _existing_accident_letter(db, accident.letter_book_id)
+        return _existing_accident_letter(db, accident.letter_book_id, user)
 
     employee = accident.employee
     employee_label = None
