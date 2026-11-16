@@ -153,6 +153,12 @@ class BookForwardToBranchRequest(BaseModel):
     note: str | None = Field(default=None, max_length=1000)
 
 
+class VehicleLetterRebuildRequest(BaseModel):
+    """Rebuild the current revision of a returned fleet vehicle letter."""
+
+    version_id: int = Field(gt=0)
+
+
 class BookStateOverrideRequest(BaseModel):
     """Admin state override (``books.override_state``). ``state`` spans the six
     approval states plus ``voided`` — the discarded-draft marker, which reads as
@@ -607,6 +613,9 @@ class BookRead(ORMBase):
     # The caller is the assignee of the pending line-manager step of a
     # fleet-reporter paper and may forward it to a branch manager.
     can_forward_to_branch: bool = False
+    # The caller is the fleet author of this unsubmitted or returned vehicle letter
+    # and may rebuild it from current fleet data (POST .../rebuild-vehicle-letter).
+    can_rebuild_vehicle_letter: bool = False
     # Government classification code, e.g. "5/1"; None for plain books.
     classification_code: str | None = None
     # Non-None when a manager discarded the draft (ref stays in register).

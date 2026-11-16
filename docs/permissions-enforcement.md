@@ -428,6 +428,7 @@ may call, each self-service or gated inside its handler:
 | `POST /books/word-sessions`, `GET /books/{book_id}/word-sessions`, `.../status`, `.../preview`, `POST .../finish`, `DELETE /books/{book_id}/word-sessions`, `POST /books/{book_id}/word-sessions` | Word authoring of the reporter's own General Books and Reports (`book_service.require_scoped_word_access`). |
 | `GET /books/by-ref/{ref}`, `GET /books/{book_id}`, `GET .../versions/{version_id}/fields`, `.../annotations`, `.../signed-document`, `GET /books/{book_id}/imported-document` | Record reads; `resolve_book_read_access` and the role's visibility matrix decide in the handler. |
 | `GET /notifications/decisions`, `POST /notifications/decisions/seen`, `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/subscribe` | The author is told when a paper is returned, rejected or finished. |
+| `POST /books/{book_id}/seen` | Opening one decision marks it seen; writes only the caller's own markers, after `resolve_book_read_access`. |
 
 **Shared restrictions** (`scoped_roles.is_scoped_role`): no Direct send or forward via
 `/send`; never a send recipient, in the user directory or in folder sharing; no folders at
@@ -476,6 +477,14 @@ manager either signs to finish, or forwards with `POST /books/{book_id}/forward-
 stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
+
+**Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
+(`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
+returned vehicle letter from current fleet data through the ordinary revise path: same
+reference and paper date, a new revision, earlier steps kept as history, state `none`.
+`book_service.vehicle_letter_rebuild_refusal` is the one rule behind the route and
+`BookRead.can_rebuild_vehicle_letter`. Fines letters keep their source selection in the
+version's `_letter_source` field (older letters fall back to the `letter.generated` audit).
 
 **Tests:** `backend/tests/test_fleet_reporter_scope.py` (route policy, allowlist parity,
 shared routes exist, ceiling, line-manager admin route, migration),

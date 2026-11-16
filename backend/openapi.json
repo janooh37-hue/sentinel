@@ -14883,6 +14883,75 @@
         }
       }
     },
+    "/api/v1/books/{book_id}/rebuild-vehicle-letter": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Rebuild Vehicle Letter",
+        "description": "The fleet author regenerates a returned (or unsubmitted) vehicle letter from\ncurrent fleet data as a new revision, ready to submit again.",
+        "operationId": "rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleLetterRebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/{book_id}/branch-candidates": {
       "get": {
         "tags": [
@@ -42324,6 +42393,11 @@
             "title": "Can Forward To Branch",
             "default": false
           },
+          "can_rebuild_vehicle_letter": {
+            "type": "boolean",
+            "title": "Can Rebuild Vehicle Letter",
+            "default": false
+          },
           "classification_code": {
             "anyOf": [
               {
@@ -69535,6 +69609,21 @@
           "title"
         ],
         "title": "VehicleImportSection"
+      },
+      "VehicleLetterRebuildRequest": {
+        "properties": {
+          "version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id"
+        ],
+        "title": "VehicleLetterRebuildRequest",
+        "description": "Rebuild the current revision of a returned fleet vehicle letter."
       },
       "VehicleLicenceScan": {
         "properties": {

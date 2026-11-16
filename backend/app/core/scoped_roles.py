@@ -114,6 +114,8 @@ SCOPED_SHARED_ROUTES: Final[frozenset[RouteKey]] = frozenset(
         # The author is told of return, reject and finish.
         ("GET", "/api/v1/notifications/decisions"),
         ("POST", "/api/v1/notifications/decisions/seen"),
+        # Opening one decision marks it seen: own markers only, read-checked.
+        ("POST", "/api/v1/books/{book_id}/seen"),
         ("GET", "/api/v1/push/vapid-public-key"),
         ("POST", "/api/v1/push/subscribe"),
         ("DELETE", "/api/v1/push/subscribe"),
