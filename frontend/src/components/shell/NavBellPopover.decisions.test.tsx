@@ -165,13 +165,13 @@ it('hides the entire panel and makes no decision request for an inmate reporter'
   expect(api.getDecisionNotices).not.toHaveBeenCalled()
 })
 
-it.each([false, true])('shows only decisions for fleet and opens the record without its closed seen route (phone=%s)', async (phone) => {
+it.each([false, true])('shows only decisions for fleet and marks the opened one seen (phone=%s)', async (phone) => {
   auth.scoped_role = 'fleet_reporter'
   renderBell(phone)
   await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
   await userEvent.click(screen.getByRole('button', { name: /Approved · GS-0048/ }))
   expect(screen.getByTestId('location')).toHaveTextContent('/books/48?version_id=5')
-  expect(api.markBookSeen).not.toHaveBeenCalled()
+  await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledWith(48))
   expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
   expect(api.getApprovalSummary).not.toHaveBeenCalled()
   expect(api.getNotificationCounts).not.toHaveBeenCalled()

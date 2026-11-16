@@ -12,9 +12,8 @@
  *     invalidates both the unread-count and unread-recent queries. It also
  *     clears the caller's unseen approval decisions.
  *   - `GET /api/v1/notifications/decisions` lists approve/reject/return
- *     decisions on records the caller submitted; opening one marks it seen
- *     for unrestricted users. Fleet gets only these decision rows and marks
- *     them seen in bulk; inmate reporters have no bell.
+ *     decisions on records the caller submitted; opening one marks it seen.
+ *     Fleet gets only these decision rows; inmate reporters have no bell.
  *
  * There is no shadcn `Popover` primitive in this project; the panel is hand-
  * rolled with the same outside-click / Escape handling used by `AccountMenu`.
@@ -214,8 +213,6 @@ function NavBellContent({ phone, signals }: { phone: boolean; signals?: BellSign
     navigate(approvalRecordUrl(item.book_id, item.version_id, {
       tab: 'sent', status: 'all', sort: 'newest', page: 1,
     }))
-    // The fleet ceiling does not open POST /books/{id}/seen.
-    if (decisionsOnly) return
     api
       .markBookSeen(item.book_id)
       .then(() => {
