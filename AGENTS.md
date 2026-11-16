@@ -7,6 +7,8 @@ Local/LAN HR and document console: FastAPI/Python 3.12 backend, React/Vite/TypeS
 - On the production server (`GSSGIT`), the main checkout is live production. Do not switch branches there; use a Git worktree for feature work.
 - On every host, cut feature worktrees from a freshly fetched `origin/main` (`git fetch origin && git worktree add -b feat/x .worktrees/x origin/main`). Local `main` lags, and a stale base reuses migration and ADR numbers already taken on `origin/main`.
 - The laptop `GSSGLT` is the dev channel: a production-backup snapshot restored to a dev data directory. Its `.env` sets `GSSG_DISABLE_SCHEDULER=1` and has no SMS, WhatsApp, or BioTime settings. Never copy `.email_key` or `.vapid_key` to it. Share it only via tailnet-only `tailscale serve`, never Funnel. See issue #160 and `docs/adr/0004-dev-channel-on-laptop-with-production-snapshot.md`.
+- One branch owns a change from first commit to merge: cut it from `origin/main`, commit every edit on it, and open its PR to `main`. Branch `dev` is only a preview of `origin/main` plus the branches under test (`scripts/dev-channel.ps1 preview <branch>`). Never edit, commit, or cherry-pick on `dev`, and never copy commits between `dev` and a feature branch. Follow the `dev-cycle` skill.
+- Run agents in parallel and heavy test runs on the desktop (`dtop`), not on the laptop, which runs out of memory. Follow the `dtop-writers` skill.
 - Never deploy changes that are not committed and pushed to `origin/main`; a later `mng update` would overwrite them.
 - Do not commit secrets, `data/`, local PII, generated static assets, or accidental Word resaves of `backend/templates/*.docx`.
 - Do not expose Codex app-server transports directly to the LAN or internet. Use Codex Remote Control's authenticated relay, or SSH/VPN for remote hosts.
@@ -59,7 +61,11 @@ scripts/mng.ps1 logs
 
 ## Project skills
 
-- `deploy`: commit, push, build, restart, and verify the live service.
+Each skill is written once in `.agents/skills/<name>/SKILL.md`: `$<name>` in Codex. `.claude/skills/<name>/SKILL.md` is a generated pointer to it so `/<name>` works in Claude Code; after adding, renaming, or re-describing a skill, run `python scripts/sync_claude_skills.py` (CI runs it with `--check`).
+
+- `dev-cycle`: the path of every fix or feature, from a branch off `origin/main` through the dev preview to its PR.
+- `dtop-writers`: start, brief, and collect writer agents and full test runs on the desktop.
+- `deploy`: ship merged `origin/main` to the production server and verify the live service.
 - `sync-api-types`: regenerate and validate the frontend API contract.
 - `new-migration`: create one reversible, SQLite-safe migration on the current head.
 - `permissions`: the one way to add capabilities, role presets, and capability-gated UI.

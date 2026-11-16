@@ -20,6 +20,8 @@ jobs:
       - run: pip install ruff==0.16.6
       - name: Single Alembic head, unique ADR numbers
         run: python scripts/check_numbering.py
+      - name: Claude Code skill pointers match .agents/skills
+        run: python scripts/sync_claude_skills.py --check
       - name: ruff check
         run: ruff check --output-format github .
       # ponytail: main still has ~190 unformatted files, so only files the PR

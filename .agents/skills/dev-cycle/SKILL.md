@@ -1,65 +1,79 @@
 ---
 name: "dev-cycle"
-description: "Fix bugs and add features on the laptop dev channel (branch dev, rebased on main); user tests on the dev URL before promotion. Use for any fix, feature, or template change."
+description: "Fix bugs and add features: one feature branch per change, cut from origin/main in its own worktree, previewed on the laptop dev URL, sent to main through its own PR. Use for any fix, feature, or template change."
 ---
 
 # /dev-cycle
 
+## The rule
+
+One branch owns a change from its first commit to its merge. The branch is cut from `origin/main`, every edit is committed on it, the user tests it on the dev URL, and its PR goes to `main`.
+
+`dev` is a preview, not a place to work: `origin/main` plus merges of the branches under test, rebuilt by a script. Never edit, commit, or cherry-pick in the dev worktree, and never copy commits between `dev` and a feature branch in either direction. Carrying the same change on two branches under different commit ids is what made PRs conflict at merge time.
+
+When the user says "put it on dev", "add this to the worktree too", or "make the worktree match dev", the action is always the same: commit on the feature branch, then `preview` it again.
+
 ## Locations
 
-- Worktree: `C:\Users\GSSG\projects\sentinel\.worktrees\160-laptop-dev` (absolute paths only; relative paths from another checkout hit main)
-- Branch: `dev`, upstream `origin/main`. `git status -sb` shows ahead (unpromoted work) / behind (main moved).
-- Control: `scripts\dev-channel.ps1` (`status`, `sync`, `publish`, `restart`, `promote`). Run with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-channel.ps1 <verb>` from the worktree.
-- Server: `backend\serve.py` on 127.0.0.1:8765, started detached by the script; log `.tmp\dev-server.log.err`.
-- URL: `https://gssglt.<your-tailnet>.ts.net/` (tailnet only; actual host lives in the gitignored dev `.env`)
-- Dev data: `C:\Users\GSSG\gssg-dev-data` (throwaway snapshot; never production)
-- Main checkout: untouched.
+- **Feature worktrees:** on the desktop, `~/Projects/sentinel/.worktrees/<name>` (`ssh dtop`). See the `dtop-writers` skill for starting agents there.
+- **Dev channel:** on the laptop, worktree `C:\Users\GSSG\projects\sentinel\.worktrees\160-laptop-dev`, branch `dev`. Use absolute paths; relative paths from another checkout hit main.
+- **Control:** `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-channel.ps1 <verb>` from the dev worktree.
+
+  | Verb | Effect |
+  | --- | --- |
+  | `status` | Main, previewed branches (and whether each has newer commits), stray work, server health. |
+  | `preview <branch>` | Fetch the branch from dtop (`desk`) and `origin`, merge its newest tip onto `origin/main` with the other previewed branches, publish. Run it again after every new commit. |
+  | `drop <branch>` | Take a branch off the preview, publish. |
+  | `sync` | Rebuild on the latest `origin/main` and the latest of every previewed branch; merged or deleted branches leave the preview. |
+  | `publish` / `restart` | Build frontend, migrate, restart / restart only. |
+
+- **Server:** `backend\serve.py` on 127.0.0.1:8765, started detached; log `.tmp\dev-server.log.err`.
+- **URL:** `https://gssglt.<your-tailnet>.ts.net/` (tailnet only; the real host is in the gitignored dev `.env`). The user is on the laptop or a phone: never give a `localhost` link.
+- **Dev data:** `C:\Users\GSSG\gssg-dev-data` (throwaway snapshot; never production).
+- **Production:** GSSGIT, through the `deploy` skill.
 
 ## Cycle
 
-1. **Start:** `dev-channel.ps1 status`. Behind main and tree clean → `sync` before touching code. Dirty → ask whose changes they are.
+1. **Start:** fetch, then cut the branch from `origin/main`, never from `dev` or local `main`:
+   `ssh dtop 'cd ~/Projects/sentinel && git fetch origin && git worktree add -b <branch> .worktrees/<name> origin/main'`
 2. **Understand:** trace the code; reproduce the bug.
 3. **Gate:** ask if a gate fires; otherwise proceed.
-4. **Build:** subagents, absolute paths, own hunks only, one commit per change on `dev`.
+4. **Build:** in the feature worktree, own hunks only, one commit per change.
 5. **Verify:**
-   - Backend: narrowest pytest.
-   - Documents: generate → PDF → PNG → inspect the reported defect.
+   - Backend: narrowest pytest in the feature worktree.
+   - Documents: generate → PDF → PNG → inspect the reported defect (laptop; needs Word).
    - Required `AGENTS.md` reviews.
-6. **Publish:** `dev-channel.ps1 publish` (frontend build, migrate, restart, health check). `restart` alone for backend-only changes.
-7. **Report:** changes, commits, checks, failures, what to test on the dev URL.
-8. **Promote (gate):** after the user approves, follow **Promotion** below. Production goes live only via `scripts\mng.ps1 update` on GSSGIT.
+6. **Preview:** `dev-channel.ps1 preview <branch>` on the laptop. It reads the branch straight from dtop, so no push is needed first. Tell the user what to test and give the dev URL.
+7. **Fix what testing finds:** in the same feature worktree. Commit, then `preview <branch>` again.
+8. **PR (gate):** after the user approves what they saw. From the feature worktree: `git fetch origin && git merge origin/main` if main moved, re-run the checks, run the routing audit below, `git push -u origin <branch>`, `gh pr create --base main`. The PR contains exactly the commits the user tested.
+9. **After the merge:** `dev-channel.ps1 sync` (the merged branch leaves the preview), then remove the worktree and branch on dtop. Deploy only when the user asks.
 
-## Promotion
+## When branches collide
 
-- Word reaches the server through `ms-word:ofe|u|{GSSG_PUBLIC_BASE_URL}/dav/...`. On the laptop, that base URL is the tailnet dev host, set only in the gitignored dev `.env`; production sets its own. Never commit the dev host, change the `public_base_url` default, or alter Word/WebDAV URL building to make dev work. The code path stays identical; only `.env` differs.
-- Start a new branch from `origin/main` and cherry-pick the commits. Never PR `dev` directly.
-- Before opening the PR, audit `git diff origin/main...<promo-branch>` and the PR text for dev routing leaks. Grep added lines for non-placeholder `ts.net`, `127.0.0.1` / `localhost` / `8765` used as a Word/DAV base, and changes to `GSSG_PUBLIC_BASE_URL`, `public_base_url`, `/dav`, or `word_url`.
+- **`preview` refuses with conflicts.** dev is left as it was. Either the branch is behind main (`git merge origin/main` in its worktree) or it overlaps another previewed branch: preview them one at a time with `drop`, or merge the first PR and bring main into the second.
+- **Two previewed branches each add a migration.** dev gets two Alembic heads and `publish` fails. Preview one at a time. The branch that merges second takes main in and renumbers with the `new-migration` skill.
+- **A dropped branch had a migration.** The dev database is now ahead of the code; restore a fresh snapshot (`docs/dev-channel.md`).
+- **`status` reports stray commits or edits on dev.** Someone worked there. Cherry-pick each commit into the worktree of the branch it belongs to, or recreate the edit there, and push. Then `git reset --hard origin/main` in the dev worktree and `sync`. The `.githooks/pre-commit` hook blocks plain commits on dev; cherry-picks and edits added while committing a merge get past it, which is why `sync` and `publish` also refuse.
+- **New work depends on an unmerged branch.** Cut it from that branch, say so in the PR, and merge `origin/main` in once the first PR lands.
+
+## Routing audit before the PR
+
+Word reaches the server through `ms-word:ofe|u|{GSSG_PUBLIC_BASE_URL}/dav/...`. On the laptop that base URL is the tailnet dev host, set only in the gitignored dev `.env`; production sets its own. Never commit the dev host, change the `public_base_url` default, or alter Word/WebDAV URL building to make dev work.
+
+Read `git diff origin/main...<branch>` and the PR text. Grep added lines for non-placeholder `ts.net`, `127.0.0.1` / `localhost` / `8765` used as a Word/DAV base, and changes to `GSSG_PUBLIC_BASE_URL`, `public_base_url`, `/dav`, or `word_url`.
 
 ## Gates (ask)
 
 - Request can't work or breaks something: measure, offer options, recommend one.
 - Changes the user's spec.
-- Promote/push, merge, deploy.
-- Destructive: delete worktree/branch, restore snapshot.
+- Push to `origin`, open or merge a PR, deploy.
+- Destructive: delete worktree/branch, restore snapshot, `git reset --hard` on dev when `status` shows stray work.
 - User-only: credentials, Tailscale, BitLocker, physical scans.
 
 ## Rules
 
-- Dev `.env`: scheduler off, no SMS/WhatsApp/BioTime, no `.email_key`/`.vapid_key`.
+- Dev `.env`: scheduler off, no SMS/WhatsApp/BioTime, no `.email_key`/`.vapid_key`. Never copy dev data or `.env` to the desktop.
 - Word COM: one conversion at a time; kill only your WINWORD.
 - `.docx`: edit XML; never resave in Word.
-- Other sessions' hunks: leave alone.
-
-## Work
-
-- Always auto-plan.
-- Writers run on the desktop (`dtop`, Linux, 32 GB) via `herdr --machine dtop`; the laptop keeps merge, publish, dev URL/data, Word/document checks, and the PR. Never copy dev data or `.env` to the desktop; leave its other worktrees and agents alone.
-- Setup per writer: from the dev worktree `git push desk dev`; then `ssh dtop git -C ~/Projects/sentinel worktree add .worktrees/<name> -b <branch> dev`; `herdr --machine dtop tab create --workspace <id> --cwd <worktree> --label <name> --no-focus`; `herdr --machine dtop agent start <name> --kind omp --pane <returned-pane> -- --model <model>`. Cheap model to explore, strong model to review. Tell each agent to use subagents.
-- Long jobs: pass `-- --goal "Read .tmp/brief-<name>.md in this worktree and complete it exactly, including the report step."` with the brief placed there first. Goal mode starts working at once, so `agent start` may report the name lost; fix it with `herdr --machine dtop agent rename <pane> <name>`, then `agent wait`.
-- Large task: parallel writers, one worktree and branch each, no shared files.
-- Brief: goal, owned files, edits allowed or not, check to run (`~/.venvs/sentinel/bin/python -m pytest <narrowest>`), commit on the branch, and "write your report to `<worktree>/.tmp/handoff-<name>.md` and reply with the path only".
-- Reports are claims: `ssh dtop cat` the handoff, `git fetch desk <branch>`, read the diff before merging into `dev`.
-- Small fixes go back to the same agent; bigger follow-ups go to a fresh agent briefed with the handoff file. After merging: `herdr --machine dtop tab close <tab>` and remove the desktop worktree and branch.
-- Tests: writers run the narrowest pytest; after merging, `git push desk dev` and run the full suite once on the desktop with `-n 6` in a detached worktree of `dev`. Requirements changed → `uv pip install -p ~/.venvs/sentinel/bin/python -r requirements.txt pytest-xdist` there first.
-- Before heavy runs check `ssh dtop free -g`; if a stray heavy process (ComfyUI, old `omp ps` services) leaves under ~8 GB available, ask the user to kill it, then stop it (`omp ps stop <name> --dir <project>` for omp-supervised ones).
-- When done, create a PR on GitHub.
+- Other sessions' hunks, worktrees and agents: leave alone.
+- Always auto-plan. Heavy or parallel work runs on dtop (`dtop-writers`); the laptop keeps the dev channel, Word/document checks and light orchestration.
