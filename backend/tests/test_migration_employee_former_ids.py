@@ -10,7 +10,7 @@ from sqlalchemy import create_engine, inspect, text
 from app.db.session import attach_sqlite_pragmas
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0119_employee_former_ids"
+HEAD = "0120_user_line_manager"
 PARENT = "0118_drop_record_category_overreach"
 
 

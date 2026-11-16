@@ -432,6 +432,49 @@ def set_default_manager(
     return user
 
 
+def set_line_manager(
+    db: Session, user_id: int, line_manager_user_id: int | None, *, actor: str | None = None
+) -> User:
+    """Set or clear the approving account a line-manager-routed scoped role
+    (fleet_reporter) submits to. The reporter never chooses it.
+
+    422 ``LINE_MANAGER_NOT_APPLICABLE`` for any other role; 422
+    ``LINE_MANAGER_NOT_ELIGIBLE`` unless the manager is another active
+    account holding ``books.approve``.
+    """
+    user = _require_user(db, user_id)
+    scoped = scoped_role(user.role)
+    if scoped is None or not scoped.routes_to_line_manager:
+        raise ValidationFailedError(
+            "LINE_MANAGER_NOT_APPLICABLE", "Only a fleet reporter account has a line manager."
+        )
+    manager = db.get(User, line_manager_user_id) if line_manager_user_id is not None else None
+    if line_manager_user_id is not None and (
+        manager is None
+        or manager.id == user.id
+        or manager.status != "active"
+        or not perm_service.has_capability(db, manager, "books.approve")
+    ):
+        raise ValidationFailedError(
+            "LINE_MANAGER_NOT_ELIGIBLE",
+            "The line manager must be another active account allowed to approve.",
+        )
+    user.line_manager_user_id = line_manager_user_id
+    _audit(
+        db,
+        actor,
+        "set_line_manager",
+        user,
+        {
+            "line_manager_user_id": str(manager.id) if manager is not None else "none",
+            "line_manager_email": manager.email if manager is not None else None,
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def reset_password(
     db: Session, user_id: int, new_password: str, *, actor: str | None = None
 ) -> User:
@@ -782,6 +825,7 @@ def admin_read(db: Session, user: User) -> AdminUserRead:
         created_at=user.created_at,
         is_default_manager=user.is_default_manager,
         password_change_required=user.password_change_required,
+        line_manager_user_id=user.line_manager_user_id,
     )
 
 
@@ -914,6 +958,7 @@ __all__ = [
     "resolve_session_hash",
     "revoke_session",
     "revoke_user_sessions",
+    "set_line_manager",
     "set_role",
     "set_status",
     "set_user_employee_link",

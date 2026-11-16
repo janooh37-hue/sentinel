@@ -93,6 +93,8 @@ class AdminUserRead(ORMBase):
     created_at: datetime | None = None
     is_default_manager: bool = False
     password_change_required: bool = False
+    # Fleet reporters only: the admin-set approving account (not the org supervisor).
+    line_manager_user_id: int | None = None
 
 
 class AdminUserCreateRequest(BaseModel):
@@ -126,6 +128,12 @@ class ApproveRequest(BaseModel):
 
 class SetRoleRequest(BaseModel):
     role: str
+
+
+class SetLineManagerRequest(BaseModel):
+    """Administrator-set line manager of a fleet reporter; null clears it."""
+
+    line_manager_user_id: int | None = Field(default=None, gt=0)
 
 
 class SetUserEmployeeLinkRequest(BaseModel):
