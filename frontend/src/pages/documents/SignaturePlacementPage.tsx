@@ -830,9 +830,6 @@ function PlacementControls({
   const aspect = signatureAspect(selected)
   const leftMm = page ? ptToMm(draft.x * page.width_pt) : 0
   const topMm = page ? ptToMm(draft.y * page.height_pt) : 0
-  // The width field keeps the raw text while it is being typed: clamping each
-  // keystroke to the 10 mm floor would turn "1" (on the way to "15") into 10.
-  const [widthText, setWidthText] = useState<string | null>(null)
 
   function setLeftMm(mm: number): void {
     if (!page || page.width_pt <= 0) return
@@ -876,52 +873,25 @@ function PlacementControls({
             </SelectContent>
           </Select>
         </label>
-        <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
-          {t('signaturePlacement.left')}
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            dir="ltr"
-            value={leftMm.toFixed(1)}
-            disabled={!previewReady || saving}
-            onChange={(e) => setLeftMm(Number(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
-          {t('signaturePlacement.top')}
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            dir="ltr"
-            value={topMm.toFixed(1)}
-            disabled={!previewReady || saving}
-            onChange={(e) => setTopMm(Number(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
-          {t('signaturePlacement.width')}
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            min={MIN_SIGNATURE_WIDTH_MM}
-            dir="ltr"
-            value={widthText ?? ptToMm(draft.widthPt).toFixed(1)}
-            disabled={!previewReady || saving}
-            onChange={(e) => {
-              const raw = e.target.value
-              setWidthText(raw)
-              const mm = Number(raw)
-              if (raw !== '' && mm >= MIN_SIGNATURE_WIDTH_MM) setWidthMm(mm)
-            }}
-            onBlur={() => {
-              if (widthText !== null && widthText !== '') setWidthMm(Number(widthText))
-              setWidthText(null)
-            }}
-          />
-        </label>
+        <MmField
+          label={t('signaturePlacement.left')}
+          valueMm={leftMm}
+          disabled={!previewReady || saving}
+          onApplyMm={setLeftMm}
+        />
+        <MmField
+          label={t('signaturePlacement.top')}
+          valueMm={topMm}
+          disabled={!previewReady || saving}
+          onApplyMm={setTopMm}
+        />
+        <MmField
+          label={t('signaturePlacement.width')}
+          valueMm={ptToMm(draft.widthPt)}
+          minMm={MIN_SIGNATURE_WIDTH_MM}
+          disabled={!previewReady || saving}
+          onApplyMm={setWidthMm}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -953,6 +923,56 @@ function PlacementControls({
         </p>
       )}
     </div>
+  )
+}
+
+/** A millimetre field that keeps the raw text while it is being typed. A
+ * controlled number field reformatted on every keystroke turns "3" into
+ * "3.0", so "38" becomes "3.08". A finite value applies live (at or above
+ * `minMm`, when given); blur applies the final text, which the setter clamps,
+ * and the field then shows the draft again. When it is not being edited it
+ * always shows `valueMm`, so Reset, Save and drags show up immediately. */
+function MmField({
+  label,
+  valueMm,
+  minMm,
+  disabled,
+  onApplyMm,
+}: {
+  label: string
+  valueMm: number
+  minMm?: number
+  disabled: boolean
+  onApplyMm: (mm: number) => void
+}): React.JSX.Element {
+  const [text, setText] = useState<string | null>(null)
+  const parse = (raw: string): number | null => {
+    const mm = Number(raw)
+    return raw.trim() !== '' && Number.isFinite(mm) ? mm : null
+  }
+  return (
+    <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
+      {label}
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="0.5"
+        min={minMm}
+        dir="ltr"
+        value={text ?? valueMm.toFixed(1)}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value)
+          const mm = parse(e.target.value)
+          if (mm !== null && (minMm === undefined || mm >= minMm)) onApplyMm(mm)
+        }}
+        onBlur={() => {
+          const mm = text === null ? null : parse(text)
+          if (mm !== null) onApplyMm(mm)
+          setText(null)
+        }}
+      />
+    </label>
   )
 }
 

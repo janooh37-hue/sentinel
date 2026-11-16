@@ -570,6 +570,49 @@ for (const viewport of VIEWPORTS) {
 
 for (const viewport of VIEWPORTS) {
   for (const locale of ['en', 'ar'] as const) {
+    test(`${viewport.name}/${locale}: Left and Top take typed multi-digit values`, async ({ page, backend }) => {
+      const copy = COPY[locale]
+      await prepareApp(page, locale, viewport.size)
+      const overlay = draggableOverlay(page, locale)
+      await expect(overlay.locator('img')).toBeVisible()
+      await expect(overlay).toHaveAttribute('tabindex', '0')
+
+      // Type key by key, as a person does — `fill` would set the whole value
+      // at once and hide a field that reformats on every keystroke.
+      const typeMm = async (label: string, value: string): Promise<void> => {
+        const input = page.getByLabel(label)
+        await input.fill('')
+        await input.pressSequentially(value)
+        await expect(input).toHaveValue(value) // not reformatted mid-typing
+        await input.blur()
+        await expect(input).toHaveValue(Number(value).toFixed(1))
+      }
+      await typeMm(copy.left, '38')
+      await typeMm(copy.top, '120.5')
+
+      // The overlay sits at the typed position on the rendered page (612 x 792 pt).
+      const pageBox = await page.locator('[data-pdf-page]').first().boundingBox()
+      const sig = await overlay.boundingBox()
+      if (!pageBox || !sig) throw new Error('missing bounding box')
+      const toMm = (px: number, pagePx: number, pagePt: number): number =>
+        ((px / pagePx) * pagePt * 25.4) / 72
+      expect(Math.abs(toMm(sig.x - pageBox.x, pageBox.width, 612) - 38)).toBeLessThan(1)
+      expect(Math.abs(toMm(sig.y - pageBox.y, pageBox.height, 792) - 120.5)).toBeLessThan(1)
+
+      // Save sends exactly the typed position.
+      await page.getByRole('button', { name: copy.save }).click()
+      await expect(page.getByText(copy.saved, { exact: true })).toBeVisible()
+      expect(backend.positionPuts).toHaveLength(1)
+      const [put] = backend.positionPuts
+      expect(put?.x).toBeCloseTo(((38 * 72) / 25.4) / 612, 5)
+      expect(put?.y).toBeCloseTo(((120.5 * 72) / 25.4) / 792, 5)
+      expect(put).not.toHaveProperty('width_pt')
+    })
+  }
+}
+
+for (const viewport of VIEWPORTS) {
+  for (const locale of ['en', 'ar'] as const) {
     test(`${viewport.name}/${locale}: the page shows at reading size and the real signature resizes with a locked aspect`, async ({
       page,
       backend,
