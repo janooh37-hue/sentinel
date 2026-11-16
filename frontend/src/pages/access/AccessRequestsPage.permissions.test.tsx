@@ -84,6 +84,10 @@ beforeEach(async () => {
     { id: 42, name: 'Reporter himself', name_ar: 'المُبلّغ نفسه', is_default: false },
     { id: 7, name: 'Approving Manager', name_ar: 'المدير المعتمد', is_default: false },
   ])
+  vi.spyOn(api, 'listManagers').mockResolvedValue([
+    { id: 1, user_id: 7, name_en: 'Approving Manager', name_ar: null, title: null, active: true, has_signature: false },
+    { id: 2, user_id: 42, name_en: 'Reporter himself', name_ar: null, title: null, active: true, has_signature: false },
+  ])
   vi.spyOn(api, 'setLineManager').mockResolvedValue(user({ role: 'fleet_reporter', line_manager_user_id: 7 }))
   vi.spyOn(api, 'listAuthUsers').mockResolvedValue([])
   await i18n.changeLanguage('en')
@@ -128,6 +132,32 @@ describe('Fleet reporter line manager', () => {
     await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['auth-users'] }))
   })
 
+  it('excludes approvers without an active linked Manager row and signers without approval capability', async () => {
+    vi.mocked(api.listApprovers).mockResolvedValue([
+      { id: 7, name: 'Approving Manager', is_default: false },
+      { id: 8, name: 'No Manager row', is_default: false },
+      { id: 9, name: 'Inactive Manager row', is_default: false },
+    ])
+    vi.mocked(api.listManagers).mockResolvedValue([
+      { id: 1, user_id: 7, name_en: 'Approving Manager', name_ar: null, title: null, active: true, has_signature: false },
+      { id: 2, user_id: 9, name_en: 'Inactive Manager row', name_ar: null, title: null, active: false, has_signature: false },
+      { id: 3, user_id: 10, name_en: 'Signer without approval', name_ar: null, title: null, active: true, has_signature: false },
+    ])
+    renderRow(user({ role: 'fleet_reporter' }))
+    await userEvent.click(await screen.findByRole('combobox', { name: 'Line manager' }))
+    expect(screen.getByRole('option', { name: 'Approving Manager' })).toBeVisible()
+    expect(screen.queryByRole('option', { name: 'No Manager row' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Inactive Manager row' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Signer without approval' })).not.toBeInTheDocument()
+  })
+
+  it('does not offer unfiltered approvers when the Manager lookup fails', async () => {
+    vi.mocked(api.listManagers).mockRejectedValue(new ApiError(403, 'FORBIDDEN', 'Forbidden'))
+    renderRow(user({ role: 'fleet_reporter', line_manager_user_id: 7 }))
+    expect(await screen.findByRole('alert')).toBeVisible()
+    expect(screen.queryByRole('combobox', { name: 'Line manager' })).not.toBeInTheDocument()
+  })
+
   it('shows the assigned manager and allows clearing it', async () => {
     renderRow(user({ role: 'fleet_reporter', line_manager_user_id: 7 }))
     const picker = await screen.findByRole('combobox', { name: 'Line manager' })
@@ -144,6 +174,7 @@ describe('Fleet reporter line manager', () => {
       expect(screen.queryByRole('combobox', { name: 'Line manager' })).not.toBeInTheDocument()
       expect(screen.queryByText('Line manager')).not.toBeInTheDocument()
       expect(api.listApprovers).not.toHaveBeenCalled()
+      expect(api.listManagers).not.toHaveBeenCalled()
     },
   )
 
@@ -152,6 +183,7 @@ describe('Fleet reporter line manager', () => {
     renderRow(user({ role: 'fleet_reporter' }))
     expect(screen.queryByText('Line manager')).not.toBeInTheDocument()
     expect(api.listApprovers).not.toHaveBeenCalled()
+    expect(api.listManagers).not.toHaveBeenCalled()
   })
 
   it('shows the current assignment as text, never a disabled picker, if candidates are forbidden', async () => {

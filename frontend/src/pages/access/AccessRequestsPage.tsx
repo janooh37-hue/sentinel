@@ -568,6 +568,11 @@ function LineManagerPicker({
     queryFn: () => api.listApprovers(),
     enabled: canManage,
   })
+  const managersQuery = useQuery({
+    queryKey: ['managers'],
+    queryFn: () => api.listManagers(),
+    enabled: canManage,
+  })
   const mutation = useMutation({
     mutationFn: (managerId: number | null) => api.setLineManager(target.id, managerId),
     onSuccess: () => {
@@ -579,7 +584,12 @@ function LineManagerPicker({
 
   if (!canManage) return null
 
-  const candidates = (candidatesQuery.data ?? []).filter((candidate) => candidate.id !== target.id)
+  const activeManagerUserIds = new Set(
+    (managersQuery.data ?? []).filter((manager) => manager.active).map((manager) => manager.user_id),
+  )
+  const candidates = (candidatesQuery.data ?? []).filter(
+    (candidate) => candidate.id !== target.id && activeManagerUserIds.has(candidate.id),
+  )
   const current = candidates.find((candidate) => candidate.id === target.line_manager_user_id)
   const currentUser = users.find((candidate) => candidate.id === target.line_manager_user_id)
   const currentName = target.line_manager_user_id == null
@@ -594,7 +604,7 @@ function LineManagerPicker({
       <span id={labelId} className="font-medium text-muted-foreground">
         {t('access.lineManager.label')}
       </span>
-      {candidatesQuery.isSuccess ? (
+      {candidatesQuery.isSuccess && managersQuery.isSuccess ? (
         <Select
           value={target.line_manager_user_id == null ? 'none' : String(target.line_manager_user_id)}
           onValueChange={(value) => mutation.mutate(value === 'none' ? null : Number(value))}
@@ -615,9 +625,9 @@ function LineManagerPicker({
       ) : (
         <span className="text-foreground" dir="auto">{currentName}</span>
       )}
-      {candidatesQuery.isError && (
+      {(candidatesQuery.isError || managersQuery.isError) && (
         <span role="alert" className="text-destructive-text">
-          {apiErrorMessage(candidatesQuery.error)}
+          {apiErrorMessage(candidatesQuery.error ?? managersQuery.error)}
         </span>
       )}
     </div>
