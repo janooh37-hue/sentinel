@@ -357,7 +357,9 @@ function StandardApplicationPage(): React.JSX.Element {
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   if (schema && scoped) {
     schema.fields = schema.fields.filter((field) =>
-      !['manager_picker', 'recipient_picker', 'recipient_multi_picker'].includes(field.type),
+      field.type !== 'manager_picker' &&
+      field.id !== 'hand_sign_manager' &&
+      (selectedTemplate !== 'Report' || !['recipient_picker', 'recipient_multi_picker'].includes(field.type)),
     )
     schema.needs_manager = false
   }
@@ -581,6 +583,7 @@ function StandardApplicationPage(): React.JSX.Element {
     for (const field of schema?.fields ?? []) {
       if (field.type === 'hand_sign_checkbox') {
         const entity = field.id.replace(/^hand_sign_/, '')
+        if (scoped && entity === 'manager') continue
         embedSignature[entity] =
           field.default === 'true' ? values[field.id] !== false : Boolean(values[field.id])
       }
@@ -669,9 +672,9 @@ function StandardApplicationPage(): React.JSX.Element {
           Array.isArray(tableRowsValue) && tableRowsValue.length > 0 ? tableRowsValue : undefined
         wordSessionMutation.mutate({
           classification_code: classificationCode,
-          recipient_id: scoped ? null : recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
+          recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
           subject,
-          cc: !scoped && Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
+          cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
           manager_id: scoped ? null : managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
           template_name: templateName ?? undefined,
           table_rows,
@@ -692,7 +695,7 @@ function StandardApplicationPage(): React.JSX.Element {
         const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         wordSessionMutation.mutate({
           subject: String(values.subject ?? '').trim(),
-          recipient_id: (values.recipient_id as number | null | undefined) ?? null,
+          recipient_id: scoped ? null : (values.recipient_id as number | null | undefined) ?? null,
           signer_employee_id: String(values.signer_id ?? ''),
           sign: values.sign !== false,
           date: (values.report_date as string | undefined) ?? null,
