@@ -1,7 +1,7 @@
 /**
  * Shared book approval mutations (decide = reject/return/note, sign = approve)
  * for the book-decision surface (`BookRecordPage`): the mutations (incl. the
- * NO_SIGNATURE hint on sign) and the shared 3-key invalidation.
+ * NO_SIGNATURE hint on sign) and the shared invalidation.
  *
  * The post-success behaviour differs on purpose and is left to the caller via
  * `onDecided` / `onSigned`: the record page stays on the record after a
@@ -37,6 +37,9 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
     void qc.invalidateQueries({ queryKey: ['books'] })
     void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
     void qc.invalidateQueries({ queryKey: ['dashboard'] })
+    // Signing creates the tracked signature; until this refetches, the
+    // record's "Adjust signature" eligibility stays at its pre-sign "no".
+    void qc.invalidateQueries({ queryKey: ['signature-editor'] })
   }
 
   /** A stale write (someone else advanced the record's revision since this
