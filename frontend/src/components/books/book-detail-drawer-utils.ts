@@ -86,16 +86,16 @@ export type ScopedReporterAction = 'edit-submit' | 'correct-resubmit' | 'read-on
 
 /** The restricted reporter's complete state/ownership action matrix. */
 export function scopedReporterActionFor(
-  book: { approval_state: string; original_creator_user_id?: number | null },
+  book: { approval_state: string; original_creator_user_id?: number | null; service_id?: string },
   userId: number | undefined,
 ): ScopedReporterAction {
   const ownsPaper = userId !== undefined && book.original_creator_user_id === userId
   if (ownsPaper && book.approval_state === 'none') return 'edit-submit'
-  if (ownsPaper && book.approval_state === 'returned') return 'correct-resubmit'
+  if (ownsPaper && book.approval_state === 'returned' && !isFleetLetter(book)) return 'correct-resubmit'
   return 'read-only'
 }
 
-/** Fleet-generated papers have no Services-form or Word correction surface. */
+/** Fleet-generated papers are corrected by rebuilding from their source data. */
 export function isFleetLetter(book: { service_id?: string }): boolean {
   return book.service_id === 'Vehicle Fines' ||
     book.service_id === 'Vehicle Accident Report' ||

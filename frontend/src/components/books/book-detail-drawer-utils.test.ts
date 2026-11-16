@@ -149,4 +149,9 @@ describe('scopedReporterActionFor — fleet reporter ownership', () => {
   it('never treats a missing identity as ownership', () => {
     expect(scopedReporterActionFor({ approval_state: 'none' }, undefined)).toBe('read-only')
   })
+
+  it.each(['Vehicle Fines', 'Vehicle Accident Report', 'Vehicle Mileage Log'])('requires rebuilding a returned %s before submission', (service_id) => {
+    expect(scopedReporterActionFor({ service_id, approval_state: 'returned', original_creator_user_id: 7 }, 7)).toBe('read-only')
+    expect(scopedReporterActionFor({ service_id, approval_state: 'none', original_creator_user_id: 7 }, 7)).toBe('edit-submit')
+  })
 })

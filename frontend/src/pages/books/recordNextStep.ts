@@ -51,6 +51,7 @@ export type ActionId =
   | 'removeSigned'
   | 'changeState'
   | 'revise'
+  | 'rebuildVehicleLetter'
 
 /** Suffix under `books.status.` — one per row of the state table. */
 export type StatusKey =
@@ -462,19 +463,25 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     case 'rejected': {
       const decider = decisionStep(steps, [state])
       const reviseKey = reviseReasonKey(reviseBlockReason(book, ctx))
+      const canRebuild =
+        state === 'returned' && scopedFleetLetter && book.can_rebuild_vehicle_letter === true &&
+        ctx.canMutateCurrent && ctx.has('vehicles.edit') && ctx.has('books.submit')
+      const canRevise = !scopedFleetLetter && book.can_write && ctx.canGenerate &&
+        (scoped ? ctx.reporterAction === 'correct-resubmit' : ctx.canEdit)
+      const canResubmit = state === 'returned' && scoped && !scopedFleetLetter && !isInmateReport && canSend &&
+        (book.service_id === 'General Book' || book.service_id === 'Report')
       return step(
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: scopedFleetLetter
-            ? canSend ? 'sendForApproval' : undefined
-            : book.can_write && ctx.canGenerate && (scoped ? ctx.reporterAction === 'correct-resubmit' : ctx.canEdit) ? 'revise' : undefined,
+          primary: canRebuild ? 'rebuildVehicleLetter' : canRevise ? 'revise' : canResubmit ? 'sendForApproval' : undefined,
+          secondary: pick([['sendForApproval', canRevise && canResubmit]]),
           overflow: pick([
             ['print', true],
             ['deleteRecord', deleteVisible],
           ]),
           disabled: {
-            ...(!scopedFleetLetter && book.can_write && ctx.canGenerate && reviseKey && (scoped ? ctx.reporterAction === 'correct-resubmit' : ctx.canEdit) ? { revise: reviseKey } : {}),
+            ...(canRevise && reviseKey ? { revise: reviseKey } : {}),
             ...deleteDisabled('deleteRecord'),
           },
         },

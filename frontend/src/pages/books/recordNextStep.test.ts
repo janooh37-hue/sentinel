@@ -567,7 +567,7 @@ describe('recordNextStep — read-only recipients', () => {
 })
 
 describe('fleet reporter record workflow', () => {
-  const fleetCaps = ['books.submit', 'documents.generate']
+  const fleetCaps = ['books.submit', 'documents.generate', 'vehicles.edit']
   const fleet = (reporterAction: NextStepContext['reporterAction']) =>
     ctxOf({ isScopedRole: true, reporterAction, canManageIncludedPapers: false }, fleetCaps)
 
@@ -603,8 +603,39 @@ describe('fleet reporter record workflow', () => {
     const draft = recordNextStep(bookOf('none', { service_id }), fleet('edit-submit'))
     expect(draft.primary).toBe('sendForApproval')
     expect(draft.secondary).toEqual([])
-    const returned = recordNextStep(bookOf('returned', { service_id }), fleet('correct-resubmit'))
-    expect(returned.primary).toBe('sendForApproval')
-    expect(returned.disabled?.revise).toBeUndefined()
+    const returned = recordNextStep(bookOf('returned', { service_id }), fleet('read-only'))
+    expect(returned.primary).toBeUndefined()
+    expect(returned.secondary).not.toContain('sendForApproval')
+  })
+
+  it.each([false, true])('offers Rebuild only when can_rebuild_vehicle_letter=%s and keeps the return note', (can_rebuild_vehicle_letter) => {
+    const next = recordNextStep(bookOf('returned', {
+      service_id: 'Vehicle Fines', can_rebuild_vehicle_letter,
+      steps: [stepOf({ state: 'returned', note: 'Wrong amount.' })],
+    }), fleet('read-only'))
+    expect(next.primary).toBe(can_rebuild_vehicle_letter ? 'rebuildVehicleLetter' : undefined)
+    expect(next.quote).toBe('Wrong amount.')
+    expect(next.secondary).toEqual([])
+  })
+
+  it('offers no as-is resubmission for a returned vehicle letter but keeps it for a returned General Book', () => {
+    const letter = recordNextStep(bookOf('returned', { service_id: 'Vehicle Fines' }), fleet('read-only'))
+    const general = recordNextStep(bookOf('returned', { service_id: 'General Book' }), fleet('correct-resubmit'))
+    expect([letter.primary, ...letter.secondary]).not.toContain('sendForApproval')
+    expect([general.primary, ...general.secondary]).toContain('sendForApproval')
+  })
+
+  it.each([false, true])('keeps direct Report resubmission fleet-only (inmate=%s)', (isInmateReport) => {
+    const next = recordNextStep(bookOf('returned', { service_id: 'Report' }), ctxOf({
+      isScopedRole: true, isInmateReport, reporterAction: 'correct-resubmit',
+    }, fleetCaps))
+    expect([next.primary, ...next.secondary].includes('sendForApproval')).toBe(!isInmateReport)
+  })
+
+  it.each(['vehicles.edit', 'books.submit'])('hides rebuilding without %s even when the flag is true', (denied) => {
+    const next = recordNextStep(bookOf('returned', {
+      service_id: 'Vehicle Fines', can_rebuild_vehicle_letter: true,
+    }), ctxOf({ isScopedRole: true }, fleetCaps.filter((cap) => cap !== denied)))
+    expect(next.primary).toBeUndefined()
   })
 })

@@ -82,6 +82,7 @@ export interface RecordView {
   recordHasPapers: boolean
   emailingRecord: boolean
   scanBusy: boolean
+  rebuildBusy: boolean
   wordReopenTrigger: WordReopenTrigger | null
   adjustSigTrigger: AdjustSignatureTrigger | null
   /** Props for the shared return/reject reason form (minus `act`). */
@@ -108,6 +109,7 @@ export interface RecordActions {
   openMobileDecision: (decision: 'return' | 'reject') => void
   /** Submit a scoped reporter's paper (`useScopedReporterSubmit`). */
   submitReport: (bookId: number) => void
+  rebuildVehicleLetter: () => void
   emailViaOutlook: () => Promise<void>
   setUnfileOpen: (open: boolean) => void
   fileSignedCopy: (file: File, ref: string) => Promise<void>

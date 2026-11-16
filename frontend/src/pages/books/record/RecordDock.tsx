@@ -22,6 +22,7 @@ import {
   Lock,
   MoreHorizontal,
   PenLine,
+  RefreshCw,
   Send,
   UserCog,
   Upload,
@@ -217,6 +218,16 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
             else actions.openOverlay('submit')
           },
         }
+      case 'rebuildVehicleLetter':
+        return book.can_rebuild_vehicle_letter === true ? {
+          id,
+          tone: 'primary',
+          icon: view.rebuildBusy ? <Spinner /> : <RefreshCw className={ICON} aria-hidden="true" />,
+          label: t(view.rebuildBusy ? 'books.fleetReporter.rebuilding' : 'books.fleetReporter.rebuild'),
+          disabled: view.rebuildBusy,
+          pending: view.rebuildBusy,
+          onClick: actions.rebuildVehicleLetter,
+        } : null
       case 'continueEditing':
         return {
           id,
@@ -367,6 +378,9 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
               <span>{t(key)}</span>
             </p>
           ))}
+          {nextStep.primary === 'rebuildVehicleLetter' && (
+            <p className="mb-2 text-[0.76em] leading-snug text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>
+          )}
           <div data-record-dock className="flex items-stretch gap-1.5">
             <button
               type="button"

@@ -91,6 +91,8 @@ interface Setup {
   isAr?: boolean
   wordTrigger?: boolean
   canManageSignedPaper?: boolean
+  scoped?: boolean
+  reporterAction?: NextStepContext['reporterAction']
 }
 
 function mount(book: BookRead, s: Setup = {}) {
@@ -101,8 +103,8 @@ function mount(book: BookRead, s: Setup = {}) {
     canEdit: has('books.edit'),
     canGenerate: has('documents.generate'),
     canMutateCurrent: true,
-    isScopedRole: false,
-    reporterAction: 'read-only',
+    isScopedRole: Boolean(s.scoped),
+    reporterAction: s.reporterAction ?? 'read-only',
     isAssignee: Boolean(s.decider),
     isReviewer: false,
     hasDocument: true,
@@ -116,7 +118,7 @@ function mount(book: BookRead, s: Setup = {}) {
     has,
     canEdit: ctx.canEdit,
     canMutateCurrent: true,
-    isScopedRole: false,
+    isScopedRole: ctx.isScopedRole,
     isInmateReport: false,
     canOverrideState: has('books.override_state'),
     canManageRevisionAccess: false,
@@ -139,6 +141,7 @@ function mount(book: BookRead, s: Setup = {}) {
     recordHasPapers: true,
     emailingRecord: false,
     scanBusy: false,
+    rebuildBusy: false,
     armed: false,
     wordReopenTrigger: s.wordTrigger
       ? { label: 'Edit in Word (creates a new version)', icon: null, disabled: true, onClick: vi.fn() }
@@ -152,6 +155,7 @@ function mount(book: BookRead, s: Setup = {}) {
     requestSignConfirm: vi.fn(),
     openMobileDecision: vi.fn(),
     submitReport: vi.fn(),
+    rebuildVehicleLetter: vi.fn(),
     emailViaOutlook: vi.fn(),
     requestDelete: vi.fn(),
     setUnfileOpen: vi.fn(),
@@ -286,6 +290,25 @@ describe('RecordDock', () => {
     } else {
       expect(forward).not.toBeInTheDocument()
     }
+  })
+
+  it.each([true, false])('offers Rebuild in the dock and More only for the rebuild flag %s', async (can_rebuild_vehicle_letter) => {
+    const { actions } = mount(bookOf('returned', {
+      service_id: 'Vehicle Fines', can_rebuild_vehicle_letter,
+      original_creator_user_id: 7, steps: [stepOf({ state: 'returned', note: 'Wrong amount.' })],
+    }), { scoped: true, caps: ['books.submit', 'vehicles.edit'] })
+    const dock = within(dockEl())
+    const rebuild = dock.queryByRole('button', { name: 'Rebuild letter' })
+    expect(rebuild !== null).toBe(can_rebuild_vehicle_letter)
+    expect(dock.queryByRole('button', { name: /Resubmit|Submit|Send for/ })).not.toBeInTheDocument()
+    if (rebuild) {
+      await userEvent.click(rebuild)
+      expect(actions.rebuildVehicleLetter).toHaveBeenCalledOnce()
+      expect(screen.getByText('Correct the fine or accident in the fleet hub first, then rebuild.')).toBeVisible()
+    }
+    await userEvent.click(dock.getByRole('button', { name: 'More' }))
+    const more = within(await screen.findByRole('dialog', { name: 'More' }))
+    expect(more.queryByRole('button', { name: /Rebuild letter/ }) !== null).toBe(can_rebuild_vehicle_letter)
   })
 
   describe('More sheet', () => {

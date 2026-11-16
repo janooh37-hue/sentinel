@@ -30,6 +30,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PenLine,
+  RefreshCw,
   Send,
   Upload,
   UserCog,
@@ -447,6 +448,20 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             }}
           />
         )
+      case 'rebuildVehicleLetter':
+        return book?.can_rebuild_vehicle_letter === true ? (
+          <div key={id} className="flex max-w-sm flex-col items-start gap-1">
+            <HeaderBtn
+              icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
+              label={t('books.fleetReporter.rebuild')}
+              tone="navy-solid"
+              pending={view.rebuildBusy}
+              pendingLabel={t('books.fleetReporter.rebuilding')}
+              onClick={actions.rebuildVehicleLetter}
+            />
+            {!compact && <p className="text-[0.72em] text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>}
+          </div>
+        ) : null
       case 'continueEditing':
         return (
           <HeaderBtn

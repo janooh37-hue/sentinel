@@ -247,6 +247,16 @@ export function RecordMoreSheet({
       onSelect: () => openOverlay('forward-to-branch'),
     })
   }
+  if (nextStep.primary === 'rebuildVehicleLetter' && book.can_rebuild_vehicle_letter === true) {
+    editingRows.push({
+      id: 'rebuildVehicleLetter',
+      icon: iconOf(RefreshCw),
+      label: t('books.fleetReporter.rebuild'),
+      hint: t('books.fleetReporter.rebuildHint'),
+      pending: view.rebuildBusy,
+      onSelect: actions.rebuildVehicleLetter,
+    })
+  }
   if (!isScopedRole) {
     if (wordReopenTrigger) {
       editingRows.push({

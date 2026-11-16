@@ -60,6 +60,7 @@ import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { useScopedReporterSubmit } from '@/components/books/useScopedReporterSubmit'
+import { useVehicleLetterRebuild } from '@/components/books/useVehicleLetterRebuild'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -732,6 +733,7 @@ function BookRecordPageBody(): React.JSX.Element {
     onSuccess: () => toast.success(t('books.approval.submitted')),
     onRevise: handleRevise,
   })
+  const { mutate: rebuildLetter, isPending: rebuildBusy } = useVehicleLetterRebuild()
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the
   // SAME one-item basket prefill the tray builds (subject/body templates,
@@ -1050,6 +1052,7 @@ function BookRecordPageBody(): React.JSX.Element {
     recordHasPapers,
     emailingRecord,
     scanBusy: addScan.busy,
+    rebuildBusy,
     wordReopenTrigger,
     adjustSigTrigger,
     decisionReasonFormProps,
@@ -1062,6 +1065,10 @@ function BookRecordPageBody(): React.JSX.Element {
   const createMarkMutate = createMark.mutate
   const deleteMarkAsync = deleteMark.mutateAsync
   const requestDelete = useCallback((): void => setDeleteOpen(true), [setDeleteOpen])
+  const rebuildVehicleLetter = useCallback((): void => {
+    if (!book || !current || nextStep?.primary !== 'rebuildVehicleLetter' || rebuildBusy) return
+    rebuildLetter({ bookId: book.id, versionId: current.id })
+  }, [book, current, nextStep?.primary, rebuildBusy, rebuildLetter])
   const actions: RecordActions = useMemo(
     () => ({
       back,
@@ -1073,6 +1080,7 @@ function BookRecordPageBody(): React.JSX.Element {
       requestSignConfirm,
       openMobileDecision,
       submitReport: reporterSubmit,
+      rebuildVehicleLetter,
       emailViaOutlook: handleEmailViaOutlook,
       setUnfileOpen,
       fileSignedCopy: (file, ref) => fileSignedCopy(file, ref).then(() => void refetch()),
@@ -1112,6 +1120,7 @@ function BookRecordPageBody(): React.JSX.Element {
       requestSignConfirm,
       openMobileDecision,
       reporterSubmit,
+      rebuildVehicleLetter,
       handleEmailViaOutlook,
       fileSignedCopy,
       refetch,

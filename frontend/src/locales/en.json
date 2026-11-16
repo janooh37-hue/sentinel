@@ -3146,7 +3146,11 @@
       "forwarded": "Forwarded to branch manager",
       "lineManager": "Line manager",
       "stale": "Record or employee data changed. Reload before continuing.",
-      "resubmit": "Resubmit"
+      "resubmit": "Resubmit",
+      "rebuild": "Rebuild letter",
+      "rebuildHint": "Correct the fine or accident in the fleet hub first, then rebuild.",
+      "rebuilding": "Rebuilding letter…",
+      "rebuilt": "Letter rebuilt. Submit it when it's ready."
     },
     "thread": {
       "reply": "Reply",

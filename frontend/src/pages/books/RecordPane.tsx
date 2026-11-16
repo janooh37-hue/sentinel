@@ -31,6 +31,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PenLine,
+  RefreshCw,
   Send,
   Trash2,
   Upload,
@@ -83,6 +84,7 @@ import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
+import { useVehicleLetterRebuild } from '@/components/books/useVehicleLetterRebuild'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -178,6 +180,7 @@ export function RecordPane({
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
   const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
+  const rebuildMutation = useVehicleLetterRebuild()
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const pagesRef = useRef<HTMLInputElement | null>(null)
@@ -290,7 +293,8 @@ export function RecordPane({
     )
   }
 
-  const state = book.approval_state
+  const actionBook = statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book
+  const state = actionBook.approval_state
   const label = serviceLabel(book.service_id)
   const artwork = serviceArtwork(book.service_id)
   const glyph = serviceGlyph(book.service_id)
@@ -381,15 +385,15 @@ export function RecordPane({
   // ── Next step: the one status sentence + the footer's workflow buttons ─────
   // Word-authored books and an inmate's own report never get "Continue editing":
   // `recordNextStep` leaves it out (BookWordActions carries the Word actions).
-  const versions = book.versions ?? []
+  const versions = actionBook.versions ?? []
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
   const currentVersion =
-    (book.selected_version_id != null
-      ? versions.find((v) => v.id === book.selected_version_id)
+    (actionBook.selected_version_id != null
+      ? versions.find((v) => v.id === actionBook.selected_version_id)
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
-  const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
-  const reporterAction = scopedReporterActionFor(book, user?.id)
+  const canMutateCurrent = actionBook.can_write && actionBook.access_scope !== 'assigned_revision' && isLiveCurrent
+  const reporterAction = scopedReporterActionFor(actionBook, user?.id)
   const isInmateReport =
     scopedRoleOf(user) === 'inmate_reporter' && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
   const canEditScopedWord = isScopedRole && has('documents.generate') && reporterAction !== 'read-only' &&
@@ -401,7 +405,7 @@ export function RecordPane({
     canMutateCurrent &&
     currentVersion?.document_id != null &&
     isIncludedPapersOwner(book, user?.id)
-  const ns: NextStep = recordNextStep(statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book, {
+  const ns: NextStep = recordNextStep(actionBook, {
     has,
     canEdit,
     canGenerate: has('documents.generate') && book.can_write,
@@ -433,6 +437,16 @@ export function RecordPane({
     switch (id) {
       case 'sendForApproval':
         return { ...base, label: t(isScopedRole && state === 'returned' ? 'books.fleetReporter.resubmit' : review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
+      case 'rebuildVehicleLetter':
+        return {
+          ...base,
+          label: t(rebuildMutation.isPending ? 'books.fleetReporter.rebuilding' : 'books.fleetReporter.rebuild'),
+          disabled: rebuildMutation.isPending,
+          icon: <RefreshCw className="h-3.5 w-3.5" aria-hidden />,
+          onClick: () => {
+            if (currentVersion && !rebuildMutation.isPending) rebuildMutation.mutate({ bookId: book.id, versionId: currentVersion.id })
+          },
+        }
       case 'continueEditing':
         return { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
       case 'revise':
@@ -702,6 +716,9 @@ export function RecordPane({
             {action.label}
           </PaneBtn>
         ))}
+        {ns.primary === 'rebuildVehicleLetter' && (
+          <p className="basis-full text-[0.75em] text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>
+        )}
         <Link
           {...recordLinkProps(book.id, nav())}
           onClick={(e) => {
