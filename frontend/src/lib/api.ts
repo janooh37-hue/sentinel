@@ -1149,6 +1149,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
   WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
   INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
+  SCOPED_ROLE_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
   LINE_MANAGER_REQUIRED: 'errors.fleet.lineManagerRequired',
   LINE_MANAGER_NOT_APPLICABLE: 'errors.fleet.lineManagerNotApplicable',
   LINE_MANAGER_NOT_ELIGIBLE: 'errors.fleet.lineManagerNotEligible',
