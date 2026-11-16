@@ -6896,7 +6896,9 @@
         "operator": "موظف",
         "operatorHint": "الوصول اليومي القياسي",
         "inmate_reporter": "مقدم تقارير مخالفات النزلاء",
-        "inmate_reporterHint": "إنشاء تقارير مخالفات النزلاء ومتابعتها"
+        "inmate_reporterHint": "إنشاء تقارير مخالفات النزلاء ومتابعتها",
+        "fleet_reporter": "مُبلّغ الأسطول",
+        "fleet_reporterHint": "إدارة سجلات الأسطول وتقديم معاملات المركبات للاعتماد"
       }
     },
     "active": {
@@ -7001,6 +7003,10 @@
       "operator": "موظف",
       "inmate_reporter": "مقدم تقارير مخالفات النزلاء",
       "fleet_reporter": "مُبلّغ الأسطول"
+    },
+    "lineManager": {
+      "label": "المدير المباشر",
+      "notSet": "غير محدد"
     },
     "permissions": {
       "loadError": "تعذّر تحميل الصلاحيات.",

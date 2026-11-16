@@ -6334,7 +6334,9 @@
         "operator": "Operator",
         "operatorHint": "Standard day-to-day access",
         "inmate_reporter": "Inmate violation reporter",
-        "inmate_reporterHint": "Create and track inmate violation reports"
+        "inmate_reporterHint": "Create and track inmate violation reports",
+        "fleet_reporter": "Fleet reporter",
+        "fleet_reporterHint": "Manage fleet records and submit vehicle papers for approval"
       }
     },
     "active": {
@@ -6439,6 +6441,10 @@
       "operator": "Operator",
       "inmate_reporter": "Inmate violation reporter",
       "fleet_reporter": "Fleet reporter"
+    },
+    "lineManager": {
+      "label": "Line manager",
+      "notSet": "Not set"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",
