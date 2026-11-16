@@ -1,7 +1,7 @@
 /**
  * Records page preview + row menu: the preview starts collapsed on every visit
  * (the normal/wide width is still remembered), a row click opens it, a double-click
- * opens the record, and the row menu only exists while the preview is collapsed.
+ * opens the record, and the row menu works with the preview collapsed or open.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -375,22 +375,25 @@ describe('Records page drawer preview', () => {
 })
 
 describe('Records page row menu', () => {
-  it('returns the row menu when the preview is collapsed again', async () => {
+  it('keeps the row menu beside an open preview, and the preview follows the menu row', async () => {
     renderPage()
     await waitFor(() => expect(menuButton(2)).toBeInTheDocument())
     await userEvent.click(selectButton(2))
-    expect(menuButton(2)).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'collapse' }))
+    expect(screen.getByTestId('preview-content')).toHaveTextContent('Preview 2')
     expect(menuButton(2)).toBeInTheDocument()
+
+    fireEvent.contextMenu(selectButton(1))
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    expect(screen.getByTestId('preview-content')).toHaveTextContent('Preview 1')
   })
 
-  it('exists only while the preview is collapsed', async () => {
+  it('does not select or expand the preview when the menu opens while it is collapsed', async () => {
     renderPage()
-    await waitFor(() => expect(menuButton(2)).toBeInTheDocument())
-    await userEvent.click(selectButton(2))
-    expect(menuButton(2)).toBeNull()
+    await waitFor(() => expect(screen.getByTestId('pane')).toHaveTextContent('3'))
     fireEvent.contextMenu(selectButton(1))
-    expect(screen.queryByRole('menu')).toBeNull()
+    expect(await screen.findByRole('menu')).toBeInTheDocument()
+    expect(screen.getByTestId('pane')).toHaveTextContent('3')
+    expect(screen.getByTestId('pane')).toHaveAttribute('data-size', 'collapsed')
   })
 
   it('offers Send only on records the user can send, and opens from right-click', async () => {

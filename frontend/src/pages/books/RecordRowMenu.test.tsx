@@ -140,6 +140,37 @@ describe('desktop record row menu', () => {
     await waitFor(() => expect(control).toHaveFocus())
   })
 
+  it('right-click anchors the menu at the pointer, not at the row trigger', async () => {
+    setup()
+    const { select, trigger } = rowControls()
+
+    fireEvent.contextMenu(select, { clientX: 120, clientY: 340 })
+    await screen.findByRole('menu')
+    const anchor = document.querySelector<HTMLElement>('[data-row-menu-anchor]')!
+    expect(anchor.style.left).toBe('120px')
+    expect(anchor.style.top).toBe('340px')
+    expect(anchor).toHaveAttribute('data-state', 'open')
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+
+    // A second right-click elsewhere moves the menu to the new pointer position.
+    fireEvent.contextMenu(select, { clientX: 300, clientY: 80 })
+    await screen.findByRole('menu')
+    const moved = document.querySelector<HTMLElement>('[data-row-menu-anchor]')!
+    expect(moved.style.left).toBe('300px')
+    expect(moved.style.top).toBe('80px')
+    expect(screen.getAllByRole('menu')).toHaveLength(1)
+  })
+
+  it('choosing an item from the right-click menu invokes that action and closes it', async () => {
+    const user = userEvent.setup()
+    const { onSelect, onAction } = setup()
+    fireEvent.contextMenu(rowControls().select, { clientX: 10, clientY: 10 })
+    await user.click(await screen.findByRole('menuitem', { name: 'Second action' }))
+    expect(onAction).toHaveBeenCalledOnce()
+    expect(onSelect).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+  })
+
   it('clicking the trigger and choosing an item only invokes that action', async () => {
     const user = userEvent.setup()
     const { onSelect, onAction } = setup()
