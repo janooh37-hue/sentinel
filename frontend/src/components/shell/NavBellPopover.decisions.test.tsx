@@ -16,6 +16,10 @@ vi.mock('@/lib/api', () => ({
   api: {
     getDecisionNotices: vi.fn(),
     getLedgerUnreadRecent: vi.fn(),
+    getApprovalSummary: vi.fn(),
+    getNotificationCounts: vi.fn(),
+    getInmateRegisterAwaitingClose: vi.fn(),
+    getInboxSummary: vi.fn(),
     markBookSeen: vi.fn().mockResolvedValue(undefined),
     markDecisionsSeen: vi.fn().mockResolvedValue(undefined),
     markAllLedgerRead: vi.fn().mockResolvedValue(undefined),
@@ -153,10 +157,43 @@ it('marks emails and decisions read and refreshes their unread queries', async (
   expect(screen.queryByRole('button', { name: 'Mark all read' })).not.toBeInTheDocument()
 })
 
-it.each(['inmate_reporter', 'fleet_reporter'] as const)('hides the entire panel and makes no decision request for %s', (role) => {
-  auth.role = role
-  auth.scoped_role = role
+it('hides the entire panel and makes no decision request for an inmate reporter', () => {
+  auth.role = 'inmate_reporter'
+  auth.scoped_role = 'inmate_reporter'
   renderBell()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
   expect(api.getDecisionNotices).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('shows only decisions for fleet and opens the record without its closed seen route (phone=%s)', async (phone) => {
+  auth.scoped_role = 'fleet_reporter'
+  renderBell(phone)
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
+  await userEvent.click(screen.getByRole('button', { name: /Approved · GS-0048/ }))
+  expect(screen.getByTestId('location')).toHaveTextContent('/books/48?version_id=5')
+  expect(api.markBookSeen).not.toHaveBeenCalled()
+  expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
+  expect(api.getApprovalSummary).not.toHaveBeenCalled()
+  expect(api.getNotificationCounts).not.toHaveBeenCalled()
+  expect(api.getInmateRegisterAwaitingClose).not.toHaveBeenCalled()
+  expect(api.getInboxSummary).not.toHaveBeenCalled()
+})
+
+it('acknowledges fleet decisions without calling the ledger acknowledgement route', async () => {
+  auth.scoped_role = 'fleet_reporter'
+  renderBell()
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
+  vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [], total: 0 })
+  await userEvent.click(screen.getByRole('button', { name: 'Mark all read' }))
+  await waitFor(() => expect(api.markDecisionsSeen).toHaveBeenCalledOnce())
+  expect(api.markAllLedgerRead).not.toHaveBeenCalled()
+  expect(await screen.findByText('No unread notifications')).toBeVisible()
+})
+
+it('links additional fleet decisions to own records, not the closed approvals page', async () => {
+  auth.scoped_role = 'fleet_reporter'
+  vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [notice()], total: 2 })
+  renderBell()
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }))
+  expect(screen.getByRole('link', { name: '+1 more decision' })).toHaveAttribute('href', '/books?mine=1')
 })

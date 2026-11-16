@@ -12,7 +12,7 @@ vi.mock('@/lib/api', () => ({
     getSettings: vi.fn(),
     getTemplateFields: vi.fn(),
     generateDocument: vi.fn(),
-    listClassifications: vi.fn(),
+    listBookClassifications: vi.fn(),
     createWordBook: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
@@ -130,7 +130,7 @@ describe('ApplicationPage service permissions', () => {
     capabilityState.mobile = false
     vi.mocked(api.listTemplates).mockResolvedValue(templates)
     vi.mocked(api.getSettings).mockResolvedValue({} as never)
-    vi.mocked(api.listClassifications).mockResolvedValue([])
+    vi.mocked(api.listBookClassifications).mockResolvedValue({ items: [] })
     vi.mocked(api.getTemplateFields).mockResolvedValue({
       meta: templates.items[0], needs_manager: true, needs_submitter: false,
       fields: [

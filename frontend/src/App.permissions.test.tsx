@@ -122,6 +122,7 @@ vi.mock('@/lib/routeLoaders', () => ({
 
 import App from './App'
 import { api } from '@/lib/api'
+import { useNotificationStream } from '@/hooks/useNotificationStream'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -169,6 +170,7 @@ beforeEach(() => {
   capabilityState.isLoading = false
   sessionState.scoped_role = null
   vi.mocked(api.requestPermission).mockClear()
+  vi.mocked(useNotificationStream).mockClear()
 })
 
 afterEach(() => {
@@ -393,6 +395,17 @@ describe('App unknown paths', () => {
 })
 
 describe('App scoped role routes', () => {
+  it.each([
+    { role: 'fleet_reporter', stream: false, push: true },
+    { role: 'inmate_reporter', stream: false, push: false },
+    { role: null, stream: true, push: true },
+  ] as const)('sets stream=$stream and push=$push for $role', async ({ role, stream, push }) => {
+    sessionState.scoped_role = role
+    render(<App />)
+    expect(await screen.findByText('dashboard-page')).toBeVisible()
+    expect(useNotificationStream).toHaveBeenLastCalledWith(stream, { pushEnabled: push })
+  })
+
   it.each(['/employees', '/settings', '/vehicles/42', '/ledger', '/books/approvals'])('redirects a fleet reporter away from %s', async (path) => {
     sessionState.scoped_role = 'fleet_reporter'
     // Even stale/broader capability data cannot widen the scoped shell.

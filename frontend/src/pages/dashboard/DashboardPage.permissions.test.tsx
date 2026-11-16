@@ -1,17 +1,17 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import i18n from 'i18next'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, type DashboardSummary } from '@/lib/api'
+import { api, type BookRead, type DashboardSummary } from '@/lib/api'
 import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import ar from '@/locales/ar.json'
 import { DashboardPage } from './DashboardPage'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
-const sessionState = vi.hoisted(() => ({ scoped_role: null as 'fleet_reporter' | null }))
+const sessionState = vi.hoisted(() => ({ scoped_role: null as 'fleet_reporter' | 'inmate_reporter' | null }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     has: (capability: string) => capabilityState.allowed.has(capability),
@@ -21,7 +21,10 @@ vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, scoped_ro
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
 vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: vi.fn(() => ({ data: undefined })) }))
 vi.mock('@/lib/api', () => ({
-  api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn(), getWorkforceAccess: vi.fn() },
+  api: {
+    getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn(), getWorkforceAccess: vi.fn(),
+    listBooks: vi.fn(), getBookFacets: vi.fn(),
+  },
 }))
 vi.mock('@/pages/books/RecordDeleteProvider', () => ({ useRecordDelete: () => ({ pendingIds: new Set<number>() }) }))
 vi.mock('@/components/dashboard/WidgetEditDialog', () => ({ WidgetEditDialog: () => null }))
@@ -203,32 +206,105 @@ describe.each([
   })
 })
 
-describe('Fleet reporter home', () => {
-  it.each(['en', 'ar'])('shows only permitted navigation without generic dashboard requests (%s)', async (language) => {
+const PAPER: BookRead = {
+  id: 50, ref_number: 'HR-0050', category_id: null, subject: 'My pending paper', direction: 'outgoing',
+  stamp_style: null, created_at: '2026-10-20T08:00:00', deleted_at: null, priority: 'Normal',
+  approval_state: 'pending', access_scope: 'full', confidentiality: 'general', can_write: false,
+  can_send: false, can_change_confidentiality: false, can_sign: false, can_review: false,
+  can_forward_to_branch: false, is_draft: false, doc_manager_has_signature: false, is_word_book: false,
+  included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
+  current_template_id: null, service_id: 'General Book',
+}
+
+describe('Scoped reporter home', () => {
+  beforeEach(() => {
     vi.clearAllMocks()
     sessionState.scoped_role = 'fleet_reporter'
     capabilityState.allowed = new Set(['books.view', 'documents.generate', 'vehicles.view'])
+    vi.mocked(api.getBookFacets).mockResolvedValue({
+      total: 6, states: { none: 2, returned: 1, rejected: 3 }, services: [],
+    })
+    vi.mocked(api.listBooks).mockImplementation(async (params) => ({
+      items: [{
+        ...PAPER,
+        id: params?.approval_state === 'approved' ? 51 : 50,
+        approval_state: params?.approval_state === 'approved' ? 'approved' : 'pending',
+        subject: params?.created_by_me
+          ? `My ${params.approval_state} paper`
+          : 'Another reporter’s vehicle letter',
+      }],
+      total: 1, limit: params?.limit ?? 4, offset: params?.offset ?? 0,
+    }))
+  })
+
+  it.each(['en', 'ar'])('shows own papers and own status counts without dashboard requests (%s)', async (language) => {
     await i18n.changeLanguage(language)
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderPage()
 
-    const nav = screen.getByRole('navigation', { name: i18n.t('nav.menu') })
-    expect(within(nav).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/services', '/books', '/vehicles'])
+    expect(screen.getByRole('heading', { level: 1, name: i18n.t('dashboard.fleetReporter.title') })).toBeVisible()
+    expect(screen.getByText(i18n.t('dashboard.fleetReporter.eyebrow'))).toBeVisible()
+    expect(screen.getByText(i18n.t('dashboard.fleetReporter.pendingHint'))).toBeVisible()
+    expect(screen.getByRole('link', { name: i18n.t('dashboard.fleetReporter.newReport') })).toHaveAttribute('href', '/services')
+    expect(screen.getByRole('link', { name: i18n.t('dashboard.inmateReporter.viewAll') })).toHaveAttribute('href', '/books?mine=1')
+    expect(await screen.findByText('My pending paper')).toBeVisible()
+    expect(await screen.findByText('My approved paper')).toBeVisible()
+    expect(screen.queryByText('Another reporter’s vehicle letter')).not.toBeInTheDocument()
+    expect(api.listBooks).toHaveBeenCalledWith({ approval_state: 'pending', limit: 4, offset: 0, created_by_me: true })
+    expect(api.listBooks).toHaveBeenCalledWith({ approval_state: 'approved', limit: 4, offset: 0, created_by_me: true })
+    expect(api.getBookFacets).toHaveBeenCalledExactlyOnceWith({ created_by_me: true })
+    const drafts = await screen.findByRole('link', { name: new RegExp(`^${i18n.t('dashboard.inmateReporter.draft')}`) })
+    expect(drafts).toHaveAttribute('href', '/books?status=draft&mine=1')
+    await waitFor(() => expect(drafts).toHaveTextContent(/2$/))
     expect(api.getDashboardSummary).not.toHaveBeenCalled()
     expect(api.getDashboardLayout).not.toHaveBeenCalled()
     expect(api.getWorkforceAccess).not.toHaveBeenCalled()
     expect(useApprovalSummary).not.toHaveBeenCalled()
   })
 
-  it('hides the fleet hub shortcut without vehicles.view', () => {
-    sessionState.scoped_role = 'fleet_reporter'
-    capabilityState.allowed = new Set(['books.view', 'documents.generate'])
+  it('preserves the inmate home wording and original list/facet requests', async () => {
+    sessionState.scoped_role = 'inmate_reporter'
     renderPage()
-    expect(screen.queryByRole('link', { name: i18n.t('nav.vehicles') })).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: i18n.t('dashboard.inmateReporter.title') })).toBeVisible()
+    expect(screen.getByRole('link', { name: i18n.t('dashboard.inmateReporter.newReport') })).toHaveAttribute('href', '/services')
+    expect(screen.getByRole('link', { name: i18n.t('dashboard.inmateReporter.viewAll') })).toHaveAttribute('href', '/books')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledTimes(2))
+    expect(api.listBooks).toHaveBeenCalledWith({ approval_state: 'pending', limit: 4, offset: 0 })
+    expect(api.listBooks).toHaveBeenCalledWith({ approval_state: 'approved', limit: 4, offset: 0 })
+    expect(api.getBookFacets).toHaveBeenCalledExactlyOnceWith()
+    expect(api.getDashboardSummary).not.toHaveBeenCalled()
+    expect(api.getDashboardLayout).not.toHaveBeenCalled()
+  })
+
+  it('keeps pagination restricted to the fleet reporter’s own papers', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [PAPER], total: 5, limit: 4, offset: 0 })
+    renderPage()
+    await screen.findAllByText(PAPER.ref_number)
+    const section = screen.getByRole('heading', { name: i18n.t('dashboard.fleetReporter.pending') }).closest('section')
+    if (!section) throw new Error('Pending papers section missing')
+    fireEvent.click(within(section).getByRole('button', { name: i18n.t('dashboard.inmateReporter.next') }))
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({
+      approval_state: 'pending', limit: 4, offset: 4, created_by_me: true,
+    }))
+  })
+
+  it('uses the fleet untitled-paper fallback', async () => {
+    vi.mocked(api.listBooks).mockResolvedValue({ items: [{ ...PAPER, subject: null }], total: 1, limit: 4, offset: 0 })
+    renderPage()
+    await waitFor(() => expect(screen.getAllByText(i18n.t('dashboard.fleetReporter.untitled'))).toHaveLength(2))
+  })
+
+  it('hides record surfaces and starts no book queries without books.view', () => {
+    capabilityState.allowed.delete('books.view')
+    renderPage()
+    expect(screen.queryByRole('heading', { name: i18n.t('dashboard.fleetReporter.yourReports') })).not.toBeInTheDocument()
+    expect(api.listBooks).not.toHaveBeenCalled()
+    expect(api.getBookFacets).not.toHaveBeenCalled()
+  })
+
+  it('hides New paper without documents.generate', () => {
+    capabilityState.allowed.delete('documents.generate')
+    renderPage()
+    expect(screen.queryByRole('link', { name: i18n.t('dashboard.fleetReporter.newReport') })).not.toBeInTheDocument()
   })
 })

@@ -228,9 +228,10 @@ function Shell(): React.JSX.Element {
   const waitingForScopedCapabilities = role === 'fleet_reporter' && capabilitiesLoading
   const routeAllowed = role === null || scopedRouteAllowed(role, normalizedPath, has)
 
-  // Phase 4 LAN — SSE notification stream. Enabled only when the session is
-  // resolved so it doesn't open a connection that 401s immediately.
-  useNotificationStream(status === 'authed' && !scoped)
+  // Fleet receives decision push without opening the closed counts/SSE routes.
+  useNotificationStream(status === 'authed' && !scoped, {
+    pushEnabled: status === 'authed' && role !== 'inmate_reporter',
+  })
   useReportClientErrors(status === 'authed' && !scoped)
 
   // Web Push deep-link: the service worker postMessages the target path when a

@@ -72,7 +72,7 @@ export function MobileTopBar({
           direct-child selector (wrapper div > button) leaves the buttons inside their panels alone, and the
           desktop TopNav does not render this bar. */}
       <div className="flex shrink-0 items-center gap-1.5 max-[180px]:gap-0 [&>div>button]:flex [&>div>button]:min-h-[44px] [&>div>button]:min-w-[44px] [&>div>button]:items-center [&>div>button]:justify-center [&>div>button]:p-0 [&>div>button]:leading-none">
-        {!scoped ? <NavBellPopover phone /> : null}
+        {scopedRoleOf(user) !== 'inmate_reporter' ? <NavBellPopover phone /> : null}
         <AccountMenu
           phone
           onLock={onLock}

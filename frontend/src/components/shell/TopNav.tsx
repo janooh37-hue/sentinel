@@ -120,9 +120,9 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             <IntakeLauncher />
             <EmailBasketTray />
             <GatewayIndicator />
-            <NavBellPopover />
           </>
         ) : null}
+        {!isInmateReporter ? <NavBellPopover /> : null}
         {!scoped && has('system.admin') ? (
           <NavLink
             to="/debug"

@@ -5437,6 +5437,22 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Today at a glance",
+    "fleetReporter": {
+      "eyebrow": "Fleet",
+      "title": "Paper workspace",
+      "subtitle": "Create General Books, Reports, and vehicle letters, and follow their progress with your line manager.",
+      "newReport": "New paper",
+      "yourReports": "Your papers",
+      "yourReportsHint": "Continue drafts and review papers returned or rejected by your line manager.",
+      "pending": "Pending approval",
+      "pendingHint": "Papers currently with your line manager.",
+      "pendingEmpty": "No papers are pending approval.",
+      "approved": "Approved",
+      "approvedHint": "Papers ready to read or print.",
+      "approvedEmpty": "No approved papers yet.",
+      "untitled": "Untitled paper",
+      "loadError": "Papers couldn't be loaded."
+    },
     "inmateReporter": {
       "eyebrow": "Inmate conduct violations",
       "title": "Report workspace",
