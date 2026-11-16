@@ -445,6 +445,14 @@ Fines, Vehicle Accident Report, Vehicle Mileage Log) by anyone: pending or appro
 unsubmitted `auto` letter by an author outside the line-manager chain. Never another
 user's General Book or Report.
 
+**Category-exempt services.** A `ScopedRole` may name services authorised by their
+service capabilities alone (`category_exempt_services`). For `fleet_reporter` that is
+`Report`: a Report's record category (13/1) stays out of the ceiling, so creating, opening,
+listing, revising and submitting it answer only to `books.service.Report` /
+`books.servicerecords.Report`. The SQL side is `book_service._category_gate_hidden_clause`
+(also used by `document_visibility_clause`); the Python side is `assert_record_type_visible`
+and `require_record_type_access`. A General Book under 13/1 is still refused.
+
 **Writes without `books.create`/`books.edit`.** A fleet reporter authors through
 `book_service.require_fleet_write_access` (own General Book, Report or vehicle paper in
 `none`/`returned`; a Report must stay signed by the linked employee) and
@@ -454,7 +462,10 @@ with no signing manager. It cannot choose an approver, reviewers, priority or ma
 
 **Line manager.** `users.line_manager_user_id` (migration `0120_user_line_manager`) is set
 by an admin with `PATCH /api/v1/auth/users/{user_id}/line-manager` (`require_admin`,
-audited as `set_line_manager`). Submitting builds one `line_manager` step; the line
+audited as `set_line_manager`). Line and branch managers must be active, hold
+`books.approve` and be linked to exactly one active `Manager` (signer) row
+(`manager_service.sole_active_manager_id`); that row becomes the paper's
+`doc_manager_id`, so the signer printed is always the account that finishes the chain. Submitting builds one `line_manager` step; the line
 manager either signs to finish, or forwards with `POST /books/{book_id}/forward-to-branch`
 (gate `books.approve` plus the pending-assignee check) to an optional `branch_manager`
 stage. Both stages are keyed on the step's `stage_label`, separate from

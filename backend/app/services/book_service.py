@@ -58,7 +58,12 @@ from app.core.record_categories import (
     service_filing_category,
 )
 from app.core.roles import ADMIN_ROLE, FLEET_REPORTER_ROLE, INMATE_REPORTER_ROLE
-from app.core.scoped_roles import LINE_MANAGER_ROLES, is_scoped_role, routes_to_line_manager
+from app.core.scoped_roles import (
+    LINE_MANAGER_ROLES,
+    category_exempt_services,
+    is_scoped_role,
+    routes_to_line_manager,
+)
 from app.db.models import (
     AuditLog,
     Book,
@@ -93,6 +98,7 @@ from app.schemas.book import (
 from app.services import (
     employee_service,
     inmate_violation_whatsapp,
+    manager_service,
     perm_service,
     user_signature_service,
 )
@@ -644,7 +650,7 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
-        clauses.append(not_(record_gate_category_in_clause(denied_categories)))
+        clauses.append(not_(_category_gate_hidden_clause(user, denied_categories)))
     if denied_services:
         clauses.append(
             not_(
@@ -654,6 +660,17 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     if is_scoped_role(user):
         clauses.append(_scoped_visibility_clause(user))
     return and_(*clauses) if clauses else None
+
+
+def _category_gate_hidden_clause(user: User, denied_categories: set[str]) -> ColumnElement[bool]:
+    """SQL: the correlated Book is hidden by a denied record category. Services the
+    user's scoped role exempts from the category gate never are. Python mirror:
+    ``assert_record_type_visible``."""
+    hidden = record_gate_category_in_clause(denied_categories)
+    exempt = category_exempt_services(user)
+    if exempt:
+        hidden = and_(hidden, not_(or_(*[service_clause(s) for s in sorted(exempt)])))
+    return hidden
 
 
 def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -710,7 +727,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
     if OTHER_SERVICE_ID in denied_services:
         linked_hidden.append(_stray_record_clause())
     if denied_categories:
-        linked_hidden.append(record_gate_category_in_clause(denied_categories))
+        linked_hidden.append(_category_gate_hidden_clause(user, denied_categories))
     if linked_hidden:
         linked_document = aliased(Document)
         linked_to_hidden_record = exists(
@@ -807,7 +824,10 @@ def require_record_type_access(
         classification_code=classification_code,
         category_id=category_id,
     )
-    category_denied = any(f"books.category.{code}" not in caps for code in gate_categories)
+    category_exempt = service_id is not None and service_id in category_exempt_services(user)
+    category_denied = not category_exempt and any(
+        f"books.category.{code}" not in caps for code in gate_categories
+    )
     service_denied = service_id is not None and any(
         f"books.service.{gate}" not in caps
         for gate in record_services(service_id=service_id, category_id=category_id)
@@ -843,6 +863,9 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
         category_id=row.category_id,
     )
     gate_services = record_services(service_id=service_id, category_id=row.category_id)
+    if service_id in category_exempt_services(user):
+        # Mirrors ``_category_gate_hidden_clause``.
+        denied_categories = set()
     if not denied_categories.isdisjoint(gate_categories) or not denied_services.isdisjoint(
         gate_services
     ):
@@ -2506,10 +2529,13 @@ BRANCH_MANAGER_STAGE: Final[str] = "branch_manager"
 
 
 def _is_chain_approver(db: Session, user: User | None) -> bool:
+    """An active account allowed to approve that signs as exactly one active
+    ``Manager`` row, so the paper always names the account that finishes it."""
     return (
         user is not None
         and user.status == "active"
         and perm_service.has_capability(db, user, "books.approve")
+        and manager_service.sole_active_manager_id(db, user.id) is not None
     )
 
 
@@ -2523,16 +2549,6 @@ def resolve_line_manager(db: Session, author: User) -> User:
             http_status=409,
         )
     return manager
-
-
-def _active_manager_row_id(db: Session, user_id: int) -> int | None:
-    """The approver's Manager row, so the account that signs is named on the paper."""
-    return db.scalar(
-        select(Manager.id)
-        .where(Manager.user_id == user_id, Manager.active.is_(True))
-        .order_by(Manager.id)
-        .limit(1)
-    )
 
 
 def _is_line_manager_chain(version: BookVersion) -> bool:
@@ -2566,7 +2582,7 @@ def _submit_to_line_manager(
     )
     book.priority = "Normal"
     book.submitted_by_user_id = caller.id
-    book.doc_manager_id = _active_manager_row_id(db, line_manager.id)
+    book.doc_manager_id = manager_service.sole_active_manager_id(db, line_manager.id)
     capture_approval_context(
         db, book, version, submitted_by_user_id=caller.id, submitted_at=datetime.now(UTC)
     )
@@ -2619,7 +2635,12 @@ def branch_candidates(db: Session, book_id: int, *, user_id: int) -> list[Approv
     book = _get_book_with_versions(db, book_id)
     line_step = _require_line_manager_stage(book, user_id)
     excluded = _branch_excluded_user_ids(book, line_step)
-    return [option for option in list_approver_candidates(db) if option.id not in excluded]
+    return [
+        option
+        for option in list_approver_candidates(db)
+        if option.id not in excluded
+        and manager_service.sole_active_manager_id(db, option.id) is not None
+    ]
 
 
 def forward_to_branch(
@@ -2660,7 +2681,7 @@ def forward_to_branch(
             created_at=now,
         )
     )
-    book.doc_manager_id = _active_manager_row_id(db, branch_approver_user_id)
+    book.doc_manager_id = manager_service.sole_active_manager_id(db, branch_approver_user_id)
     _recompute_approval_state(book)
     _commit_approval_state(db, book, user_id=user_id)
     return book

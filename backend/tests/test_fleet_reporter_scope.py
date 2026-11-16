@@ -16,7 +16,7 @@ from app.db.models import AuditLog, Employee, RolePermission, User, UserPermissi
 from app.db.session import attach_sqlite_pragmas
 from app.main import create_app
 from app.services import perm_service
-from tests.fleet_support import FleetEnv
+from tests.fleet_support import FleetEnv, set_signer_rows
 
 # Literal snapshot of origin/main's api/deps.py allowlist, not derived from the
 # registry under test: moving to scoped roles must not alter the inmate surface.
@@ -262,13 +262,20 @@ def test_line_manager_not_applicable_to_operator(fleet_env: FleetEnv) -> None:
     assert env.operator.line_manager_user_id is None
 
 
-@pytest.mark.parametrize("candidate", ["operator", "disabled", "self"])
+@pytest.mark.parametrize(
+    "candidate", ["operator", "disabled", "self", "admin_without_signer_row", "two_signer_rows"]
+)
 def test_line_manager_must_be_another_active_approver(fleet_env: FleetEnv, candidate: str) -> None:
     env = fleet_env
     if candidate == "disabled":
         manager = env.branch
         manager.status = "disabled"
         env.db.commit()
+    elif candidate == "admin_without_signer_row":
+        manager = env.admin  # holds books.approve but signs as no Manager row
+    elif candidate == "two_signer_rows":
+        manager = env.branch
+        set_signer_rows(env, manager, 2)
     else:
         manager = env.reporter if candidate == "self" else env.operator
     response = env.client(env.admin).patch(
