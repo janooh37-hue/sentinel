@@ -5084,6 +5084,10 @@
       "other": "Other"
     },
     "nsCategory": "Record",
+    "fleetReporter": {
+      "generalBookTitle": "General Book",
+      "generalBookDescription": "Create a classified record and send it to your line manager."
+    },
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
       "description": "Save an unfinished report, then send it to the configured approval manager.",

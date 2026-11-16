@@ -4,12 +4,13 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), mobile: false }))
 
 vi.mock('@/lib/api', () => ({
   api: {
     listTemplates: vi.fn(),
     getSettings: vi.fn(),
+    getTemplateFields: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
   apiErrorMessage: (error: unknown) => String(error),
@@ -21,8 +22,19 @@ vi.mock('@/lib/useCapabilities', () => ({
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
 }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => capabilityState.mobile }))
 vi.mock('@/lib/applicationFormSchema', () => ({ buildZodSchema: () => z.object({}) }))
-vi.mock('@/components/application/TemplateForm', () => ({ TemplateForm: () => null }))
+vi.mock('@/components/application/TemplateForm', () => ({
+  TemplateForm: ({ isClassificationAllowed, schema }: {
+    isClassificationAllowed?: (code: string) => boolean
+    schema: { fields: { id: string }[] }
+  }) => (
+    <div>
+      {['7/1', '11/1', '1/1'].filter((code) => !isClassificationAllowed || isClassificationAllowed(code)).map((code) => <span key={code}>{code}</span>)}
+      {schema.fields.map((field) => <span key={field.id}>{field.id}</span>)}
+    </div>
+  ),
+}))
 vi.mock('@/components/application/AttachmentsBlock', () => ({ AttachmentsBlock: () => null }))
 vi.mock('./EmployeeHeader', () => ({ EmployeeHeader: () => null }))
 vi.mock('./JobStatus', () => ({ JobStatus: () => null }))
@@ -40,6 +52,8 @@ vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => nul
 
 import { api } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
+import type { SessionUser } from '@/lib/api'
+import { AuthContext, type AuthContextValue } from '@/lib/authContext'
 
 const templates = {
   items: [
@@ -68,15 +82,22 @@ const templates = {
   ],
 }
 
-function renderPage(entry = '/services') {
+function renderPage(entry = '/services', scopedRole: 'inmate_reporter' | 'fleet_reporter' | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const user = { id: 7, employee_id: 'G7', role: scopedRole ?? 'operator', scoped_role: scopedRole } as SessionUser
+  const auth: AuthContextValue = {
+    user, status: 'authed', login: async () => user, logout: async () => undefined,
+    refetch: async () => undefined, setUser: () => undefined,
+  }
   return render(
     <QueryClientProvider client={client}>
+      <AuthContext.Provider value={auth}>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/services/:slug?" element={<ApplicationPage />} />
         </Routes>
       </MemoryRouter>
+      </AuthContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -85,8 +106,19 @@ describe('ApplicationPage service permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capabilityState.allowed = new Set()
+    capabilityState.mobile = false
     vi.mocked(api.listTemplates).mockResolvedValue(templates)
     vi.mocked(api.getSettings).mockResolvedValue({} as never)
+    vi.mocked(api.getTemplateFields).mockResolvedValue({
+      meta: templates.items[0], needs_manager: true, needs_submitter: false,
+      fields: [
+        { id: 'subject', type: 'text', label_en: 'Subject', label_ar: 'الموضوع', required: true },
+        { id: 'body', type: 'arabic_rich_full', label_en: 'Body', label_ar: 'نص الكتاب', required: true },
+        { id: 'manager_id', type: 'manager_picker', label_en: 'Manager', label_ar: 'المدير', required: false },
+        { id: 'recipient_id', type: 'recipient_picker', label_en: 'Recipient', label_ar: 'المستلم', required: false },
+        { id: 'cc', type: 'recipient_multi_picker', label_en: 'CC', label_ar: 'نسخة إلى', required: false },
+      ],
+    } as never)
   })
 
   it('shows service templates when all creation capabilities are granted', async () => {
@@ -175,5 +207,37 @@ describe('ApplicationPage service permissions', () => {
     expect(await screen.findByText('Leave & Attendance')).toBeVisible()
     expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
+  })
+
+  it.each([false, true])('shows exactly the fleet General Book and Report tiles (mobile=%s)', (mobile) => {
+    capabilityState.mobile = mobile
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.service.Vehicle Fines'])
+    renderPage('/services', 'fleet_reporter')
+    const tiles = screen.getAllByRole('button')
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]).toHaveTextContent('General Book')
+    expect(tiles[1]).toHaveTextContent('Report')
+    expect(tiles[1]).toHaveProperty('disabled', mobile)
+  })
+
+  it.each([false, true])('keeps the inmate violations and Report tiles unchanged (mobile=%s)', (mobile) => {
+    capabilityState.mobile = mobile
+    renderPage('/services', 'inmate_reporter')
+    const tiles = screen.getAllByRole('button')
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]).toHaveTextContent('Inmate Conduct Violations')
+    expect(tiles[1]).toHaveTextContent('Report')
+    expect(tiles[1]).toHaveProperty('disabled', mobile)
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+  })
+
+  it('filters scoped General Book classifications and removes create-time routing pickers', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1', 'books.category.11/1'])
+    renderPage('/services/general_book', 'fleet_reporter')
+    expect(await screen.findByText('7/1')).toBeVisible()
+    expect(screen.getByText('11/1')).toBeVisible()
+    expect(screen.queryByText('1/1')).not.toBeInTheDocument()
+    for (const picker of ['manager_id', 'recipient_id', 'cc']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
+    expect(api.getSettings).not.toHaveBeenCalled()
   })
 })

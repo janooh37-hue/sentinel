@@ -5517,6 +5517,10 @@
       "other": "أخرى"
     },
     "nsCategory": "سجل",
+    "fleetReporter": {
+      "generalBookTitle": "كتاب عام",
+      "generalBookDescription": "أنشئ معاملة مصنّفة وأرسلها إلى المدير المباشر."
+    },
     "inmateReporter": {
       "title": "المخالفات المسلكية للنزلاء",
       "description": "احفظ التقرير غير المكتمل، ثم أرسله إلى مدير الاعتماد المحدد.",
