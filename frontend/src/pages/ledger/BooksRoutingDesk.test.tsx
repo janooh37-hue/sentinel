@@ -29,6 +29,7 @@ const BOOK: BookRead = {
   deleted_at: null, priority: null, approval_state: 'none', access_scope: 'full',
   confidentiality: 'general', can_write: false, can_send: false,
   can_change_confidentiality: false, can_sign: false, can_review: false, is_draft: false,
+  can_forward_to_branch: false,
   doc_manager_has_signature: false, is_word_book: false,
   included_papers_revision: 0, included_papers_fixed_page_count: 0,
   included_papers_total_page_count: 0, current_template_id: null, service_id: 'General Book',

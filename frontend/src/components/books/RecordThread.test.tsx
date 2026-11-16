@@ -40,6 +40,7 @@ const BOOK: BookRead = {
   included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
   access_scope: 'full', can_write: true, can_sign: false, can_review: false,
   confidentiality: 'general', can_send: true, can_change_confidentiality: true,
+  can_forward_to_branch: false,
 }
 const REFERENCE: BookThreadItem = {
   book_id: 8, ref_number: 'REF-8', subject: 'Reference subject', confidentiality: 'secret',

@@ -895,8 +895,6 @@ export type BookRead = components['schemas']['BookRead'] & {
   doc_manager_name?: string | null
   doc_manager_has_signature?: boolean
   imported_doc?: ImportedDocRead | null
-  /** True only for the assignee of the pending `line_manager` step. */
-  can_forward_to_branch?: boolean
 }
 export type BookFolderRead = components['schemas']['BookFolderRead']
 export type BookFolderShareUser = components['schemas']['BookFolderShareUser']

@@ -64,6 +64,7 @@ const BOOK: BookRead = {
   confidentiality: 'general',
   can_send: false,
   can_change_confidentiality: false,
+  can_forward_to_branch: false,
 }
 
 function wrapper(qc: QueryClient) {

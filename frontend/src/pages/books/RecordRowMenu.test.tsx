@@ -32,6 +32,7 @@ const book: BookRead = {
   can_write: false,
   can_send: false,
   can_change_confidentiality: false,
+  can_forward_to_branch: false,
   can_sign: false,
   can_review: false,
   is_draft: false,
