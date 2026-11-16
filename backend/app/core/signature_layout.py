@@ -49,16 +49,18 @@ EMU_PER_POINT = 12700
 MIN_SIGNATURE_WIDTH_PT = 10 * 72 / 25.4
 
 # Probe geometry/matching tuning. Empirically proven against real Word
-# (Word COM SaveAs2 → PyMuPDF get_image_info + pixel sampling):
-# a 1pt probe is below Word's PDF-export anti-aliasing noise floor and
-# reads back as a blurred, unmatchable color; 6pt survives reliably. A
-# render-resolution pixmap sample (72 dpi) is too coarse for a probe this
-# small — 300 dpi resolves it to a multi-pixel patch with a stable center
-# color. Probes are floating (`wrapNone`), so their physical size never
-# perturbs layout/pagination — only ONE run (the moved drawing's own, when
-# it was inline) ever occupies real flow space; see `write_signature_position`.
+# (Word COM SaveAs2 → PyMuPDF get_image_info): a 1pt probe is below Word's
+# PDF-export anti-aliasing noise floor and reads back as a blurred,
+# unmatchable color; 6pt survives reliably. Probes are matched by the
+# EMBEDDED image's own pixels, never by rendering the page: after a move,
+# the transparent spacer left at a previously-inline signature's original
+# rect overlaps a nudged/resized signature, so a rendered sample at the
+# spacer's center shows the probe colour through it and would misreport
+# the original position (see `_find_probe`). Probes are floating
+# (`wrapNone`), so their physical size never perturbs layout/pagination —
+# only ONE run (the moved drawing's own, when it was inline) ever occupies
+# real flow space; see `write_signature_position`.
 _PROBE_SIZE_PT = 6.0
-_SAMPLE_DPI = 300
 _MATCH_TOLERANCE = 10
 _MAX_ANCHOR_CANDIDATES = 64
 # Grid step guarantees any two distinct probe indices differ by this much in
@@ -370,19 +372,31 @@ def _embed_raw_probe(paragraph: Any, probe_bytes: bytes, *, width_pt: float) -> 
 def _find_probe(
     document: Any, rgb: tuple[int, int, int]
 ) -> tuple[int, tuple[float, float, float, float]] | None:
-    """Locate the rendered image matching *rgb* by sampling its bounding
-    box's center pixel at `_SAMPLE_DPI` (a render-resolution 72 dpi sample
-    is too coarse for a probe this small — proven empirically). Returns
-    ``(0-based page index, bbox)`` or None."""
+    """Locate the placed image whose EMBEDDED pixels match *rgb*. Returns
+    ``(0-based page index, bbox)`` or None.
+
+    Matching decodes each placed image's own data (its center pixel), not a
+    render of the page: a rendered sample at an image's bbox center shows
+    whatever is visible there, and the transparent spacer a previously-inline
+    signature leaves at its original rect lets an overlapping probe (a nudged
+    or resized-in-place signature) show through — so the spacer would match
+    first and report the ORIGINAL geometry. Images with a soft mask (the
+    transparent spacer, the signature-free placeholder) are skipped outright;
+    probes are always opaque."""
     import pymupdf
 
     for page_index in range(document.page_count):
         page = document[page_index]
-        for info in page.get_image_info(hashes=True):
+        for info in page.get_image_info(xrefs=True):
+            xref = info.get("xref", 0)
             rect = pymupdf.Rect(info["bbox"])
-            if rect.width <= 0 or rect.height <= 0:
+            if xref <= 0 or rect.is_empty:
                 continue
-            pix = page.get_pixmap(clip=rect, dpi=_SAMPLE_DPI)
+            if document.xref_get_key(xref, "SMask")[0] != "null":
+                continue  # transparent: never a probe
+            pix = pymupdf.Pixmap(document, xref)
+            if pix.n - pix.alpha != 3:
+                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
             if pix.width == 0 or pix.height == 0:
                 continue
             sample = pix.pixel(pix.width // 2, pix.height // 2)[:3]

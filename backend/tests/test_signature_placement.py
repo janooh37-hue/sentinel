@@ -638,6 +638,47 @@ def test_move_signature_with_width_resizes_and_records_sizes(
 
 
 # ---------------------------------------------------------------------------
+# _find_probe — measurement must not mistake the transparent spacer for a probe
+# ---------------------------------------------------------------------------
+
+
+def test_find_probe_skips_overlapping_transparent_spacer(tmp_path: Path) -> None:
+    """A nudged signature overlaps the transparent spacer its first move left
+    at the original rect. The spacer comes first in the page and the probe
+    shows through its center, but the probe's OWN rect must be reported."""
+    from app.core.signature_layout import (
+        _distinct_rgb,
+        _find_probe,
+        _probe_png_bytes,
+        _transparent_png_bytes,
+    )
+
+    rgb = _distinct_rgb(3)
+    spacer_rect = pymupdf.Rect(90, 420, 180, 456)  # the original position
+    probe_rect = pymupdf.Rect(120, 420, 210, 456)  # nudged right, covering its center
+    pdf_path = tmp_path / "measure.pdf"
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        page.insert_image(spacer_rect, stream=_transparent_png_bytes())
+        page.insert_image(probe_rect, stream=_probe_png_bytes(rgb))
+        doc.save(pdf_path)
+    finally:
+        doc.close()
+
+    measured = pymupdf.open(pdf_path)
+    try:
+        located = _find_probe(measured, rgb)
+    finally:
+        measured.close()
+
+    assert located is not None
+    page_index, bbox = located
+    assert page_index == 0
+    assert bbox == pytest.approx(tuple(probe_rect))
+
+
+# ---------------------------------------------------------------------------
 # write_signature_position / validate_move — resizing (no Word needed: the
 # DOCX rewrite and the remeasurement check are pure functions of their inputs)
 # ---------------------------------------------------------------------------
