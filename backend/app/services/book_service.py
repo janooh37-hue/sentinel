@@ -690,6 +690,12 @@ def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
     read gate does, so a direct send still opens a general Record without it.
     Deleted Records and revision-scoped access are the caller's to add.
     """
+    if user.role == FLEET_REPORTER_ROLE:
+        # The record-type denials AND the fleet matrix (``_record_type_clause``),
+        # as the Python mirror ``_scoped_book_visible`` applies them.
+        fleet_types = _record_type_clause(db, user)
+        assert fleet_types is not None  # always carries the scoped matrix
+        return _confidentiality_clause(db, user, fleet_types)
     if is_scoped_role(user):
         return _confidentiality_clause(db, user, _scoped_visibility_clause(user))
     type_ok: ColumnElement[bool] = false()
@@ -2263,6 +2269,22 @@ def submit_for_approval(
             "BRANCH_APPROVER_REQUIRED", "Choose a branch manager before submitting this form."
         )
     caller = db.get(User, submitted_by_user_id)
+    # The chain follows the paper's author, never the submitter.
+    if _line_manager_chain_author(db, book) is not None or (
+        caller is not None and routes_to_line_manager(caller)
+    ):
+        return _submit_to_line_manager(
+            db,
+            book,
+            version,
+            caller,
+            choices_made=bool(
+                priority != "Normal"
+                or approver_user_id is not None
+                or reviewer_user_ids
+                or branch_approver_user_id is not None
+            ),
+        )
     report = is_report(book)
     inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
     if version.status == "awaiting_scan":
@@ -2280,19 +2302,6 @@ def submit_for_approval(
         raise ValidationFailedError(
             "ALREADY_SIGNED",
             "This version is already signed/approved; it can't be re-submitted for approval.",
-        )
-    if caller is not None and routes_to_line_manager(caller):
-        return _submit_to_line_manager(
-            db,
-            book,
-            version,
-            caller,
-            choices_made=bool(
-                priority != "Normal"
-                or approver_user_id is not None
-                or reviewer_user_ids
-                or branch_approver_user_id is not None
-            ),
         )
     if report and any(s.state == "approved" for s in _approver_steps(version)):
         raise ValidationFailedError(
@@ -2555,10 +2564,29 @@ def _is_line_manager_chain(version: BookVersion) -> bool:
     return any(step.stage_label == LINE_MANAGER_STAGE for step in version.approval_steps)
 
 
+def _line_manager_chain_author(db: Session, book: Book) -> User | None:
+    """The paper's original author when their role routes to a line manager."""
+    from app.services import included_papers_service
+
+    author_id = included_papers_service.original_creator_user_id(book)
+    if author_id is None:
+        author_id = book.created_by_user_id
+    author = db.get(User, author_id) if author_id is not None else None
+    return author if author is not None and routes_to_line_manager(author) else None
+
+
 def _submit_to_line_manager(
-    db: Session, book: Book, version: BookVersion, caller: User, *, choices_made: bool
+    db: Session, book: Book, version: BookVersion, caller: User | None, *, choices_made: bool
 ) -> Book:
-    """(Re)build the chain as one pending line-manager step."""
+    """(Re)build the chain as one pending line-manager step, from the author's own
+    line manager. Only the author may submit their paper."""
+    author = _line_manager_chain_author(db, book)
+    if caller is None or author is None or author.id != caller.id:
+        raise AppError(
+            "SCOPED_ROLE_CHAIN_AUTHOR_ONLY",
+            "Only the author can submit this paper; it goes to their line manager.",
+            http_status=403,
+        )
     if choices_made:
         raise AppError(
             "SCOPED_ROLE_INPUT_FORBIDDEN",

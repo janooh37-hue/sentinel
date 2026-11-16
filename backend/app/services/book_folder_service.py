@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError
-from app.core.scoped_roles import SCOPED_ROLES
+from app.core.scoped_roles import SCOPED_ROLES, is_scoped_role
 from app.db.models import Book, BookFolder, BookFolderItem, BookFolderShare, Employee, User
 from app.schemas.book import (
     BookFolderRead,
@@ -16,6 +16,15 @@ from app.schemas.book import (
     BookFolderShareUser,
 )
 from app.services import book_send_service, book_service
+
+
+def require_folder_access(user: User) -> None:
+    """Every scoped role is excluded from folders: listing, filing, managing, sharing,
+    and filtering the register by a folder."""
+    if is_scoped_role(user):
+        raise AppError(
+            "SCOPED_ROLE_FOLDERS_FORBIDDEN", "This role cannot use folders.", http_status=403
+        )
 
 
 def visibility_clause(user: User) -> ColumnElement[bool]:
@@ -54,6 +63,7 @@ def visibility_clause(user: User) -> ColumnElement[bool]:
 
 
 def get_folder(db: Session, user: User, folder_id: int, *, manage: bool = False) -> BookFolder:
+    require_folder_access(user)
     folder = db.scalar(
         select(BookFolder).where(BookFolder.id == folder_id, visibility_clause(user))
     )
@@ -69,6 +79,7 @@ def get_folder(db: Session, user: User, folder_id: int, *, manage: bool = False)
 def list_folders(
     db: Session, user: User, *, book_id: int | None = None, folder_id: int | None = None
 ) -> list[BookFolderRead]:
+    require_folder_access(user)
     stmt = select(BookFolder).where(visibility_clause(user))
     if folder_id is not None:
         stmt = stmt.where(BookFolder.id == folder_id)
@@ -141,6 +152,7 @@ def list_folders(
 
 
 def create_folder(db: Session, user: User, *, name: str, team: bool) -> BookFolderRead:
+    require_folder_access(user)
     if team and not book_send_service._is_manager_or_admin(user):
         raise AppError(
             "FORBIDDEN", "Only managers and admins may manage team folders.", http_status=403
@@ -197,6 +209,7 @@ def _require_team_manager(user: User) -> None:
 
 
 def share_options(db: Session, user: User) -> BookFolderShareOptions:
+    require_folder_access(user)
     _require_team_manager(user)
     users = [
         BookFolderShareOption(

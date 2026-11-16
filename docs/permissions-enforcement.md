@@ -430,7 +430,9 @@ may call, each self-service or gated inside its handler:
 | `GET /notifications/decisions`, `POST /notifications/decisions/seen`, `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/subscribe` | The author is told when a paper is returned, rejected or finished. |
 
 **Shared restrictions** (`scoped_roles.is_scoped_role`): no Direct send or forward via
-`/send`; never a send recipient, in the user directory or in folder sharing; no Level
+`/send`; never a send recipient, in the user directory or in folder sharing; no folders at
+all (`book_folder_service.require_folder_access`: list, create, file, rename, delete,
+share, and the register's `folder_id` filter answer 403 `SCOPED_ROLE_FOLDERS_FORBIDDEN`); no Level
 change; no derive; PDF-only downloads and own generation jobs only; current revision
 only; confidentiality limited to General plus own Personal/Directed. Rules about Inmate
 Conduct Violations forms, the global inmate manager and inmate Report-only writes stay
@@ -465,7 +467,10 @@ by an admin with `PATCH /api/v1/auth/users/{user_id}/line-manager` (`require_adm
 audited as `set_line_manager`). Line and branch managers must be active, hold
 `books.approve` and be linked to exactly one active `Manager` (signer) row
 (`manager_service.sole_active_manager_id`); that row becomes the paper's
-`doc_manager_id`, so the signer printed is always the account that finishes the chain. Submitting builds one `line_manager` step; the line
+`doc_manager_id`, so the signer printed is always the account that finishes the chain. The chain follows the paper's original author: a paper whose author's role routes to a
+line manager is submitted only by that author (anyone else gets 403
+`SCOPED_ROLE_CHAIN_AUTHOR_ONLY`), and the step is built from the author's own
+`line_manager_user_id`. Submitting builds one `line_manager` step; the line
 manager either signs to finish, or forwards with `POST /books/{book_id}/forward-to-branch`
 (gate `books.approve` plus the pending-assignee check) to an optional `branch_manager`
 stage. Both stages are keyed on the step's `stage_label`, separate from
