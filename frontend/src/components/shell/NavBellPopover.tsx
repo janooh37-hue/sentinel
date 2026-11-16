@@ -28,6 +28,7 @@ import { toast } from '@/lib/toast'
 import { api, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -86,7 +87,7 @@ interface NavBellPopoverProps {
 
 export function NavBellPopover({ phone = false }: NavBellPopoverProps): React.JSX.Element | null {
   const { user } = useAuth()
-  if (user?.role === 'inmate_reporter') return null
+  if (scopedRoleOf(user) !== null) return null
   return <DefaultNavBellPopover phone={phone} />
 }
 

@@ -8,9 +8,9 @@ import { api, type DecisionNotice } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { NavBellPopover } from './NavBellPopover'
 
-const auth = vi.hoisted(() => ({ role: 'staff' }))
+const auth = vi.hoisted(() => ({ role: 'staff', scoped_role: null as 'inmate_reporter' | 'fleet_reporter' | null }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ status: 'authed', user: { id: 7, role: auth.role } }),
+  useAuth: () => ({ status: 'authed', user: { id: 7, role: auth.role, scoped_role: auth.scoped_role } }),
 }))
 vi.mock('@/lib/api', () => ({
   api: {
@@ -68,6 +68,7 @@ function renderBell(phone = false) {
 beforeEach(async () => {
   vi.clearAllMocks()
   auth.role = 'staff'
+  auth.scoped_role = null
   await i18n.changeLanguage('en')
   vi.mocked(api.getLedgerUnreadRecent).mockResolvedValue({ items: [], total_unread: 0 })
   vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [notice()], total: 1 })
@@ -152,8 +153,9 @@ it('marks emails and decisions read and refreshes their unread queries', async (
   expect(screen.queryByRole('button', { name: 'Mark all read' })).not.toBeInTheDocument()
 })
 
-it('hides the entire panel and makes no decision request for inmate reporters', () => {
-  auth.role = 'inmate_reporter'
+it.each(['inmate_reporter', 'fleet_reporter'] as const)('hides the entire panel and makes no decision request for %s', (role) => {
+  auth.role = role
+  auth.scoped_role = role
   renderBell()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
   expect(api.getDecisionNotices).not.toHaveBeenCalled()

@@ -96,6 +96,19 @@ describe('useCapabilityCatalog', () => {
     },
   )
 
+  it.each(['inmate_reporter', 'fleet_reporter'] as const)('does not fetch the catalog for %s', (role) => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <AuthContext.Provider value={{ ...AUTH, user: { ...USER, role, scoped_role: role } }}>
+          <Consumers />
+        </AuthContext.Provider>
+      </QueryClientProvider>,
+    )
+
+    expect(api.listCapabilities).not.toHaveBeenCalled()
+  })
+
   it('does not reuse catalog data after the authenticated identity changes', async () => {
     const nextUser = { ...USER, id: 18, email: 'next@example.test' }
     const nextEntry = { ...ENTRY, id: 'leaves.view', domain: 'leaves' }

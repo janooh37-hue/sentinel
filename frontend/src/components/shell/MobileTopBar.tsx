@@ -6,6 +6,7 @@ import { AccountMenu } from '@/components/shell/AccountMenu'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 
 interface MobileTopBarProps {
   onBurger: () => void
@@ -25,7 +26,7 @@ export function MobileTopBar({
 }: MobileTopBarProps): React.JSX.Element {
   const { t } = useTranslation()
   const user = useContext(AuthContext)?.user ?? null
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const scoped = scopedRoleOf(user) !== null
   const { has } = useCapabilities()
   return (
     <header
@@ -71,11 +72,11 @@ export function MobileTopBar({
           direct-child selector (wrapper div > button) leaves the buttons inside their panels alone, and the
           desktop TopNav does not render this bar. */}
       <div className="flex shrink-0 items-center gap-1.5 max-[180px]:gap-0 [&>div>button]:flex [&>div>button]:min-h-[44px] [&>div>button]:min-w-[44px] [&>div>button]:items-center [&>div>button]:justify-center [&>div>button]:p-0 [&>div>button]:leading-none">
-        {!isInmateReporter ? <NavBellPopover phone /> : null}
+        {!scoped ? <NavBellPopover phone /> : null}
         <AccountMenu
           phone
           onLock={onLock}
-          onOpenSettings={!isInmateReporter && has('settings.view') ? onOpenSettings : undefined}
+          onOpenSettings={!scoped && has('settings.view') ? onOpenSettings : undefined}
           onSignOut={onSignOut}
         />
       </div>

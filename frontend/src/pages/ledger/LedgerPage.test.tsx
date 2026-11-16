@@ -7,11 +7,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ar from '@/locales/ar.json'
 
-const state = vi.hoisted(() => ({ caps: new Set<string>(), role: 'employee' }))
+const state = vi.hoisted(() => ({ caps: new Set<string>(), role: 'employee', scoped_role: null as 'inmate_reporter' | 'fleet_reporter' | null }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => state.caps.has(cap), isLoading: false }),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: state.role, scoped_role: state.scoped_role } }) }))
 vi.mock('./outlook/LedgerOutlookShell', () => ({
   LedgerOutlookShell: ({ switcher }: { switcher?: ReactNode }) => (
     <div data-testid="email-shell">{switcher}<span>email-shell</span></div>
@@ -35,6 +35,7 @@ function mount(url = '/ledger'): void {
 beforeEach(async () => {
   state.caps = new Set()
   state.role = 'employee'
+  state.scoped_role = null
   await i18n.changeLanguage('en')
 })
 afterEach(async () => {
@@ -115,9 +116,10 @@ describe('Ledger tabs by capability', () => {
     expect(screen.getByRole('status').textContent).toBe(search)
   })
 
-  it('never offers Books to inmate reporters', () => {
+  it.each(['inmate_reporter', 'fleet_reporter'] as const)('never offers Books to %s', (role) => {
     state.caps = new Set(['ledger.view', 'books.view'])
-    state.role = 'inmate_reporter'
+    state.role = role
+    state.scoped_role = role
     mount('/ledger?tab=books')
     expect(screen.queryByRole('tab', { name: 'Books' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()

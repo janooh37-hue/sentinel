@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
 import { Pencil } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import {
   api,
   apiErrorMessage,
@@ -13,6 +14,7 @@ import {
   type WorkforceSnapshot,
 } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
+import { NAV_ITEMS } from '@/components/shell/navItems'
 import { WidgetEditDialog } from '@/components/dashboard/WidgetEditDialog'
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import {
@@ -41,6 +43,7 @@ import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
@@ -108,8 +111,36 @@ function joinNames(names: string[], isAr: boolean): string {
 
 export function DashboardPage(props: DashboardPageProps): React.JSX.Element {
   const { user } = useAuth()
-  if (user?.role === 'inmate_reporter') return <InmateReporterDashboard />
+  const role = scopedRoleOf(user)
+  if (role === 'inmate_reporter') return <InmateReporterDashboard />
+  if (role === 'fleet_reporter') return <FleetReporterDashboard />
   return <GenericDashboardPage key={user?.id ?? 'anonymous'} {...props} />
+}
+
+/** Summary/layout endpoints have no capability gate, so scoped roles cannot use them. */
+function FleetReporterDashboard(): React.JSX.Element {
+  const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const destinations = scopedDestinations('fleet_reporter', has).filter((to) => to !== '/')
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto bg-background">
+      <div className="mx-auto w-full max-w-[1180px] space-y-6 px-4 py-6 md:px-7">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{t('nav.dashboard')}</h1>
+        <nav aria-label={t('nav.menu')} className="grid gap-3 sm:grid-cols-3">
+          {destinations.map((to) => {
+            const { key, Icon } = NAV_ITEMS.find((item) => item.to === to)!
+            return (
+              <Link key={to} to={to} className="flex min-h-16 items-center gap-3 rounded-xl border border-border bg-surface px-5 py-4 font-medium text-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                {t(key)}
+              </Link>
+            )
+          })}
+        </nav>
+      </div>
+    </div>
+  )
 }
 
 function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {

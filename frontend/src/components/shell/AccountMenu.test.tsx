@@ -235,8 +235,8 @@ describe('AccountMenu My records', () => {
     expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
   })
 
-  it('is absent for inmate reporters even with books.view', async () => {
-    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role: 'inmate_reporter' })
+  it.each(['inmate_reporter', 'fleet_reporter'] as const)('is absent for %s even with books.view', async (role) => {
+    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role, scoped_role: role })
     const user = userEvent.setup()
     renderWithProbe()
     await openMenu(user)

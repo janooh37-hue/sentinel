@@ -34,6 +34,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useIdentity } from '@/lib/useIdentity'
 import { AUTH_KEY, useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useMyRecordsCount } from '@/pages/books/useMyRecordsCount'
 import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
 import type { LockLayout, LockTimerSeconds } from '@/lib/useLockState'
@@ -107,14 +108,14 @@ export function AccountMenu({
   // "My records": the Records page's "Created by me" count, over the shared
   // ['books','facets',true] query; only fetched while the menu is open.
   const { has } = useCapabilities()
-  const canViewMine = user?.role !== 'inmate_reporter' && has('books.view')
+  const scoped = scopedRoleOf(user) !== null
+  const canViewMine = !scoped && has('books.view')
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: open && canViewMine })
-  // inmate_reporter's route allowlist blocks GET /email/account outright —
-  // this role has no mailbox/email surface at all (§8 restricted shell).
+  // Scoped roles have no mailbox/email surface.
   const accountQuery = useQuery({
     queryKey: ['email-account'],
     queryFn: () => api.getEmailAccount(),
-    enabled: user?.role !== 'inmate_reporter',
+    enabled: !scoped,
     staleTime: 60_000,
   })
 

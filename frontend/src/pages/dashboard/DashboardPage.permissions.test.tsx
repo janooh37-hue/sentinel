@@ -6,18 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api, type DashboardSummary } from '@/lib/api'
 import { DEFAULT_LAYOUT } from '@/lib/dashboardLayout'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import ar from '@/locales/ar.json'
 import { DashboardPage } from './DashboardPage'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const sessionState = vi.hoisted(() => ({ scoped_role: null as 'fleet_reporter' | null }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1 } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, scoped_role: sessionState.scoped_role } }) }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ identity: null }) }))
-vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: () => ({ data: undefined }) }))
+vi.mock('@/lib/useApprovalSummary', () => ({ useApprovalSummary: vi.fn(() => ({ data: undefined })) }))
 vi.mock('@/lib/api', () => ({
   api: { getDashboardSummary: vi.fn(), getDashboardLayout: vi.fn(), getWorkforceAccess: vi.fn() },
 }))
@@ -95,6 +97,7 @@ function renderPage(data = summary(), widgets = DEFAULT_WIDGETS.map((widget) => 
 
 afterEach(async () => {
   cleanup()
+  sessionState.scoped_role = null
   document.documentElement.removeAttribute('dir')
   await i18n.changeLanguage('en')
 })
@@ -197,5 +200,35 @@ describe.each([
     }))
     renderPage(summary(), widgets)
     expect(screen.getByTestId('widget-grid').querySelectorAll('[data-widget-id]')).toHaveLength(0)
+  })
+})
+
+describe('Fleet reporter home', () => {
+  it.each(['en', 'ar'])('shows only permitted navigation without generic dashboard requests (%s)', async (language) => {
+    vi.clearAllMocks()
+    sessionState.scoped_role = 'fleet_reporter'
+    capabilityState.allowed = new Set(['books.view', 'documents.generate', 'vehicles.view'])
+    await i18n.changeLanguage(language)
+    document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr'
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><DashboardPage onNavigate={vi.fn()} /></MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    const nav = screen.getByRole('navigation', { name: i18n.t('nav.menu') })
+    expect(within(nav).getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual(['/services', '/books', '/vehicles'])
+    expect(api.getDashboardSummary).not.toHaveBeenCalled()
+    expect(api.getDashboardLayout).not.toHaveBeenCalled()
+    expect(api.getWorkforceAccess).not.toHaveBeenCalled()
+    expect(useApprovalSummary).not.toHaveBeenCalled()
+  })
+
+  it('hides the fleet hub shortcut without vehicles.view', () => {
+    sessionState.scoped_role = 'fleet_reporter'
+    capabilityState.allowed = new Set(['books.view', 'documents.generate'])
+    renderPage()
+    expect(screen.queryByRole('link', { name: i18n.t('nav.vehicles') })).not.toBeInTheDocument()
   })
 })

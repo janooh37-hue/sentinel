@@ -19,13 +19,14 @@ import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
+import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
 
 import { AaSlider } from './AaSlider'
 import { EmailBasketTray } from './EmailBasketTray'
 import { GatewayIndicator } from './GatewayIndicator'
 import { LanguageToggle } from './LanguageToggle'
 import { NavBellPopover } from './NavBellPopover'
-import { INMATE_REPORTER_ALLOWED_DESTINATIONS, NAV_ITEMS } from './navItems'
+import { NAV_ITEMS } from './navItems'
 import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
 import { useChromePrefs } from './useChromePrefs'
@@ -40,10 +41,12 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
   const { t } = useTranslation()
   const user = useContext(AuthContext)?.user ?? null
   const { has } = useCapabilities()
-  const isInmateReporter = user?.role === 'inmate_reporter'
-  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(isInmateReporter)
-  const navItems = isInmateReporter
-    ? NAV_ITEMS.filter(({ to }) => INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(to as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]))
+  const role = scopedRoleOf(user)
+  const scoped = role !== null
+  const isInmateReporter = role === 'inmate_reporter'
+  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(scoped)
+  const navItems = role
+    ? NAV_ITEMS.filter(({ to }) => scopedDestinations(role, has).includes(to))
     : NAV_ITEMS
 
   return (
@@ -112,7 +115,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         />
         <LanguageToggle />
         <ThemeToggle value={theme} onChange={setTheme} />
-        {!isInmateReporter ? (
+        {!scoped ? (
           <>
             <IntakeLauncher />
             <EmailBasketTray />
@@ -120,7 +123,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             <NavBellPopover />
           </>
         ) : null}
-        {!isInmateReporter && has('system.admin') ? (
+        {!scoped && has('system.admin') ? (
           <NavLink
             to="/debug"
             aria-label={t('debug.title')}
@@ -134,7 +137,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             <Bug className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
           </NavLink>
         ) : null}
-        {!isInmateReporter && has('settings.view') ? (
+        {!scoped && has('settings.view') ? (
           <button
             type="button"
             onClick={onOpenSettings}
@@ -147,7 +150,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         ) : null}
         <AccountMenu
           onLock={onLock}
-          onOpenSettings={!isInmateReporter && has('settings.view') ? onOpenSettings : undefined}
+          onOpenSettings={!scoped && has('settings.view') ? onOpenSettings : undefined}
           onSignOut={onSignOut}
         />
       </div>
