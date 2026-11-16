@@ -9,8 +9,8 @@
  *                     the whole row (`after:inset-0`) so a click anywhere selects
  * Click = select (the pane shows the record); double-click, or Enter on a focused
  * row or its ref, opens the record; Ctrl/⌘+Enter and J/K are page-level shortcuts
- * (BooksPage). With `rowMenu` (preview collapsed) each row gets a ⋯ menu, also
- * opened by right-click / Shift+F10 / the ContextMenu key on the row.
+ * (BooksPage). With `rowMenu` each row gets a ⋯ menu, also opened by Shift+F10 /
+ * the ContextMenu key on the row; right-click opens the same menu at the pointer.
  *
  * The scroller is a container (`@container`): below `@[26rem]` the glyph tile and
  * the paper-count chip drop out and the ref stacks over the label, so the list
@@ -38,7 +38,7 @@ import { paperCountOf } from './recordPapers'
 import { openRecord, recordLinkProps, type RecordNavState } from './useRecordNavContext'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
-import { RecordRowMenu, type RowMenuItem } from './RecordRowMenu'
+import { RecordContextMenu, RecordRowMenu, type RowMenuItem } from './RecordRowMenu'
 
 /** Parse `[token]` FTS snippet markers into React nodes with <mark>. */
 function SnippetLine({ text }: { text: string }): React.JSX.Element {
@@ -86,7 +86,7 @@ export function RecordsList({
   empty?: React.ReactNode
   /** Inmate reporters see fewer papers per record; the count must match the pane. */
   isInmateReporter: boolean
-  /** Items for a row's ⋯ / context menu; omit to hide the menu (preview open). */
+  /** Items for a row's ⋯ / context menu; omit to hide the menu. */
   rowMenu?: (book: BookRead) => RowMenuItem[]
   /** Called as a row's menu opens (before its items render). */
   onRowMenuOpen?: (book: BookRead) => void
@@ -99,6 +99,8 @@ export function RecordsList({
   const scroller = scrollerRef ?? internalRef
   const linkNav = nav(0)
   const [menuRowId, setMenuRowId] = useState<number | null>(null)
+  // The right-click menu: one for the list, at the pointer.
+  const [contextMenu, setContextMenu] = useState<{ book: BookRead; x: number; y: number } | null>(null)
   const menuReturnFocus = useRef<HTMLElement | null>(null)
 
   const days: { date: string; items: BookRead[] }[] = []
@@ -158,7 +160,8 @@ export function RecordsList({
                   target?.focus()
                   menuReturnFocus.current = target
                   onRowMenuOpen?.(row)
-                  setMenuRowId(row.id)
+                  setMenuRowId(null)
+                  setContextMenu({ book: row, x: e.clientX, y: e.clientY })
                 }}
                 className={cn(
                   'group relative flex items-center gap-2.5 border-b border-hairline px-3.5 py-2 transition-colors motion-reduce:transition-none',
@@ -224,6 +227,7 @@ export function RecordsList({
                         e.stopPropagation()
                         menuReturnFocus.current = e.currentTarget
                         onRowMenuOpen?.(row)
+                        setContextMenu(null)
                         setMenuRowId(row.id)
                         return
                       }
@@ -307,6 +311,7 @@ export function RecordsList({
                         // Trigger entry uses Radix's own restoration, not a previous row's origin.
                         menuReturnFocus.current = null
                         onRowMenuOpen?.(row)
+                        setContextMenu(null)
                       }
                       setMenuRowId(o ? row.id : null)
                     }}
@@ -317,6 +322,17 @@ export function RecordsList({
           })}
         </section>
       ))}
+      {rowMenu && contextMenu && (
+        <RecordContextMenu
+          // Remount per right-click so the menu re-anchors at the new pointer position.
+          key={`${contextMenu.book.id}:${contextMenu.x}:${contextMenu.y}`}
+          book={contextMenu.book}
+          itemsFor={rowMenu}
+          point={contextMenu}
+          returnFocusRef={menuReturnFocus}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
       {rows.length === 0 &&
         (empty ?? (
           <div className="px-4 py-10 text-center text-[0.8em] text-muted-foreground">

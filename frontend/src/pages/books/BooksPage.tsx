@@ -965,11 +965,13 @@ function BooksRegister(): React.JSX.Element {
                     scrollerRef={scrollerRef}
                     empty={listEmpty}
                     isInmateReporter={isInmateReporter}
-                    // Never beside an open preview: its tools would be duplicated.
-                    rowMenu={(inlinePane ? !paneOpen : !drawerOpen) ? rowMenu.itemsFor : undefined}
+                    // Beside the inline preview too; the modal drawer covers the list.
+                    rowMenu={drawerOpen ? undefined : rowMenu.itemsFor}
                     onRowMenuOpen={(book) => {
                       cancelPendingPreview()
                       rowMenu.onMenuOpen(book)
+                      // An open preview follows the menu's row, so both show one record.
+                      if (inlinePane && paneOpen && book.id !== selectedId) setSelectedId(book.id)
                     }}
                   />
                 </>
