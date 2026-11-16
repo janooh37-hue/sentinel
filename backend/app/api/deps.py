@@ -2,69 +2,53 @@
 
 The ``gssg_session`` cookie carries an opaque token; ``get_optional_user``
 resolves it to the active ``User`` (or ``None``). ``get_current_user`` is the
-401 gate; ``require_admin`` the 403 gate; ``require_capability("x")`` the
+401 gate and applies the scoped-role route policy (``core.scoped_roles``);
+``require_admin`` the 403 gate; ``require_capability("x")`` the
 capability-aware 403 gate (effective caps = role defaults ± per-user overrides).
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Cookie, Depends, Request
+from fastapi.dependencies.models import Dependant
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import Settings, get_settings
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
+from app.core.roles import ADMIN_ROLE, MANAGER_ROLE
+from app.core.scoped_roles import scoped_role
 from app.db.models import User
 from app.db.session import get_db
 from app.services import auth_service, perm_service
 
 COOKIE_NAME = "gssg_session"
 
-#: The complete authenticated-route surface for ``inmate_reporter`` — a fixed
-#: allowlist, not a capability policy: capability filtering alone does not
-#: close self-signature, dashboard summary, manager lists, permission
-#: requests, monthly statistics, notification, attachment, Word, review, or
-#: admin APIs. (method, registered route TEMPLATE path) — never a prefix
-#: test, so a new route is closed by default. Public login/logout/password-
-#: setup routes don't depend on ``get_current_user`` and are unaffected.
-_INMATE_REPORTER_ALLOWED_ROUTES: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("GET", "/api/v1/auth/me"),
-        ("POST", "/api/v1/auth/verify-password"),
-        ("PATCH", "/api/v1/auth/me/lock-timer"),
-        ("PATCH", "/api/v1/auth/me/lock-layout"),
-        ("GET", "/api/v1/auth/me/capabilities"),
-        ("GET", "/api/v1/identity/me"),
-        ("GET", "/api/v1/signatures/me"),
-        ("POST", "/api/v1/auth/me/signature"),
-        ("POST", "/api/v1/books/word-sessions"),
-        ("GET", "/api/v1/books/{book_id}/word-sessions/status"),
-        ("GET", "/api/v1/books/{book_id}/word-sessions/preview"),
-        ("POST", "/api/v1/books/{book_id}/word-sessions/finish"),
-        ("DELETE", "/api/v1/books/{book_id}/word-sessions"),
-        ("POST", "/api/v1/books/{book_id}/word-sessions"),
-        ("GET", "/api/v1/employees/{employee_id}/photo"),
-        ("GET", "/api/v1/templates"),
-        ("GET", "/api/v1/templates/{template_id}/fields"),
-        ("GET", "/api/v1/inmate-violations/nationalities"),
-        ("GET", "/api/v1/book-categories"),
-        ("GET", "/api/v1/books"),
-        ("GET", "/api/v1/books/facets"),
-        ("GET", "/api/v1/books/by-ref/{ref}"),
-        ("GET", "/api/v1/books/{book_id}"),
-        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/fields"),
-        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/annotations"),
-        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/signed-document"),
-        ("GET", "/api/v1/books/{book_id}/imported-document"),
-        ("POST", "/api/v1/books/{book_id}/submit"),
-        ("POST", "/api/v1/documents/generate"),
-        ("GET", "/api/v1/jobs/{job_id}"),
-        ("GET", "/api/v1/documents/{document_id}/download"),
-    }
-)
+#: Capabilities each matched route requires through ``require_capability``
+#: dependencies (router- and route-level, nested), memoized per route object.
+_ROUTE_CAPS: dict[int, frozenset[str]] = {}
+
+
+def _dependant_caps(dependant: Dependant) -> set[str]:
+    caps: set[str] = set()
+    for sub in dependant.dependencies:
+        capability = getattr(sub.call, "required_capability", None)
+        if isinstance(capability, str):
+            caps.add(capability)
+        caps |= _dependant_caps(sub)
+    return caps
+
+
+def route_capabilities(route: Any) -> frozenset[str]:
+    """The ``require_capability`` ids a matched route depends on."""
+    cached = _ROUTE_CAPS.get(id(route))
+    if cached is None:
+        dependant = getattr(route, "dependant", None)
+        cached = frozenset(_dependant_caps(dependant)) if dependant is not None else frozenset()
+        _ROUTE_CAPS[id(route)] = cached
+    return cached
 
 
 def settings_dep() -> Settings:
@@ -83,16 +67,22 @@ def get_optional_user(
 def get_current_user(
     request: Request,
     user: Annotated[User | None, Depends(get_optional_user)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> User:
     if user is None:
         raise AppError("NOT_AUTHENTICATED", "Not signed in.", http_status=401)
-    if user.role == INMATE_REPORTER_ROLE:
+    scoped = scoped_role(user.role)
+    if scoped is not None:
         route = request.scope.get("route")
         path = getattr(route, "path", None)
         # Missing route metadata fails closed — never fall through to "allow".
-        if path is None or (request.method, path) not in _INMATE_REPORTER_ALLOWED_ROUTES:
+        if path is None or not scoped.allows_route(
+            (request.method, path),
+            route_capabilities(route),
+            perm_service.effective_caps(db, user),
+        ):
             raise AppError(
-                "INMATE_REPORTER_ROUTE_FORBIDDEN",
+                f"{scoped.error_prefix}_ROUTE_FORBIDDEN",
                 "This role cannot use this endpoint.",
                 http_status=403,
             )
@@ -115,7 +105,8 @@ def require_capability(capability: str) -> Callable[..., User]:
     """Build a dependency that 401s if anon, 403s if the user lacks ``capability``.
 
     Effective capabilities are role defaults ± per-user overrides; admins always
-    pass (see ``perm_service.effective_caps``).
+    pass (see ``perm_service.effective_caps``). The capability is also recorded
+    on the dependency so the scoped-role route policy can read a route's gates.
     """
 
     def _dep(
@@ -131,6 +122,7 @@ def require_capability(capability: str) -> Callable[..., User]:
             )
         return user
 
+    _dep.required_capability = capability  # type: ignore[attr-defined]
     return _dep
 
 
@@ -141,5 +133,6 @@ __all__ = [
     "require_admin",
     "require_admin_or_manager",
     "require_capability",
+    "route_capabilities",
     "settings_dep",
 ]
