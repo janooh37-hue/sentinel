@@ -101,6 +101,7 @@ from app.schemas.book import (
     ScanBackResult,
     ServiceFacetRead,
     TemplateSessionRead,
+    VehicleLetterRebuildRequest,
     WordBookCreate,
     WordSaveStatusRead,
     WordSessionDetailRead,
@@ -119,6 +120,7 @@ from app.services import (
     perm_service,
     scan_inbox_service,
     scan_triage_service,
+    vehicle_letter_service,
     word_book_service,
 )
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
@@ -1742,6 +1744,12 @@ def _build_book_response(
         item.can_sign = can_sign
         item.can_review = can_review
         item.can_forward_to_branch = can_forward
+        item.can_rebuild_vehicle_letter = (
+            selected_is_current
+            and perm_service.has_capability(db, user, "vehicles.edit")
+            and perm_service.has_capability(db, user, "books.submit")
+            and book_service.vehicle_letter_rebuild_refusal(db, user, row) is None
+        )
         item.your_step_kind = your_step_kind
         item.can_send = not is_scoped_role(user)
         try:
@@ -2201,6 +2209,22 @@ def forward_to_branch(
         note=payload.note,
     )
     return _build_book_response(db, row, user, version_id=payload.version_id)
+
+
+@router.post("/{book_id}/rebuild-vehicle-letter", response_model=BookRead)
+def rebuild_vehicle_letter(
+    book_id: int,
+    payload: VehicleLetterRebuildRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    _submitter: Annotated[User, Depends(require_capability("books.submit"))],
+) -> BookRead:
+    """The fleet author regenerates a returned (or unsubmitted) vehicle letter from
+    current fleet data as a new revision, ready to submit again."""
+    row = vehicle_letter_service.rebuild_vehicle_letter(
+        db, book_id, version_id=payload.version_id, user=user
+    )
+    return _build_book_response(db, row, user)
 
 
 @router.get("/{book_id}/branch-candidates", response_model=list[ApproverOptionRead])

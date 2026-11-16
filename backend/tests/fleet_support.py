@@ -214,6 +214,17 @@ def fleet_env(api_db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     )
 
 
+def set_signer_rows(env: FleetEnv, user: User, count: int) -> None:
+    """Give ``user`` exactly ``count`` active Manager (signer) rows."""
+    for row in env.db.query(Manager).filter_by(user_id=user.id):
+        row.active = False
+    env.db.add_all(
+        Manager(name_en=f"{user.email} signer {n}", user_id=user.id, active=True)
+        for n in range(count)
+    )
+    env.db.commit()
+
+
 def general_book(
     env: FleetEnv, user: User, classification_code: str = "11/1", **kwargs: Any
 ) -> Book:

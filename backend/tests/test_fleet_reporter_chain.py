@@ -7,7 +7,13 @@ from httpx import Response
 
 from app.db.models import Book, BookVersion
 from app.services import book_service
-from tests.fleet_support import FleetEnv, current_version_id, fines_letter, general_book
+from tests.fleet_support import (
+    FleetEnv,
+    current_version_id,
+    fines_letter,
+    general_book,
+    set_signer_rows,
+)
 
 
 def _assert_error(response: Response, status: int, code: str) -> None:
@@ -47,7 +53,10 @@ def _forward(env: FleetEnv, book: Book) -> Response:
     )
 
 
-@pytest.mark.parametrize("line_manager", ["missing", "disabled", "without_approval"])
+@pytest.mark.parametrize(
+    "line_manager",
+    ["missing", "disabled", "without_approval", "without_signer_row", "two_signer_rows"],
+)
 def test_submit_requires_an_eligible_line_manager(fleet_env: FleetEnv, line_manager: str) -> None:
     env = fleet_env
     book = general_book(env, env.reporter)
@@ -55,6 +64,10 @@ def test_submit_requires_an_eligible_line_manager(fleet_env: FleetEnv, line_mana
         env.reporter.line_manager_user_id = None
     elif line_manager == "disabled":
         env.line.status = "disabled"
+    elif line_manager == "without_signer_row":
+        set_signer_rows(env, env.line, 0)
+    elif line_manager == "two_signer_rows":
+        set_signer_rows(env, env.line, 2)
     else:
         env.reporter.line_manager_user_id = env.operator.id
     env.db.commit()
@@ -151,10 +164,6 @@ def test_line_manager_approves_vehicle_fines_without_signing_paper(fleet_env: Fl
     assert version.approval_steps[0].state == "approved"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Open question: Report records map to category 13/1, outside the agreed fleet ceiling (7/1, 11/1)",
-)
 def test_report_review_preserves_the_reporters_signed_paper(fleet_env: FleetEnv) -> None:
     env = fleet_env
     book = Book(
@@ -263,13 +272,28 @@ def test_only_the_pending_line_assignee_can_forward(fleet_env: FleetEnv, caller:
     _assert_pending_line(env, book.id)
 
 
-@pytest.mark.parametrize("candidate", ["reporter", "line", "operator", "disabled_branch"])
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        "reporter",
+        "line",
+        "operator",
+        "disabled_branch",
+        "admin_without_signer_row",
+        "branch_with_two_signer_rows",
+    ],
+)
 def test_forward_rejects_ineligible_branch_candidates(fleet_env: FleetEnv, candidate: str) -> None:
     env = fleet_env
     book = _submit(env, general_book(env, env.reporter))
     if candidate == "disabled_branch":
         env.branch.status = "disabled"
         env.db.commit()
+        target = env.branch
+    elif candidate == "admin_without_signer_row":
+        target = env.admin  # holds books.approve but signs as no Manager row
+    elif candidate == "branch_with_two_signer_rows":
+        set_signer_rows(env, env.branch, 2)
         target = env.branch
     else:
         target = getattr(env, candidate)
@@ -400,8 +424,19 @@ def test_branch_candidates_exclude_author_and_line_and_require_current_assignee(
     assert response.status_code == 200, response.text
     candidates = response.json()
     ids = {candidate["id"] for candidate in candidates}
-    assert {env.branch.id, env.admin.id} <= ids
-    assert ids.isdisjoint({env.reporter.id, env.line.id, env.operator.id, env.other_reporter.id})
+    assert env.branch.id in ids
+    # The admin can approve but has no Manager (signer) row, so cannot sign the paper.
+    assert ids.isdisjoint(
+        {env.reporter.id, env.line.id, env.operator.id, env.other_reporter.id, env.admin.id}
+    )
+    set_signer_rows(env, env.admin, 1)
+    ids = {
+        candidate["id"]
+        for candidate in env.client(env.line)
+        .get(f"/api/v1/books/{book.id}/branch-candidates")
+        .json()
+    }
+    assert env.admin.id in ids
     for candidate in candidates:
         assert {"id", "name", "name_ar", "is_default"} <= candidate.keys()
     response = env.client(env.branch).get(f"/api/v1/books/{book.id}/branch-candidates")

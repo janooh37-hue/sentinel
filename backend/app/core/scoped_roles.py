@@ -114,6 +114,8 @@ SCOPED_SHARED_ROUTES: Final[frozenset[RouteKey]] = frozenset(
         # The author is told of return, reject and finish.
         ("GET", "/api/v1/notifications/decisions"),
         ("POST", "/api/v1/notifications/decisions/seen"),
+        # Opening one decision marks it seen: own markers only, read-checked.
+        ("POST", "/api/v1/books/{book_id}/seen"),
         ("GET", "/api/v1/push/vapid-public-key"),
         ("POST", "/api/v1/push/subscribe"),
         ("DELETE", "/api/v1/push/subscribe"),
@@ -134,6 +136,9 @@ class ScopedRole:
     route_allowlist: frozenset[RouteKey] | None
     #: Submissions route to the account's admin-set line manager.
     routes_to_line_manager: bool = False
+    #: Services authorised by their service capabilities alone: the record-category
+    #: gate never applies to them for this role (create, open, list, submit, revise).
+    category_exempt_services: frozenset[str] = frozenset()
 
     def allows_route(self, route: RouteKey, route_caps: frozenset[str], caps: set[str]) -> bool:
         if self.route_allowlist is not None:
@@ -156,6 +161,9 @@ SCOPED_ROLES: Final[dict[str, ScopedRole]] = {
         error_prefix="SCOPED_ROLE",
         route_allowlist=None,
         routes_to_line_manager=True,
+        # A Report has no classification; its record category (13/1) stays out
+        # of the ceiling, so it answers to books.service/servicerecords.Report.
+        category_exempt_services=frozenset({"Report"}),
     ),
 }
 
@@ -167,6 +175,12 @@ LINE_MANAGER_ROLES: Final[frozenset[str]] = frozenset(
 
 def scoped_role(role: str | None) -> ScopedRole | None:
     return SCOPED_ROLES.get(role) if role is not None else None
+
+
+def category_exempt_services(user: User) -> frozenset[str]:
+    """Services the user's scoped role authorises without the record-category gate."""
+    scoped = SCOPED_ROLES.get(user.role)
+    return scoped.category_exempt_services if scoped is not None else frozenset()
 
 
 def is_scoped_role(user: User) -> bool:
@@ -183,6 +197,7 @@ __all__ = [
     "SCOPED_ROLES",
     "SCOPED_SHARED_ROUTES",
     "ScopedRole",
+    "category_exempt_services",
     "is_scoped_role",
     "routes_to_line_manager",
     "scoped_role",

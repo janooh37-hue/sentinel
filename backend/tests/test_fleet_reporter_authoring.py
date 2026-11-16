@@ -106,9 +106,14 @@ def test_general_book_allowed_classifications_start_unsigned(
     _assert_unsubmitted(book)
 
 
-def test_general_book_service_rejects_out_of_scope_classification(fleet_env: FleetEnv) -> None:
+# 13/1 holds Reports, which a fleet reporter authors by service alone; a General
+# Book there must still answer to the (absent) books.category.13/1 capability.
+@pytest.mark.parametrize("classification_code", ["15/1", "13/1"])
+def test_general_book_service_rejects_out_of_scope_classification(
+    fleet_env: FleetEnv, classification_code: str
+) -> None:
     with pytest.raises(AppError) as raised:
-        general_book(fleet_env, fleet_env.reporter, "15/1")
+        general_book(fleet_env, fleet_env.reporter, classification_code)
     assert raised.value.code == "RECORD_TYPE_FORBIDDEN"
     assert raised.value.http_status == 403
     assert fleet_env.db.scalar(select(func.count()).select_from(Book)) == 0
@@ -129,6 +134,7 @@ def test_general_book_service_cannot_choose_signing_manager(fleet_env: FleetEnv)
     ("extra", "code"),
     [
         ({"classification_code": "15/1"}, "RECORD_TYPE_FORBIDDEN"),
+        ({"classification_code": "13/1"}, "RECORD_TYPE_FORBIDDEN"),
         ({"classification_code": "11/1", "manager_id": 12345}, "SCOPED_ROLE_INPUT_FORBIDDEN"),
     ],
 )
@@ -155,6 +161,28 @@ def test_word_create_allowed_classification_starts_unapproved(word_env: FleetEnv
     assert book.approval_state == "none"
     assert book.doc_manager_id is None
     assert book.approval_steps == []
+
+
+def test_word_report_is_authorised_by_service_alone_and_stays_private(word_env: FleetEnv) -> None:
+    """A Report (record category 13/1, outside the ceiling) is created, listed and
+    opened by its fleet author through the Report service capabilities only."""
+    env = word_env
+    signature = signature_core.employee_signature_path(
+        env.settings.vault_dir, env.reporter.employee_id
+    )
+    signature.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGBA", (100, 40), (0, 0, 0, 255)).save(signature)
+    response = env.client(env.reporter).post(
+        "/api/v1/books/word-sessions",
+        json={"subject": "Incident report", "signer_employee_id": env.reporter.employee_id},
+    )
+    assert response.status_code == 201, response.text
+    report = env.book(response.json()["book_id"])
+    assert report.ref_number.startswith("REPORT-")
+    assert report.classification_code is None
+    assert report.approval_state == "none"
+    _assert_visibility(env, env.reporter, [report], {report.id})
+    _assert_visibility(env, env.other_reporter, [report], set())
 
 
 def test_vehicle_letter_fleet_draft_does_not_inherit_operator_auto_signing(

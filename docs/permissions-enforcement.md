@@ -428,9 +428,12 @@ may call, each self-service or gated inside its handler:
 | `POST /books/word-sessions`, `GET /books/{book_id}/word-sessions`, `.../status`, `.../preview`, `POST .../finish`, `DELETE /books/{book_id}/word-sessions`, `POST /books/{book_id}/word-sessions` | Word authoring of the reporter's own General Books and Reports (`book_service.require_scoped_word_access`). |
 | `GET /books/by-ref/{ref}`, `GET /books/{book_id}`, `GET .../versions/{version_id}/fields`, `.../annotations`, `.../signed-document`, `GET /books/{book_id}/imported-document` | Record reads; `resolve_book_read_access` and the role's visibility matrix decide in the handler. |
 | `GET /notifications/decisions`, `POST /notifications/decisions/seen`, `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/subscribe` | The author is told when a paper is returned, rejected or finished. |
+| `POST /books/{book_id}/seen` | Opening one decision marks it seen; writes only the caller's own markers, after `resolve_book_read_access`. |
 
 **Shared restrictions** (`scoped_roles.is_scoped_role`): no Direct send or forward via
-`/send`; never a send recipient, in the user directory or in folder sharing; no Level
+`/send`; never a send recipient, in the user directory or in folder sharing; no folders at
+all (`book_folder_service.require_folder_access`: list, create, file, rename, delete,
+share, and the register's `folder_id` filter answer 403 `SCOPED_ROLE_FOLDERS_FORBIDDEN`); no Level
 change; no derive; PDF-only downloads and own generation jobs only; current revision
 only; confidentiality limited to General plus own Personal/Directed. Rules about Inmate
 Conduct Violations forms, the global inmate manager and inmate Report-only writes stay
@@ -445,6 +448,14 @@ Fines, Vehicle Accident Report, Vehicle Mileage Log) by anyone: pending or appro
 unsubmitted `auto` letter by an author outside the line-manager chain. Never another
 user's General Book or Report.
 
+**Category-exempt services.** A `ScopedRole` may name services authorised by their
+service capabilities alone (`category_exempt_services`). For `fleet_reporter` that is
+`Report`: a Report's record category (13/1) stays out of the ceiling, so creating, opening,
+listing, revising and submitting it answer only to `books.service.Report` /
+`books.servicerecords.Report`. The SQL side is `book_service._category_gate_hidden_clause`
+(also used by `document_visibility_clause`); the Python side is `assert_record_type_visible`
+and `require_record_type_access`. A General Book under 13/1 is still refused.
+
 **Writes without `books.create`/`books.edit`.** A fleet reporter authors through
 `book_service.require_fleet_write_access` (own General Book, Report or vehicle paper in
 `none`/`returned`; a Report must stay signed by the linked employee) and
@@ -454,12 +465,26 @@ with no signing manager. It cannot choose an approver, reviewers, priority or ma
 
 **Line manager.** `users.line_manager_user_id` (migration `0120_user_line_manager`) is set
 by an admin with `PATCH /api/v1/auth/users/{user_id}/line-manager` (`require_admin`,
-audited as `set_line_manager`). Submitting builds one `line_manager` step; the line
+audited as `set_line_manager`). Line and branch managers must be active, hold
+`books.approve` and be linked to exactly one active `Manager` (signer) row
+(`manager_service.sole_active_manager_id`); that row becomes the paper's
+`doc_manager_id`, so the signer printed is always the account that finishes the chain. The chain follows the paper's original author: a paper whose author's role routes to a
+line manager is submitted only by that author (anyone else gets 403
+`SCOPED_ROLE_CHAIN_AUTHOR_ONLY`), and the step is built from the author's own
+`line_manager_user_id`. Submitting builds one `line_manager` step; the line
 manager either signs to finish, or forwards with `POST /books/{book_id}/forward-to-branch`
 (gate `books.approve` plus the pending-assignee check) to an optional `branch_manager`
 stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
+
+**Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
+(`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
+returned vehicle letter from current fleet data through the ordinary revise path: same
+reference and paper date, a new revision, earlier steps kept as history, state `none`.
+`book_service.vehicle_letter_rebuild_refusal` is the one rule behind the route and
+`BookRead.can_rebuild_vehicle_letter`. Fines letters keep their source selection in the
+version's `_letter_source` field (older letters fall back to the `letter.generated` audit).
 
 **Tests:** `backend/tests/test_fleet_reporter_scope.py` (route policy, allowlist parity,
 shared routes exist, ceiling, line-manager admin route, migration),
