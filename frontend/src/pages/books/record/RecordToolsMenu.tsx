@@ -68,7 +68,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
     has,
     canEdit,
     canMutateCurrent,
-    isInmateReporter,
+    isScopedRole,
     canOverrideState,
     canManageRevisionAccess,
     canManageIncludedPapers,
@@ -83,22 +83,22 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
   const overflow = nextStep?.overflow ?? []
   const canReroute = overflow.includes('reroute')
   const canScanSigned = overflow.includes('scanSigned')
-  const deleteReason = deleteBlockReason(book, { has, isInmateReporter })
+  const deleteReason = deleteBlockReason(book, { has, isScopedRole })
   const deleteVisible = deleteReason !== 'noCapability' && deleteReason !== 'restricted'
   const deleteReasonText = deleteReasonKey(deleteReason)
 
   const showEditing =
-    !isInmateReporter &&
-    (wordReopenTrigger != null ||
+    wordReopenTrigger != null ||
+    (!isScopedRole && (
       adjustSigTrigger != null ||
       canReroute ||
       canScanSigned ||
-      canManageSignedPaper)
+      canManageSignedPaper))
   // Delete sits last, after its own separator — but only when it follows other
   // admin items; alone it would put a rule right under the group label.
   const hasOtherAdmin =
     (canOverrideState && canMutateCurrent) || canManageRevisionAccess || canManageSignedPaper
-  const showAdmin = !isInmateReporter && (hasOtherAdmin || deleteVisible)
+  const showAdmin = !isScopedRole && (hasOtherAdmin || deleteVisible)
 
   // modal={false}: its items open confirm dialogs, and Radix's modal menu leaves
   // `pointer-events: none` on <body> when a dialog opens from it (page dead after Cancel/Delete).
@@ -122,7 +122,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
         {/* Hand this record to Outlook. Same one-item basket prefill the
             tray builds, so subject/body/reference PDF and the book link
             are identical whether you email one record or a whole basket. */}
-        {!isInmateReporter && (
+        {!isScopedRole && (
           <DropdownMenuItem
             reason={recordHasPapers ? undefined : t('books.reason.emailNoDoc')}
             pending={emailingRecord}
@@ -138,7 +138,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.includedPapers.addToPdf')}
           </DropdownMenuItem>
         )}
-        {book.can_send && (
+        {!isScopedRole && book.can_send && (
           <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
             <Send className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.send.menu')}
@@ -160,7 +160,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             {t('books.thread.linkRecord')}
           </DropdownMenuItem>
         )}
-        {book.can_change_confidentiality && (
+        {!isScopedRole && book.can_change_confidentiality && (
           <DropdownMenuItem data-testid="record-level-trigger" onSelect={() => openOverlay('level')}>
             <Lock className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.confidentiality.menu')}

@@ -79,6 +79,7 @@ import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { NotFoundPage } from '@/pages/NotFoundPage'
+import { VehicleRecordLink } from './components/VehicleRecordLink'
 
 import {
   DOCUMENT_ACCEPT,
@@ -1651,7 +1652,7 @@ function MaintenanceRequestsPanel({
             <li key={request.id} className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3">
               <div className="flex min-w-0 flex-col gap-1 text-sm">
                 {request.book_id ? (
-                  <Link to={`/books/${request.book_id}`} className="font-mono font-medium text-primary hover:underline"><bdi dir="ltr">{request.ref_number || `#${request.book_id}`}</bdi></Link>
+                  <VehicleRecordLink bookId={request.book_id} className="font-mono font-medium text-primary hover:underline"><bdi dir="ltr">{request.ref_number || `#${request.book_id}`}</bdi></VehicleRecordLink>
                 ) : <span>{EMPTY_VALUE}</span>}
                 <span>{t(`vehicles.${request.type}`)}{' · '}<bdi dir="ltr">{formatIsoDate(request.created_at.slice(0, 10))}</bdi></span>
                 <span className="whitespace-pre-wrap break-words text-xs text-muted-foreground" dir="auto">{request.description}</span>

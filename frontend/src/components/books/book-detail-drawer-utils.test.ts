@@ -4,6 +4,7 @@ import {
   canFileSignedCopy,
   canSendForApproval,
   footerActionFor,
+  scopedReporterActionFor,
 } from './book-detail-drawer-utils'
 
 /**
@@ -129,5 +130,28 @@ describe('canSendForApproval', () => {
   it('requires the submit capability', () => {
     expect(canSendForApproval('none', { canSubmitBook: false })).toBe(false)
     expect(canSendForApproval('pending', { canSubmitBook: false })).toBe(false)
+  })
+})
+
+describe('scopedReporterActionFor — fleet reporter ownership', () => {
+  it.each([
+    ['none', 7, 'edit-submit'],
+    ['returned', 7, 'correct-resubmit'],
+    ['none', 8, 'read-only'],
+    ['returned', 8, 'read-only'],
+    ['pending', 7, 'read-only'],
+    ['approved', 7, 'read-only'],
+    ['rejected', 7, 'read-only'],
+  ] as const)('%s owned by user %i yields %s', (approval_state, original_creator_user_id, action) => {
+    expect(scopedReporterActionFor({ approval_state, original_creator_user_id }, 7)).toBe(action)
+  })
+
+  it('never treats a missing identity as ownership', () => {
+    expect(scopedReporterActionFor({ approval_state: 'none' }, undefined)).toBe('read-only')
+  })
+
+  it.each(['Vehicle Fines', 'Vehicle Accident Report', 'Vehicle Mileage Log'])('requires rebuilding a returned %s before submission', (service_id) => {
+    expect(scopedReporterActionFor({ service_id, approval_state: 'returned', original_creator_user_id: 7 }, 7)).toBe('read-only')
+    expect(scopedReporterActionFor({ service_id, approval_state: 'none', original_creator_user_id: 7 }, 7)).toBe('edit-submit')
   })
 })

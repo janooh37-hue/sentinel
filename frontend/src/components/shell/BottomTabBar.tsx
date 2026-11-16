@@ -1,6 +1,6 @@
 import { useCallback, useContext, useRef, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
-import { BookText, FilePlus2, Grip, LayoutDashboard, Minus, Pencil } from 'lucide-react'
+import { BookText, Car, FilePlus2, Grip, LayoutDashboard, Minus, Pencil } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useNavigate } from 'react-router-dom'
@@ -9,6 +9,8 @@ import { cn } from '@/lib/utils'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
+import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
+import type { ScopedRoleName } from '@/lib/api'
 
 import {
   DEFAULT_SLOT_IDS,
@@ -25,7 +27,7 @@ import {
 } from './navCustomization'
 import { useWaitingSignals } from './useWaitingSignals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
-import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from './navItems'
+import type { NavItem } from './navItems'
 
 interface DockSlotVisualProps {
   Icon: LucideIcon
@@ -117,21 +119,25 @@ function EntryPicker({ entry, label, count, placed, onSelect }: EntryPickerProps
 
 export function BottomTabBar(): React.JSX.Element {
   const user = useContext(AuthContext)?.user ?? null
-  return user?.role === 'inmate_reporter'
-    ? <InmateReporterBottomTabBar />
+  const role = scopedRoleOf(user)
+  return role
+    ? <ScopedRoleBottomTabBar role={role} />
     : <CustomizableBottomTabBar />
 }
 
-function InmateReporterBottomTabBar(): React.JSX.Element {
+function ScopedRoleBottomTabBar({ role }: { role: ScopedRoleName }): React.JSX.Element {
   const { t } = useTranslation()
-  const entryByDestination = {
-    '/': { labelKey: 'nav.dashboard', Icon: LayoutDashboard },
-    '/services': { labelKey: 'nav.inmateReport', Icon: FilePlus2 },
-    '/books': { labelKey: 'nav.records', Icon: BookText },
+  const { has } = useCapabilities()
+  const entryByDestination: Record<string, Pick<NavItem, 'key' | 'Icon'>> = {
+    '/': { key: 'nav.dashboard', Icon: LayoutDashboard },
+    '/services': { key: role === 'inmate_reporter' ? 'nav.inmateReport' : 'nav.services', Icon: FilePlus2 },
+    '/books': { key: 'nav.records', Icon: BookText },
+    '/vehicles': { key: 'nav.vehicles', Icon: Car },
   }
-  const entries = INMATE_REPORTER_ALLOWED_DESTINATIONS.map((to) => ({
+  const entries = scopedDestinations(role, has).map((to) => ({
     to,
-    ...entryByDestination[to],
+    labelKey: entryByDestination[to]!.key,
+    Icon: entryByDestination[to]!.Icon,
   }))
 
   return (

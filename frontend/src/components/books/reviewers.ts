@@ -13,9 +13,10 @@ export function approverStep(steps: BookApprovalStepRead[]): BookApprovalStepRea
   return active
 }
 
-export function approvalStageLabel(stage: string | null | undefined): 'books.approval.branchManager' | 'books.approval.projectManager' | null {
+export function approvalStageLabel(stage: string | null | undefined): 'books.approval.branchManager' | 'books.approval.projectManager' | 'books.fleetReporter.lineManager' | null {
   if (stage === 'branch_manager') return 'books.approval.branchManager'
   if (stage === 'project_manager') return 'books.approval.projectManager'
+  if (stage === 'line_manager') return 'books.fleetReporter.lineManager'
   return null
 }
 export function reviewerSteps(steps: BookApprovalStepRead[]): BookApprovalStepRead[] {

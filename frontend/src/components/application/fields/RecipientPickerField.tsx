@@ -167,6 +167,7 @@ export function RecipientPickerField({
                           </button>
                         ))}
                         {showAddInline && (
+                          <CapabilityGate cap="books.edit">
                           <button
                             type="button"
                             role="option"
@@ -191,6 +192,7 @@ export function RecipientPickerField({
                                 : `Add "${query.trim()}"`}
                             </span>
                           </button>
+                          </CapabilityGate>
                         )}
                       </>
                     )}

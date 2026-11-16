@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), isLoading: false }))
+const sessionState = vi.hoisted(() => ({ scoped_role: null as 'inmate_reporter' | 'fleet_reporter' | null }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -43,7 +44,7 @@ vi.mock('@/lib/api', () => ({
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ status: 'authed', user: { id: 999 }, logout: vi.fn() }),
+  useAuth: () => ({ status: 'authed', user: { id: 999, scoped_role: sessionState.scoped_role }, logout: vi.fn() }),
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/lib/useLockState', () => ({
@@ -121,6 +122,7 @@ vi.mock('@/lib/routeLoaders', () => ({
 
 import App from './App'
 import { api } from '@/lib/api'
+import { useNotificationStream } from '@/hooks/useNotificationStream'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -166,7 +168,9 @@ const routes = [
 beforeEach(() => {
   capabilityState.allowed = new Set()
   capabilityState.isLoading = false
+  sessionState.scoped_role = null
   vi.mocked(api.requestPermission).mockClear()
+  vi.mocked(useNotificationStream).mockClear()
 })
 
 afterEach(() => {
@@ -387,5 +391,60 @@ describe('App unknown paths', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /page not found/i })).toBeVisible()
     expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument()
     expect(window.location.pathname).toBe('/nope')
+  })
+})
+
+describe('App scoped role routes', () => {
+  it.each([
+    { role: 'fleet_reporter', stream: false, push: true },
+    { role: 'inmate_reporter', stream: false, push: false },
+    { role: null, stream: true, push: true },
+  ] as const)('sets stream=$stream and push=$push for $role', async ({ role, stream, push }) => {
+    sessionState.scoped_role = role
+    render(<App />)
+    expect(await screen.findByText('dashboard-page')).toBeVisible()
+    expect(useNotificationStream).toHaveBeenLastCalledWith(stream, { pushEnabled: push })
+  })
+
+  it.each(['/employees', '/settings', '/vehicles/42', '/ledger', '/books/approvals'])('redirects a fleet reporter away from %s', async (path) => {
+    sessionState.scoped_role = 'fleet_reporter'
+    // Even stale/broader capability data cannot widen the scoped shell.
+    capabilityState.allowed = new Set(['employees.view', 'settings.view', 'ledger.view', 'books.view'])
+    window.history.pushState({}, '', path)
+    render(<App />)
+
+    expect(await screen.findByText('dashboard-page')).toBeVisible()
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('waits for capabilities before deciding whether a fleet vehicle link is allowed', async () => {
+    sessionState.scoped_role = 'fleet_reporter'
+    capabilityState.isLoading = true
+    window.history.pushState({}, '', '/vehicles/42')
+    const view = render(<App />)
+
+    expect(window.location.pathname).toBe('/vehicles/42')
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument()
+    expect(screen.queryByText('vehicle-detail-page')).not.toBeInTheDocument()
+    capabilityState.allowed.add('vehicles.view')
+    capabilityState.isLoading = false
+    view.rerender(<App />)
+
+    expect(await screen.findByText('vehicle-detail-page')).toBeVisible()
+    expect(window.location.pathname).toBe('/vehicles/42')
+  })
+
+  it('redirects a fleet vehicle link once resolved capabilities deny it', async () => {
+    sessionState.scoped_role = 'fleet_reporter'
+    capabilityState.isLoading = true
+    window.history.pushState({}, '', '/vehicles/42')
+    const view = render(<App />)
+
+    expect(window.location.pathname).toBe('/vehicles/42')
+    capabilityState.isLoading = false
+    view.rerender(<App />)
+
+    expect(await screen.findByText('dashboard-page')).toBeVisible()
+    expect(window.location.pathname).toBe('/')
   })
 })

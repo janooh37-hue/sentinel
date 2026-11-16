@@ -454,6 +454,26 @@ export interface paths {
         patch: operations["set_user_link_api_v1_auth_users__user_id__link_patch"];
         trace?: never;
     };
+    "/api/v1/auth/users/{user_id}/line-manager": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Line Manager
+         * @description Set or clear the approving account a fleet reporter's papers route to.
+         */
+        patch: operations["set_line_manager_api_v1_auth_users__user_id__line_manager_patch"];
+        trace?: never;
+    };
     "/api/v1/auth/users/{user_id}/disable": {
         parameters: {
             query?: never;
@@ -3469,6 +3489,69 @@ export interface paths {
          *     document, store the signed PDF, and mark the book approved.
          */
         post: operations["sign_book_api_v1_books__book_id__sign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/forward-to-branch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forward To Branch
+         * @description The pending line manager approves their stage unsigned and hands the
+         *     paper to a branch manager, who finishes the chain.
+         */
+        post: operations["forward_to_branch_api_v1_books__book_id__forward_to_branch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/rebuild-vehicle-letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild Vehicle Letter
+         * @description The fleet author regenerates a returned (or unsubmitted) vehicle letter from
+         *     current fleet data as a new revision, ready to submit again.
+         */
+        post: operations["rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/branch-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Branch Candidates
+         * @description Accounts the pending line manager may forward to: active approvers other
+         *     than the author and the line manager.
+         */
+        get: operations["list_branch_candidates_api_v1_books__book_id__branch_candidates_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -8432,7 +8515,7 @@ export interface components {
              * @default operator
              * @enum {string}
              */
-            role: "operator" | "manager" | "admin" | "inmate_reporter";
+            role: "operator" | "manager" | "admin" | "inmate_reporter" | "fleet_reporter";
         };
         /**
          * AdminUserCreateResult
@@ -8475,6 +8558,8 @@ export interface components {
              * @default false
              */
             password_change_required: boolean;
+            /** Line Manager User Id */
+            line_manager_user_id?: number | null;
         };
         /** AnnouncementOut */
         AnnouncementOut: {
@@ -9746,6 +9831,18 @@ export interface components {
             name: string;
         };
         /**
+         * BookForwardToBranchRequest
+         * @description The line manager approves their stage and hands the paper to a branch manager.
+         */
+        BookForwardToBranchRequest: {
+            /** Version Id */
+            version_id: number;
+            /** Branch Approver User Id */
+            branch_approver_user_id: number;
+            /** Note */
+            note?: string | null;
+        };
+        /**
          * BookInboxRead
          * @description The caller's own received send of a record (BookRead.my_inbox).
          */
@@ -9870,6 +9967,16 @@ export interface components {
              * @default false
              */
             can_review: boolean;
+            /**
+             * Can Forward To Branch
+             * @default false
+             */
+            can_forward_to_branch: boolean;
+            /**
+             * Can Rebuild Vehicle Letter
+             * @default false
+             */
+            can_rebuild_vehicle_letter: boolean;
             /** Classification Code */
             classification_code?: string | null;
             /** Voided At */
@@ -15493,6 +15600,8 @@ export interface components {
              * @default false
              */
             is_manager: boolean;
+            /** Scoped Role */
+            scoped_role?: string | null;
             /**
              * Has Signature
              * @default false
@@ -15508,6 +15617,14 @@ export interface components {
              * @default band
              */
             lock_layout: string;
+        };
+        /**
+         * SetLineManagerRequest
+         * @description Administrator-set line manager of a fleet reporter; null clears it.
+         */
+        SetLineManagerRequest: {
+            /** Line Manager User Id */
+            line_manager_user_id?: number | null;
         };
         /**
          * SetPermissionBulkRequest
@@ -18413,6 +18530,14 @@ export interface components {
             title: string;
         };
         /**
+         * VehicleLetterRebuildRequest
+         * @description Rebuild the current revision of a returned fleet vehicle letter.
+         */
+        VehicleLetterRebuildRequest: {
+            /** Version Id */
+            version_id: number;
+        };
+        /**
          * VehicleLicenceScan
          * @description OCR pre-fill result for a vehicle licence (mulkiya). All optional; the
          *     operator confirms/edits every field before saving.
@@ -20493,6 +20618,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetUserEmployeeLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_line_manager_api_v1_auth_users__user_id__line_manager_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetLineManagerRequest"];
             };
         };
         responses: {
@@ -27288,6 +27450,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    forward_to_branch_api_v1_books__book_id__forward_to_branch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookForwardToBranchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleLetterRebuildRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_branch_candidates_api_v1_books__book_id__branch_candidates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproverOptionRead"][];
                 };
             };
             /** @description Validation Error */

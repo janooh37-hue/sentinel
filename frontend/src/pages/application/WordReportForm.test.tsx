@@ -35,6 +35,7 @@ const user = {
   name_en: 'Reporter',
   employee_id: 'G123',
   role: 'inmate_reporter',
+  scoped_role: 'inmate_reporter',
 } as SessionUser
 
 function renderForm(): void {

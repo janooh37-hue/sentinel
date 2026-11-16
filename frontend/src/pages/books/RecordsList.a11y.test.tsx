@@ -69,7 +69,7 @@ function setup(
             queue: rows.map((row) => row.id),
             scrollY,
           })}
-          isInmateReporter={false}
+          isScopedRole={false}
           {...props}
         />
         <Probe />
@@ -109,7 +109,7 @@ describe('RecordsList row a11y', () => {
             selected={new Set()}
             onToggleSelect={vi.fn()}
             nav={nav}
-            isInmateReporter={false}
+            isScopedRole={false}
           />
         </MemoryRouter>
       </QueryClientProvider>
@@ -187,7 +187,7 @@ describe('RecordsList row a11y', () => {
     })
 
     it('inmate reporters: only the signed copy, matching the pane and the phone list', () => {
-      setup([signedWithScans()], { isInmateReporter: true })
+      setup([signedWithScans()], { isScopedRole: true })
       expect(within(rowOf(1)).getByText('1 paper')).toBeInTheDocument()
     })
   })

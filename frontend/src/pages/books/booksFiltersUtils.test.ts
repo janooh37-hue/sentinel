@@ -62,6 +62,8 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
     confidentiality: 'general',
     can_send: false,
     can_change_confidentiality: false,
+    can_forward_to_branch: false,
+    can_rebuild_vehicle_letter: false,
     ...overrides,
   }
 }

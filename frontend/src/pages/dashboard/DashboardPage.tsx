@@ -41,6 +41,7 @@ import { hijriToday } from '@/lib/hijri'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
@@ -49,7 +50,7 @@ import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { WorkforceCoverageSheet } from './widgets/WorkforceCoverageSheet'
 import { DashboardRuntimeContext } from './widgets/dashboardWidgetContext'
 import { widgetRegistry } from './widgetRegistry'
-import { InmateReporterDashboard } from './InmateReporterDashboard'
+import { ScopedReporterDashboard } from './ScopedReporterDashboard'
 
 export type DashboardPage = 'employees' | 'services' | 'books' | 'leaves' | 'ledger' | 'settings' | 'dashboard'
 export interface DashboardPageProps { onNavigate: (page: DashboardPage) => void }
@@ -108,9 +109,11 @@ function joinNames(names: string[], isAr: boolean): string {
 
 export function DashboardPage(props: DashboardPageProps): React.JSX.Element {
   const { user } = useAuth()
-  if (user?.role === 'inmate_reporter') return <InmateReporterDashboard />
+  const role = scopedRoleOf(user)
+  if (role !== null) return <ScopedReporterDashboard key={`${role}:${user?.id ?? 0}`} role={role} />
   return <GenericDashboardPage key={user?.id ?? 'anonymous'} {...props} />
 }
+
 
 function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()

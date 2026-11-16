@@ -53,7 +53,7 @@ function Harness({ row, detailKey }: { row: BookRead; detailKey: readonly unknow
     queryFn: () => api.getBook(row.id),
     enabled: reading,
   })
-  const menu = useRecordRowMenu({ open: vi.fn(), isInmateReporter: false })
+  const menu = useRecordRowMenu({ open: vi.fn(), isScopedRole: false })
   const location = useLocation()
   return <>
     <RecordRowMenu book={row} itemsFor={menu.itemsFor} open={open} onOpenChange={(next) => {

@@ -26,7 +26,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => gates.caps.has(cap) || gates.caps.has('*') }),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: gates.role } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: gates.role, scoped_role: gates.role === 'inmate_reporter' || gates.role === 'fleet_reporter' ? gates.role : null } }) }))
 vi.mock('./RecordDeleteProvider', () => ({
   useRecordDelete: () => ({ scheduleDelete, pendingIds: new Set<number>() }),
 }))
