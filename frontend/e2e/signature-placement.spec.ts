@@ -35,13 +35,15 @@ const COPY = {
     previewFailed: 'Could not load the signature preview. Retry before adjusting its position.',
     save: 'Save position',
     saved: 'Signature position saved.',
-    reset: 'Reset position',
+    reset: 'Reset position and size',
     cancel: 'Cancel',
     retry: 'Retry',
     unsavedTitle: 'Discard unsaved changes?',
     discard: 'Discard changes',
     left: 'Left (mm)',
     top: 'Top (mm)',
+    width: 'Width (mm)',
+    resizeHandle: 'Resize signature — drag the corner or use the arrow keys',
     signatureLabel: 'Signature — drag or use the arrow keys to move',
     identify: 'Identify signature',
   },
@@ -50,13 +52,15 @@ const COPY = {
     previewFailed: 'تعذّر تحميل معاينة التوقيع. أعد المحاولة قبل ضبط موضعه.',
     save: 'حفظ الموضع',
     saved: 'تم حفظ موضع التوقيع.',
-    reset: 'استعادة الموضع الأصلي',
+    reset: 'استعادة الموضع والحجم الأصليين',
     cancel: 'إلغاء',
     retry: 'إعادة المحاولة',
     unsavedTitle: 'تجاهل التغييرات غير المحفوظة؟',
     discard: 'تجاهل التغييرات',
     left: 'من اليسار (مم)',
     top: 'من الأعلى (مم)',
+    width: 'العرض (مم)',
+    resizeHandle: 'تغيير حجم التوقيع — اسحب الزاوية أو استخدم مفاتيح الأسهم',
     signatureLabel: 'التوقيع — اسحب أو استخدم مفاتيح الأسهم للتحريك',
     identify: 'تحديد التوقيع',
   },
@@ -103,13 +107,15 @@ class SyntheticApi {
   }
 
   readonly unhandledRequests: string[] = []
-  readonly positionPuts: Array<{ page: number; x: number; y: number }> = []
+  readonly positionPuts: Array<{ page: number; x: number; y: number; width_pt?: number }> = []
   imageOutcomes: ImageOutcome[] = []
   identifyMode = false
 
   private revision = 3
   private readonly defaultPosition = { page: 1, x: 0.3, y: 0.4 }
   private position = { ...this.defaultPosition }
+  // 90 x 40 pt measured; the height always follows the locked 40:90 aspect.
+  private widthPt = 90
   private history: Array<Record<string, unknown>> = []
 
   async install(page: Page): Promise<void> {
@@ -151,11 +157,13 @@ class SyntheticApi {
               page: this.position.page,
               x: this.position.x,
               y: this.position.y,
-              width_pt: 90,
-              height_pt: 40,
+              width_pt: this.widthPt,
+              height_pt: (this.widthPt * 40) / 90,
               default_page: this.defaultPosition.page,
               default_x: this.defaultPosition.x,
               default_y: this.defaultPosition.y,
+              default_width_pt: 90,
+              default_height_pt: 40,
               image_url: '',
             },
           ],
@@ -280,6 +288,24 @@ class SyntheticApi {
       await this.fulfillJson(route, null)
       return
     }
+    if (method === 'GET' && path === '/email/draft-templates') {
+      await this.fulfillJson(route, { overrides: {}, tokens: {} })
+      return
+    }
+    if (method === 'GET' && path === '/notifications/decisions') {
+      await this.fulfillJson(route, { items: [], total: 0 })
+      return
+    }
+    if (method === 'GET' && path === '/books/inbox/summary') {
+      await this.fulfillJson(route, {
+        unread: 0,
+        received: 0,
+        sent: 0,
+        archived: 0,
+        by_purpose: { info: 0, action: 0, reply: 0 },
+      })
+      return
+    }
     if (method === 'GET' && path === '/notifications/counts') {
       await this.fulfillJson(route, { approvals: 0, leaves: 0, scans: 0, emails: 0 })
       return
@@ -322,10 +348,16 @@ class SyntheticApi {
       return
     }
     if (method === 'PUT' && path === `/documents/${DOCUMENT_ID}/signatures/${SIGNATURE_ID}/position`) {
-      const body = request.postDataJSON() as { page: number; x: number; y: number }
-      this.positionPuts.push({ page: body.page, x: body.x, y: body.y })
+      const body = request.postDataJSON() as { page: number; x: number; y: number; width_pt?: number }
+      this.positionPuts.push({
+        page: body.page,
+        x: body.x,
+        y: body.y,
+        ...(body.width_pt !== undefined ? { width_pt: body.width_pt } : {}),
+      })
       this.revision += 1
       this.position = { page: body.page, x: body.x, y: body.y }
+      if (body.width_pt !== undefined) this.widthPt = body.width_pt
       this.history.push({
         revision: this.revision,
         action: 'move',
@@ -454,7 +486,7 @@ for (const viewport of VIEWPORTS) {
       // Save sends exactly the displayed (moved) draft — not the original.
       await expect(saveButton).toBeEnabled()
       await saveButton.click()
-      await expect(page.getByText(copy.saved)).toBeVisible()
+      await expect(page.getByText(copy.saved, { exact: true })).toBeVisible()
       expect(backend.positionPuts.length).toBe(1)
       expect(backend.positionPuts[0]).not.toEqual({ page: 1, x: 0.3, y: 0.4 })
 
@@ -465,6 +497,86 @@ for (const viewport of VIEWPORTS) {
         .first()
         .evaluate((el) => getComputedStyle(el).direction)
       expect(direction).toBe('ltr')
+    })
+  }
+}
+
+for (const viewport of VIEWPORTS) {
+  for (const locale of ['en', 'ar'] as const) {
+    test(`${viewport.name}/${locale}: the page shows at reading size and the real signature resizes with a locked aspect`, async ({
+      page,
+      backend,
+    }, testInfo) => {
+      const copy = COPY[locale]
+      await prepareApp(page, locale, viewport.size)
+      const overlay = draggableOverlay(page, locale)
+      await expect(overlay.locator('img')).toBeVisible()
+      await expect(overlay).toHaveAttribute('tabindex', '0')
+
+      // Reading size: the page fills the canvas column instead of the old
+      // 640 px cap, on desktop and phone alike.
+      const pdfPage = await page.locator('[data-pdf-page]').first().boundingBox()
+      if (!pdfPage) throw new Error('pdf page has no bounding box')
+      if (viewport.name === 'desktop') expect(pdfPage.width).toBeGreaterThan(640)
+      else expect(pdfPage.width).toBeGreaterThan(viewport.size.width * 0.7)
+
+      const widthInput = page.getByLabel(copy.width)
+      const leftInput = page.getByLabel(copy.left)
+      await expect(widthInput).toHaveValue('31.7') // 90 pt = 31.75 mm
+      const aspectOf = async (): Promise<number> => {
+        const b = await overlay.boundingBox()
+        if (!b) throw new Error('overlay has no bounding box')
+        return b.height / b.width
+      }
+      expect(await aspectOf()).toBeCloseTo(40 / 90, 2)
+
+      // Dragging the corner handle grows the signature; the height follows.
+      const handle = page.getByRole('button', { name: copy.resizeHandle })
+      await handle.scrollIntoViewIfNeeded()
+      const before = await overlay.boundingBox()
+      const h = await handle.boundingBox()
+      if (!before || !h) throw new Error('handle has no bounding box')
+      await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2)
+      await page.mouse.down()
+      await page.mouse.move(h.x + h.width / 2 + 60, h.y + h.height / 2, { steps: 6 })
+      await page.mouse.up()
+      const after = await overlay.boundingBox()
+      if (!after) throw new Error('overlay has no bounding box')
+      expect(after.width).toBeGreaterThan(before.width + 40)
+      expect(after.x).toBeCloseTo(before.x, 0) // the top-left stays put
+      expect(await aspectOf()).toBeCloseTo(40 / 90, 2)
+      await expect(widthInput).not.toHaveValue('31.7')
+      await testInfo.attach(`resized-${viewport.name}-${locale}`, {
+        body: await page.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      })
+
+      // The width field never goes below 10 mm.
+      await widthInput.fill('5')
+      await widthInput.blur()
+      await expect(widthInput).toHaveValue('10.0')
+
+      // Reset restores the original position AND size.
+      await leftInput.fill('20')
+      await page.getByRole('button', { name: copy.reset }).click()
+      await expect(widthInput).toHaveValue('31.7')
+      await expect(leftInput).toHaveValue(INITIAL_LEFT_MM)
+      expect(backend.positionPuts).toEqual([])
+
+      // Save sends the new width when it changed...
+      await widthInput.fill('50')
+      await widthInput.blur()
+      await page.getByRole('button', { name: copy.save }).click()
+      await expect(page.getByText(copy.saved, { exact: true })).toBeVisible()
+      expect(backend.positionPuts).toHaveLength(1)
+      expect(backend.positionPuts[0]?.width_pt).toBeCloseTo((50 * 72) / 25.4, 1)
+      await expect(widthInput).toHaveValue('50.0')
+
+      // ...and omits it for a move-only save.
+      await leftInput.fill('30')
+      await page.getByRole('button', { name: copy.save }).click()
+      await expect.poll(() => backend.positionPuts.length).toBe(2)
+      expect(backend.positionPuts[1]).not.toHaveProperty('width_pt')
     })
   }
 }
