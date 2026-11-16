@@ -3136,6 +3136,18 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "fleetReporter": {
+      "approveFinish": "Approve and finish",
+      "forward": "Forward to branch manager",
+      "forwardHint": "Choose a branch manager to continue the approval chain.",
+      "note": "Note (optional)",
+      "noCandidatesTitle": "No eligible branch managers",
+      "noCandidatesBody": "Ask an administrator to grant approval access to another active account.",
+      "forwarded": "Forwarded to branch manager",
+      "lineManager": "Line manager",
+      "stale": "Record or employee data changed. Reload before continuing.",
+      "resubmit": "Resubmit"
+    },
     "thread": {
       "reply": "Reply",
       "createFrom": "Create from",

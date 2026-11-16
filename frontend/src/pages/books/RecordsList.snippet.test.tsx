@@ -106,7 +106,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 
@@ -131,7 +131,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 
@@ -148,7 +148,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 

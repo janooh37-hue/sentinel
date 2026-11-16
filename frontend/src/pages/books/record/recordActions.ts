@@ -25,9 +25,11 @@ export interface RecordCaps {
   canEdit: boolean
   /** Full access AND the live revision — gates every current-record mutation. */
   canMutateCurrent: boolean
-  isInmateReporter: boolean
+  isScopedRole: boolean
   /** An inmate reporter looking at their own editable REPORT- record. */
   isInmateReport: boolean
+  /** A scoped reporter's own editable Word-backed paper. */
+  canEditScopedWord: boolean
   canOverrideState: boolean
   canManageRevisionAccess: boolean
   canManageIncludedPapers: boolean
@@ -104,7 +106,7 @@ export interface RecordActions {
   /** Request the unified sign confirmation from a given trigger button. */
   requestSignConfirm: (triggerRef: RefObject<HTMLButtonElement | null>) => void
   openMobileDecision: (decision: 'return' | 'reject') => void
-  /** Submit an inmate-reporter record (`useInmateReportSubmit`). */
+  /** Submit a scoped reporter's paper (`useScopedReporterSubmit`). */
   submitReport: (bookId: number) => void
   emailViaOutlook: () => Promise<void>
   setUnfileOpen: (open: boolean) => void

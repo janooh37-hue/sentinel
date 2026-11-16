@@ -49,6 +49,7 @@ import { WordSessionActions } from '@/components/books/BookWordActions'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useFocusTrap } from '@/lib/useFocusTrap'
@@ -76,7 +77,7 @@ import { useRecordDelete } from './RecordDeleteProvider'
 import { openRecord, useListReturnFocus, type RecordNavState } from './useRecordNavContext'
 import { useListTier } from './useListTier'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
-import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
+import { useScopedReporterSubmit } from '@/components/books/useScopedReporterSubmit'
 import { serviceHref } from '@/lib/quickActions'
 import { newRecordHref } from './newRecordHref'
 import { useSearchParam } from '@/lib/urlState'
@@ -141,7 +142,7 @@ function BooksRegister(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
   const { user } = useAuth()
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const isScopedRole = scopedRoleOf(user) !== null
   const canDelete = has('books.delete')
   const canSubmit = has('books.submit')
   const navigate = useNavigate()
@@ -165,7 +166,7 @@ function BooksRegister(): React.JSX.Element {
   const [openParam, setOpenParam] = useSearchParam('open')
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
   // "Created by me" is hidden for inmate reporters, so its param is ignored.
-  const mine = mineParam === '1' && !isInmateReporter
+  const mine = mineParam === '1' && !isScopedRole
   const filters = useMemo<BooksFilters>(
     () => ({
       categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
@@ -202,12 +203,14 @@ function BooksRegister(): React.JSX.Element {
   const clearAllFilters = (): void => setFilters({ ...DEFAULT_BOOKS_FILTERS })
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
-  const reporterSubmitMutation = useInmateReportSubmit({
+  const reporterSubmitMutation = useScopedReporterSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
-    onRevise: (bookId) => navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
+    onRevise: (bookId) => navigate(scopedRoleOf(user) === 'inmate_reporter'
+      ? `${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`
+      : `/books/${bookId}`),
   })
   const submitBook = (bookId: number): void => {
-    if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
+    if (isScopedRole) reporterSubmitMutation.mutate(bookId)
     else setSubmitBookId(bookId)
   }
 
@@ -281,7 +284,7 @@ function BooksRegister(): React.JSX.Element {
     queryKey: booksFacetsKey(mine),
     queryFn: () => api.getBookFacets(serverScope),
   })
-  const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
+  const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isScopedRole })
 
 
   // Dashboard links must filter before the server's 500-row page window.
@@ -495,7 +498,7 @@ function BooksRegister(): React.JSX.Element {
     },
     [navigate, buildNav, cancelPendingPreview],
   )
-  const rowMenu = useRecordRowMenu({ open: openFromList, isInmateReporter })
+  const rowMenu = useRecordRowMenu({ open: openFromList, isScopedRole })
 
   // Back from a record: restore the scroll and select (inline) or flash (drawer)
   // the row, without expanding the preview in either tier.
@@ -539,8 +542,8 @@ function BooksRegister(): React.JSX.Element {
   }, [selectedForBasket, desktopRows])
   // Signed / in-flight / Word-session rows are skipped, never deleted.
   const deletableRows = useMemo(
-    () => selectedRows.filter((row) => deleteBlockReason(row, { has, isInmateReporter }) === null),
-    [selectedRows, has, isInmateReporter],
+    () => selectedRows.filter((row) => deleteBlockReason(row, { has, isScopedRole }) === null),
+    [selectedRows, has, isScopedRole],
   )
   const skippedCount = selectedRows.length - deletableRows.length
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -683,7 +686,7 @@ function BooksRegister(): React.JSX.Element {
     autoSelectedRef.current = null
   }, [drawerTier, paneOpen, selectedId, setOpenParam])
 
-  const mineToggle = isInmateReporter
+  const mineToggle = isScopedRole
     ? undefined
     : {
         pressed: mine,
@@ -704,7 +707,7 @@ function BooksRegister(): React.JSX.Element {
       message={t('books.emptyUnfiltered')}
       actionLabel={t('books.newRecord')}
       onAction={() =>
-        navigate(newRecordHref(isInmateReporter))
+        navigate(newRecordHref(scopedRoleOf(user) === 'inmate_reporter'))
       }
     />
   )
@@ -738,7 +741,7 @@ function BooksRegister(): React.JSX.Element {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <RefreshButton />
-              {!isInmateReporter && (
+              {!isScopedRole && (
                 <button
                   type="button"
                   onClick={() => navigate('/books/approvals')}
@@ -750,7 +753,7 @@ function BooksRegister(): React.JSX.Element {
               )}
             </div>
           </header>
-          {!isInmateReporter && <ScanBackEntry />}
+          {!isScopedRole && <ScanBackEntry />}
           {facetsQuery.isError ? (
             // A failed facets fetch must never render as an honest "0" — the spine's
             // whole reason to exist is to be a number the operator can trust. Show a
@@ -770,19 +773,19 @@ function BooksRegister(): React.JSX.Element {
               counts={spineCounts}
               active={spineState}
               onChange={setSpineState}
-              showAwaitingScan={!isInmateReporter}
+              showAwaitingScan={!isScopedRole}
             />
           )}
           <div
             style={{ '--pane-w': PANE_WIDTH[inlinePane ? paneSize : 'normal'] } as React.CSSProperties}
             className={cn(
               'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3',
-              isInmateReporter
+              isScopedRole
                 ? '@5xl/page:grid-cols-[minmax(0,1fr)_var(--pane-w)]'
                 : '@5xl/page:grid-cols-[3.5rem_minmax(0,1fr)_var(--pane-w)] @7xl/page:grid-cols-[15rem_minmax(0,1fr)_var(--pane-w)]',
             )}
           >
-            {!isInmateReporter && (
+            {!isScopedRole && (
               <div className="hidden min-h-0 @5xl/page:grid">
                 {facetsQuery.isError ? (
                   <div className="rounded-2xl border border-hairline bg-surface py-8">
@@ -814,12 +817,12 @@ function BooksRegister(): React.JSX.Element {
                   data-testid="records-search"
                 />
                 {/* Below 64rem there is no rail: its two jobs move into the toolbar. */}
-                {!isInmateReporter && (
+                {!isScopedRole && (
                   <span className="contents @5xl/page:hidden">
                     <ServicePopover items={railItems} active={railService} onChange={setRailService} />
                   </span>
                 )}
-                {!isInmateReporter && (
+                {!isScopedRole && (
                   <FiltersPopover filters={filters} categories={categories} onChange={setFilters} />
                 )}
                 {mineToggle && (
@@ -897,7 +900,7 @@ function BooksRegister(): React.JSX.Element {
                                 {draft.subject ?? '—'}
                               </span>
                               <BookStatusChips book={draft} noClassification />
-                              {!isInmateReporter && <WordSessionActions book={draft} />}
+                              {!isScopedRole && <WordSessionActions book={draft} />}
                             </div>
                           ))}
                           {draftBooks.length > 3 && (
@@ -913,7 +916,7 @@ function BooksRegister(): React.JSX.Element {
                       </details>
                     </div>
                   )}
-                  {!isInmateReporter && selectedRows.length > 0 && (
+                  {!isScopedRole && selectedRows.length > 0 && (
                     <div
                       role="region"
                       aria-label={t('books.list.selected', { count: selectedRows.length })}
@@ -959,12 +962,12 @@ function BooksRegister(): React.JSX.Element {
                     selectedId={selectedId}
                     highlightedId={highlightedId}
                     onSelect={selectRow}
-                    selected={isInmateReporter ? undefined : selectedForBasket}
-                    onToggleSelect={isInmateReporter ? undefined : handleToggleSelect}
+                    selected={isScopedRole ? undefined : selectedForBasket}
+                    onToggleSelect={isScopedRole ? undefined : handleToggleSelect}
                     nav={buildNav}
                     scrollerRef={scrollerRef}
                     empty={listEmpty}
-                    isInmateReporter={isInmateReporter}
+                    isScopedRole={isScopedRole}
                     // Beside the inline preview too; the modal drawer covers the list.
                     rowMenu={drawerOpen ? undefined : rowMenu.itemsFor}
                     onRowMenuOpen={(book) => {
@@ -1026,7 +1029,7 @@ function BooksRegister(): React.JSX.Element {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <RefreshButton />
-                {!isInmateReporter && (
+                {!isScopedRole && (
                   <button
                     type="button"
                     onClick={() => navigate('/books/approvals')}
@@ -1040,14 +1043,14 @@ function BooksRegister(): React.JSX.Element {
             </div>
           </header>
 
-          {!isInmateReporter && (
+          {!isScopedRole && (
             <div className="px-6">
               <ScanBackEntry />
             </div>
           )}
 
           <div className="px-6 pb-2">
-            {isInmateReporter ? (
+            {isScopedRole ? (
               <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-3 py-2">
                 <Input
                   value={filters.q}
@@ -1088,14 +1091,15 @@ function BooksRegister(): React.JSX.Element {
             rows={mobileRows}
             hasFilters={hasFilters}
             isAr={isAr}
-            isInmateReporter={isInmateReporter}
+            isScopedRole={isScopedRole}
+            newRecordPath={newRecordHref(scopedRoleOf(user) === 'inmate_reporter')}
             canSubmit={canSubmit}
             userId={user?.id}
             highlightedId={highlightedId}
             onSubmit={submitBook}
             onClearFilters={clearAllFilters}
             search={
-              isInmateReporter ? undefined : (
+              isScopedRole ? undefined : (
                 <BooksSearchField filters={filters} onChange={setFilters} />
               )
             }
@@ -1103,7 +1107,7 @@ function BooksRegister(): React.JSX.Element {
         </>
       )}
 
-      {!isInmateReporter && submitBookId !== null && (
+      {!isScopedRole && submitBookId !== null && (
         <SubmitForApprovalDialog
           bookId={submitBookId}
           onClose={() => setSubmitBookId(null)}
@@ -1119,7 +1123,7 @@ function BooksRegister(): React.JSX.Element {
         }}
       />
 
-      {!isInmateReporter && (
+      {!isScopedRole && (
         <ConfirmDialog
           open={confirmDeleteOpen}
           onOpenChange={setConfirmDeleteOpen}

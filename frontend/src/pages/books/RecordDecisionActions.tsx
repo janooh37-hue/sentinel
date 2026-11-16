@@ -10,6 +10,8 @@ export interface RecordDecisionActionsProps {
   pending?: DecisionPending | null
   /** A Report: the primary records the manager's review instead of signing. */
   review?: boolean
+  canForwardToBranch?: boolean
+  onForward?: () => void
   onReturn: () => void
   onReject: () => void
   onSign: () => void
@@ -22,6 +24,8 @@ export function RecordDecisionActions({
   busy,
   pending = null,
   review = false,
+  canForwardToBranch = false,
+  onForward,
   onReturn,
   onReject,
   onSign,
@@ -37,7 +41,7 @@ export function RecordDecisionActions({
   )
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className={`grid gap-2 ${canForwardToBranch ? 'grid-cols-2' : 'grid-cols-3'}`}>
       <button
         ref={returnButtonRef}
         type="button"
@@ -60,6 +64,16 @@ export function RecordDecisionActions({
         {pending === 'reject' ? spinner : <X className="h-4 w-4 shrink-0" strokeWidth={2.4} aria-hidden />}
         <span>{pending === 'reject' ? t('books.approval.rejecting') : t('books.approval.reject')}</span>
       </button>
+      {canForwardToBranch && onForward && (
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onForward}
+          className={`${buttonClass} border-hairline bg-surface text-foreground hover:bg-surface-tinted`}
+        >
+          {t('books.fleetReporter.forward')}
+        </button>
+      )}
       <button
         ref={signButtonRef}
         type="button"
@@ -72,7 +86,7 @@ export function RecordDecisionActions({
         <span>
           {pending === 'sign'
             ? t(review ? 'books.approval.markingReviewed' : 'books.approval.signing')
-            : t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
+            : t(canForwardToBranch ? 'books.fleetReporter.approveFinish' : review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
         </span>
       </button>
     </div>

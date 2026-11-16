@@ -29,8 +29,8 @@ function ctxOf(over: Partial<NextStepContext> = {}, caps: string[] = ADMIN_CAPS)
     canEdit: caps.includes('books.edit'),
     canGenerate: caps.includes('documents.generate'),
     canMutateCurrent: true,
-    isInmateReporter: false,
-    inmateAction: 'read-only',
+    isScopedRole: false,
+    reporterAction: 'read-only',
     isAssignee: false,
     isReviewer: false,
     hasDocument: true,
@@ -306,7 +306,7 @@ describe('recordNextStep rows', () => {
     expect(recordNextStep(bookOf('none', { is_word_book: true }), ctxOf({}, noSubmit)).primary).toBeUndefined()
     const report = recordNextStep(
       bookOf('none', { ref_number: 'REPORT-1' }),
-      ctxOf({ isInmateReporter: true, inmateAction: 'edit-submit' }, []),
+      ctxOf({ isScopedRole: true, isInmateReport: true, reporterAction: 'edit-submit' }, ['books.submit']),
     )
     expect(report.primary).toBe('sendForApproval')
     expect(report.secondary).toEqual([])
@@ -414,7 +414,7 @@ describe('recordNextStep rows', () => {
     const book = bookOf('none', { ref_number: 'REPORT-1' })
     const r = recordNextStep(
       book,
-      ctxOf({ isInmateReporter: true, inmateAction: 'edit-submit', canManageIncludedPapers: false }, []),
+      ctxOf({ isScopedRole: true, reporterAction: 'edit-submit', canManageIncludedPapers: false }, ['books.submit']),
     )
     expect(r.primary).toBe('sendForApproval')
     expect(r.overflow).toEqual(['print'])
@@ -453,7 +453,7 @@ describe('recordNextStep invariants', () => {
       { isReviewer: true },
       { hasDocument: false },
       { canMutateCurrent: false },
-      { isInmateReporter: true, inmateAction: 'correct-resubmit' },
+      { isScopedRole: true, reporterAction: 'correct-resubmit' },
     ]
     for (const state of states) {
       for (const variant of variants) {
@@ -505,10 +505,10 @@ describe('reviseBlockReason', () => {
 
   it('reporterLocked for an inmate reporter until the record is returned to them', () => {
     expect(
-      reviseBlockReason(book, ctxOf({ isInmateReporter: true, inmateAction: 'read-only' })),
+      reviseBlockReason(book, ctxOf({ isScopedRole: true, reporterAction: 'read-only' })),
     ).toBe('reporterLocked')
     expect(
-      reviseBlockReason(book, ctxOf({ isInmateReporter: true, inmateAction: 'correct-resubmit' })),
+      reviseBlockReason(book, ctxOf({ isScopedRole: true, reporterAction: 'correct-resubmit' })),
     ).toBeNull()
   })
 
@@ -563,5 +563,48 @@ describe('recordNextStep — read-only recipients', () => {
     expect(r.primary).toBeUndefined()
     expect(r.secondary).toEqual([])
     expect(r.overflow).toEqual(['print'])
+  })
+})
+
+describe('fleet reporter record workflow', () => {
+  const fleetCaps = ['books.submit', 'documents.generate']
+  const fleet = (reporterAction: NextStepContext['reporterAction']) =>
+    ctxOf({ isScopedRole: true, reporterAction, canManageIncludedPapers: false }, fleetCaps)
+
+  it('offers edit and submit on an own form draft without books.edit', () => {
+    const next = recordNextStep(bookOf('none'), fleet('edit-submit'))
+    expect(next.primary).toBe('sendForApproval')
+    expect(next.secondary).toEqual(['continueEditing'])
+    expect(next.overflow).toEqual(['print'])
+  })
+
+  it('offers correction for returned fleet Word papers without form fields', () => {
+    const next = recordNextStep(bookOf('returned', {
+      is_word_book: true, versions: [{ id: 10, version_no: 1, status: 'returned', has_fields: false }],
+    }), fleet('correct-resubmit'))
+    expect(next.primary).toBe('revise')
+    expect(next.disabled?.revise).toBeUndefined()
+  })
+
+  it('offers no edit or submit actions for someone else’s paper', () => {
+    for (const state of ['none', 'returned']) {
+      const next = recordNextStep(bookOf(state), fleet('read-only'))
+      expect(next.primary).toBeUndefined()
+      expect(next.secondary).toEqual([])
+    }
+  })
+
+  it.each([true, false])('includes Forward only for the line-manager flag %s', (can_forward_to_branch) => {
+    const next = recordNextStep(bookOf('pending', { can_forward_to_branch }), ctxOf({ isAssignee: true }))
+    expect(next.secondary.includes('forwardToBranch')).toBe(can_forward_to_branch)
+  })
+
+  it.each(['Vehicle Fines', 'Vehicle Accident Report', 'Vehicle Mileage Log'])('never links %s into a forbidden correction surface', (service_id) => {
+    const draft = recordNextStep(bookOf('none', { service_id }), fleet('edit-submit'))
+    expect(draft.primary).toBe('sendForApproval')
+    expect(draft.secondary).toEqual([])
+    const returned = recordNextStep(bookOf('returned', { service_id }), fleet('correct-resubmit'))
+    expect(returned.primary).toBe('sendForApproval')
+    expect(returned.disabled?.revise).toBeUndefined()
   })
 })

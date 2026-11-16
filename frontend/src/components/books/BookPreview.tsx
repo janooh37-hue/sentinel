@@ -18,7 +18,8 @@ import { ExternalLink, Loader2, PencilLine, Send, Trash2, X } from 'lucide-react
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
-import { inmateReporterActionFor } from './book-detail-drawer-utils'
+import { scopedRoleOf } from '@/lib/scopedRole'
+import { scopedReporterActionFor, isFleetLetter } from './book-detail-drawer-utils'
 import { deleteBlockReason } from '@/pages/books/recordDelete'
 import { paperUrl } from '@/pages/books/recordPapers'
 import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
@@ -38,7 +39,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
   const { user } = useAuth()
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const isScopedRole = scopedRoleOf(user) !== null
   const navigate = useNavigate()
   const { scheduleDelete } = useRecordDelete()
   const [confirming, setConfirming] = useState<{ bookId: number | null; value: boolean }>({ bookId, value: false })
@@ -62,13 +63,14 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
 
   const versions = book?.versions ?? []
   const current = versions.length > 0 ? versions[versions.length - 1] : undefined
-  const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
-  const canDiscard = book ? deleteBlockReason(book, { has, isInmateReporter }) === null : false
-  const canContinue = !!book?.can_write && (isInmateReporter ? reporterAction === 'edit-submit' : canEdit)
-  const canSubmitCurrent = !!book?.can_write && (isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook)
+  const reporterAction = book ? scopedReporterActionFor(book, user?.id) : 'read-only'
+  const canDiscard = book ? deleteBlockReason(book, { has, isScopedRole }) === null : false
+  const canContinue = !!book?.can_write && has('documents.generate') && (isScopedRole ? reporterAction === 'edit-submit' && !isFleetLetter(book) : canEdit)
+  const canSubmitCurrent = !!book?.can_write && (isScopedRole ? has('books.submit') && reporterAction === 'edit-submit' : canSubmitBook)
   const pdfUrl = current?.document_id
     ? paperUrl({ documentId: current.document_id })
     : null
+  const continueInRecord = book?.is_word_book || book?.service_id === 'Report'
 
   return (
     <Dialog.Root open={bookId !== null} onOpenChange={(open) => { if (!open) onClose() }}>
@@ -194,12 +196,14 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
                       )}
                       {canContinue && (
                         <button type="button"
-                          disabled={!current?.has_fields}
-                          title={!current?.has_fields ? t('books.preview.editUnavailable') : undefined}
+                          disabled={!continueInRecord && !current?.has_fields}
+                          title={!continueInRecord && !current?.has_fields ? t('books.preview.editUnavailable') : undefined}
                           onClick={() => {
-                            if (!current?.template_id) return
+                            if (!continueInRecord && !current?.template_id) return
                             onClose()
-                            navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
+                            navigate(continueInRecord
+                              ? `/books/${book.id}`
+                              : `${serviceHref(current!.template_id!)}?revise=${book.id}`)
                           }}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40">
                           <PencilLine className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />

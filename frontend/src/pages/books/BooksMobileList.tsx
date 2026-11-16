@@ -26,14 +26,13 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
-import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { scopedReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
 import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
-import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf } from './recordPapers'
@@ -52,7 +51,8 @@ export interface BooksMobileListProps {
   rows: BookRead[]
   hasFilters: boolean
   isAr: boolean
-  isInmateReporter: boolean
+  isScopedRole: boolean
+  newRecordPath: string
   canSubmit: boolean
   userId: number | undefined
   highlightedId: number | null
@@ -72,7 +72,8 @@ export function BooksMobileList({
   rows,
   hasFilters,
   isAr,
-  isInmateReporter,
+  isScopedRole,
+  newRecordPath,
   canSubmit,
   userId,
   highlightedId,
@@ -93,7 +94,7 @@ export function BooksMobileList({
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
-  const canBulk = !isInmateReporter
+  const canBulk = !isScopedRole
   const canDelete = canBulk && has('books.delete')
   // Drop ticks for rows that left the list (filter relaxed/tightened), so they
   // cannot silently reappear later. Adjusting state during render, guarded.
@@ -103,7 +104,7 @@ export function BooksMobileList({
   const pickedRows = mobileRows.filter((row) => picked.has(row.id))
   const deletableRows = canDelete
     ? pickedRows.filter(
-        (row) => deleteBlockReason(row, { has, isInmateReporter }) === null,
+        (row) => deleteBlockReason(row, { has, isScopedRole }) === null,
       )
     : []
   const skippedCount = canDelete ? pickedRows.length - deletableRows.length : 0
@@ -223,7 +224,7 @@ export function BooksMobileList({
                   icon={BookOpen}
                   message={hasFilters ? t('books.list.noMatch') : t('books.emptyUnfiltered')}
                   actionLabel={hasFilters ? t('books.filters.clear') : t('books.newRecord')}
-                  onAction={hasFilters ? onClearFilters : () => navigate(newRecordHref(isInmateReporter))}
+                  onAction={hasFilters ? onClearFilters : () => navigate(newRecordPath)}
                 />
               </div>
             ) : (
@@ -234,14 +235,14 @@ export function BooksMobileList({
                     row={row}
                     isAr={isAr}
                     canSubmit={
-                      row.can_write && (isInmateReporter
-                        ? inmateReporterActionFor(row, userId) === 'edit-submit'
+                      row.can_write && (isScopedRole
+                        ? canSubmit && scopedReporterActionFor(row, userId) === 'edit-submit'
                         : canSubmit)
                     }
                     highlighted={row.id === highlightedId || row.id === flashId}
                     selectMode={selectMode}
                     picked={picked.has(row.id)}
-                    paperCount={paperCountOf(row, { inmateReporter: isInmateReporter })}
+                    paperCount={paperCountOf(row, { isScopedRole })}
                     link={recordLinkProps(row.id, linkNav)}
                     onLinkClick={handleLinkClick(row.id)}
                     onTogglePick={() => togglePick(row.id)}

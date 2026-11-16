@@ -179,7 +179,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           icon: pendingAct === 'sign' ? <Spinner /> : review ? <CheckCheck className={ICON} aria-hidden="true" /> : <PenLine className={ICON} aria-hidden="true" />,
           label: pendingAct === 'sign'
             ? t(review ? 'books.approval.markingReviewed' : 'books.approval.signing')
-            : t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove'),
+            : t(book.can_forward_to_branch ? 'books.fleetReporter.approveFinish' : review ? 'books.approval.markReviewed' : 'books.approval.signApprove'),
           disabled: busy,
           pending: pendingAct === 'sign',
           buttonRef: actions.mobileDockSignRef,
@@ -211,9 +211,9 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           id,
           tone: 'primary',
           icon: <Send className={ICON} aria-hidden="true" />,
-          label: t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'),
+          label: t(caps.isScopedRole && book.approval_state === 'returned' ? 'books.fleetReporter.resubmit' : review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'),
           onClick: () => {
-            if (caps.isInmateReporter) actions.submitReport(bookId)
+            if (caps.isScopedRole) actions.submitReport(bookId)
             else actions.openOverlay('submit')
           },
         }
@@ -223,7 +223,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           tone: nextStep.primary === id ? 'primary' : 'plain',
           icon: <PenLine className={ICON} aria-hidden="true" />,
           label: t('books.pane.continueDraft'),
-          reasonKey: nextStep.disabled?.continueEditing,
+          reasonKey: caps.canEditScopedWord ? 'books.word.needsPc' : nextStep.disabled?.continueEditing,
           onClick: actions.handleRevise,
         }
       case 'revise':
@@ -232,7 +232,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           tone: 'primary',
           icon: <CornerUpLeft className={cn(ICON, '-scale-x-100')} aria-hidden="true" />,
           label: t('books.pane.revise'),
-          reasonKey: nextStep.disabled?.revise,
+          reasonKey: caps.canEditScopedWord ? 'books.word.needsPc' : nextStep.disabled?.revise,
           onClick: actions.handleRevise,
         }
       case 'scanSigned':
@@ -288,7 +288,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
   // The Word session's Discard is rendered by WordSessionActions itself.
   const secondaries = wordSession
     ? []
-    : (decide ? nextStep.secondary : nextStep.secondary.slice(0, 1))
+    : (decide ? nextStep.secondary.filter((id) => id !== 'forwardToBranch') : nextStep.secondary.slice(0, 1))
         .map(build)
         .filter((a): a is DockAction => a != null)
   const inline = [...secondaries, ...(primary ? [primary] : [])]
@@ -390,7 +390,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
                 {book && (
                   <WordSessionActions
                     book={book}
-                    onFinished={caps.isInmateReport ? () => actions.submitReport(book.id) : undefined}
+                    onFinished={caps.canEditScopedWord ? () => actions.submitReport(book.id) : undefined}
                   />
                 )}
               </div>

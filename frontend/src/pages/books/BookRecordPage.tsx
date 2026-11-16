@@ -42,11 +42,13 @@ import {
   type BookAnnotationRead,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDecisionNotices } from '@/lib/useDecisionNotices'
-import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { canFileSignedCopy, canSendForApproval, footerActionFor, scopedReporterActionFor, isFleetLetter } from '@/components/books/book-detail-drawer-utils'
 import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { approverStep, changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
+import { ForwardToBranchDialog } from '@/components/books/ForwardToBranchDialog'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
@@ -57,7 +59,7 @@ import { DeriveRecordDialog } from '@/components/books/DeriveRecordDialog'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
-import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
+import { useScopedReporterSubmit } from '@/components/books/useScopedReporterSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -90,7 +92,8 @@ import { serviceHref } from '@/lib/quickActions'
 import { copyToClipboard } from '@/lib/clipboard'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { RecordHeader } from './record/RecordHeader'
-import { RecordDesk, DecisionReasonForm } from './record/RecordDesk'
+import { RecordDesk } from './record/RecordDesk'
+import { DecisionReasonForm } from './DecisionReasonForm'
 import { RecordDock } from './record/RecordDock'
 import { RecordPhoneProgress, RecordRail, type Station } from './record/RecordRail'
 import type { MarkInput, RecordActions, RecordCaps, RecordView } from './record/recordActions'
@@ -333,9 +336,9 @@ function BookRecordPageBody(): React.JSX.Element {
   const qc = useQueryClient()
   const draftOverrides = useDraftTemplates().data?.overrides
   const { user } = useAuth()
-  const isInmateReporter = user?.role === 'inmate_reporter'
-  const effectiveVersionId = isInmateReporter ? undefined : versionIdParam
-  const effectiveApprovalContext = isInmateReporter ? null : approvalContext
+  const isScopedRole = scopedRoleOf(user) !== null
+  const effectiveVersionId = isScopedRole ? undefined : versionIdParam
+  const effectiveApprovalContext = isScopedRole ? null : approvalContext
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canApprove = has('books.approve')
   const canManageRevisionAccess = has('users.manage')
@@ -389,7 +392,7 @@ function BookRecordPageBody(): React.JSX.Element {
     queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
   })
-  const canDerive = !isInmateReporter && book?.access_scope === 'full' && has('books.create') && has('books.view')
+  const canDerive = !isScopedRole && book?.access_scope === 'full' && has('books.create') && has('books.view')
   const canEdit = has('books.edit') && !!book?.can_write
   const canSubmitBook = has('books.submit') && !!book?.can_write
   // Filing a physically-signed scan back requires books.edit + documents.scan.
@@ -427,7 +430,7 @@ function BookRecordPageBody(): React.JSX.Element {
     ? paperUrl({ documentId: current.document_id, signed: !!current.signed_pdf_url })
     : (book?.imported_doc?.pdf_url ?? null)
   const canManageIncludedPapers =
-    !isInmateReporter &&
+    !isScopedRole &&
     book !== undefined &&
     canMutateCurrent &&
     current?.document_id != null &&
@@ -446,7 +449,7 @@ function BookRecordPageBody(): React.JSX.Element {
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
   const showFileSigned =
-    !isInmateReporter &&
+    !isScopedRole &&
     canMutateCurrent &&
     canFileSignedCopy(state, { canEdit, canScan })
   // Approved + signed paper on file + edit rights: gates Replace / Unfile and
@@ -456,18 +459,19 @@ function BookRecordPageBody(): React.JSX.Element {
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
-  const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
+  const reporterAction = book ? scopedReporterActionFor(book, user?.id) : 'read-only'
   const isInmateReport =
-    isInmateReporter &&
+    scopedRoleOf(user) === 'inmate_reporter' &&
     book?.ref_number.startsWith('REPORT-') === true &&
     reporterAction !== 'read-only'
+  const isScopedFleetLetter = isScopedRole && book != null && isFleetLetter(book)
+  const canEditScopedWord = isScopedRole && reporterAction !== 'read-only' && canGenerate &&
+    (isInmateReport || book?.is_word_book === true || isReport)
   const showSendForApproval =
-    canMutateCurrent &&
-    (isInmateReport
-      ? state === 'none' && book?.edit_session?.state !== 'active'
-      : isInmateReporter
-        ? reporterAction === 'edit-submit'
-        : canSendForApproval(state, { canSubmitBook }, review))
+    canMutateCurrent && canSubmitBook && book?.edit_session?.state !== 'active' &&
+    (isScopedRole
+      ? reporterAction === 'edit-submit' || reporterAction === 'correct-resubmit'
+      : canSendForApproval(state, { canSubmitBook }, review))
 
   const stations = useMemo(
     () =>
@@ -484,8 +488,8 @@ function BookRecordPageBody(): React.JSX.Element {
   const activeApprover = approverStep(currentSteps)
   const signingBranch = isAssignee && activeApprover?.stage_label === 'branch_manager'
   const myReview = isLiveCurrentVersion ? myPendingReviewerStep(currentSteps, user?.id) : null
-  const action = isInmateReporter
-    ? reporterAction === 'correct-resubmit' && !isInmateReport
+  const action = isScopedRole
+    ? reporterAction === 'correct-resubmit' && !isInmateReport && !isScopedFleetLetter
       ? 'revise'
       : 'none'
     : footerActionFor(state, {
@@ -497,6 +501,7 @@ function BookRecordPageBody(): React.JSX.Element {
         isAssignee,
         isReviewer: myReview != null,
       })
+  const canForwardToBranch = action === 'decide' && book?.can_forward_to_branch === true
 
   const decision =
     overlay.value === 'decision'
@@ -509,14 +514,15 @@ function BookRecordPageBody(): React.JSX.Element {
     const value = overlayValue
     if (isPending || capabilitiesLoading || !book || !value) return
     const allowed =
-      (value === 'submit' && !isInmateReporter && showSendForApproval) ||
+      (value === 'submit' && !isScopedRole && showSendForApproval) ||
       (value === 'papers' && canManageIncludedPapers) ||
-      (value === 'revision-access' && !isInmateReporter && canManageRevisionAccess) ||
+      (value === 'revision-access' && !isScopedRole && canManageRevisionAccess) ||
       (value === 'override' &&
-        !isInmateReporter &&
+        !isScopedRole &&
         canOverrideState &&
         canMutateCurrent) ||
       (value === 'decision' && action === 'decide') ||
+      (value === 'forward-to-branch' && canForwardToBranch) ||
       (value === 'send' && book.can_send) ||
       (value === 'level' && book.can_change_confidentiality) ||
       ((value === 'reply' || value === 'createFrom') && canDerive) ||
@@ -526,13 +532,14 @@ function BookRecordPageBody(): React.JSX.Element {
     action,
     book,
     canDerive,
+    canForwardToBranch,
     canEdit,
     canManageIncludedPapers,
     canManageRevisionAccess,
     canMutateCurrent,
     canOverrideState,
     capabilitiesLoading,
-    isInmateReporter,
+    isScopedRole,
     isPending,
     overlayValue,
     closeOverlay,
@@ -557,7 +564,7 @@ function BookRecordPageBody(): React.JSX.Element {
     ? currentSteps.find((s) => s.assignee_user_id === user?.id)
     : undefined
   useEffect(() => {
-    if (!isInmateReporter && book && myStep && !myStep.seen_at) {
+    if (!isScopedRole && book && myStep && !myStep.seen_at) {
       api
         .markBookSeen(book.id)
         .then(() => void qc.invalidateQueries({ queryKey: ['books', 'detail', book.id] }))
@@ -714,10 +721,14 @@ function BookRecordPageBody(): React.JSX.Element {
   })
 
   const handleRevise = useCallback((): void => {
-    if (!book || !current?.template_id) return
-    navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
-  }, [book, current, navigate])
-  const reporterSubmitMutation = useInmateReportSubmit({
+    if (!book) return
+    if (canEditScopedWord) {
+      if (!isMobile && !wordReopenTrigger?.disabled) wordReopenTrigger?.onClick()
+      return
+    }
+    if (current?.template_id) navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
+  }, [book, current, navigate, canEditScopedWord, wordReopenTrigger, isMobile])
+  const reporterSubmitMutation = useScopedReporterSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
     onRevise: handleRevise,
   })
@@ -764,11 +775,11 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(
-    current?.template_id &&
-      current?.has_fields &&
+    !isScopedFleetLetter &&
+    (canEditScopedWord || (current?.template_id && current?.has_fields)) &&
       canGenerate &&
       canMutateCurrent &&
-      (!isInmateReporter || reporterAction === 'correct-resubmit'),
+      (!isScopedRole || reporterAction === 'correct-resubmit'),
   )
   const reasonValid = reason.trim().length > 0 || hasCommentBearingMark(annotations)
   const decisionReasonFormProps = {
@@ -867,8 +878,9 @@ function BookRecordPageBody(): React.JSX.Element {
             canEdit,
             canGenerate,
             canMutateCurrent,
-            isInmateReporter,
-            inmateAction: reporterAction,
+            isScopedRole,
+            isInmateReport,
+            reporterAction: reporterAction,
             isAssignee,
             isReviewer: myReview != null,
             hasDocument: recordHasDocument,
@@ -883,8 +895,9 @@ function BookRecordPageBody(): React.JSX.Element {
       canEdit,
       canGenerate,
       canMutateCurrent,
-      isInmateReporter,
+      isScopedRole,
       reporterAction,
+      isInmateReport,
       isAssignee,
       myReview,
       recordHasDocument,
@@ -902,7 +915,7 @@ function BookRecordPageBody(): React.JSX.Element {
           ? 'return'
           : null
       : null
-  const deleteBlocked = book ? deleteBlockReason(book, { has, isInmateReporter }) : 'noCapability'
+  const deleteBlocked = book ? deleteBlockReason(book, { has, isScopedRole }) : 'noCapability'
 
   const copyRef = useCallback((): void => {
     if (!book) return
@@ -918,8 +931,9 @@ function BookRecordPageBody(): React.JSX.Element {
       has,
       canEdit,
       canMutateCurrent,
-      isInmateReporter,
+      isScopedRole,
       isInmateReport,
+      canEditScopedWord,
       canOverrideState,
       canManageRevisionAccess,
       canManageIncludedPapers,
@@ -933,8 +947,9 @@ function BookRecordPageBody(): React.JSX.Element {
       has,
       canEdit,
       canMutateCurrent,
-      isInmateReporter,
+      isScopedRole,
       isInmateReport,
+      canEditScopedWord,
       canOverrideState,
       canManageRevisionAccess,
       canManageIncludedPapers,
@@ -950,12 +965,12 @@ function BookRecordPageBody(): React.JSX.Element {
   const canDecideNow = nextStep?.decide === true && action === 'decide'
   const stepTo = useCallback(
     (id: number | null, versionId: number | null): boolean => {
-      if (isInmateReporter || id == null) return false
+      if (isScopedRole || id == null) return false
       setArmedFor(null)
       step(id, versionId)
       return true
     },
-    [isInmateReporter, step, setArmedFor],
+    [isScopedRole, step, setArmedFor],
   )
   useShortcutAction('recordNext', () => stepTo(queue.nextId, queue.nextVersionId))
   useShortcutAction('recordPrev', () => stepTo(queue.prevId, queue.prevVersionId))
@@ -1250,7 +1265,7 @@ function BookRecordPageBody(): React.JSX.Element {
             </div>
             : undefined
         }
-        confirmLabel={t(isReport ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
+        confirmLabel={t(canForwardToBranch ? 'books.fleetReporter.approveFinish' : isReport ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
         onConfirm={confirmSign}
         returnFocusRef={lastSignTriggerRef}
       />
@@ -1318,7 +1333,7 @@ function BookRecordPageBody(): React.JSX.Element {
         <ol className="space-y-2 border-b border-hairline bg-surface px-4 py-3 text-sm sm:px-5" aria-label={t('books.approval.stageProgress')} data-print-hide>
           {currentSteps.filter((step) => step.kind === 'approver').sort((a, b) => a.step_order - b.step_order).map((step) => (
             <li key={step.id}>
-              <span className="font-medium">{t(step.stage_label === 'branch_manager' ? 'books.approval.branchManager' : step.stage_label === 'project_manager' ? 'books.approval.projectManager' : 'books.approval.signingManager')}</span>
+              <span className="font-medium">{t(step.stage_label === 'branch_manager' ? 'books.approval.branchManager' : step.stage_label === 'line_manager' ? 'books.fleetReporter.lineManager' : step.stage_label === 'project_manager' ? 'books.approval.projectManager' : 'books.approval.signingManager')}</span>
               {' · '}{t(`books.spine.${step.state}`)}
               {step.stage_label === 'branch_manager' && step.state === 'approved' && step.note && (
                 <p dir="auto" className="mt-1 whitespace-pre-wrap break-words text-muted-foreground">{step.note}</p>
@@ -1343,16 +1358,19 @@ function BookRecordPageBody(): React.JSX.Element {
       </div>
 
       <RecordDock book={book} caps={caps} view={view} actions={actions} />
+      {canForwardToBranch && current && book && overlay.value === 'forward-to-branch' && (
+        <ForwardToBranchDialog bookId={book.id} versionId={current.id} onClose={overlay.close} />
+      )}
 
-      {!isInmateReporter && overlay.value === 'submit' && book && showSendForApproval && !isPending && !capabilitiesLoading && (
+      {!isScopedRole && overlay.value === 'submit' && book && showSendForApproval && !isPending && !capabilitiesLoading && (
         <SubmitForApprovalDialog bookId={book.id} onClose={overlay.close} />
       )}
 
-      {!isInmateReporter && overlay.value === 'override' && book && canOverrideState && canMutateCurrent && !isPending && !capabilitiesLoading && (
+      {!isScopedRole && overlay.value === 'override' && book && canOverrideState && canMutateCurrent && !isPending && !capabilitiesLoading && (
         <RecordStateOverrideDialog book={book} onClose={overlay.close} />
       )}
 
-      {!isInmateReporter && overlay.value === 'revision-access' && book && canManageRevisionAccess && !isPending && !capabilitiesLoading && (
+      {!isScopedRole && overlay.value === 'revision-access' && book && canManageRevisionAccess && !isPending && !capabilitiesLoading && (
         <RevisionAccessPanel bookId={book.id} onClose={overlay.close} />
       )}
 

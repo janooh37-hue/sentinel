@@ -64,7 +64,7 @@ function setup(withMenu = true) {
           selectedId={null}
           onSelect={onSelect}
           nav={() => ({ from: '/books', queue: [1], scrollY: 0 })}
-          isInmateReporter={false}
+          isScopedRole={false}
           rowMenu={withMenu ? () => [
             { key: 'first', label: 'First action', icon: null, onSelect: onAction },
             { key: 'second', label: 'Second action', icon: null, onSelect: onAction },

@@ -26,7 +26,7 @@ vi.mock('react-router-dom', async (original) => ({
   ...await original<typeof RouterModule>(),
   useNavigate: () => navigate,
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role, scoped_role: auth.role === 'inmate_reporter' || auth.role === 'fleet_reporter' ? auth.role : null } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 

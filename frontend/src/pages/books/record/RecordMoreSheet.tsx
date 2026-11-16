@@ -149,7 +149,7 @@ export function RecordMoreSheet({
   const inboxActions = useInboxActions(book)
   if (!book) return null
 
-  const { isInmateReporter, canEdit, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
+  const { isScopedRole, canEdit, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
   const { bookId, state, current, recordHasPapers, emailingRecord, wordReopenTrigger, adjustSigTrigger, armed } = view
   const { openOverlay, emailViaOutlook, setUnfileOpen, pickSignedFile, pickReplacementFile, setArmedFor } = actions
   const close = (): void => onOpenChange(false)
@@ -166,7 +166,7 @@ export function RecordMoreSheet({
       onSelect: print,
     },
   ]
-  if (!isInmateReporter) {
+  if (!isScopedRole) {
     documentRows.push({
       id: 'email',
       icon: iconOf(Mail),
@@ -238,7 +238,16 @@ export function RecordMoreSheet({
       onSelect: () => setArmedFor(armed ? null : bookId),
     })
   }
-  if (!isInmateReporter) {
+  if (nextStep.decide && book.can_forward_to_branch) {
+    editingRows.push({
+      id: 'forwardToBranch',
+      icon: iconOf(Send),
+      label: t('books.fleetReporter.forward'),
+      pending: view.busy,
+      onSelect: () => openOverlay('forward-to-branch'),
+    })
+  }
+  if (!isScopedRole) {
     if (wordReopenTrigger) {
       editingRows.push({
         id: 'word',
@@ -290,7 +299,7 @@ export function RecordMoreSheet({
   }
 
   const adminRows: SheetRow[] = []
-  if (!isInmateReporter) {
+  if (!isScopedRole) {
     if (canOverrideState && canMutateCurrent) {
       adminRows.push({
         id: 'state',
@@ -324,7 +333,7 @@ export function RecordMoreSheet({
   }
   // Delete is always the last row of the sheet. noCapability / restricted hide
   // it; inFlight / wordSession keep it, disabled, with the reason.
-  const blockReason = deleteBlockReason(book, { has: caps.has, isInmateReporter })
+  const blockReason = deleteBlockReason(book, { has: caps.has, isScopedRole })
   if (blockReason !== 'noCapability' && blockReason !== 'restricted') {
     adminRows.push({
       id: 'delete',

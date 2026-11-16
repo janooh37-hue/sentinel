@@ -18,7 +18,7 @@ vi.mock('@/lib/api', () => ({
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 const viewport = vi.hoisted(() => ({ mobile: false, role: 'admin' }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: viewport.role } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: viewport.role, scoped_role: viewport.role === 'inmate_reporter' || viewport.role === 'fleet_reporter' ? viewport.role : null } }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => viewport.mobile }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }))
 vi.mock('./StatusSpine', () => ({ StatusSpine: ({ active, onChange }: { active: string; onChange: (state: string) => void }) => <button aria-label="status-filter" onClick={() => onChange('approved')}>{active}</button> }))

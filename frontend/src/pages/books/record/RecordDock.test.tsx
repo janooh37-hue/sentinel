@@ -101,8 +101,8 @@ function mount(book: BookRead, s: Setup = {}) {
     canEdit: has('books.edit'),
     canGenerate: has('documents.generate'),
     canMutateCurrent: true,
-    isInmateReporter: false,
-    inmateAction: 'read-only',
+    isScopedRole: false,
+    reporterAction: 'read-only',
     isAssignee: Boolean(s.decider),
     isReviewer: false,
     hasDocument: true,
@@ -116,7 +116,7 @@ function mount(book: BookRead, s: Setup = {}) {
     has,
     canEdit: ctx.canEdit,
     canMutateCurrent: true,
-    isInmateReporter: false,
+    isScopedRole: false,
     isInmateReport: false,
     canOverrideState: has('books.override_state'),
     canManageRevisionAccess: false,
@@ -270,6 +270,22 @@ describe('RecordDock', () => {
     expect(actions.openMobileDecision).toHaveBeenCalledWith('reject')
     await userEvent.click(dock.getByRole('button', { name: 'Sign & approve' }))
     expect(actions.requestSignConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([true, false])('offers the line-manager handoff only when can_forward_to_branch=%s', async (canForward) => {
+    const { actions } = mount(bookOf('pending', { steps: [stepOf()], can_forward_to_branch: canForward }), { decider: true })
+    const dock = within(dockEl())
+    expect(dock.getByRole('button', { name: canForward ? 'Approve and finish' : 'Sign & approve' })).toBeVisible()
+    await userEvent.click(dock.getByRole('button', { name: 'More' }))
+    const sheet = await screen.findByRole('dialog', { name: 'More' })
+    const forward = within(sheet).queryByRole('button', { name: 'Forward to branch manager' })
+    if (canForward) {
+      expect(forward).toBeVisible()
+      await userEvent.click(forward!)
+      expect(actions.openOverlay).toHaveBeenCalledWith('forward-to-branch')
+    } else {
+      expect(forward).not.toBeInTheDocument()
+    }
   })
 
   describe('More sheet', () => {

@@ -21,6 +21,7 @@ import { CategoryChecklist, DateRangeFields, DirectionChips } from './BooksFilte
 import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
 import { useMyRecordsCount } from './useMyRecordsCount'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 
 interface BooksFilterBarProps {
   filters: BooksFilters
@@ -39,8 +40,8 @@ export function BooksFilterBar({
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const { user } = useAuth()
-  const isInmateReporter = user?.role === 'inmate_reporter'
-  const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
+  const isScopedRole = scopedRoleOf(user) !== null
+  const { count: myCount } = useMyRecordsCount({ enabled: !isScopedRole })
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
@@ -260,7 +261,7 @@ export function BooksFilterBar({
       <div className="hidden h-5 w-px bg-hairline md:block" />
 
       {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
-      {!isInmateReporter && (
+      {!isScopedRole && (
         <button
           type="button"
           data-testid="mine-filter"
@@ -315,7 +316,7 @@ export function BooksFilterBar({
             ['all', t('books.filters.statusAll')],
             ['none', t('books.approval.stateDraft')],
             ['pending', t('books.approval.statePending')],
-            ...(isInmateReporter
+            ...(isScopedRole
               ? []
               : ([['awaiting_scan', t('books.approval.stateAwaitingScan')]] as const)),
             ['approved', t('books.approval.stateApproved')],

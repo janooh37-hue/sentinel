@@ -47,7 +47,7 @@ function makeBook(overrides: Record<string, unknown> = {}): BookRead {
 }
 
 function makeCaps(overrides: Partial<RecordCaps> = {}): RecordCaps {
-  return { isInmateReporter: false, canEdit: true, canRevise: false, ...overrides } as RecordCaps
+  return { isScopedRole: false, canEdit: true, canRevise: false, ...overrides } as RecordCaps
 }
 
 function makeView(book: BookRead, overrides: Partial<RecordView> = {}): RecordView {
@@ -202,7 +202,7 @@ describe('RecordDesk papers', () => {
   })
 
   it('never offers scans or an original=true paper to an inmate reporter', async () => {
-    renderDesk(makeBook(), { caps: makeCaps({ isInmateReporter: true }) })
+    renderDesk(makeBook(), { caps: makeCaps({ isScopedRole: true }) })
 
     // signed only: one paper, so no switcher, and the viewer shows the signed copy
     expect(switcher()).toBeNull()

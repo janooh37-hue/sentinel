@@ -190,7 +190,7 @@ function FocusApproveReviewed({
  *  components owning their mutation / dialog / eligibility query mount here
  *  unconditionally — independent of any menu being open (see their own docs). */
 function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
-  const { canMutateCurrent, isInmateReporter, isInmateReport } = caps
+  const { canMutateCurrent, isScopedRole, canEditScopedWord } = caps
   const { isMobile, current } = view
   const {
     submitReport,
@@ -203,16 +203,16 @@ function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): Rea
   } = actions
   return (
     <>
-      {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
+      {(!isScopedRole || canEditScopedWord) && book && canMutateCurrent && (
         <WordReopenButton
           book={book}
           isMobile={isMobile}
           hideTrigger
           onTriggerChange={setWordReopenTrigger}
-          onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
+          onFinished={canEditScopedWord ? () => submitReport(book.id) : undefined}
         />
       )}
-      {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
+      {!isScopedRole && canMutateCurrent && current?.document_id != null && (
         <AdjustSignatureAction
           documentId={current.document_id}
           hideTrigger
@@ -252,7 +252,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
   const chrome = useRecordChrome()
   const railDocked = useRailDocked()
   const [subjectOpen, setSubjectOpen] = useState(false)
-  const { isInmateReporter, isInmateReport, canMark } = caps
+  const { isScopedRole, canEditScopedWord, canMark } = caps
   const {
     bookId,
     isMobile,
@@ -362,7 +362,9 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
     compact = false,
   ): React.JSX.Element | null => {
     const reasonKey = step_.disabled?.[id]
-    const reason = reasonKey ? t(reasonKey) : undefined
+    const reason = canEditScopedWord && isMobile && (id === 'continueEditing' || id === 'revise')
+      ? t('books.word.needsPc')
+      : reasonKey ? t(reasonKey) : undefined
     switch (id) {
       case 'sign':
         return (
@@ -370,7 +372,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             key={id}
             ref={desktopSignRef}
             icon={review ? <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <PenLine className="h-3.5 w-3.5" aria-hidden="true" />}
-            label={t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
+            label={t(book?.can_forward_to_branch ? 'books.fleetReporter.approveFinish' : review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
             tone="green-solid"
             shortcut="S"
             pending={pendingAct === 'sign'}
@@ -379,6 +381,17 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             onClick={() => requestSignConfirm(desktopSignRef)}
           />
         )
+      case 'forwardToBranch':
+        return book?.can_forward_to_branch ? (
+          <HeaderBtn
+            key={id}
+            icon={<Send className="h-3.5 w-3.5" aria-hidden="true" />}
+            label={t('books.fleetReporter.forward')}
+            tone="plain"
+            disabled={busy}
+            onClick={() => openOverlay('forward-to-branch')}
+          />
+        ) : null
       case 'returnForChanges':
         return (
           <HeaderBtn
@@ -426,10 +439,10 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <HeaderBtn
             key={id}
             icon={<Send className="h-3.5 w-3.5" aria-hidden="true" />}
-            label={t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval')}
+            label={t(isScopedRole && state === 'returned' ? 'books.fleetReporter.resubmit' : review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval')}
             tone="navy-solid"
             onClick={() => {
-              if (isInmateReporter) submitReport(bookId)
+              if (isScopedRole) submitReport(bookId)
               else openOverlay('submit')
             }}
           />
@@ -491,7 +504,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             key={id}
             book={book}
             isMobile={isMobile}
-            onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
+            onFinished={canEditScopedWord ? () => submitReport(book.id) : undefined}
           />
         ) : null
       default:
@@ -567,7 +580,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <div className="min-w-0 flex-1">
             {book && <CopyRef refNumber={book.ref_number} onCopy={copyRef} className="min-h-11" />}
           </div>
-          {!isInmateReporter && (
+          {!isScopedRole && (
             <QueueNav
               compact
               position={queue.position}
@@ -631,7 +644,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
         >
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} aria-hidden="true" />
         </IconAction>
-        {!isInmateReporter && (
+        {!isScopedRole && (
           <QueueNav position={queue.position} total={queue.total} onPrev={onPrev} onNext={onNext} />
         )}
         <div className="min-w-0 flex-1">

@@ -39,7 +39,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: state.role } }),
+  useAuth: () => ({ user: { id: 1, role: state.role, scoped_role: state.role === 'inmate_reporter' || state.role === 'fleet_reporter' ? state.role : null } }),
 }))
 vi.mock('./useMyRecordsCount', () => ({
   useMyRecordsCount: () => ({ count: state.count }),

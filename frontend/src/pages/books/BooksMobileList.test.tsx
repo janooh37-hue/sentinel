@@ -97,7 +97,8 @@ function renderList(
     rows: [book(1), book(2), book(3, { approval_state: 'approved' })],
     hasFilters: false,
     isAr: true,
-    isInmateReporter: false,
+    isScopedRole: false,
+    newRecordPath: '/services',
     canSubmit: false,
     userId: 1,
     highlightedId: null,
@@ -249,7 +250,7 @@ describe('BooksMobileList select mode', () => {
   })
 
   it('is unavailable to inmate reporters', () => {
-    renderList({ isInmateReporter: true })
+    renderList({ isScopedRole: true })
     expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
   })
 })
