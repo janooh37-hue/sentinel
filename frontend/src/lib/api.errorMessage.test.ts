@@ -59,7 +59,7 @@ describe('apiErrorMessage', () => {
     [422, 'LINE_MANAGER_NOT_ELIGIBLE', 'Choose another active account that can approve records.', 'اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.'],
     [403, 'SCOPED_ROLE_INPUT_FORBIDDEN', "Your role can't set this option. Your approval route and signatures are set for you.", 'لا يمكن لدورك تحديد هذا الخيار؛ يُحدَّد مسار الاعتماد والتوقيعات تلقائيًا.'],
     [409, 'SCOPED_ROLE_STATE_LOCKED', 'This paper can no longer be edited. Reload to see its current state.', 'لم يعد بالإمكان تعديل هذه المعاملة. أعد التحميل لمعرفة حالتها الحالية.'],
-    [409, 'SCOPED_ROLE_EMPLOYEE_REQUIRED', 'Ask an administrator to link your employee record.', 'اطلب من المسؤول ربط سجل الموظف بحسابك.'],
+    [409, 'SCOPED_ROLE_EMPLOYEE_REQUIRED', 'Ask an administrator to link your employee record.', 'اطلب من المسؤول ربط حسابك بسجلك الوظيفي.'],
   ])('maps the fleet chain refusal %i %s in both languages', async (status, code, en, ar) => {
     const refusal = new ApiError(status, code, 'server detail')
     expect(apiErrorMessage(refusal)).toBe(en)

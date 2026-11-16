@@ -5093,7 +5093,8 @@
     "nsCategory": "Record",
     "fleetReporter": {
       "generalBookTitle": "General Book",
-      "generalBookDescription": "Create a classified record and send it to your line manager."
+      "generalBookDescription": "Create a classified record and send it to your line manager.",
+      "reportDescription": "Create a report in Word and send it to your line manager."
     },
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
@@ -5445,7 +5446,7 @@
       "yourReports": "Your papers",
       "yourReportsHint": "Continue drafts and review papers returned or rejected by your line manager.",
       "pending": "Pending approval",
-      "pendingHint": "Papers currently with your line manager.",
+      "pendingHint": "Papers waiting for approval.",
       "pendingEmpty": "No papers are pending approval.",
       "approved": "Approved",
       "approvedHint": "Papers ready to read or print.",
@@ -6427,7 +6428,8 @@
         "create_user": "Account created",
         "disable": "Disabled",
         "reactivate": "Restored",
-        "password_setup": "Password set up"
+        "password_setup": "Password set up",
+        "set_line_manager": "Line manager changed"
       }
     },
     "reject": {

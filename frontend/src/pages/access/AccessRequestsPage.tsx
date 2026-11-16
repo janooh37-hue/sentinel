@@ -623,7 +623,7 @@ function LineManagerPicker({
           </SelectContent>
         </Select>
       ) : (
-        <span className="text-foreground" dir="auto">{currentName}</span>
+        <span className="text-foreground"><bdi>{currentName}</bdi></span>
       )}
       {(candidatesQuery.isError || managersQuery.isError) && (
         <span role="alert" className="text-destructive-text">

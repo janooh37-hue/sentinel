@@ -41,7 +41,7 @@ export function FleetReporterApplication({ user, generalBookForm }: { user: Sess
           {canReport && (
             <button type="button" disabled={isMobile} onClick={() => navigate('/services/report')} className="rounded-2xl border border-hairline bg-surface p-5 text-start hover:border-primary disabled:cursor-not-allowed disabled:opacity-60">
               <span className="block text-lg font-semibold">{t('application.inmateReporter.reportTitle')}</span>
-              <span className="mt-1 block text-sm text-muted-foreground">{t(isMobile ? 'books.word.needsPc' : 'application.inmateReporter.reportDescription')}</span>
+              <span className="mt-1 block text-sm text-muted-foreground">{t(isMobile ? 'books.word.needsPc' : 'application.fleetReporter.reportDescription')}</span>
             </button>
           )}
         </div>
