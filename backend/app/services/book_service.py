@@ -2642,6 +2642,32 @@ def _require_line_manager_stage(book: Book, user_id: int) -> BookApprovalStep:
     return current
 
 
+def vehicle_letter_rebuild_refusal(db: Session, user: User, book: Book) -> AppError | None:
+    """Why ``user`` may not rebuild ``book`` from current fleet data now, or ``None``.
+
+    One rule for the rebuild route and ``BookRead.can_rebuild_vehicle_letter``:
+    a vehicle letter of the line-manager chain, rebuilt only by its author while
+    unsubmitted or returned. The route's own capability gates are the caller's.
+    """
+    version = _current_version(book)
+    if version is None or version.template_id not in VEHICLE_LETTER_FORMS:
+        return ValidationFailedError("NOT_A_VEHICLE_LETTER", "This record is not a vehicle letter.")
+    if book.deleted_at is not None or book.voided_at is not None:
+        return NotFoundError("BOOK_NOT_FOUND", "Record not found")
+    author = _line_manager_chain_author(db, book)
+    if author is None:
+        return _scoped_error("NOT_OWNER", "Only a fleet reporter's own letter is rebuilt.", 403)
+    if author.id != user.id:
+        return AppError(
+            "SCOPED_ROLE_CHAIN_AUTHOR_ONLY",
+            "Only the author can rebuild this letter.",
+            http_status=403,
+        )
+    if book.approval_state not in _FLEET_WRITABLE_STATES:
+        return _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
+    return None
+
+
 def _branch_excluded_user_ids(book: Book, line_step: BookApprovalStep) -> set[int]:
     """The author and the line manager can never be the branch manager."""
     from app.services import included_papers_service
