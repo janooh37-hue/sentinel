@@ -108,8 +108,10 @@ export function AccountMenu({
   // "My records": the Records page's "Created by me" count, over the shared
   // ['books','facets',true] query; only fetched while the menu is open.
   const { has } = useCapabilities()
-  const scoped = scopedRoleOf(user) !== null
-  const canViewMine = !scoped && has('books.view')
+  const role = scopedRoleOf(user)
+  const scoped = role !== null
+  // Fleet reporters see other reporters' filed letters, so "mine" matters; inmates see only their own.
+  const canViewMine = role !== 'inmate_reporter' && has('books.view')
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: open && canViewMine })
   // Scoped roles have no mailbox/email surface.
   const accountQuery = useQuery({

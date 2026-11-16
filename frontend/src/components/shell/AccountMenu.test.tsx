@@ -235,8 +235,8 @@ describe('AccountMenu My records', () => {
     expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
   })
 
-  it.each(['inmate_reporter', 'fleet_reporter'] as const)('is absent for %s even with books.view', async (role) => {
-    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role, scoped_role: role })
+  it('is absent for inmate_reporter even with books.view', async () => {
+    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role: 'inmate_reporter', scoped_role: 'inmate_reporter' })
     const user = userEvent.setup()
     renderWithProbe()
     await openMenu(user)
@@ -248,6 +248,15 @@ describe('AccountMenu My records', () => {
     })
     expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
     expect(api.getBookFacets).not.toHaveBeenCalled()
+  })
+
+  it('is offered to fleet_reporter, who also sees other reporters\u2019 filed letters', async () => {
+    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role: 'fleet_reporter', scoped_role: 'fleet_reporter' })
+    const user = userEvent.setup()
+    renderWithProbe()
+    await openMenu(user)
+    expect(await screen.findByRole('button', { name: /My records/ })).toBeInTheDocument()
+    expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
   })
 })
 
