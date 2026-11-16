@@ -69,7 +69,7 @@ def _session_counts(
     with open_session() as session:
         user = auth_service.resolve_session_hash(session, token_hash)
         try:
-            user = get_current_user(request, user)
+            user = get_current_user(request, user, session)
         except AppError:
             return None
         return _shared_counts(session, user)
