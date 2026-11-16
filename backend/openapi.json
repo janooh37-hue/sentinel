@@ -60173,6 +60173,18 @@
             "maximum": 1.0,
             "minimum": 0.0,
             "title": "Y"
+          },
+          "width_pt": {
+            "anyOf": [
+              {
+                "type": "number",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Pt"
           }
         },
         "additionalProperties": false,
@@ -60332,6 +60344,28 @@
               }
             ],
             "title": "Default Y"
+          },
+          "default_width_pt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Width Pt"
+          },
+          "default_height_pt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Height Pt"
           },
           "image_url": {
             "type": "string",

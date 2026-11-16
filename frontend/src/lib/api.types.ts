@@ -15715,6 +15715,8 @@ export interface components {
             x: number;
             /** Y */
             y: number;
+            /** Width Pt */
+            width_pt?: number | null;
         };
         /** SignaturePreviewRequest */
         SignaturePreviewRequest: {
@@ -15757,6 +15759,10 @@ export interface components {
             default_x?: number | null;
             /** Default Y */
             default_y?: number | null;
+            /** Default Width Pt */
+            default_width_pt?: number | null;
+            /** Default Height Pt */
+            default_height_pt?: number | null;
             /** Image Url */
             image_url: string;
         };

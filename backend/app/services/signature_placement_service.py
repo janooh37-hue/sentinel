@@ -337,6 +337,8 @@ class SignatureDescription:
     default_page: int | None
     default_x: float | None
     default_y: float | None
+    default_width_pt: float | None
+    default_height_pt: float | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -521,7 +523,7 @@ def describe_editor(
                 PageDescription(page=p.page, width_pt=p.width_pt, height_pt=p.height_pt)
                 for p in layout.pages
             )
-            # "Reset position" restores the ORIGINALLY measured location, not
+            # "Reset" restores the ORIGINALLY measured location and size, not
             # today's template (plan §9.5) — that is revision 1's retained
             # DOCX, which a correction never mutates. When the active
             # revision already IS revision 1 (no correction has happened
@@ -554,6 +556,12 @@ def describe_editor(
                     default_page=default_by_id[sig_id].page if sig_id in default_by_id else None,
                     default_x=default_by_id[sig_id].x if sig_id in default_by_id else None,
                     default_y=default_by_id[sig_id].y if sig_id in default_by_id else None,
+                    default_width_pt=(
+                        default_by_id[sig_id].width_pt if sig_id in default_by_id else None
+                    ),
+                    default_height_pt=(
+                        default_by_id[sig_id].height_pt if sig_id in default_by_id else None
+                    ),
                 )
                 for sig_id, geo in layout.drawings.items()
             )
@@ -702,6 +710,7 @@ def move_signature(
     page: int,
     x: float,
     y: float,
+    width_pt: float | None = None,
 ) -> EditorDescription:
     """The authoritative placement-correction transaction (plan §7.5-7.8):
     measure/move/validate happens OUTSIDE the DB write lock (the isolated
@@ -710,6 +719,8 @@ def move_signature(
     gates publication in one commit. Never advances either counter twice —
     the publish call below always passes its own already-performed CAS
     through as ``advance_revision=False`` / ``invalidate_revision=False``.
+    *width_pt* resizes the signature (aspect locked) in the same correction;
+    omitted, its size is unchanged.
     """
     from app.services import _pdf_executor, included_papers_service
 
@@ -783,6 +794,7 @@ def move_signature(
             y=y,
             layout=layout,
             before_pdf=before_pdf,
+            width_pt=width_pt,
         )
     except Exception:
         shutil.rmtree(dest_dir, ignore_errors=True)
@@ -844,6 +856,11 @@ def move_signature(
     if after_pdf.resolve() != retained_pdf.resolve():
         shutil.copy2(after_pdf, retained_pdf)
     after_geometry = after_layout.drawings.get(signature_id)
+    after_width_pt = (
+        after_geometry.width_pt
+        if after_geometry is not None
+        else (width_pt if width_pt is not None else before_geometry.width_pt)
+    )
     row = SignatureArtifactRevision(
         version_id=version.id,
         revision=next_revision,
@@ -861,9 +878,17 @@ def move_signature(
             "page": before_geometry.page,
             "x": before_geometry.x,
             "y": before_geometry.y,
+            "width_pt": before_geometry.width_pt,
+            "height_pt": before_geometry.height_pt,
         },
         after_geometry=(
-            {"page": after_geometry.page, "x": after_geometry.x, "y": after_geometry.y}
+            {
+                "page": after_geometry.page,
+                "x": after_geometry.x,
+                "y": after_geometry.y,
+                "width_pt": after_geometry.width_pt,
+                "height_pt": after_geometry.height_pt,
+            }
             if after_geometry is not None
             else None
         ),
@@ -879,7 +904,9 @@ def move_signature(
             payload=(
                 f'{{"version_id": {version.id}, "signature_id": "{signature_id}", '
                 f'"actor_user_id": {user.id}, "revision": {next_revision}, '
-                f'"before_page": {before_geometry.page}, "after_page": {page}}}'
+                f'"before_page": {before_geometry.page}, "after_page": {page}, '
+                f'"before_width_pt": {round(before_geometry.width_pt, 2)}, '
+                f'"after_width_pt": {round(after_width_pt, 2)}}}'
             ),
         )
     )

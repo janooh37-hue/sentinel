@@ -207,11 +207,13 @@ def _move_in_subprocess(
     y: float,
     layout: SignatureLayout,
     before_pdf_str: str,
+    width_pt: float | None = None,
 ) -> tuple[SignatureLayout, str]:
-    """Performs the move, converts the result, remeasures it, and validates
-    the remeasured result against the request — entirely inside the one
-    worker, so the whole operation is one serialized unit against ordinary
-    PDF conversion. Raises the ``signature_layout`` error taxonomy directly;
+    """Performs the move (and optional aspect-locked resize to *width_pt*),
+    converts the result, remeasures it, and validates the remeasured result
+    against the request — entirely inside the one worker, so the whole
+    operation is one serialized unit against ordinary PDF conversion.
+    Raises the ``signature_layout`` error taxonomy directly;
     ``ProcessPoolExecutor`` re-raises it in the calling process. Returns
     ``(after_layout, after_pdf_path_str)`` — the CLEAN converted PDF (never a
     probe-marked measurement artifact) a caller may publish."""
@@ -227,6 +229,7 @@ def _move_in_subprocess(
         x=x,
         y=y,
         layout=layout,
+        width_pt=width_pt,
     )
     after_pdf = word_pdf.convert(destination)
     if after_pdf is None:
@@ -244,6 +247,7 @@ def _move_in_subprocess(
         requested_x=x,
         requested_y=y,
         layout_after=after_layout,
+        requested_width_pt=width_pt,
     )
     return after_layout, str(after_pdf)
 
@@ -258,10 +262,12 @@ def move_signature_position(
     y: float,
     layout: SignatureLayout,
     before_pdf: Path,
+    width_pt: float | None = None,
 ) -> tuple[SignatureLayout, Path]:
-    """Move, convert, remeasure, and validate *signature_id* in one
-    worker unit — see ``signature_layout.write_signature_position``/
-    ``validate_move``. Returns ``(after_layout, after_pdf_path)``. Raises
+    """Move (and, with *width_pt*, resize) *signature_id*, convert,
+    remeasure, and validate in one worker unit — see
+    ``signature_layout.write_signature_position``/``validate_move``.
+    Returns ``(after_layout, after_pdf_path)``. Raises
     the ``signature_layout`` error taxonomy on any failure; *destination* is
     left on disk for the caller to clean up on a raised error (plan §7.9
     assigns that to the caller, which knows which files it newly owns)."""
@@ -275,6 +281,7 @@ def move_signature_position(
         y=y,
         layout=layout,
         before_pdf_str=str(before_pdf),
+        width_pt=width_pt,
         timeout=240,
     )
     return after_layout, Path(after_pdf_str)

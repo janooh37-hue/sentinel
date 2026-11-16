@@ -690,6 +690,8 @@ def _editor_read(description: signature_placement_service.EditorDescription) -> 
             default_page=s.default_page,
             default_x=s.default_x,
             default_y=s.default_y,
+            default_width_pt=s.default_width_pt,
+            default_height_pt=s.default_height_pt,
             image_url=(
                 f"/api/v1/documents/{description.document_id}/signature-editor/images/{s.id}"
                 f"?signature_revision={description.signature_revision}"
@@ -929,6 +931,7 @@ def put_signature_position(
         page=payload.page,
         x=payload.x,
         y=payload.y,
+        width_pt=payload.width_pt,
     )
     return _editor_read(description)
 
