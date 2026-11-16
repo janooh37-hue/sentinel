@@ -532,6 +532,24 @@ function PlacementCanvas({
     onReadyChangeRef.current(previewReady)
   }, [previewReady])
 
+  // Open where the signature is: the first time this preview becomes ready,
+  // centre the overlay in view (it may be pages down). The canvas is keyed by
+  // previewKey, so a fresh load, another signature, or a Save each scroll
+  // once; drags, resizes, and later re-renders never do. Focus stays put.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const scrolledToSignatureRef = useRef(false)
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!previewReady || scrolledToSignatureRef.current || !overlay) return
+    scrolledToSignatureRef.current = true
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    overlay.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    })
+  }, [previewReady])
+
   const interactive = canAdjust && previewReady && !saving
   const aspect = signatureAspect(selected)
 
@@ -690,6 +708,7 @@ function PlacementCanvas({
           return (
             <div ref={rootRef} className="pointer-events-none absolute inset-0">
               <div
+                ref={overlayRef}
                 role="img"
                 aria-label={t('signaturePlacement.signatureLabel')}
                 tabIndex={interactive ? 0 : -1}

@@ -21,6 +21,35 @@ const NARROW = { width: 390, height: 844 }
 const MINIMAL_PDF_BASE64 =
   'JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA1IDAgUiA+PiA+PiAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA1NSA+PgpzdHJlYW0KQlQgL0YxIDI0IFRmIDcyIDcyMCBUZCAoU2lnbmF0dXJlIFBsYWNlbWVudCBUZXN0KSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDM0NiAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjQxNgolJUVPRg=='
 
+// A real multi-page US Letter PDF, one "Page N" line per page — built at run
+// time with correct xref offsets so pdf.js parses it without repair.
+function multiPagePdfBase64(pageCount: number): string {
+  const kids = Array.from({ length: pageCount }, (_, i) => `${4 + i * 2} 0 R`).join(' ')
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${kids}] /Count ${pageCount} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ]
+  for (let i = 0; i < pageCount; i++) {
+    const content = `BT /F1 24 Tf 72 720 Td (Page ${i + 1}) Tj ET`
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${5 + i * 2} 0 R >>`,
+      `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    )
+  }
+  let pdf = '%PDF-1.4\n'
+  const offsets: number[] = []
+  objects.forEach((body, i) => {
+    offsets.push(pdf.length)
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`
+  })
+  const xrefOffset = pdf.length
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
+  pdf += offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`
+  return Buffer.from(pdf, 'latin1').toString('base64')
+}
+
 // A real, non-blank, decodable PNG (a short blue stroke) — the "actual ink".
 const SIGNATURE_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAHgAAAA8CAYAAACtrX6oAAABzElEQVR4nO2awZXCMAwFwTWowC1tC3QP7InbhjiOLH2ZmQuPA4lGn2Al+PEAAAAAAAAAAAAAAAAAkMbs9/XpfRVM0KNlF/BuwtFrFUzU45l58hH53n9Sa6zukX4FfwuWdCU3deHsnzjP+jJcUgK+Kqoask3UFe0SHvAnwU/rlFrIduKh4hIa8F0xlZBtsA6FkMMCPhN6N+Ns2swO2QY9jt5fOdY2U/SVpijTD+rODLmprrvZ33zP+SHTZ3nAFZvi7ZHpszTgqk1Z4ZHlsyxghearHj8y5KYwaZ6RNVmbs8foZz19wqfo2aaoTdbdoZ6IkJvyenXl895XsS30iHRq1ZoSEbIFhRvh5BZwZFNWNsSCw13t5BJw9uNDr3os2WNFyE150rxzXO+/JHvQkOcd8tIpenVTFJquHnKruF6Nnsccdo1k3Z55hTwdsFJT7jTDhDxWhDwVsGJTZpphgh7eIbdqk+ZOm9IjQm4VJ83Z89vgZvRsD6//zV2naJWmrHwcWnHny7BMhfXq7k9wF/Q4chut9bljuDMhd2GPO7Rdw/XaNbJ9wDvLfwNDQ9Z/O/WrBN9P6q7iEUal+8dd7oMBAAAAAAAAAAAAAB7C/AE5fI2hnujawwAAAABJRU5ErkJggg=='
@@ -112,11 +141,23 @@ class SyntheticApi {
   identifyMode = false
 
   private revision = 3
-  private readonly defaultPosition = { page: 1, x: 0.3, y: 0.4 }
+  private pageCount = 1
+  private defaultPosition = { page: 1, x: 0.3, y: 0.4 }
   private position = { ...this.defaultPosition }
   // 90 x 40 pt measured; the height always follows the locked 40:90 aspect.
   private widthPt = 90
   private history: Array<Record<string, unknown>> = []
+
+  /** Serve a *pageCount*-page document whose signature sits on *signaturePage*. */
+  useMultiPageDocument(pageCount: number, signaturePage: number): void {
+    this.pageCount = pageCount
+    this.defaultPosition = { page: signaturePage, x: 0.3, y: 0.6 }
+    this.position = { ...this.defaultPosition }
+  }
+
+  private pdfBase64(): string {
+    return this.pageCount === 1 ? MINIMAL_PDF_BASE64 : multiPagePdfBase64(this.pageCount)
+  }
 
   async install(page: Page): Promise<void> {
     await page.route('**/*', (route) => this.handleRoute(route))
@@ -147,7 +188,7 @@ class SyntheticApi {
       unavailable_code: null,
       measured: true,
       pdf_url: null,
-      pages: [{ page: 1, width_pt: 612, height_pt: 792 }],
+      pages: Array.from({ length: this.pageCount }, (_, i) => ({ page: i + 1, width_pt: 612, height_pt: 792 })),
       signatures: this.identifyMode
         ? []
         : [
@@ -321,7 +362,7 @@ class SyntheticApi {
     }
 
     if (method === 'GET' && path === `/documents/${DOCUMENT_ID}/download`) {
-      await this.fulfillBase64(route, MINIMAL_PDF_BASE64)
+      await this.fulfillBase64(route, this.pdfBase64())
       return
     }
     if (method === 'GET' && path === `/documents/${DOCUMENT_ID}/signature-editor`) {
@@ -333,7 +374,7 @@ class SyntheticApi {
       return
     }
     if (method === 'GET' && path === `/documents/${DOCUMENT_ID}/signature-editor/background`) {
-      await this.fulfillBase64(route, MINIMAL_PDF_BASE64)
+      await this.fulfillBase64(route, this.pdfBase64())
       return
     }
     if (method === 'GET' && path === `/documents/${DOCUMENT_ID}/signature-editor/images/${SIGNATURE_ID}`) {
@@ -497,6 +538,32 @@ for (const viewport of VIEWPORTS) {
         .first()
         .evaluate((el) => getComputedStyle(el).direction)
       expect(direction).toBe('ltr')
+    })
+  }
+}
+
+for (const viewport of VIEWPORTS) {
+  for (const locale of ['en', 'ar'] as const) {
+    test(`${viewport.name}/${locale}: opens scrolled to a signature on a later page without moving focus`, async ({
+      page,
+      backend,
+    }, testInfo) => {
+      backend.useMultiPageDocument(3, 3)
+      await prepareApp(page, locale, viewport.size)
+      const overlay = draggableOverlay(page, locale)
+      await expect(overlay.locator('img')).toBeVisible()
+      await expect(page.locator('[data-pdf-page]')).toHaveCount(3)
+
+      // Page 1 is no longer in view: the workspace scrolled down to page 3
+      // and the signature sits in the viewport with no user action.
+      await expect(overlay).toBeInViewport()
+      await expect(page.locator('[data-pdf-page]').first()).not.toBeInViewport()
+      await expect(overlay).not.toBeFocused()
+      expect(backend.positionPuts).toEqual([])
+      await testInfo.attach(`scrolled-${viewport.name}-${locale}`, {
+        body: await page.screenshot({ animations: 'disabled' }),
+        contentType: 'image/png',
+      })
     })
   }
 }
