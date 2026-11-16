@@ -3516,6 +3516,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/rebuild-vehicle-letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rebuild Vehicle Letter
+         * @description The fleet author regenerates a returned (or unsubmitted) vehicle letter from
+         *     current fleet data as a new revision, ready to submit again.
+         */
+        post: operations["rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/branch-candidates": {
         parameters: {
             query?: never;
@@ -9951,6 +9972,11 @@ export interface components {
              * @default false
              */
             can_forward_to_branch: boolean;
+            /**
+             * Can Rebuild Vehicle Letter
+             * @default false
+             */
+            can_rebuild_vehicle_letter: boolean;
             /** Classification Code */
             classification_code?: string | null;
             /** Voided At */
@@ -18502,6 +18528,14 @@ export interface components {
             sheet: string;
             /** Title */
             title: string;
+        };
+        /**
+         * VehicleLetterRebuildRequest
+         * @description Rebuild the current revision of a returned fleet vehicle letter.
+         */
+        VehicleLetterRebuildRequest: {
+            /** Version Id */
+            version_id: number;
         };
         /**
          * VehicleLicenceScan
@@ -27443,6 +27477,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BookForwardToBranchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleLetterRebuildRequest"];
             };
         };
         responses: {

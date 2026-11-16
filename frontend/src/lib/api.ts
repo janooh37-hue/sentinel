@@ -1160,6 +1160,13 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   LINE_MANAGER_NOT_ELIGIBLE: 'errors.fleet.lineManagerNotEligible',
   BRANCH_APPROVER_NOT_ELIGIBLE: 'errors.fleet.branchApproverNotEligible',
   NOT_LINE_MANAGER_STAGE: 'errors.fleet.notLineManagerStage',
+  NOT_A_VEHICLE_LETTER: 'errors.fleet.notAVehicleLetter',
+  LETTER_SOURCE_CHANGED: 'errors.fleet.letterSourceChanged',
+  SCOPED_ROLE_CHAIN_AUTHOR_ONLY: 'errors.fleet.chainAuthorOnly',
+  SCOPED_ROLE_FOLDERS_FORBIDDEN: 'errors.fleet.foldersForbidden',
+  ACCIDENT_LETTER_NOT_VISIBLE: 'errors.fleet.accidentLetterNotVisible',
+  ACCIDENT_NOT_FOUND: 'errors.fleet.accidentNotFound',
+  ODOMETER_NO_VEHICLES: 'errors.fleet.odometerNoVehicles',
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
   EMPLOYEE_ID_INVALID: 'employees.idChange.invalid',
   EMPLOYEE_ID_SAME: 'employees.idChange.same',
@@ -2510,6 +2517,13 @@ export const api = {
       branch_approver_user_id: branchApproverUserId,
       note: note ?? null,
     }),
+  /** POST /books/{id}/rebuild-vehicle-letter — regenerate the author's returned
+   * Fines, Accident or Mileage letter from current fleet data as a new
+   * revision; the paper returns to draft for a normal submit. `versionId` is
+   * the current revision. Error codes: LETTER_SOURCE_CHANGED (409, missing
+   * fine ids in details), NOT_A_VEHICLE_LETTER (422), SCOPED_ROLE_STATE_LOCKED. */
+  rebuildVehicleLetter: (bookId: number, versionId: number) =>
+    request<BookRead>('POST', `/books/${bookId}/rebuild-vehicle-letter`, { version_id: versionId }),
   /** GET version annotations (pins + highlights) for the record-screen overlay. */
   listBookAnnotations: (bookId: number, versionId: number) =>
     request<BookAnnotationRead[]>(

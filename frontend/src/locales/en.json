@@ -4784,7 +4784,15 @@
       "employeeRequired": "Ask an administrator to link your employee record.",
       "identityChanged": "Your employee record changed since this paper was signed. Reload before continuing.",
       "notOwner": "You can only change your own papers.",
-      "stateLocked": "This paper can no longer be edited. Reload to see its current state."
+      "stateLocked": "This paper can no longer be edited. Reload to see its current state.",
+      "notAVehicleLetter": "Only Fines, Accident and Odometer letters can be rebuilt.",
+      "letterSourceChanged": "Some fines on this letter were removed, archived or moved to another vehicle. Create a new letter from the fleet hub.",
+      "letterSourceChangedFines": "These fines were removed, archived or moved to another vehicle: {{fines}}. Create a new letter from the fleet hub.",
+      "chainAuthorOnly": "Only the author can submit or rebuild this paper; it goes to their line manager.",
+      "foldersForbidden": "Folders aren't available for your account.",
+      "accidentLetterNotVisible": "This accident already has a letter you can't open.",
+      "accidentNotFound": "This letter's accident no longer exists.",
+      "odometerNoVehicles": "Select at least one active vehicle for the monthly mileage log."
     },
     "boundary": {
       "bodyLead": "This screen lost its connection.",

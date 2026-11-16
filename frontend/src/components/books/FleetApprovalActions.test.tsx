@@ -28,6 +28,7 @@ const pendingBook: BookRead = {
   included_papers_revision: 0, included_papers_fixed_page_count: 1, included_papers_total_page_count: 1,
   current_template_id: 'General Book', service_id: 'General Book', selected_version_id: 101,
   can_forward_to_branch: true,
+  can_rebuild_vehicle_letter: false,
   versions: [{
     id: 101, version_no: 2, trigger: 'generated', status: 'pending', has_fields: true,
     template_id: 'General Book', document_id: 55, created_at: '2026-11-01T09:00:00', manager_sig_embedded: false,

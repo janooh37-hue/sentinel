@@ -93,6 +93,7 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     can_send: false,
     can_change_confidentiality: false,
     can_forward_to_branch: false,
+    can_rebuild_vehicle_letter: false,
     ...overrides,
   }
 }

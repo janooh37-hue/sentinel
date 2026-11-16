@@ -41,6 +41,7 @@ const BOOK: BookRead = {
   access_scope: 'full', can_write: true, can_sign: false, can_review: false,
   confidentiality: 'general', can_send: true, can_change_confidentiality: true,
   can_forward_to_branch: false,
+  can_rebuild_vehicle_letter: false,
 }
 const REFERENCE: BookThreadItem = {
   book_id: 8, ref_number: 'REF-8', subject: 'Reference subject', confidentiality: 'secret',

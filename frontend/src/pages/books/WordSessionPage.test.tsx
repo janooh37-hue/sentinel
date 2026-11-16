@@ -35,6 +35,7 @@ const book: BookRead = {
   access_scope: 'full', can_write: true, can_sign: false, can_review: false,
   confidentiality: 'general', can_send: true, can_change_confidentiality: true,
   can_forward_to_branch: false,
+  can_rebuild_vehicle_letter: false,
   submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234',
 }
 

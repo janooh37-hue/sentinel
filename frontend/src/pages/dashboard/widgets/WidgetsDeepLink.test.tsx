@@ -45,7 +45,7 @@ const BOOK: BookRead = {
   stamp_style: null, created_at: '2026-10-20T08:00:00', deleted_at: null, priority: 'Normal',
   approval_state: 'approved', access_scope: 'full', confidentiality: 'general', can_write: false,
   can_send: false, can_change_confidentiality: false, can_sign: false, can_review: false,
-  can_forward_to_branch: false,
+  can_forward_to_branch: false, can_rebuild_vehicle_letter: false,
   is_draft: false, doc_manager_has_signature: false, is_word_book: false,
   included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
   current_template_id: null, service_id: 'General Book',
