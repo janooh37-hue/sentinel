@@ -50,7 +50,6 @@ import { StatisticsTab } from './statistics/StatisticsTab'
 import { InmateReporterApplication } from './InmateReporterApplication'
 import { FleetReporterApplication } from './FleetReporterApplication'
 import { scopedRoleOf } from '@/lib/scopedRole'
-import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { api, apiErrorMessage } from '@/lib/api'
@@ -63,7 +62,6 @@ import type {
   StagedAttachmentRead,
   TemplateMeta,
   WordBookCreate,
-  WordSessionRead,
 } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
@@ -272,7 +270,6 @@ function StandardApplicationPage(): React.JSX.Element {
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
-  const [wordSession, setWordSession] = useState<WordSessionRead | null>(null)
   // Per-book notify switch: the operator's choice (null = untouched) over the
   // event's default-send setting reported by the message preview. Resets per
   // form. Only surfaced for notifying forms when global autosend is on (see notifyToggle.ts).
@@ -545,8 +542,7 @@ function StandardApplicationPage(): React.JSX.Element {
       // Chrome's tab-modal protocol prompt that silently swallows every click
       // in the tab while it lingers. The Word page's «Open in Word»
       // anchor is the launch point (2026-07-19 dead-buttons audit).
-      if (scoped) setWordSession(res)
-      else navigate(`/books/${res.book_id}/word`)
+      navigate(`/books/${res.book_id}/word`)
     },
     onError: (err) => {
       setSubmitError(apiErrorMessage(err))
@@ -1820,18 +1816,6 @@ function StandardApplicationPage(): React.JSX.Element {
           </div>
         )}
       </div>
-      <WordHandoffDialog
-        session={wordSession}
-        open={wordSession !== null}
-        onClose={() => {
-          setWordSession(null)
-          void qc.invalidateQueries({ queryKey: ['books'] })
-        }}
-        onFinished={(book) => {
-          setWordSession(null)
-          navigate(`/books/${book.id}`)
-        }}
-      />
     </div>
   )
 }
