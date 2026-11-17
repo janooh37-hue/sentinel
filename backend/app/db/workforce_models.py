@@ -813,6 +813,12 @@ class AttendanceAdjustment(Base):
     )
 
 
+#: A status change that took the employee out of the duty-unit structure. The
+#: latest one of a departed employee is what a return restores from, so
+#: retention keeps it (``workforce_retention_service``).
+DUTY_DEPARTURE_EVENT_TYPES: tuple[str, ...] = ("service_end", "transfer_out")
+
+
 class DutyAssignmentEvent(Base):
     __tablename__ = "duty_assignment_events"
 

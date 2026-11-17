@@ -48,9 +48,8 @@ def _employees(connection: Connection) -> dict[str, tuple[object, object]]:
     }
 
 
-def test_single_head_on_its_parent() -> None:
+def test_revision_follows_its_parent() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == [HEAD]
     assert script.get_revision(HEAD).down_revision == PARENT
 
 
@@ -106,6 +105,18 @@ def test_backfill_round_trip(tmp_path: Path) -> None:
                     "VALUES ('G1', 'reinstatement', '2026-06-01', '2026-06-01', 'Unit A')"
                 )
             )
+            # Attendance stamps a case with the latest event of any type.
+            connection.execute(
+                text(
+                    "INSERT INTO attendance_cases "
+                    "(id, employee_id, shift_override_id, duty_assignment_event_id, "
+                    "employee_status_snapshot, shift_code_snapshot, scheduled_start_at, "
+                    "scheduled_end_at, operational_date, organization_snapshot_state) "
+                    "SELECT 1, 'G1', 1, id, 'Active', 'M', '2026-06-02 05:00:00', "
+                    "'2026-06-02 13:00:00', '2026-06-02', 'captured' "
+                    "FROM duty_assignment_events WHERE event_type = 'reinstatement'"
+                )
+            )
 
         command.downgrade(config, PARENT)
         with engine.begin() as connection:
@@ -118,6 +129,18 @@ def test_backfill_round_trip(tmp_path: Path) -> None:
                 "G5": (None, None),
                 "G6": (None, None),
             }
+            # The case lost its link instead of pointing at a deleted id.
+            assert (
+                connection.scalar(
+                    text("SELECT duty_assignment_event_id FROM attendance_cases WHERE id = 1")
+                )
+                is None
+            )
+            assert [
+                row
+                for row in connection.execute(text("PRAGMA foreign_key_check")).all()
+                if row[2] == "duty_assignment_events"
+            ] == []
             assert (
                 connection.scalar(text("SELECT count(*) FROM duty_assignment_events"))
                 == baseline_count

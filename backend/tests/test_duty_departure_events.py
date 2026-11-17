@@ -367,3 +367,65 @@ def test_restore_moves_the_crew_without_a_second_reconciliation_event(db_session
     )
     crew = db_session.get(WorkCrew, latest.crew_id)
     assert crew.code == workforce_seed_service.DUTY_UNIT_TO_CREW[other]
+
+
+def test_retention_keeps_the_departure_a_return_restores_from(db_session):
+    """The cleared employee row leaves that event as the only copy of the post."""
+    from datetime import UTC, datetime
+
+    from app.schemas.workforce import WorkforceConfiguration
+    from app.services.workforce_retention_service import purge_expired_workforce_data
+
+    user = _user(db_session)
+    _emp(db_session)
+    _emp(db_session, "G8002")
+    for _ in range(2):  # two departures; only the latest is restorable
+        employee_service.update_employee(
+            db_session,
+            "G8001",
+            EmployeeUpdate(status="Active", duty_unit=UNIT, duty_post=POST),
+            actor_user_id=user.id,
+        )
+        employee_service.update_employee(
+            db_session,
+            "G8001",
+            EmployeeUpdate(status="Resigned", end_date=TODAY),
+            actor_user_id=user.id,
+        )
+    employee_service.update_employee(
+        db_session,
+        "G8002",
+        EmployeeUpdate(status="Resigned", end_date=TODAY),
+        actor_user_id=user.id,
+    )
+    employee_service.update_employee(
+        db_session, "G8002", EmployeeUpdate(status="Active"), actor_user_id=user.id
+    )
+    latest = _events(db_session)[-1]
+
+    now = datetime.now(UTC) + timedelta(days=400)
+    configuration = WorkforceConfiguration.model_validate(
+        {
+            "integration_enabled": False,
+            "sync_interval_minutes": 15,
+            "stale_after_minutes": 30,
+            "initial_backfill_start_at": now - timedelta(days=31),
+            "evaluation_start_at": now - timedelta(days=30),
+            "nationality_fold_min_count": 5,
+            "excusing_record_kinds": ["annual"],
+            "provider_person_retention_days": 90,
+            "punch_retention_days": 60,
+            "attendance_retention_days": 30,
+            "duty_event_retention_days": 30,
+            "audit_retention_days": 30,
+        }
+    )
+    purge_expired_workforce_data(db_session, configuration=configuration, now=now)
+
+    assert [e.id for e in _events(db_session)] == [latest.id]
+    assert latest.event_type == "service_end"
+    assert _events(db_session, "G8002") == []
+    row = employee_service.update_employee(
+        db_session, "G8001", EmployeeUpdate(status="Active"), actor_user_id=user.id
+    )
+    assert (row.duty_unit, row.duty_post) == (UNIT, POST)

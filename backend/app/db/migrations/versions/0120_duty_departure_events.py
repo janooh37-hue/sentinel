@@ -15,9 +15,10 @@ the two fields cleared, so the roster is clean on upgrade.
 
 Downgrade puts back, for each employee who is still departed and unassigned,
 the unit/post their latest departure event left, then deletes every event of
-the new types (the old CHECK rejects them). A post held without a unit was
-never a hierarchy path, so the backfill could not record it and it is not
-restored.
+the new types (the old CHECK rejects them). Attendance cases stamped with one
+of those events lose that link (the column is nullable) rather than point at a
+deleted, later reused id. A post held without a unit was never a hierarchy
+path, so the backfill could not record it and it is not restored.
 """
 
 from __future__ import annotations
@@ -117,5 +118,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     _restore_departed_locations()
+    new_events = f"SELECT id FROM {_TABLE} WHERE event_type IN {_NEW_TYPES}"
+    op.execute(
+        "UPDATE attendance_cases SET duty_assignment_event_id = NULL "
+        f"WHERE duty_assignment_event_id IN ({new_events})"
+    )
     op.execute(f"DELETE FROM {_TABLE} WHERE event_type IN {_NEW_TYPES}")
     _replace_checks(_OLD_EVENT_TYPES, _OLD_ACTOR)

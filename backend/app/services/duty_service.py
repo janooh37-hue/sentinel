@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
-from app.db.workforce_models import DutyAssignmentEvent
+from app.db.workforce_models import DUTY_DEPARTURE_EVENT_TYPES, DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
 from app.schemas.employee import EMPLOYEE_STATUS_TRANSFERRED, WORKING_STATUSES
 from app.services import book_service, document_service, workforce_schedule_service
@@ -46,7 +46,6 @@ from app.services import book_service, document_service, workforce_schedule_serv
 EVENT_SERVICE_END: Final = "service_end"
 EVENT_TRANSFER_OUT: Final = "transfer_out"
 EVENT_REINSTATEMENT: Final = "reinstatement"
-DEPARTURE_EVENT_TYPES: Final[tuple[str, ...]] = (EVENT_SERVICE_END, EVENT_TRANSFER_OUT)
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
@@ -195,7 +194,7 @@ def apply_status_change(
             select(DutyAssignmentEvent)
             .where(
                 DutyAssignmentEvent.employee_id == employee.id,
-                DutyAssignmentEvent.event_type.in_(DEPARTURE_EVENT_TYPES),
+                DutyAssignmentEvent.event_type.in_(DUTY_DEPARTURE_EVENT_TYPES),
             )
             .order_by(DutyAssignmentEvent.id.desc())
             .limit(1)
