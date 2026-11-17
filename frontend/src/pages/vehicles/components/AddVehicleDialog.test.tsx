@@ -215,3 +215,36 @@ describe('AddVehicleDialog licence scan', () => {
     expect(screen.getByText('Second scan make')).toBeInTheDocument()
   })
 })
+
+describe('Add Vehicle request language', () => {
+  it.each(['en', 'ar'])('asks one language and stores shared names in both halves in %s', async (language) => {
+    await i18n.changeLanguage(language)
+    const user = userEvent.setup()
+    renderDialog()
+    await screen.findByLabelText(i18n.t('vehicles.type'), { exact: false })
+    expect(screen.queryByLabelText(i18n.t('vehicles.typeAr'), { exact: false })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(i18n.t('vehicles.typeEn'), { exact: false })).not.toBeInTheDocument()
+    const type = language === 'ar' ? 'حافلة' : 'Bus'
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.plate') }), '14 \\ 58216')
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.trafficCode') }), '1180021637')
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.type') }), type)
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.accessories') }), 'Radio')
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.generalNotes') }), 'Fleet note')
+    await user.click(screen.getByRole('combobox', { name: i18n.t('vehicles.site') }))
+    await user.click(screen.getByRole('option', { name: i18n.t('vehicles.newSiteOption') }))
+    const siteName = language === 'ar' ? 'الموقع الجديد' : 'New site'
+    await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.siteName') }), siteName)
+    expect(screen.queryByLabelText(i18n.t('vehicles.siteNameAr'), { exact: false })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(i18n.t('vehicles.siteNameEn'), { exact: false })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: i18n.t('vehicles.save') }))
+    await waitFor(() => expect(api.createVehicle).toHaveBeenCalledWith(expect.objectContaining({
+      type_ar: type,
+      type_en: type,
+      new_site: { name_ar: siteName, name_en: siteName },
+      accessories_ar: language === 'ar' ? 'Radio' : null,
+      accessories_en: language === 'en' ? 'Radio' : null,
+      notes_ar: language === 'ar' ? 'Fleet note' : null,
+      notes_en: language === 'en' ? 'Fleet note' : null,
+    })))
+  })
+})

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehiclePhotoRead, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
+import { localized } from '@/lib/language'
 
 import {
   DOCUMENT_ACCEPT,
@@ -31,15 +32,14 @@ import {
   vehicleFormSchema,
 } from '../vehicleForm'
 import {
-  DialogBody,
-  DialogFooter,
-  DialogShell,
+  FieldGrid,
   FormAlert,
   UploadSlot,
 } from '@/components/forms/DialogShell'
 import { VehicleFormFields } from './VehicleFormFields'
 import { VehicleLicenceScanControl } from './VehicleLicenceScanControl'
 import { VehiclePhotoPicker } from './VehiclePhotoPicker'
+import { RequestBody, RequestFooter, RequestShell } from './RequestShell'
 
 interface Props {
   open: boolean
@@ -63,12 +63,11 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
   const sites = sitesQuery.data
 
   return (
-    <DialogShell
+    <RequestShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.addVehicleTitle')}
       description={t('vehicles.addVehicleDesc')}
-      size="xl"
       busy={busy}
     >
       {sites ? (
@@ -79,13 +78,13 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
           onBusyChange={setBusy}
         />
       ) : (
-        <DialogBody>
+        <RequestBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
           <Skeleton className="h-9 w-1/2" />
-        </DialogBody>
+        </RequestBody>
       )}
-    </DialogShell>
+    </RequestShell>
   )
 }
 
@@ -104,7 +103,7 @@ function AddVehicleForm({
   onOpenChange: (open: boolean) => void
   onBusyChange: (busy: boolean) => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const fieldId = useId()
   const alertId = `${fieldId}-alert`
@@ -187,17 +186,17 @@ function AddVehicleForm({
         mutation.mutate(values)
       })}
     >
-      <DialogBody>
+      <RequestBody>
         <FormAlert id={alertId} message={alert} />
         <VehicleFormFields
           form={form}
           sites={sites}
           mode="create"
+          request
           fieldIdPrefix={fieldId}
           alertId={alertId}
-        />
-
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          licenceAttachments={
+        <FieldGrid>
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-3">
             <span className="text-xs font-semibold text-foreground">
               {t('vehicles.mainPhoto')}
@@ -247,6 +246,16 @@ function AddVehicleForm({
                 >) {
                   form.setValue(field, value, { shouldDirty: true, shouldValidate: true })
                 }
+                if (fields.type_ar != null || fields.type_en != null) {
+                  const type = localized(fields.type_ar, fields.type_en, i18n.language)
+                  form.setValue('type_ar', type, { shouldDirty: true, shouldValidate: true })
+                  form.setValue('type_en', type, { shouldDirty: true, shouldValidate: true })
+                }
+                if (fields.custom_class_ar != null || fields.custom_class_en != null) {
+                  const name = localized(fields.custom_class_ar, fields.custom_class_en, i18n.language)
+                  form.setValue('custom_class_ar', name, { shouldDirty: true, shouldValidate: true })
+                  form.setValue('custom_class_en', name, { shouldDirty: true, shouldValidate: true })
+                }
               }}
               onFileRetained={(file) => {
                 const previouslyRetained = scanRetainedFileRef.current
@@ -262,22 +271,16 @@ function AddVehicleForm({
               disabled={mutation.isPending}
             />
           </div>
-        </div>
-      </DialogBody>
+        </FieldGrid>
+          }
+        />
+      </RequestBody>
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={mutation.isPending}
-          onClick={() => onOpenChange(false)}
-        >
-          {t('vehicles.cancel')}
-        </Button>
-        <Button type="submit" disabled={mutation.isPending}>
+      <RequestFooter busy={mutation.isPending}>
+        <Button type="submit" size="lg" className="sm:min-w-[11rem]" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </DialogFooter>
+      </RequestFooter>
     </form>
       <VehiclePhotoPicker
         open={photoPickerOpen}
