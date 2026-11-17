@@ -415,6 +415,10 @@ def rebuild_vehicle_letter(db: Session, book_id: int, *, version_id: int, user: 
     for key in _PAPER_DATE_KEYS:
         if key in stored and key in fields:
             fields[key] = stored[key]
+    if template_id != "Vehicle Mileage Log":
+        # The fines and accident papers print their Gregorian issue date as
+        # ``today``, which the renderer would otherwise fill with the rebuild day.
+        fields["today"] = book.created_at.strftime("%d/%m/%Y")
     document_service.authorize_interactive_generation(
         db, user, template_id, classification_code=classification_code
     )

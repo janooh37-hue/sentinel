@@ -118,6 +118,19 @@ def test_rebuilt_accident_letter_picks_up_the_edited_description(fleet_env: Flee
     assert book.versions[-1].fields["description"] == "اصطدام بالبوابة الشرقية"
 
 
+def test_rebuilt_accident_letter_keeps_its_issue_date(fleet_env: FleetEnv) -> None:
+    env = fleet_env
+    letter = _returned(env, accident_letter(env, env.reporter))
+    # Issued on an earlier day than the rebuild.
+    letter.created_at = datetime(2026, 1, 5, 10, 30)
+    env.db.commit()
+
+    response = _rebuild(env, letter)
+
+    assert response.status_code == 200, response.text
+    assert env.book(letter.id).versions[-1].fields["today"] == "05/01/2026"
+
+
 def test_rebuilt_mileage_log_reads_the_same_month_again(fleet_env: FleetEnv) -> None:
     env = fleet_env
     env.db.add_all(
