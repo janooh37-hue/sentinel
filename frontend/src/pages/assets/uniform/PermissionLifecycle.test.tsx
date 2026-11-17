@@ -57,7 +57,7 @@ beforeEach(async () => {
   vi.spyOn(api, 'listUniformRecipients').mockImplementation(async (query = '') => [ALI, OMAR].filter(person => [person.employee_id, person.name_en].some(value => value.toLowerCase().includes(query.toLowerCase()))))
   vi.spyOn(api, 'lookupEmployees').mockImplementation(async ({ q } = {}) => ({
     items: [ALI, OMAR].filter(person => [person.employee_id, person.name_en].some(value => value.toLowerCase().includes((q ?? '').toLowerCase()))).map(person => ({
-      id: person.employee_id, name_en: person.name_en, name_ar: null, department: null, position: null, position_ar: null, duty_unit: null, duty_post: null,
+      id: person.employee_id, name_en: person.name_en, name_ar: null, department: null, position: null, position_ar: null, duty_unit: null, duty_post: null, status: 'Active',
     })), total: 1, limit: 8, offset: 0,
   }))
   vi.spyOn(api, 'getUniformEmployee').mockImplementation(async employeeId => ({
