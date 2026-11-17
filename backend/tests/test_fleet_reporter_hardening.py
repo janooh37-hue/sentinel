@@ -186,6 +186,25 @@ def _deny(env: FleetEnv, capability: str) -> None:
     perm_service._invalidate_caps_cache(env.db, env.reporter.id)
 
 
+def test_denied_record_type_also_closes_the_authors_own_returned_paper(
+    fleet_env: FleetEnv,
+) -> None:
+    env = fleet_env
+    book = general_book(env, env.reporter)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+    version_id = current_version_id(book)
+    client = env.client(env.reporter)
+    fields_path = f"/api/v1/books/{book.id}/versions/{version_id}/fields"
+    assert client.get(fields_path).status_code == 200
+
+    _deny(env, "books.category.11/1")
+
+    assert client.get(f"/api/v1/books/{book.id}").status_code == 404
+    assert client.get(fields_path).status_code == 404
+
+
 def test_denied_books_view_closes_direct_reads_and_documents(fleet_env: FleetEnv) -> None:
     env = fleet_env
     letter = fines_letter(env, env.reporter)

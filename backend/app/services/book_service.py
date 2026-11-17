@@ -1245,6 +1245,9 @@ def require_fleet_write_access(
             not (version.fields or {}).get("signed") or version.status != "approved"
         ):
             raise AppError("SIGNATURE_REQUIRED", "A signed Report is required.", http_status=409)
+    # Its own paper is still subject to its record-type, books.view and level
+    # gates: what an admin hid from it is not writable either.
+    resolve_book_read_access(db, user, book)
     return version
 
 
@@ -1274,6 +1277,8 @@ def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
         raise _scoped_error("NOT_OWNER", "You are not the author of this record.", 403)
     if row.versions:
         require_fleet_write_access(db, user, row, action="revise")
+    else:
+        resolve_book_read_access(db, user, row)
     return row
 
 
