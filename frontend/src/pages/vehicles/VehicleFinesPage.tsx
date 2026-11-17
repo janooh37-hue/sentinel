@@ -378,6 +378,7 @@ export function VehicleFinesPage(): React.JSX.Element {
       counter={canEdit ? (
         <ServiceCounter artwork="vehicle-fines" title={t('vehicles.start.fine')}
           description={t('vehicles.addFineDesc')} actionLabel={t('vehicles.addFine')} vehicles={fleetQuery.data}
+          onRetry={fleetQuery.isError ? () => void fleetQuery.refetch() : undefined}
           onStart={(vehicleId) => { setInitialVehicleId(vehicleId); setAddOpen(true) }}
           extra={<Button type="button" variant="secondary" size="lg" onClick={() => setEvgOpen(true)}>{t('vehicles.importFines')}</Button>} />
       ) : null}

@@ -65,7 +65,7 @@ export function VehicleRenewalsPage(): React.JSX.Element {
     <>
       <ServicePage
         band={{ back: { to: '/vehicles', label: t('vehicles.backHub') }, title: t('vehicles.renewService'), description: t('vehicles.renewServiceDesc') }}
-        counter={canEdit ? <ServiceCounter artwork="vehicle-licence-renewal" title={t('vehicles.start.renewal')} description={t('vehicles.renewDesc')} actionLabel={t('vehicles.renew')} vehicles={fleet} onStart={(id) => overlay.open('renew', { vehicle: String(id) })} /> : null}
+        counter={canEdit ? <ServiceCounter artwork="vehicle-licence-renewal" title={t('vehicles.start.renewal')} description={t('vehicles.renewDesc')} actionLabel={t('vehicles.renew')} vehicles={fleet} onStart={(id) => overlay.open('renew', { vehicle: String(id) })} onRetry={fleetQuery.isError ? () => void fleetQuery.refetch() : undefined} /> : null}
       >
         <RegisterBar>
           <RegisterTabs<Filter> label={t('vehicles.renewService')} value={filter} onChange={(next) => setParams((previous) => { const updated = new URLSearchParams(previous); if (next === 'attention') updated.delete('status'); else updated.set('status', next); return updated }, { replace: true })} items={[

@@ -117,7 +117,8 @@ export function VehicleMaintenancePage(): React.JSX.Element {
       counter={canEdit ? (
         <ServiceCounter artwork="vehicle-maintenance" title={t('vehicles.start.maintenance')}
           description={t('vehicles.addMaintenanceDesc')} actionLabel={t('vehicles.addMaintenance')}
-          vehicles={fleetQuery.data} onStart={(vehicleId) => addOverlay.open('maintenance', { vehicle: String(vehicleId) })} />
+          vehicles={fleetQuery.data} onStart={(vehicleId) => addOverlay.open('maintenance', { vehicle: String(vehicleId) })}
+          onRetry={fleetQuery.isError ? () => void fleetQuery.refetch() : undefined} />
       ) : null}
     >
       <RegisterBar>

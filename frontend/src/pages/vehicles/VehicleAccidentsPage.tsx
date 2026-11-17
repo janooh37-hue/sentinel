@@ -126,6 +126,7 @@ export function VehicleAccidentsPage(): React.JSX.Element {
             description={t('vehicles.addAccidentDesc')}
             actionLabel={t('vehicles.newReport')}
             vehicles={vehiclesQuery.data}
+            onRetry={vehiclesQuery.isError ? () => void vehiclesQuery.refetch() : undefined}
             onStart={(vehicleId) => overlay.open('accident', { vehicle: String(vehicleId) })}
           />
         ) : null

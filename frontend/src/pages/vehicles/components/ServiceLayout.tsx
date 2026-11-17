@@ -157,6 +157,7 @@ export function ServiceCounter({
   vehicles,
   onStart,
   extra,
+  onRetry,
 }: {
   artwork: ServiceArtworkId
   title: string
@@ -167,6 +168,9 @@ export function ServiceCounter({
   onStart: (vehicleId: number) => void
   /** A secondary action beside the large one (for example Fetch from EVG). */
   extra?: React.ReactNode
+  /** Set when the fleet list failed: the counter says so and offers this
+   *  retry instead of loading forever. */
+  onRetry?: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const titleId = useId()
@@ -200,23 +204,37 @@ export function ServiceCounter({
       </div>
       <div className="col-span-full flex flex-wrap items-end justify-end gap-3 xl:col-span-1">
         <div className="flex min-w-0 flex-[1_1_100%] flex-col gap-1.5 sm:flex-[1_1_14rem] xl:w-[17rem] xl:flex-none">
-          <Label htmlFor={pickerId}>{t('vehicles.vehicle')}</Label>
-          <Select value={value} onValueChange={setPicked} disabled={list.length === 0}>
-            <SelectTrigger id={pickerId} className="h-11 text-[0.86rem]">
-              <SelectValue placeholder={vehicles ? t('vehicles.noVehicles') : t('common.loading')} />
-            </SelectTrigger>
-            <SelectContent>
-              {list.map((vehicle) => (
-                <SelectItem key={vehicle.id} value={String(vehicle.id)}>
-                  <bdi dir="ltr" className="font-mono">
-                    {plateLabel(vehicle)}
-                  </bdi>
-                  {' · '}
-                  {localized(vehicle.type_ar, vehicle.type_en, i18n.language)}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {onRetry && !vehicles ? (
+            <>
+              <span className="text-sm font-medium leading-none">{t('vehicles.vehicle')}</span>
+              <p role="alert" className="flex min-h-11 flex-wrap items-center gap-2 text-[0.8rem] text-muted-foreground">
+                {t('common.loadError')}
+                <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
+                  {t('common.retry')}
+                </Button>
+              </p>
+            </>
+          ) : (
+            <>
+            <Label htmlFor={pickerId}>{t('vehicles.vehicle')}</Label>
+            <Select value={value} onValueChange={setPicked} disabled={list.length === 0}>
+              <SelectTrigger id={pickerId} className="h-11 text-[0.86rem]">
+                <SelectValue placeholder={vehicles ? t('vehicles.noVehicles') : t('common.loading')} />
+              </SelectTrigger>
+              <SelectContent>
+                {list.map((vehicle) => (
+                  <SelectItem key={vehicle.id} value={String(vehicle.id)}>
+                    <bdi dir="ltr" className="font-mono">
+                      {plateLabel(vehicle)}
+                    </bdi>
+                    {' · '}
+                    {localized(vehicle.type_ar, vehicle.type_en, i18n.language)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            </>
+          )}
         </div>
         <Button
           type="button"
