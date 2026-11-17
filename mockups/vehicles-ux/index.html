@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicles UX: three directions · GSSG Manager</title>
+  <link rel="icon" href="assets/gssg-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="core.css">
+  <style>
+    html { font-size: 17px; background: var(--bg); }
+    .wrap { inline-size: min(64rem, 100%); margin-inline: auto; padding: 2.5rem 1.5rem 4rem; }
+    .brand { display: flex; align-items: center; gap: 0.7rem; color: var(--primary); font-weight: 700; }
+    .brand img { inline-size: 2.2rem; block-size: 2.2rem; }
+    h1 { margin-block: 1.6rem 0.5rem; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; }
+    .lede { max-inline-size: 62ch; color: var(--muted); }
+    h2 { margin-block: 2.6rem 0.8rem; font-size: 1.15rem; font-weight: 700; }
+    .dirs { border-block-start: 2px solid var(--primary); }
+    .dir { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr) auto; align-items: start; gap: 0.4rem 1.4rem; padding-block: 1.4rem; border-block-end: 1px solid var(--border); }
+    .dir > b { color: var(--primary); font: 600 2.4rem/1 var(--mono); }
+    .dir h3 { font-size: 1.25rem; font-weight: 700; }
+    .dir p { max-inline-size: 60ch; margin-block-start: 0.3rem; color: var(--muted); font-size: 0.9rem; }
+    .dir dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.25rem 0.9rem; margin-block-start: 0.8rem; font-size: 0.82rem; }
+    .dir dt { color: var(--muted); font-weight: 600; }
+    .open { display: grid; gap: 0.4rem; }
+    .open .btn { justify-content: space-between; min-inline-size: 11rem; }
+    .rules { display: grid; gap: 0.7rem; max-inline-size: 70ch; counter-reset: rule; }
+    .rules li { display: grid; grid-template-columns: 1.8rem minmax(0, 1fr); font-size: 0.9rem; }
+    .rules li::before { counter-increment: rule; content: counter(rule); color: var(--primary); font: 600 0.9rem var(--mono); }
+    .rules b { font-weight: 600; }
+    .foot { margin-block-start: 2.6rem; color: var(--muted); font-size: 0.8rem; }
+    @media (max-width: 720px) { .dir { grid-template-columns: 2.4rem minmax(0, 1fr); } .open { grid-column: 2; grid-auto-flow: column; justify-content: start; } h1 { font-size: 1.7rem; } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand"><img src="assets/gssg-logo.png" alt=""><span>GSSG Manager · Vehicles</span></div>
+  <h1>Three directions for Vehicle Services</h1>
+  <p class="lede">Each one is a working mockup of the same five screens: the services hub, accident reports, maintenance, the vehicle file and fines. Inside a mockup the top bar switches direction, screen, language and device, so the same record can be compared across all three.</p>
+
+  <h2>Pick a direction</h2>
+  <div class="dirs">
+    <article class="dir">
+      <b>A</b>
+      <div><h3>Sharper register</h3>
+        <p>Today's pages and dialogs, with the hierarchy turned up. The live figure leads each service, fleet administration leaves the service row, and the description leads each accident report.</p>
+        <dl><dt>Forms</dt><dd>Dialogs, as today, split into numbered sections.</dd><dt>Change</dt><dd>Smallest. Nothing moves, so nobody relearns the module.</dd></dl></div>
+      <div class="open"><a class="btn primary lg" href="app.html?v=a&lang=ar">العربية <span aria-hidden="true">→</span></a><a class="btn secondary lg" href="app.html?v=a&lang=en">English <span aria-hidden="true">→</span></a></div>
+    </article>
+    <article class="dir">
+      <b>B</b>
+      <div><h3>Work queue</h3>
+        <p>The module gets its own service rail and opens on what is waiting for an action. Registers become dense rows that open in place, and every form docks beside the list instead of covering it.</p>
+        <dl><dt>Forms</dt><dd>A side panel. The list stays visible while the form is filled in.</dd><dt>Change</dt><dd>Medium. Fastest for daily work across many vehicles.</dd></dl></div>
+      <div class="open"><a class="btn primary lg" href="app.html?v=b&lang=ar">العربية <span aria-hidden="true">→</span></a><a class="btn secondary lg" href="app.html?v=b&lang=en">English <span aria-hidden="true">→</span></a></div>
+    </article>
+    <article class="dir">
+      <b>C</b>
+      <div><h3>Counter and paper</h3>
+        <p>The boldest. A navy band carries the module, reports read as dated ledger entries, and a service is filled in on its own page beside the official letter, which fills in while the operator types.</p>
+        <dl><dt>Forms</dt><dd>A full page with the live letter next to it.</dd><dt>Change</dt><dd>Largest. Closest to a printed government form.</dd></dl></div>
+      <div class="open"><a class="btn primary lg" href="app.html?v=c&lang=ar">العربية <span aria-hidden="true">→</span></a><a class="btn secondary lg" href="app.html?v=c&lang=en">English <span aria-hidden="true">→</span></a></div>
+    </article>
+  </div>
+
+  <h2>The same in all three</h2>
+  <ol class="rules">
+    <li><span><b>One language per form.</b> An Arabic session asks in Arabic, an English session asks in English. No «· AR» / «· EN» pairs, and nothing is required in the other language. Applies to accident reports, maintenance, add vehicle and sites.</span></li>
+    <li><span><b>The Arabic letter asks once.</b> If a report was written in English, the official-letter step asks for the Arabic wording before the letter is saved. Open accident 16 \ 82541 and press «Official letter» to see it.</span></li>
+    <li><span><b>No damage cost to type.</b> The report states that insurance covers the damage and that the technician estimates the cost.</span></li>
+    <li><span><b>Insurance details are optional.</b> Claim number, claim status, insurance company, repair garage and who bears the cost can be added when filing or at any time later, and none of them blocks anything.</span></li>
+    <li><span><b>A report can be closed without a cost.</b></span></li>
+    <li><span><b>Numbers and money.</b> Latin digits in both languages, whole dirhams, and the dirham mark the fines pages already use.</span></li>
+  </ol>
+
+  <p class="foot">All vehicles, people, plates, claims and amounts in the mockups are fabricated. Labels come from the product's own Arabic and English copy. Steps this work does not change (renew licence, edit vehicle, fleet import, add fine) show a short notice instead of opening.</p>
+</main>
+</body>
+</html>

@@ -1,0 +1,126 @@
+/* Direction C · Counter and paper: a navy band, dated ledger entries, forms beside their paper. */
+.c-wrap { inline-size: min(78rem, 100%); margin-inline: auto; padding-inline: 1.6rem; }
+.c-band { flex-shrink: 0; padding-block: 0.9rem 1.2rem; background: var(--primary); color: var(--on-primary); }
+.c-band.big { padding-block: 1.7rem 0; }
+.c-back { display: inline-flex; align-items: center; gap: 0.3rem; margin-block-end: 0.3rem; padding: 0; border: 0; background: none; color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.76rem; font-weight: 600; }
+.c-back:hover { color: var(--on-primary); text-decoration: underline; }
+.c-back svg { inline-size: 0.9em; block-size: 0.9em; }
+.c-band :focus-visible { outline-color: var(--on-primary); }
+.c-band-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 0.8rem 1.6rem; }
+.c-eyebrow { color: color-mix(in oklab, var(--on-primary) 70%, transparent); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+.c-band h1 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; font-size: 1.75rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; }
+.c-band.big h1 { font-size: 2.6rem; line-height: 1.1; }
+[dir="rtl"] .c-band h1, [dir="rtl"] .c-eyebrow { letter-spacing: 0; }
+[dir="rtl"] .c-band.big h1 { line-height: 1.35; }
+.c-band-desc { max-inline-size: 65ch; margin-block-start: 0.3rem; color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.84rem; }
+.c-band-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.c-band .plate { border-color: transparent; background: var(--surface); }
+.btn.c-inv { background: var(--surface); color: var(--primary); }
+.btn.c-inv:hover { background: var(--primary-soft); }
+.btn.c-ghost { border-color: color-mix(in oklab, var(--on-primary) 35%, transparent); color: var(--on-primary); }
+.btn.c-ghost:hover { background: color-mix(in oklab, var(--on-primary) 12%, transparent); }
+.c-fleet { display: flex; align-items: baseline; gap: 0.5rem; }
+.c-fleet strong { font-size: 2rem; font-weight: 700; line-height: 1; }
+.c-fleet span { color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.76rem; }
+
+/* Service doors sit across the band's lower edge: half on navy, half on the page. */
+.c-doors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.7rem; margin-block-start: 1.5rem; transform: translateY(1.6rem); }
+.c-door { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.8rem; padding: 1rem; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); color: var(--text); text-align: start; box-shadow: 0 10px 26px rgba(13, 40, 69, 0.14); transition: transform 180ms var(--ease), box-shadow 180ms; }
+.c-door:hover { transform: translateY(-3px); box-shadow: 0 16px 32px rgba(13, 40, 69, 0.2); }
+.c-door .art { inline-size: 3rem; block-size: 3rem; }
+.c-door-text strong { display: block; color: var(--primary); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+.c-door-text small { display: flex; align-items: center; gap: 0.4rem; margin-block-start: 0.2rem; color: var(--muted); font-size: 0.74rem; font-weight: 500; }
+.c-door-text b { min-inline-size: 1.5rem; padding: 0.05rem 0.4rem; border-radius: 99px; background: var(--tinted); color: var(--muted); font-size: 0.74rem; text-align: center; }
+.c-door-text b.hot { background: var(--primary); color: var(--on-primary); }
+.c-door-go { inline-size: 1rem; block-size: 1rem; color: var(--faint); }
+
+.c-body { padding-block: 1.4rem 4rem; }
+.c-band.big + .c-body { padding-block-start: 3rem; }
+.c-admin { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem 1.2rem; font-size: 0.76rem; }
+.c-admin > span { color: var(--muted); font-weight: 600; }
+.c-sec-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 0.7rem 1.4rem; margin-block: 2rem 0.7rem; }
+.c-sec-head h2 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; }
+[dir="rtl"] .c-sec-head h2 { letter-spacing: 0; }
+.c-sec-head p { color: var(--muted); font-size: 0.78rem; }
+.c-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.c-search { position: relative; inline-size: 17rem; max-inline-size: 100%; }
+.c-search svg { position: absolute; inset-block: 0; inset-inline-start: 0.6rem; inline-size: 0.85rem; block-size: 0.85rem; margin-block: auto; color: var(--muted); }
+.c-search .inp { padding-inline-start: 1.9rem; }
+.c-tabs { display: flex; max-inline-size: 100%; gap: 1.3rem; margin-block-end: 0.9rem; box-shadow: inset 0 -1px var(--border); overflow: auto hidden; }
+.c-tabs button { display: inline-flex; flex-shrink: 0; align-items: center; gap: 0.4rem; margin-block-end: -1px; padding: 0.45rem 0; border: 0; border-block-end: 2px solid transparent; background: none; color: var(--muted); font-size: 0.84rem; font-weight: 600; white-space: nowrap; }
+.c-tabs button span { color: var(--faint); font-size: 0.85em; }
+.c-tabs button[aria-pressed="true"] { border-block-end-color: var(--primary); color: var(--primary); }
+.c-tabrow { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.5rem 1rem; }
+.c-tabrow .c-tabs { flex: 1 1 20rem; }
+
+/* Sheets: square-shouldered, ruled in navy like the letterhead. */
+.c-sheet { margin-block-end: 1rem; border: 1px solid var(--border); border-block-start: 2px solid var(--primary); border-radius: 0 0 var(--r-sm) var(--r-sm); background: var(--surface); overflow: hidden; }
+.c-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: 0.7rem 0.8rem 0.5rem; }
+.c-sheet-head h3 { font-size: 1.05rem; font-weight: 700; }
+.c-sheet-head span { color: var(--muted); font-size: 0.72rem; }
+.c-empty { padding: 2rem 1rem; color: var(--muted); font-size: 0.8rem; text-align: center; }
+.c-total { display: flex; align-items: baseline; justify-content: flex-end; gap: 0.9rem; padding: 0.7rem 0.8rem; border-block-start: 1px solid var(--border); font-size: 1.3rem; }
+.c-total span { color: var(--muted); font-size: 0.74rem; font-weight: 600; }
+.c-figures { display: flex; flex-wrap: wrap; gap: 0.6rem 3rem; margin-block-end: 1.2rem; }
+.c-figures dt, .c-facts dt { color: var(--muted); font-size: 0.68rem; }
+.c-figures dd { color: var(--primary); font-size: 1.6rem; font-weight: 700; line-height: 1.3; }
+.c-figures dd small { color: var(--muted); font-size: 0.72rem; font-weight: 500; }
+.c-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: 0.9rem 1.4rem; margin-block-end: 1.4rem; padding-block-end: 1.2rem; border-block-end: 1px solid var(--border); }
+.c-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem; font-size: 0.84rem; font-weight: 600; }
+
+/* Ledger entries: the date is the index, the description is the entry. */
+.c-ledger { border-block-start: 2px solid var(--primary); }
+.c-entry { display: grid; grid-template-columns: 6.2rem minmax(0, 1fr); gap: 1.4rem; padding-block: 1.1rem; border-block-end: 1px solid var(--border); }
+.c-entry-date { display: grid; align-content: start; justify-items: start; color: var(--muted); font-size: 0.72rem; }
+.c-entry-date b { color: var(--primary); font-size: 2.4rem; font-weight: 600; line-height: 1; }
+.c-entry-date span { margin-block-start: 0.25rem; font-weight: 600; }
+.c-entry-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.c-entry-top > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; font-size: 0.76rem; }
+.c-entry h3 { font-size: 0.92rem; font-weight: 700; }
+.c-entry-desc { inline-size: fit-content; max-inline-size: min(72ch, 100%); margin-block: 0.5rem; font-size: 1rem; line-height: 1.65; }
+.c-entry-meta { display: flex; flex-wrap: wrap; gap: 0.2rem 1.4rem; color: var(--muted); font-size: 0.74rem; }
+.c-entry-meta b { color: var(--text); font-weight: 600; }
+.c-entry-ins { display: grid; gap: 0.7rem; margin-block: 0.8rem; padding: 0.75rem 0.85rem; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); }
+.c-entry-ins .cover { padding: 0; background: none; }
+.c-entry-acts { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+
+/* Compose page. */
+.c-compose { position: absolute; inset-block: calc(2.6rem + 1px) 0; inset-inline: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); animation: c-in 260ms var(--ease); }
+@keyframes c-in { from { opacity: 0; translate: 0 10px; } }
+.c-compose-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; gap: 2.2rem; padding-block: 1.5rem 2.5rem; }
+.c-compose-grid.solo { grid-template-columns: minmax(0, 46rem); }
+.c-form { display: flex; min-inline-size: 0; flex-direction: column; gap: 1.7rem; }
+.c-fsec h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6rem; margin-block-end: 0.8rem; padding-block-end: 0.45rem; border-block-end: 1px solid var(--border); color: var(--primary); font-size: 1.1rem; font-weight: 700; }
+.c-fsec h3 span { color: var(--faint); font-size: 0.8rem; font-weight: 500; }
+.c-fsec h3 small { flex-basis: 100%; color: var(--muted); font-size: 0.74rem; font-weight: 500; }
+.c-side { position: sticky; inset-block-start: 1.5rem; }
+.c-side-label { margin-block-end: 0.5rem; color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+.c-side .paper { padding: 1.8rem 1.9rem; font-size: 0.78rem; }
+.c-note { padding: 1rem 1.1rem; border: 1px solid var(--border); border-block-start: 2px solid var(--primary); background: var(--surface); font-size: 0.78rem; }
+.c-note h4 { margin-block-end: 0.6rem; color: var(--primary); font-size: 0.9rem; }
+.c-compose-foot { flex-shrink: 0; padding-block: 0.7rem; border-block-start: 1px solid var(--border); background: var(--surface); }
+.c-compose-foot .c-wrap { display: flex; justify-content: flex-end; gap: 0.6rem; }
+.c-compose-foot .primary { min-inline-size: 11rem; }
+
+@container frame (max-width: 1100px) { .c-doors { grid-template-columns: repeat(2, minmax(0, 1fr)); } .c-compose-grid { grid-template-columns: minmax(0, 1fr); } .c-side { position: static; } }
+@container frame (max-width: 720px) {
+  .c-wrap { padding-inline: 0.8rem; }
+  .c-band h1 { font-size: 1.35rem; }
+  .c-band.big h1 { font-size: 1.8rem; }
+  .c-band-desc, .c-fleet { display: none; }
+  .c-band.big { padding-block-start: 1rem; }
+  .c-doors { gap: 0.45rem; margin-block-start: 0.9rem; }
+  .c-door { grid-template-columns: minmax(0, 1fr); gap: 0.4rem; padding: 0.7rem; }
+  .c-door .art { inline-size: 2.2rem; block-size: 2.2rem; }
+  .c-door-text strong { font-size: 0.88rem; }
+  .c-door-go { display: none; }
+  .c-band-acts .btn.lg, .c-compose-foot .btn { flex: 1; }
+  .c-search { inline-size: 100%; }
+  .c-entry { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .c-entry-date { grid-auto-flow: column; align-items: baseline; justify-content: start; gap: 0.45rem; }
+  .c-entry-date b { font-size: 1.5rem; }
+  .c-entry-date span { margin: 0; }
+  .c-side .paper { padding: 1rem; }
+}
+
+.c-tabs { scrollbar-width: none; }
