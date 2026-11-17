@@ -21,17 +21,17 @@
 
   /**
    * The counter on a service page: name the vehicle, start the request. `kind`
-   * is the form it opens; without one the request is unchanged by this work.
+   * is the form it opens, `list` the order the vehicles are offered in.
    */
-  const counter = ({ art, title, desc, label, kind, extra = '' }) => `<section class="v-counter v-start" data-start aria-labelledby="start-title">
+  const counter = ({ art, title, desc, label, kind, list = VEH, extra = '' }) => `<section class="v-counter v-start" data-start aria-labelledby="start-title">
     ${K.art(art)}<div class="v-start-text"><h2 id="start-title">${title}</h2><p>${desc}</p></div>
-    <div class="v-go"><div class="fld"><label for="start-veh">${t('vehicle')}</label><select class="inp" id="start-veh">${VEH.map((v) => `<option value="${v.id}">${esc(v.plate)} · ${esc(K.vtype(v))}</option>`).join('')}</select></div>
-      <button type="button" class="btn primary v-cta" ${kind ? `data-act="overlay" data-kind="${kind}" data-pick` : 'data-act="noop"'}>${K.ic('plus')}${label}</button>${extra}</div>
+    <div class="v-go"><div class="fld"><label for="start-veh">${t('vehicle')}</label><select class="inp" id="start-veh">${list.map((v) => `<option value="${v.id}">${esc(v.plate)} · ${esc(K.vtype(v))}</option>`).join('')}</select></div>
+      <button type="button" class="btn primary v-cta" data-act="overlay" data-kind="${kind}" data-pick>${K.ic('plus')}${label}</button>${extra}</div>
   </section>`
 
   function hub() {
     const doors = `<section class="v-counter v-doors" aria-label="${t('heroTitle')}">${K.services().map((x) => `<div class="v-door">
-      <button type="button" class="v-door-main" ${K.svcAttrs(x)}>${K.art(x.art)}<span class="v-door-text"><strong>${x.title}</strong><small><b class="mono${x.hot ? ' hot' : ''}">${x.n}</b>${x.unit}</small></span>${K.ic('chevR', 'flip v-door-go')}</button>
+      <button type="button" class="v-door-main" data-act="go" data-to="${x.to}">${K.art(x.art)}<span class="v-door-text"><strong>${x.title}</strong><small><b class="mono${x.hot ? ' hot' : ''}">${x.n}</b>${x.unit}</small></span>${K.ic('chevR', 'flip v-door-go')}</button>
       <button type="button" class="btn primary v-cta" ${K.actAttrs(x.make)}>${K.ic('plus')}${x.make.label}</button></div>`).join('')}</section>`
     return page(band({ big: true, back: false, eyebrow: t('heroEyebrow'), title: t('heroTitle'), desc: t('heroDesc'), right: `<p class="v-fleet"><strong class="mono">${VEH.length}</strong><span>${t('fleetSize')}</span></p>` }), doors,
       `<p class="v-admin"><span>${t('manageFleet')}</span>${K.admin().map((x) => `<button type="button" class="link" ${K.actAttrs(x)}>${x.title}</button>`).join('')}</p>
@@ -78,9 +78,18 @@
   function fines() {
     const rows = K.fines()
     return page(band({ title: t('finesLedgerTitle'), desc: t('finesLedgerDesc'), right: `<button type="button" class="btn v-ghost" data-act="noop">${K.ic('file')}${t('finesReport')}</button>` }),
-      counter({ art: 'fines', title: t('startFine'), desc: t('addFineDesc'), label: t('addFine'), extra: `<button type="button" class="btn secondary v-cta" data-act="noop">${t('importFines')}</button>` }),
-      `<div class="v-tabrow">${tabs(K.fineFilters(), 'fineFilter', S.fineFilter)}<dl class="v-stats"><div><dt>${t('total')}</dt><dd>${K.aed(sum(rows, (f) => f.amount))}</dd></div></dl></div>
+      counter({ art: 'fines', title: t('startFine'), desc: t('addFineDesc'), label: t('addFine'), kind: 'fine', extra: `<button type="button" class="btn secondary v-cta" data-act="noop">${t('importFines')}</button>` }),
+      `<div class="v-tabrow">${tabs(K.fineFilters(), 'fineFilter', S.fineFilter)}<dl class="v-stats">${K.fineStats().map((s) => `<div><dt>${s.label}</dt><dd>${K.aed(s.amount)}</dd></div>`).join('')}</dl></div>
       <section class="v-sheet">${rows.length ? K.tblFines(rows) : empty('noRecords')}</section>`)
+  }
+
+  /** Licences by how soon they end. The counter offers the most urgent vehicle first. */
+  function renewals() {
+    const rows = K.licences()
+    return page(band({ title: t('renewService'), desc: t('renewServiceDesc') }),
+      counter({ art: 'licence-renewal', title: t('startRenewal'), desc: t('renewDesc'), label: t('renew'), kind: 'renew', list: K.byExpiry() }),
+      `<div class="v-tabrow">${tabs(K.licenceFilters(), 'lxFilter', S.lxFilter)}<dl class="v-stats"><div><dt>${t('notifyBefore')}</dt><dd><bdi class="mono">30</bdi> ${t('days')}</dd></div></dl></div>
+      <section class="v-sheet">${rows.length ? K.tblLicences(rows) : empty('noRecords')}</section>`)
   }
 
   function vehicle() {
@@ -89,14 +98,16 @@
     const body = tab === 'fines' ? `<section class="v-sheet">${mine(FINES).length ? K.tblFines(mine(FINES), false) : empty('noFines')}</section>`
       : tab === 'accidents' ? ledger(mine(ACC), false, 'noAccidents')
       : tab === 'maintenance' ? `<section class="v-sheet">${mine(MNT).length ? K.tblMaint(mine(MNT), false) : empty('noMaintenance')}</section>`
-      : `<section class="v-sheet">${empty('renewalsEmpty')}</section>`
+      : tab === 'renewals' ? `<section class="v-sheet"><header class="v-sheet-head"><h3>${t('currentLicense')}</h3><span class="v-period"><bdi class="mono ltr">${v.start} → ${v.expiry}</bdi>${K.badge('expiry', expiryState(v.expiry))}</span></header></section>
+        <section class="v-sheet"><header class="v-sheet-head"><h3>${t('renewalHistory')}</h3><span><bdi class="mono">${mine(RENEWALS).length}</bdi> ${t('records')}</span></header>${mine(RENEWALS).length ? `<div class="v-pad">${K.renewalList(mine(RENEWALS))}</div>` : empty('noRenewals')}</section>`
+      : `<section class="v-sheet">${empty('tabUnchanged')}</section>`
     // Renew leads only while the licence needs it, as on today's vehicle file.
     const requests = [
       { art: 'accident', label: t('newReport'), attrs: `data-act="overlay" data-kind="accident" data-id="${v.id}"` },
       { art: 'maintenance', label: t('addMaintenance'), attrs: `data-act="overlay" data-kind="maintenance" data-id="${v.id}"` },
       { art: 'maintenance', label: t('requestMaintenance'), attrs: 'data-act="noop"' },
-      { art: 'fines', label: t('addFine'), attrs: 'data-act="noop"' },
-      { art: 'licence-renewal', label: t('renew'), attrs: 'data-act="noop"', lead: expiryState(v.expiry) !== 'valid' },
+      { art: 'fines', label: t('addFine'), attrs: `data-act="overlay" data-kind="fine" data-id="${v.id}"` },
+      { art: 'licence-renewal', label: t('renew'), attrs: `data-act="overlay" data-kind="renew" data-id="${v.id}"`, lead: expiryState(v.expiry) !== 'valid' },
     ]
     return page(band({ title: `${K.plate(v.plate, 'xl')}<span dir="auto">${esc(K.vtype(v))}</span>`, desc: `${esc(K.vcls(v))} · ${esc(siteName(v.site))}`, right: `<button type="button" class="btn v-ghost" data-act="noop">${K.ic('pencil')}${t('editVehicle')}</button>` }),
       `<section class="v-counter v-requests" aria-labelledby="req-title"><h2 id="req-title">${t('newForVehicle')}</h2>
@@ -109,7 +120,7 @@
   function overlay(spec) {
     const many = spec.sections.filter((s) => s.title).length > 1
     const sections = spec.sections.map((s, i) => `<section class="v-fsec">${s.title ? `<h3>${many ? `<span class="mono">${String(i + 1).padStart(2, '0')}</span>` : ''}${s.title}${s.note ? `<small>${s.note}</small>` : ''}</h3>` : ''}${s.html}</section>`).join('')
-    const side = spec.paper ? `<aside class="v-side"><p class="v-side-label">${t('liveLetter')}</p>${spec.paper}</aside>` : spec.aside ? `<aside class="v-side"><div class="v-note">${spec.aside}</div></aside>` : ''
+    const side = spec.paper ? `<aside class="v-side"><p class="v-side-label">${t('liveLetter')}</p>${spec.paper}</aside>` : spec.aside ? `<aside class="v-side"><div class="v-note" data-aside>${spec.aside}</div></aside>` : ''
     return `<form class="v-compose" data-form="${spec.form}" novalidate aria-labelledby="ov-title">
       <header class="v-band flat"><div class="v-wrap"><button type="button" class="v-back" data-act="close">${K.ic('chevL', 'flip')}${t('cancel')}</button>
         <div class="v-band-row"><div><h1 id="ov-title">${spec.title}</h1><p class="v-band-desc">${spec.desc}</p></div></div></div></header>
@@ -118,5 +129,5 @@
     </form>`
   }
 
-  VIEW = { screen: () => ({ hub, accidents, maintenance, fines, vehicle })[S.route](), overlay }
+  VIEW = { screen: () => ({ hub, accidents, maintenance, fines, renewals, vehicle })[S.route](), overlay }
 })()

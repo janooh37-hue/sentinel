@@ -94,6 +94,8 @@
 .v-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); padding: var(--s-3) var(--s-3) var(--s-2); }
 .v-sheet-head h3 { font-size: 1rem; font-weight: 700; }
 .v-sheet-head span { color: var(--muted); font-size: 0.72rem; }
+.v-period { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.v-pad { padding: 0 var(--s-3) var(--s-2); }
 .v-empty { padding: var(--s-6) var(--s-4); color: var(--muted); font-size: 0.8rem; text-align: center; }
 .v-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--s-4) var(--s-5); margin-block-end: var(--s-6); }
 .v-facts dt { color: var(--muted); font-size: 0.68rem; }

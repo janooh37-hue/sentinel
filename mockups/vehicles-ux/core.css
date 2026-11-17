@@ -145,6 +145,9 @@ textarea.inp { block-size: auto; min-block-size: 4.6rem; padding-block: 0.4rem; 
 .ins-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.55rem 1rem; }
 .ins-facts dt { color: var(--muted); font-size: 0.64rem; }
 .ins-facts dd { font-size: 0.76rem; font-weight: 500; overflow-wrap: anywhere; }
+/* A short dated list beside a form or inside a sheet: fines on a vehicle, past licence periods. */
+.mini-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.2rem 0.9rem; padding-block: 0.45rem; border-block-end: 1px solid var(--hairline); font-size: 0.76rem; }
+.mini-list li:last-child { border-block-end: 0; }
 .alert { padding: 0.55rem 0.75rem; border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: var(--r-sm); background: var(--accent-soft); color: var(--destructive-text); font-size: 0.74rem; }
 @container frame (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
 

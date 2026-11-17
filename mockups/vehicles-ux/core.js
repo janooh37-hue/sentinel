@@ -23,9 +23,9 @@ const qs = new URLSearchParams(location.search)
 const S = {
   lang: qs.get('lang') === 'en' ? 'en' : 'ar',
   device: qs.get('device') === 'mobile' ? 'mobile' : 'desktop',
-  route: ['hub', 'accidents', 'maintenance', 'vehicle', 'fines'].includes(qs.get('screen')) ? qs.get('screen') : 'hub',
+  route: ['hub', 'accidents', 'maintenance', 'vehicle', 'fines', 'renewals'].includes(qs.get('screen')) ? qs.get('screen') : 'hub',
   vehicleId: 2, tab: 'accidents', mTab: 'records',
-  acFilter: 'all', fineFilter: 'all', site: null, overlay: null,
+  acFilter: 'all', fineFilter: 'all', lxFilter: 'attention', site: null, overlay: null,
 }
 
 // ── Copy: real locale first, new strings for what this work adds ────────────
@@ -45,11 +45,11 @@ const NEW = {
     locationAr: 'Location in Arabic', descriptionAr: 'Description in Arabic',
     paperPending: 'Arabic wording is added when the letter is issued',
     manageFleet: 'Fleet administration', siteName: 'Site name', unchanged: 'This step is unchanged, so it is not part of the mockup.',
-    startAccident: 'File an accident report', startMaintenance: 'Log a maintenance job', startFine: 'Record a fine',
-    newForVehicle: 'New for this vehicle', vehicle: 'Vehicle',
+    startAccident: 'File an accident report', startMaintenance: 'Log a maintenance job', startFine: 'Record a fine', startRenewal: 'Renew a vehicle licence',
+    newForVehicle: 'New for this vehicle', vehicle: 'Vehicle', secFine: 'Fine', secDriver: 'Driver and details', finesOnVehicle: 'Fines on this vehicle',
     allStatuses: 'All', total: 'Total', vehicleSaved: 'Vehicle added.',
     navDashboard: 'Dashboard', navEmployees: 'Employees', navVehicles: 'Vehicles', navBooks: 'Books', navLedger: 'Ledger',
-    renewalsEmpty: 'Renewals, photos and certificates are unchanged in this mockup.', liveLetter: 'Official letter, as it will be issued',
+    tabUnchanged: 'Photos and certificates are unchanged in this mockup.', liveLetter: 'Official letter, as it will be issued',
     reportNo: 'Report', lastService: 'Last service', reminder: 'A reminder appears when the next service date approaches.',
   },
   ar: {
@@ -67,11 +67,11 @@ const NEW = {
     locationAr: 'الموقع بالعربية', descriptionAr: 'الوصف بالعربية',
     paperPending: 'تُضاف الصياغة العربية عند إصدار الخطاب',
     manageFleet: 'إدارة الأسطول', siteName: 'اسم الموقع', unchanged: 'هذه الخطوة لم تتغير، لذا ليست ضمن النموذج.',
-    startAccident: 'تسجيل بلاغ حادث', startMaintenance: 'تسجيل عملية صيانة', startFine: 'تسجيل مخالفة',
-    newForVehicle: 'طلب جديد لهذه المركبة', vehicle: 'المركبة',
+    startAccident: 'تسجيل بلاغ حادث', startMaintenance: 'تسجيل عملية صيانة', startFine: 'تسجيل مخالفة', startRenewal: 'تجديد ترخيص مركبة',
+    newForVehicle: 'طلب جديد لهذه المركبة', vehicle: 'المركبة', secFine: 'المخالفة', secDriver: 'السائق والتفاصيل', finesOnVehicle: 'مخالفات هذه المركبة',
     allStatuses: 'الكل', total: 'الإجمالي', vehicleSaved: 'تمت إضافة المركبة.',
     navDashboard: 'لوحة التحكم', navEmployees: 'الموظفون', navVehicles: 'المركبات', navBooks: 'الكتب', navLedger: 'السجل',
-    renewalsEmpty: 'التجديدات والصور والشهادات لم تتغير في هذا النموذج.', liveLetter: 'الخطاب الرسمي كما سيصدر',
+    tabUnchanged: 'الصور والشهادات لم تتغير في هذا النموذج.', liveLetter: 'الخطاب الرسمي كما سيصدر',
     reportNo: 'بلاغ', lastService: 'آخر صيانة', reminder: 'يظهر تنبيه عند اقتراب موعد الصيانة القادمة.',
   },
 }
@@ -130,8 +130,18 @@ const FINES = [
   { id: 8, veh: 7, date: '2026-09-25', amount: 350, points: 3, emp: 'G6157', status: 'paid' },
   { id: 9, veh: 8, date: '2026-11-10', amount: 1000, points: 12, emp: 'G7346', status: 'unknown' },
 ]
+/** Licence periods that ended with a renewal (what `vehicle.renewals` holds). */
+const RENEWALS = [
+  { veh: 1, start: '2025-01-12', expiry: '2026-01-11', renewedOn: '2026-01-08', cost: 1450 },
+  { veh: 1, start: '2024-01-12', expiry: '2025-01-11', renewedOn: '2025-01-09', cost: 1400 },
+  { veh: 5, start: '2025-09-23', expiry: '2026-09-22', renewedOn: '2026-09-20', cost: 1450 },
+  { veh: 7, start: '2025-02-07', expiry: '2026-02-06', renewedOn: '2026-02-03', cost: 1450 },
+]
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+const addDays = (iso, n) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+/** A one-year licence window: start + 1 year − 1 day, the way the traffic department prints it. */
+const windowEnd = (iso) => { if (!iso) return ''; const d = new Date(`${iso}T00:00:00Z`); d.setUTCFullYear(d.getUTCFullYear() + 1); return addDays(d.toISOString().slice(0, 10), -1) }
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
 /** `localized()` from lib/language.ts: the app language first, the other as fallback. */
 const loc = (ar, en) => (S.lang === 'ar' ? ar || en : en || ar) || ''
@@ -196,14 +206,12 @@ const K = {
   services() {
     const s = K.summary()
     return [
-      { id: 'fines', art: 'fines', title: t('finesService'), n: s.finesCount, unit: t('fines.status.unpaid'), to: 'fines', hot: s.finesCount > 0, make: { label: t('addFine'), act: 'noop' } },
-      { id: 'renew', art: 'licence-renewal', title: t('renewService'), n: s.license, unit: t('attention'), to: 'hub', hot: s.license > 0, make: { label: t('renew'), act: 'noop' } },
+      { id: 'fines', art: 'fines', title: t('finesService'), n: s.finesCount, unit: t('fines.status.unpaid'), to: 'fines', hot: s.finesCount > 0, make: { label: t('addFine'), act: 'overlay', kind: 'fine' } },
+      { id: 'renew', art: 'licence-renewal', title: t('renewService'), n: s.license, unit: t('attention'), to: 'renewals', hot: s.license > 0, make: { label: t('renew'), act: 'overlay', kind: 'renew' } },
       { id: 'accidents', art: 'accident', title: t('accidentService'), n: s.openAccidents, unit: t('openStatus'), to: 'accidents', hot: s.openAccidents > 0, make: { label: t('newReport'), act: 'overlay', kind: 'accident' } },
       { id: 'maintenance', art: 'maintenance', title: t('maintenanceService'), n: s.maintDue, unit: t('dueSoon'), to: 'maintenance', hot: s.maintDue > 0, make: { label: t('addMaintenance'), act: 'overlay', kind: 'maintenance' } },
     ]
   },
-  /** Renew filters the fleet ledger in place today; that behaviour is unchanged, so it is not mocked. */
-  svcAttrs: (x) => (x.id === 'renew' ? 'data-act="noop"' : `data-act="go" data-to="${x.to}"`),
   admin: () => [
     { art: 'register', title: t('addVehicleService'), act: 'overlay', kind: 'vehicle' },
     { art: 'register', title: t('editVehicleService'), act: 'noop' },
@@ -235,7 +243,7 @@ const K = {
     const open = FINES.filter((f) => f.veh === v.id && f.status !== 'paid')
     return open.length ? `<span class="two-line"><strong><bdi class="mono">${open.length}</bdi> · ${K.aed(sum(open, (f) => f.amount))}</strong><small><bdi class="mono">${sum(open, (f) => f.points)}</bdi> ${t('points')}</small></span>` : '<span class="faint">—</span>'
   },
-  rowActs: (v) => `${expiryState(v.expiry) !== 'valid' ? `<button type="button" class="btn primary" data-act="noop">${t('renew')}</button>` : ''}<button type="button" class="btn secondary" data-act="go" data-to="vehicle" data-id="${v.id}" aria-label="${t('open')} · ${esc(v.plate)}">${t('open')}</button>`,
+  rowActs: (v) => `${expiryState(v.expiry) !== 'valid' ? `<button type="button" class="btn secondary" data-act="overlay" data-kind="renew" data-id="${v.id}" aria-label="${t('renew')} · ${esc(v.plate)}">${t('renew')}</button>` : ''}<button type="button" class="btn secondary" data-act="go" data-to="vehicle" data-id="${v.id}" aria-label="${t('open')} · ${esc(v.plate)}">${t('open')}</button>`,
   tblFleet: (list) => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th class="opt">${t('mainPhoto')}</th><th>${t('plate')}</th><th>${t('type')}</th><th class="opt">${t('trafficCode')}</th><th>${t('licenseExpiry')}</th><th class="opt">${t('tabFines')}</th><th class="end">${t('action')}</th></tr></thead><tbody>${list.map((v) => `<tr>
     <td class="opt"><span class="thumb">${K.ic('car')}</span></td><td>${K.plate(v.plate)}</td>
     <td><span class="two-line"><strong dir="auto">${esc(K.vtype(v))}</strong><small>${esc(K.vcls(v))}</small></span></td>
@@ -255,11 +263,27 @@ const K = {
     <td>${K.aed(f.amount)}</td><td class="opt"><bdi class="mono">${f.points}</bdi></td><td>${K.badge('payment', f.status)}</td>
     <td><div class="acts">${f.status === 'paid' ? '' : `<button type="button" class="btn secondary" data-act="pay" data-id="${f.id}">${t('fines.recordPayment')}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`,
   fineFilters: () => [['all', t('allStatuses')], ['unpaid', t('fines.status.unpaid')], ['paid', t('fines.status.paid')], ['unknown', t('fines.status.unknown')]].map(([k, l]) => ({ k, l, n: k === 'all' ? FINES.length : FINES.filter((f) => f.status === k).length })),
+  /** Fleet-wide amounts per payment state; the status tabs narrow the table, never these. */
+  fineStats: () => ['unpaid', 'paid', 'unknown'].map((k) => ({ label: t(`fines.status.${k}`), amount: sum(FINES.filter((f) => f.status === k), (f) => f.amount) })),
+  /** Soonest expiry first: the order a renewal is looked for in. */
+  byExpiry: () => [...VEH].sort((a, b) => a.expiry.localeCompare(b.expiry)),
+  licences: () => K.byExpiry().filter((v) => S.lxFilter === 'all' || (expiryState(v.expiry) === 'valid') === (S.lxFilter === 'valid')),
+  licenceFilters() {
+    const due = VEH.filter((v) => expiryState(v.expiry) !== 'valid').length
+    return [{ k: 'attention', l: t('attention'), n: due }, { k: 'valid', l: t('valid'), n: VEH.length - due }, { k: 'all', l: t('allStatuses'), n: VEH.length }]
+  },
+  tblLicences: (list) => `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>${t('plate')}</th><th>${t('type')}</th><th class="opt">${t('site')}</th><th class="opt">${t('licenseStart')}</th><th>${t('licenseExpiry')}</th><th class="opt">${t('insuranceExpiry')}</th><th class="end">${t('action')}</th></tr></thead><tbody>${list.map((v) => `<tr>
+    <td>${K.plate(v.plate)}</td><td><span class="two-line"><strong dir="auto">${esc(K.vtype(v))}</strong><small>${esc(K.vcls(v))}</small></span></td>
+    <td class="opt" dir="auto">${esc(siteName(v.site))}</td><td class="opt">${K.date(v.start)}</td>
+    <td><span style="display:inline-flex;flex-wrap:wrap;align-items:center;gap:.4rem">${K.date(v.expiry)}${K.badge('expiry', expiryState(v.expiry))}</span></td>
+    <td class="opt">${v.ins ? K.date(v.ins) : `<span class="muted">${t('insuranceNotRecorded')}</span>`}</td>
+    <td><div class="acts"><button type="button" class="btn secondary" data-act="overlay" data-kind="renew" data-id="${v.id}" aria-label="${t('renew')} · ${esc(v.plate)}">${t('renew')}</button><button type="button" class="btn ghost" data-act="go" data-to="vehicle" data-id="${v.id}" data-tab="renewals" aria-label="${t('open')} · ${esc(v.plate)}">${t('open')}</button></div></td></tr>`).join('')}</tbody></table></div>`,
+  renewalList: (list) => `<ol class="mini-list">${list.map((r) => `<li><bdi class="mono ltr">${r.start} → ${r.expiry}</bdi><span class="muted">${t('renewedOn')}: ${K.date(r.renewedOn)} · ${t('cost')}: ${K.aed(r.cost)}</span></li>`).join('')}</ol>`,
   /** The vehicle file's overview facts, in the order `OverviewPanel` shows them. */
   facts: (v) => [[t('plate'), K.plate(v.plate)], [t('type'), esc(K.vtype(v))], [t('class'), esc(K.vcls(v))], [t('trafficCode'), `<bdi class="mono ltr">${v.traffic}</bdi>`], [t('licenseStart'), K.date(v.start)],
     [t('licenseExpiry'), `${K.date(v.expiry)} ${K.badge('expiry', expiryState(v.expiry))}`], [t('insuranceExpiry'), v.ins ? `${K.date(v.ins)} ${K.badge('expiry', expiryState(v.ins))}` : `<span class="muted">${t('insuranceNotRecorded')}</span>`],
     [t('vin'), `<bdi class="mono ltr">${v.vin}</bdi>`], [t('site'), esc(siteName(v.site))], [t('odometer'), `<bdi class="mono ltr">${K.num(v.km)}</bdi> ${t('km')}`]],
-  vehTabs: (v) => [['fines', t('tabFines'), FINES.filter((f) => f.veh === v.id).length], ['renewals', t('tabRenewals'), 1], ['accidents', t('tabAccidents'), ACC.filter((a) => a.veh === v.id).length], ['maintenance', t('tabMaintenance'), MNT.filter((m) => m.veh === v.id).length], ['photos', t('tabPhotos'), 3], ['certificates', t('tabCertificates'), 2]],
+  vehTabs: (v) => [['fines', t('tabFines'), FINES.filter((f) => f.veh === v.id).length], ['renewals', t('tabRenewals'), RENEWALS.filter((r) => r.veh === v.id).length], ['accidents', t('tabAccidents'), ACC.filter((a) => a.veh === v.id).length], ['maintenance', t('tabMaintenance'), MNT.filter((m) => m.veh === v.id).length], ['photos', t('tabPhotos'), 3], ['certificates', t('tabCertificates'), 2]],
 }
 
 // ── Form content (identical in every direction) ─────────────────────────────
@@ -275,6 +299,11 @@ const inp = (name, attrs = '') => `<input name="${name}" ${attrs.includes('class
 const sel = (name, options, value = '', attrs = '') => `<select class="inp" name="${name}" ${attrs}>${options.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`
 const vehicleOptions = () => VEH.map((v) => [v.id, `${v.plate} · ${K.vtype(v)}`])
 const drop = (label, hint) => `<div class="drop">${K.ic('upload')}<div><strong>${label}</strong>${hint}</div></div>`
+/** A fixed plate when the request starts from a vehicle file or a ledger row; a picker everywhere else. */
+const vehField = (o, v) => (o.id != null
+  ? `<div class="fld full"><span class="lbl">${t('selectedVehicle')}</span><div>${K.plate(v.plate)}</div><input type="hidden" name="veh" value="${v.id}"></div>`
+  : fld(t('selectedVehicle'), sel('veh', vehicleOptions(), v?.id ?? ''), { req: true, full: true }))
+const aedInput = (name, attrs) => `<div class="inp-aed" dir="ltr"><i aria-hidden="true"></i>${inp(name, `inputmode="numeric" class="inp mono" required pattern="[0-9]+" ${attrs}`)}</div>`
 
 function insuranceFields(i = {}) {
   const claim = [['', t('notSet')], ...['not_submitted', 'submitted', 'under_repair', 'settled'].map((k) => [k, t('cs_' + k)])]
@@ -292,15 +321,14 @@ function insuranceFields(i = {}) {
 function spec() {
   const o = S.overlay
   if (!o) return null
-  /** The vehicle a maintenance record opens on: fixed by the vehicle file, or picked at the counter. */
-  const lockedV = (o.kind === 'maintenance' && vOf(o.id ?? o.pre)) || null
+  /** The vehicle a request opens on: fixed by a vehicle file or ledger row (`id`), or picked at the counter (`pre`). */
+  const target = ['accident', 'maintenance', 'fine', 'renew'].includes(o.kind) ? vOf(o.id ?? o.pre) ?? null : null
   if (o.kind === 'accident') {
-    const locked = o.id != null ? vOf(o.id) : null
     return {
       form: 'accident', title: t('newReport'), desc: t('addAccidentDesc'), submit: t('save'), paper: paper(null, true),
       sections: [
         { title: t('secIncident'), html: `<div class="grid2">
-          ${locked ? `<div class="fld full"><span class="lbl">${t('selectedVehicle')}</span><div>${K.plate(locked.plate)}</div><input type="hidden" name="veh" value="${locked.id}"></div>` : fld(t('selectedVehicle'), sel('veh', vehicleOptions(), o.pre ?? ''), { req: true, full: true })}
+          ${vehField(o, target)}
           ${fld(t('date'), inp('date', `type="date" class="inp mono" value="${TODAY}" required`), { req: true })}
           ${fld(t('time'), inp('time', 'type="time" class="inp mono" value="09:30" required'), { req: true })}
           ${fld(t('driver'), sel('emp', [['', t('unassigned')], ...EMP.map((e) => [e.id, `${loc(e.ar, e.en)} · ${e.id}`])]))}
@@ -334,19 +362,60 @@ function spec() {
     }
   }
   if (o.kind === 'maintenance') {
-    const last = lockedV ? MNT.filter((m) => m.veh === lockedV.id).sort((x, y) => y.date.localeCompare(x.date))[0] : null
+    const last = target ? MNT.filter((m) => m.veh === target.id).sort((x, y) => y.date.localeCompare(x.date))[0] : null
     return {
       form: 'maintenance', title: t('addMaintenance'), desc: t('addMaintenanceDesc'), submit: t('save'),
       aside: `<h4>${t('lastService')}</h4>${last ? `<dl class="ins-facts"><div><dt>${t('date')}</dt><dd>${K.date(last.date)}</dd></div><div><dt>${t('maintenanceType')}</dt><dd>${t(last.type)}</dd></div><div><dt>${t('odometer')}</dt><dd><bdi class="mono ltr">${K.num(last.km)}</bdi> ${t('km')}</dd></div><div><dt>${t('cost')}</dt><dd>${K.aed(last.cost)}</dd></div></dl>` : `<p class="muted">${t('noPreviousMaintenance')}</p>`}<p class="muted" style="margin-block-start:.8rem">${t('reminder')}</p>`,
       sections: [{ html: `<div class="grid2">
-        ${fld(t('selectedVehicle'), sel('veh', vehicleOptions(), lockedV?.id ?? ''), { req: true, full: true })}
+        ${vehField(o, target)}
         ${fld(t('date'), inp('date', `type="date" class="inp mono" value="${TODAY}" required`), { req: true })}
         ${fld(t('maintenanceType'), sel('type', ['service', 'repair', 'tires', 'other'].map((k) => [k, t(k)])), { req: true })}
-        ${fld(`${t('odometer')} (${t('km')})`, inp('km', `inputmode="numeric" dir="ltr" class="inp mono" value="${lockedV?.km ?? ''}"`))}
-        ${fld(t('cost'), `<div class="inp-aed" dir="ltr"><i aria-hidden="true"></i>${inp('cost', 'inputmode="numeric" class="inp mono" required pattern="[0-9]+"')}</div>`, { req: true })}
+        ${fld(`${t('odometer')} (${t('km')})`, inp('km', `inputmode="numeric" dir="ltr" class="inp mono" value="${target?.km ?? ''}"`))}
+        ${fld(t('cost'), aedInput('cost', ''), { req: true })}
         ${fld(t('garage'), inp('garage', dirAttr()), { full: true })}
         ${fld(t('nextDue'), inp('next', 'type="date" class="inp mono"'), { hint: t('reminderHint') })}
         <div class="fld"><span class="lbl">${t('receipt')}</span>${drop(t('uploadReceipt'), '')}</div>
+      </div>` }],
+    }
+  }
+  if (o.kind === 'fine') {
+    const v = target ?? VEH[0]
+    const mine = FINES.filter((f) => f.veh === v.id).sort((x, y) => y.date.localeCompare(x.date)), open = mine.filter((f) => f.status !== 'paid')
+    return {
+      form: 'fine', title: t('addFineTitle'), desc: t('addFineDesc'), submit: t('save'),
+      // What is already on the vehicle, so the same fine is not entered twice.
+      aside: `<h4>${t('finesOnVehicle')} ${K.plate(v.plate, 'sm')}</h4>${mine.length ? `<ul class="mini-list">${mine.slice(0, 5).map((f) => `<li>${K.date(f.date)}${K.aed(f.amount)}${K.badge('payment', f.status)}</li>`).join('')}</ul>
+        <dl class="ins-facts" style="margin-block-start:.8rem"><div><dt>${t('fines.status.unpaid')}</dt><dd><bdi class="mono">${open.length}</bdi> · ${K.aed(sum(open, (f) => f.amount))}</dd></div><div><dt>${t('blackPoints')}</dt><dd><bdi class="mono">${sum(open, (f) => f.points)}</bdi></dd></div></dl>` : `<p class="muted">${t('noFines')}</p>`}`,
+      sections: [
+        { title: t('secFine'), html: `<div class="grid2">
+          ${vehField(o, v)}
+          ${fld(t('date'), inp('date', `type="date" class="inp mono" value="${TODAY}" required`), { req: true })}
+          ${fld(t('time'), inp('time', 'type="time" class="inp mono"'))}
+          ${fld(t('amount'), aedInput('amount', 'value="300"'), { req: true })}
+          ${fld(t('blackPoints'), inp('points', 'inputmode="numeric" dir="ltr" class="inp mono" value="0" required pattern="[0-9]{1,3}"'), { req: true })}
+        </div>` },
+        { title: t('secDriver'), html: `<div class="grid2">
+          ${fld(t('employeePicker'), sel('emp', [['', t('unassigned')], ...EMP.map((e) => [e.id, `${loc(e.ar, e.en)} · ${e.id}`])]), { full: true })}
+          ${fld(t('location'), inp('location', 'dir="auto"'), { full: true })}
+          ${fld(t('description'), '<textarea class="inp" name="description" rows="2" dir="auto"></textarea>', { full: true })}
+        </div>` },
+      ],
+    }
+  }
+  if (o.kind === 'renew') {
+    const v = target ?? K.byExpiry()[0]
+    const start = addDays(v.expiry, 1), history = RENEWALS.filter((r) => r.veh === v.id)
+    return {
+      form: 'renew', title: t('renewTitle'), desc: t('renewDesc'), submit: t('renew'),
+      aside: `<h4>${t('currentLicense')} ${K.plate(v.plate, 'sm')}</h4><dl class="ins-facts"><div><dt>${t('licenseStart')}</dt><dd>${K.date(v.start)}</dd></div><div><dt>${t('licenseExpiry')}</dt><dd>${K.date(v.expiry)}</dd></div><div><dt>${t('status')}</dt><dd>${K.badge('expiry', expiryState(v.expiry))}</dd></div></dl>
+        <h4 style="margin-block-start:1.1rem">${t('renewalHistory')}</h4>${history.length ? K.renewalList(history) : `<p class="muted">${t('noRenewals')}</p>`}`,
+      // The new window opens the day after the current one ends, for one year less a day.
+      sections: [{ html: `<div class="grid2">
+        ${vehField(o, v)}
+        ${fld(t('newStart'), inp('start', `type="date" class="inp mono" value="${start}" required`), { req: true })}
+        ${fld(t('newExpiry'), inp('expiry', `type="date" class="inp mono" value="${windowEnd(start)}" required`), { req: true })}
+        ${fld(t('renewalCost'), aedInput('cost', 'value="1450"'), { req: true })}
+        <div class="fld"><span class="lbl">${t('licenseScan')}</span>${drop(t('uploadScan'), '')}</div>
       </div>` }],
     }
   }
@@ -427,6 +496,7 @@ const ACTS = {
   status(el) { const a = ACC.find((x) => x.id === Number(el.dataset.id)); a.status = a.status === 'open' ? 'closed' : 'open'; toast(t('statusUpdated')); render() },
   acFilter(el) { S.acFilter = S.acFilter === el.dataset.v ? 'all' : el.dataset.v; render() },
   fineFilter(el) { S.fineFilter = el.dataset.v; render() },
+  lxFilter(el) { S.lxFilter = el.dataset.v; render() },
   site(el) { S.site = el.dataset.v ? Number(el.dataset.v) : null; render() },
   tab(el) { S.tab = el.dataset.v; render() },
   mtab(el) { S.mTab = el.dataset.v; render() },
@@ -457,6 +527,19 @@ const FORMS = {
     MNT.unshift({ id: MNT.length + 1, veh: Number(d.get('veh')), date: d.get('date'), type: d.get('type'), km: Number(d.get('km')) || null, cost: Number(d.get('cost')), garage: d.get('garage'), next: d.get('next') || null, receipt: false })
     return t('maintenanceLogged')
   },
+  fine(d) {
+    FINES.unshift({ id: Math.max(...FINES.map((f) => f.id)) + 1, veh: Number(d.get('veh')), date: d.get('date'), amount: Number(d.get('amount')), points: Number(d.get('points')), emp: d.get('emp') || null, status: 'unpaid' })
+    S.fineFilter = 'all'
+    return t('fineAdded')
+  },
+  /** The period that is ending moves to the renewal history; the vehicle takes the new one. */
+  renew(d) {
+    const v = vOf(d.get('veh'))
+    RENEWALS.unshift({ veh: v.id, start: v.start, expiry: v.expiry, renewedOn: TODAY, cost: Number(d.get('cost')) })
+    v.start = d.get('start')
+    v.expiry = d.get('expiry')
+    return t('licenseRenewed')
+  },
   vehicle(d) {
     const type = d.get('type'), site = Number(d.get('site'))
     VEH.push({ id: VEH.length + 1, plate: d.get('plate'), ar: type, en: type, clsAr: d.get('cls'), clsEn: d.get('cls'), traffic: d.get('traffic'), site, start: d.get('start'), expiry: d.get('expiry'), ins: d.get('ins') || null, vin: d.get('vin'), km: 0, driven: 0 })
@@ -464,31 +547,49 @@ const FORMS = {
   },
   sites(d) { const name = d.get('name'); SITES.push({ id: SITES.length + 1, ar: name, en: name }); return t('siteAdded') },
 }
+/** Cross-field rules a `required` attribute cannot state: the names of the fields to flag. */
+const CHECKS = { renew: (d) => (d.get('expiry') <= d.get('start') ? ['expiry'] : []) }
 
 document.addEventListener('click', (e) => { const el = e.target.closest('[data-act]'); if (el) ACTS[el.dataset.act]?.(el) })
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && S.overlay) ACTS.close() })
-document.addEventListener('change', (e) => { if (e.target.id === 'screen-pick') ACTS.go({ dataset: { to: e.target.value } }) })
+document.addEventListener('change', (e) => {
+  const el = e.target
+  if (el.id === 'screen-pick') return ACTS.go({ dataset: { to: el.value } })
+  // Choosing another vehicle inside a request updates what the page says about that vehicle.
+  if (el.name !== 'veh' || !S.overlay) return
+  S.overlay.pre = Number(el.value)
+  if (S.overlay.kind === 'renew') { render(); document.querySelector('#ov [name="veh"]').focus() } // the new window depends on the vehicle
+  else { const aside = document.querySelector('#ov [data-aside]'); if (aside) aside.innerHTML = spec().aside }
+})
 document.addEventListener('submit', (e) => {
   e.preventDefault()
   const form = e.target
   // The app's own alert instead of the browser's bubble (FormAlert in DialogShell).
+  const data = new FormData(form)
   const bad = [...form.querySelectorAll('[required]')].filter((el) => !el.value.trim() || !el.checkValidity())
+  if (!bad.length) bad.push(...(CHECKS[form.dataset.form]?.(data) ?? []).map((name) => form.elements[name]))
   form.querySelectorAll('[aria-invalid]').forEach((el) => el.removeAttribute('aria-invalid'))
   const alert = form.querySelector('[data-alert]')
   if (bad.length) { bad.forEach((el) => el.setAttribute('aria-invalid', 'true')); alert.hidden = false; bad[0].focus(); return }
   const keep = form.dataset.form === 'sites'
-  const message = FORMS[form.dataset.form](new FormData(form))
+  const message = FORMS[form.dataset.form](data)
   if (!keep) S.overlay = null
   toast(message)
   render()
 })
-/** Variant C fills the official paper while the operator types. */
+/** The official paper fills in while the operator types. */
 document.addEventListener('input', (e) => {
   const root = document.getElementById('ov'), name = e.target.name
   if (!name || !root.contains(e.target)) return
   root.querySelectorAll(`[data-bind="${name}"]`).forEach((el) => { el.textContent = e.target.value || el.dataset.empty || '' })
   if (name === 'veh') { const v = vOf(e.target.value); root.querySelectorAll('[data-bind-plate]').forEach((el) => (el.textContent = v.plate.replace('\\', '/'))); root.querySelectorAll('[data-bind-type]').forEach((el) => (el.textContent = v.ar)) }
   if (name === 'emp') root.querySelectorAll('[data-bind-emp]').forEach((el) => (el.textContent = EMP.find((x) => x.id === e.target.value)?.ar || '—'))
+  // The expiry follows the start until the operator sets it himself (RenewLicenseDialog).
+  const form = e.target.form
+  if (form?.dataset.form === 'renew') {
+    if (name === 'expiry') form.dataset.edited = '1'
+    if (name === 'start' && !form.dataset.edited) form.elements.expiry.value = windowEnd(e.target.value)
+  }
 })
 
 function render(top = false) {
