@@ -166,6 +166,7 @@ function MaintenanceForm({
     control,
     handleSubmit,
     setValue,
+    resetField,
     getFieldState,
     watch,
     formState: { errors },
@@ -237,11 +238,15 @@ function MaintenanceForm({
     (latest, record) => !latest || record.date > latest.date || (record.date === latest.date && record.id > latest.id) ? record : latest,
     null,
   )
+  // The reading belongs to the chosen vehicle: it is filled from that
+  // vehicle's file until the operator types one, and choosing another vehicle
+  // clears it (see the picker) so a reading never moves to a different plate.
   useEffect(() => {
-    if (request || getFieldState('odometer_km').isDirty || !historyQuery.data) return
+    if (request || !historyQuery.data || String(historyQuery.data.id) !== selectedId) return
+    if (getFieldState('odometer_km').isDirty) return
     const odometer = historyQuery.data.current_odometer_km
     setValue('odometer_km', odometer == null ? '' : String(odometer))
-  }, [historyQuery.data, request, getFieldState, setValue])
+  }, [historyQuery.data, selectedId, request, getFieldState, setValue])
 
   return (
     <form
@@ -286,7 +291,14 @@ function MaintenanceForm({
               control={control}
               name="vehicle_id"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={noVehicles}>
+                <Select
+                  value={field.value}
+                  onValueChange={(next) => {
+                    if (next !== field.value && !request) resetField('odometer_km', { defaultValue: '' })
+                    field.onChange(next)
+                  }}
+                  disabled={noVehicles}
+                >
                   <SelectTrigger id={`${fieldId}-vehicle`} {...flag('vehicle_id')}>
                     <SelectValue />
                   </SelectTrigger>

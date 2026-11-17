@@ -190,6 +190,35 @@ describe('monthly vehicle maintenance', () => {
     })))
   })
 
+  it('never carries a typed odometer reading over to another vehicle', async () => {
+    vi.mocked(api.listVehicles).mockResolvedValue([
+      { id: 42, plate_code: '14', plate_number: '58216', type_ar: 'حافلة', type_en: 'Bus' },
+      { id: 23, plate_code: '10', plate_number: '36348', type_ar: 'شاحنة', type_en: 'Truck' },
+    ] as never)
+    vi.mocked(api.getVehicle).mockImplementation(async (id: number) =>
+      ({ id, maintenance: [], current_odometer_km: id === 23 ? 3000 : 1200 }) as never,
+    )
+    const create = vi.spyOn(api, 'createVehicleMaintenance').mockResolvedValue({ id: 8, vehicle_id: 23 } as never)
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <I18nextProvider i18n={i18n}>
+          <MaintenanceDialog open onOpenChange={vi.fn()} initialVehicleId={42} />
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+    const odometer = await screen.findByLabelText(/Odometer \(km\)/)
+    await waitFor(() => expect(odometer).toHaveValue(1200))
+    await user.clear(odometer)
+    await user.type(odometer, '12550')
+    await user.click(screen.getByRole('combobox', { name: new RegExp(i18n.t('vehicles.selectedVehicle')) }))
+    await user.click(await screen.findByRole('option', { name: /36348/ }))
+    await waitFor(() => expect(screen.getByLabelText(/Odometer \(km\)/)).toHaveValue(3000))
+    await user.type(screen.getByLabelText(new RegExp(i18n.t('vehicles.cost'))), '350')
+    await user.click(screen.getByRole('button', { name: i18n.t('vehicles.save') }))
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({ vehicle_id: 23, odometer_km: 3000 })))
+  })
+
   it('keeps maintenance-request completion linked to the existing request', async () => {
     const create = vi.spyOn(api, 'createVehicleMaintenance').mockResolvedValue({ id: 7, vehicle_id: 42 } as never)
     const user = userEvent.setup()
