@@ -53,17 +53,31 @@ import { useIdentity } from '@/lib/useIdentity'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import DocPdfCanvas, { type PageBox } from '@/pages/application/DocPdfCanvas'
 import {
+  cornerDragWidthPt,
   dragToPosition,
+  MIN_SIGNATURE_WIDTH_MM,
   mmToPt,
   pageAtPoint,
   placeSignature,
   ptToMm,
+  resizeToWidth,
 } from '@/components/signature/signature-utils'
 
 interface Draft {
   page: number
   x: number
   y: number
+  /** Physical width (pt); the height always follows the signature's aspect ratio. */
+  widthPt: number
+}
+
+/** Height / width of the selected signature — locked for every resize. */
+function signatureAspect(selected: SignatureRead): number {
+  return selected.width_pt && selected.height_pt ? selected.height_pt / selected.width_pt : 0
+}
+
+function widthChanged(draft: Draft, selected: SignatureRead): boolean {
+  return Math.abs(draft.widthPt - (selected.width_pt ?? 0)) > 1e-6
 }
 
 export function SignaturePlacementPage(): React.JSX.Element {
@@ -106,8 +120,13 @@ export function SignaturePlacementPage(): React.JSX.Element {
   if (draftKey !== lastDraftKey) {
     setLastDraftKey(draftKey)
     setDraft(
-      selected && selected.page != null && selected.x != null && selected.y != null
-        ? { page: selected.page, x: selected.x, y: selected.y }
+      selected &&
+        selected.page != null &&
+        selected.x != null &&
+        selected.y != null &&
+        selected.width_pt != null &&
+        selected.height_pt != null
+        ? { page: selected.page, x: selected.x, y: selected.y, widthPt: selected.width_pt }
         : null,
     )
   }
@@ -131,7 +150,8 @@ export function SignaturePlacementPage(): React.JSX.Element {
     !!selected &&
     (draft.page !== selected.page ||
       Math.abs(draft.x - (selected.x ?? 0)) > 1e-9 ||
-      Math.abs(draft.y - (selected.y ?? 0)) > 1e-9)
+      Math.abs(draft.y - (selected.y ?? 0)) > 1e-9 ||
+      widthChanged(draft, selected))
 
   useEffect(() => {
     if (!dirty) return
@@ -159,6 +179,8 @@ export function SignaturePlacementPage(): React.JSX.Element {
         page: draft.page,
         x: draft.x,
         y: draft.y,
+        // Only a changed width is sent; omitted, the server keeps the current size.
+        ...(widthChanged(draft, selected) ? { width_pt: draft.widthPt } : {}),
       })
     },
     onSuccess: (updated: SignatureEditorRead) => {
@@ -208,7 +230,12 @@ export function SignaturePlacementPage(): React.JSX.Element {
 
   const resetToDefault = (): void => {
     if (!selected || selected.default_page == null || selected.default_x == null || selected.default_y == null) return
-    setDraft({ page: selected.default_page, x: selected.default_x, y: selected.default_y })
+    setDraft({
+      page: selected.default_page,
+      x: selected.default_x,
+      y: selected.default_y,
+      widthPt: selected.default_width_pt ?? selected.width_pt ?? 0,
+    })
   }
 
   const reassignMutation = useMutation({
@@ -263,11 +290,13 @@ export function SignaturePlacementPage(): React.JSX.Element {
     />
   ) : (
     <div className="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
+      {/* On a phone the controls stack below, so the canvas keeps most of the
+          screen height instead of shrinking to the space they leave. */}
       <div
-        className="flex flex-1 justify-center overflow-auto rounded-xl border border-hairline bg-surface p-4"
+        className="flex min-h-[70svh] flex-1 justify-center overflow-auto rounded-xl border border-hairline bg-surface p-4 md:min-h-0"
         style={{ direction: 'ltr' }}
       >
-        <div className="w-full max-w-[640px]">
+        <div className="w-full">
           {placementMode && selected && draft ? (
             <PlacementCanvas
               key={previewKey}
@@ -281,7 +310,7 @@ export function SignaturePlacementPage(): React.JSX.Element {
               onReadyChange={handlePreviewReadyChange}
             />
           ) : (
-            <DocPdfCanvas pdfUrl={api.documentDownloadUrl(documentId, 'pdf')} />
+            <DocPdfCanvas pdfUrl={api.documentDownloadUrl(documentId, 'pdf')} sizing="fit" />
           )}
         </div>
       </div>
@@ -424,6 +453,13 @@ interface DragState {
   heightPx: number
 }
 
+interface ResizeState {
+  startDraft: Draft
+  /** Pointer distance from the rectangle's bottom-right corner at grab time (content px). */
+  cornerOffsetX: number
+  cornerOffsetY: number
+}
+
 function PlacementCanvas({
   documentId,
   description,
@@ -446,6 +482,7 @@ function PlacementCanvas({
   const { t } = useTranslation()
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
+  const resizeRef = useRef<ResizeState | null>(null)
   const pagesRef = useRef<PageBox[]>([])
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageState, setImageState] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -495,7 +532,26 @@ function PlacementCanvas({
     onReadyChangeRef.current(previewReady)
   }, [previewReady])
 
+  // Open where the signature is: the first time this preview becomes ready,
+  // centre the overlay in view (it may be pages down). The canvas is keyed by
+  // previewKey, so a fresh load, another signature, or a Save each scroll
+  // once; drags, resizes, and later re-renders never do. Focus stays put.
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const scrolledToSignatureRef = useRef(false)
+  useEffect(() => {
+    const overlay = overlayRef.current
+    if (!previewReady || scrolledToSignatureRef.current || !overlay) return
+    scrolledToSignatureRef.current = true
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    overlay.scrollIntoView({
+      block: 'center',
+      inline: 'nearest',
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    })
+  }, [previewReady])
+
   const interactive = canAdjust && previewReady && !saving
+  const aspect = signatureAspect(selected)
 
   const backgroundUrl = api.signatureEditorBackgroundUrl(
     documentId,
@@ -530,7 +586,7 @@ function PlacementCanvas({
     const box = pageAtPoint(pagesRef.current, point.cx, point.cy)
     if (!box) return
     const pos = dragToPosition(box, point.cx, point.cy, d.grabOffsetX, d.grabOffsetY, d.widthPx, d.heightPx)
-    onDraftChange({ page: box.page, x: pos.x, y: pos.y })
+    onDraftChange({ ...draft, page: box.page, x: pos.x, y: pos.y })
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>): void {
@@ -557,9 +613,76 @@ function PlacementCanvas({
     else return
     e.preventDefault()
     onDraftChange({
+      ...draft,
+      x: Math.max(0, Math.min(1 - (draft.widthPt / page.width_pt), draft.x + dx / page.width_pt)),
+      y: Math.max(0, Math.min(1 - (draft.widthPt * aspect) / page.height_pt, draft.y + dy / page.height_pt)),
+    })
+  }
+
+  // Corner handle: the top-left stays anchored and only the width follows the
+  // pointer — the height is derived from the locked aspect ratio.
+  function onResizePointerDown(e: React.PointerEvent<HTMLButtonElement>): void {
+    if (!interactive) return
+    const point = pointFromEvent(e)
+    const box = pagesRef.current.find((p) => p.page === draft.page)
+    const pageInfo = description.pages.find((p) => p.page === draft.page)
+    if (!point || !box || !pageInfo) return
+    const rect = placeSignature(
+      box,
+      draft.x,
+      draft.y,
+      draft.widthPt,
+      draft.widthPt * aspect,
+      pageInfo.width_pt,
+      pageInfo.height_pt,
+    )
+    resizeRef.current = {
+      startDraft: draft,
+      cornerOffsetX: point.cx - (rect.left + rect.width),
+      cornerOffsetY: point.cy - (rect.top + rect.height),
+    }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+
+  function onResizePointerMove(e: React.PointerEvent<HTMLButtonElement>): void {
+    const r = resizeRef.current
+    const point = pointFromEvent(e)
+    if (!r || !point) return
+    const box = pagesRef.current.find((p) => p.page === r.startDraft.page)
+    const pageInfo = description.pages.find((p) => p.page === r.startDraft.page)
+    if (!box || !pageInfo) return
+    const requested = cornerDragWidthPt(
+      box,
+      box.left + r.startDraft.x * box.width,
+      box.top + r.startDraft.y * box.height,
+      point.cx - r.cornerOffsetX,
+      point.cy - r.cornerOffsetY,
+      aspect,
+      pageInfo.width_pt,
+    )
+    onDraftChange({
+      page: r.startDraft.page,
+      ...resizeToWidth(r.startDraft, requested, aspect, pageInfo.width_pt, pageInfo.height_pt),
+    })
+  }
+
+  function onResizePointerUp(e: React.PointerEvent<HTMLButtonElement>): void {
+    if (!resizeRef.current) return
+    e.currentTarget.releasePointerCapture?.(e.pointerId)
+    resizeRef.current = null
+  }
+
+  function onResizeKeyDown(e: React.KeyboardEvent<HTMLButtonElement>): void {
+    const grow = e.key === 'ArrowRight' || e.key === 'ArrowDown'
+    const shrink = e.key === 'ArrowLeft' || e.key === 'ArrowUp'
+    if (!grow && !shrink) return
+    e.preventDefault()
+    const pageInfo = description.pages.find((p) => p.page === draft.page)
+    if (!interactive || !pageInfo) return
+    const stepPt = (e.shiftKey ? 10 : 1) * (grow ? 1 : -1)
+    onDraftChange({
       page: draft.page,
-      x: Math.max(0, Math.min(1, draft.x + dx / page.width_pt)),
-      y: Math.max(0, Math.min(1, draft.y + dy / page.height_pt)),
+      ...resizeToWidth(draft, draft.widthPt + stepPt, aspect, pageInfo.width_pt, pageInfo.height_pt),
     })
   }
 
@@ -572,19 +695,20 @@ function PlacementCanvas({
           pagesRef.current = pages
           const box = pages.find((p) => p.page === draft.page)
           const pageInfo = description.pages.find((p) => p.page === draft.page)
-          if (!box || !pageInfo || selected.width_pt == null || selected.height_pt == null) return null
+          if (!box || !pageInfo || aspect <= 0) return null
           const rect = placeSignature(
             box,
             draft.x,
             draft.y,
-            selected.width_pt,
-            selected.height_pt,
+            draft.widthPt,
+            draft.widthPt * aspect,
             pageInfo.width_pt,
             pageInfo.height_pt,
           )
           return (
             <div ref={rootRef} className="pointer-events-none absolute inset-0">
               <div
+                ref={overlayRef}
                 role="img"
                 aria-label={t('signaturePlacement.signatureLabel')}
                 tabIndex={interactive ? 0 : -1}
@@ -614,6 +738,29 @@ function PlacementCanvas({
                   />
                 )}
               </div>
+              {canAdjust && previewReady && (
+                // A sibling of the signature (never inside its role="img"),
+                // centred on its physical bottom-right corner: the canvas is
+                // pinned LTR and PDF coordinates never mirror. The hit target
+                // (24 px, 32 px on touch) is larger than the drawn handle.
+                <button
+                  type="button"
+                  aria-label={t('signaturePlacement.resizeHandle')}
+                  disabled={!interactive}
+                  onPointerDown={onResizePointerDown}
+                  onPointerMove={onResizePointerMove}
+                  onPointerUp={onResizePointerUp}
+                  onPointerCancel={onResizePointerUp}
+                  onKeyDown={onResizeKeyDown}
+                  className="pointer-events-auto absolute flex size-6 -translate-x-1/2 -translate-y-1/2 cursor-nwse-resize touch-none items-center justify-center rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring disabled:cursor-default pointer-coarse:size-8"
+                  style={{ left: rect.left + rect.width, top: rect.top + rect.height }}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 rounded-[3px] border-2 border-background bg-primary shadow pointer-coarse:size-3.5"
+                  />
+                </button>
+              )}
             </div>
           )
         }}
@@ -680,17 +827,28 @@ function PlacementControls({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const page = pages.find((p) => p.page === draft.page)
+  const aspect = signatureAspect(selected)
   const leftMm = page ? ptToMm(draft.x * page.width_pt) : 0
   const topMm = page ? ptToMm(draft.y * page.height_pt) : 0
 
   function setLeftMm(mm: number): void {
     if (!page || page.width_pt <= 0) return
-    onDraftChange({ ...draft, x: Math.max(0, Math.min(1, mmToPt(mm) / page.width_pt)) })
+    const maxX = Math.max(0, 1 - draft.widthPt / page.width_pt)
+    onDraftChange({ ...draft, x: Math.max(0, Math.min(maxX, mmToPt(mm) / page.width_pt)) })
   }
 
   function setTopMm(mm: number): void {
     if (!page || page.height_pt <= 0) return
-    onDraftChange({ ...draft, y: Math.max(0, Math.min(1, mmToPt(mm) / page.height_pt)) })
+    const maxY = Math.max(0, 1 - (draft.widthPt * aspect) / page.height_pt)
+    onDraftChange({ ...draft, y: Math.max(0, Math.min(maxY, mmToPt(mm) / page.height_pt)) })
+  }
+
+  function setWidthMm(mm: number): void {
+    if (!page) return
+    onDraftChange({
+      page: draft.page,
+      ...resizeToWidth(draft, mmToPt(mm), aspect, page.width_pt, page.height_pt),
+    })
   }
 
   return (
@@ -715,30 +873,25 @@ function PlacementControls({
             </SelectContent>
           </Select>
         </label>
-        <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
-          {t('signaturePlacement.left')}
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            dir="ltr"
-            value={leftMm.toFixed(1)}
-            disabled={!previewReady || saving}
-            onChange={(e) => setLeftMm(Number(e.target.value))}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
-          {t('signaturePlacement.top')}
-          <Input
-            type="number"
-            inputMode="decimal"
-            step="0.5"
-            dir="ltr"
-            value={topMm.toFixed(1)}
-            disabled={!previewReady || saving}
-            onChange={(e) => setTopMm(Number(e.target.value))}
-          />
-        </label>
+        <MmField
+          label={t('signaturePlacement.left')}
+          valueMm={leftMm}
+          disabled={!previewReady || saving}
+          onApplyMm={setLeftMm}
+        />
+        <MmField
+          label={t('signaturePlacement.top')}
+          valueMm={topMm}
+          disabled={!previewReady || saving}
+          onApplyMm={setTopMm}
+        />
+        <MmField
+          label={t('signaturePlacement.width')}
+          valueMm={ptToMm(draft.widthPt)}
+          minMm={MIN_SIGNATURE_WIDTH_MM}
+          disabled={!previewReady || saving}
+          onApplyMm={setWidthMm}
+        />
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
@@ -770,6 +923,56 @@ function PlacementControls({
         </p>
       )}
     </div>
+  )
+}
+
+/** A millimetre field that keeps the raw text while it is being typed. A
+ * controlled number field reformatted on every keystroke turns "3" into
+ * "3.0", so "38" becomes "3.08". A finite value applies live (at or above
+ * `minMm`, when given); blur applies the final text, which the setter clamps,
+ * and the field then shows the draft again. When it is not being edited it
+ * always shows `valueMm`, so Reset, Save and drags show up immediately. */
+function MmField({
+  label,
+  valueMm,
+  minMm,
+  disabled,
+  onApplyMm,
+}: {
+  label: string
+  valueMm: number
+  minMm?: number
+  disabled: boolean
+  onApplyMm: (mm: number) => void
+}): React.JSX.Element {
+  const [text, setText] = useState<string | null>(null)
+  const parse = (raw: string): number | null => {
+    const mm = Number(raw)
+    return raw.trim() !== '' && Number.isFinite(mm) ? mm : null
+  }
+  return (
+    <label className="flex flex-col gap-1 text-[0.78em] font-medium text-muted-foreground">
+      {label}
+      <Input
+        type="number"
+        inputMode="decimal"
+        step="0.5"
+        min={minMm}
+        dir="ltr"
+        value={text ?? valueMm.toFixed(1)}
+        disabled={disabled}
+        onChange={(e) => {
+          setText(e.target.value)
+          const mm = parse(e.target.value)
+          if (mm !== null && (minMm === undefined || mm >= minMm)) onApplyMm(mm)
+        }}
+        onBlur={() => {
+          const mm = text === null ? null : parse(text)
+          if (mm !== null) onApplyMm(mm)
+          setText(null)
+        }}
+      />
+    </label>
   )
 }
 

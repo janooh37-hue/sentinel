@@ -35,6 +35,23 @@ describe('useBookApprovalActions', () => {
     expect(keys).toContain(JSON.stringify(['dashboard']))
   })
 
+  it('sign marks the cached pre-sign "Adjust signature" eligibility stale', async () => {
+    const qc = new QueryClient()
+    const eligibilityKey = ['signature-editor', 2184, 'unmeasured']
+    // Fetched while the record was still pending: no tracked signature yet.
+    qc.setQueryData(eligibilityKey, { can_adjust: false, can_identify: false })
+    vi.spyOn(apiMod.api, 'signBook').mockResolvedValue({ ref_number: 'GS-5' } as apiMod.BookRead)
+    const onSigned = vi.fn()
+    const { result } = renderHook(
+      () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided: vi.fn(), onSigned }),
+      { wrapper: wrapperFor(qc) },
+    )
+    expect(qc.getQueryState(eligibilityKey)?.isInvalidated).toBe(false)
+    result.current.signMutation.mutate(undefined)
+    await waitFor(() => expect(onSigned).toHaveBeenCalled())
+    expect(qc.getQueryState(eligibilityKey)?.isInvalidated).toBe(true)
+  })
+
   it('sign shows the NO_SIGNATURE hint and does not call onSigned', async () => {
     const qc = new QueryClient()
     vi.spyOn(apiMod.api, 'signBook').mockRejectedValue(

@@ -37,23 +37,30 @@ from typing import Any, Literal
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 _WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+_PIC_NS = "http://schemas.openxmlformats.org/drawingml/2006/picture"
 
 # EMU (English Metric Units) per point — the fixed OOXML conversion factor
 # used throughout `wp:posOffset`/`wp:extent` (approval-signature-placement
 # plan §6.4).
 EMU_PER_POINT = 12700
 
+# The smallest width a resized signature may take: 10 mm, in points. Below
+# this a wet signature stops being legible on a printed page.
+MIN_SIGNATURE_WIDTH_PT = 10 * 72 / 25.4
+
 # Probe geometry/matching tuning. Empirically proven against real Word
-# (Word COM SaveAs2 → PyMuPDF get_image_info + pixel sampling):
-# a 1pt probe is below Word's PDF-export anti-aliasing noise floor and
-# reads back as a blurred, unmatchable color; 6pt survives reliably. A
-# render-resolution pixmap sample (72 dpi) is too coarse for a probe this
-# small — 300 dpi resolves it to a multi-pixel patch with a stable center
-# color. Probes are floating (`wrapNone`), so their physical size never
-# perturbs layout/pagination — only ONE run (the moved drawing's own, when
-# it was inline) ever occupies real flow space; see `write_signature_position`.
+# (Word COM SaveAs2 → PyMuPDF get_image_info): a 1pt probe is below Word's
+# PDF-export anti-aliasing noise floor and reads back as a blurred,
+# unmatchable color; 6pt survives reliably. Probes are matched by the
+# EMBEDDED image's own pixels, never by rendering the page: after a move,
+# the transparent spacer left at a previously-inline signature's original
+# rect overlaps a nudged/resized signature, so a rendered sample at the
+# spacer's center shows the probe colour through it and would misreport
+# the original position (see `_find_probe`). Probes are floating
+# (`wrapNone`), so their physical size never perturbs layout/pagination —
+# only ONE run (the moved drawing's own, when it was inline) ever occupies
+# real flow space; see `write_signature_position`.
 _PROBE_SIZE_PT = 6.0
-_SAMPLE_DPI = 300
 _MATCH_TOLERANCE = 10
 _MAX_ANCHOR_CANDIDATES = 64
 # Grid step guarantees any two distinct probe indices differ by this much in
@@ -365,19 +372,31 @@ def _embed_raw_probe(paragraph: Any, probe_bytes: bytes, *, width_pt: float) -> 
 def _find_probe(
     document: Any, rgb: tuple[int, int, int]
 ) -> tuple[int, tuple[float, float, float, float]] | None:
-    """Locate the rendered image matching *rgb* by sampling its bounding
-    box's center pixel at `_SAMPLE_DPI` (a render-resolution 72 dpi sample
-    is too coarse for a probe this small — proven empirically). Returns
-    ``(0-based page index, bbox)`` or None."""
+    """Locate the placed image whose EMBEDDED pixels match *rgb*. Returns
+    ``(0-based page index, bbox)`` or None.
+
+    Matching decodes each placed image's own data (its center pixel), not a
+    render of the page: a rendered sample at an image's bbox center shows
+    whatever is visible there, and the transparent spacer a previously-inline
+    signature leaves at its original rect lets an overlapping probe (a nudged
+    or resized-in-place signature) show through — so the spacer would match
+    first and report the ORIGINAL geometry. Images with a soft mask (the
+    transparent spacer, the signature-free placeholder) are skipped outright;
+    probes are always opaque."""
     import pymupdf
 
     for page_index in range(document.page_count):
         page = document[page_index]
-        for info in page.get_image_info(hashes=True):
+        for info in page.get_image_info(xrefs=True):
+            xref = info.get("xref", 0)
             rect = pymupdf.Rect(info["bbox"])
-            if rect.width <= 0 or rect.height <= 0:
+            if xref <= 0 or rect.is_empty:
                 continue
-            pix = page.get_pixmap(clip=rect, dpi=_SAMPLE_DPI)
+            if document.xref_get_key(xref, "SMask")[0] != "null":
+                continue  # transparent: never a probe
+            pix = pymupdf.Pixmap(document, xref)
+            if pix.n - pix.alpha != 3:
+                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
             if pix.width == 0 or pix.height == 0:
                 continue
             sample = pix.pixel(pix.width // 2, pix.height // 2)[:3]
@@ -585,6 +604,18 @@ def _position_drawing_as_page_anchor(
     drawing.append(anchor)
 
 
+def _check_rect_fits(
+    page_info: SignaturePageInfo, *, x: float, y: float, width_pt: float, height_pt: float
+) -> None:
+    if (
+        x * page_info.width_pt + width_pt > page_info.width_pt + 0.5
+        or y * page_info.height_pt + height_pt > page_info.height_pt + 0.5
+    ):
+        raise SignaturePositionInvalidError(
+            f"signature rectangle does not fit page {page_info.page} at x={x!r} y={y!r}"
+        )
+
+
 def write_signature_position(
     source: Path,
     destination: Path,
@@ -594,6 +625,7 @@ def write_signature_position(
     x: float,
     y: float,
     layout: SignatureLayout,
+    width_pt: float | None = None,
 ) -> None:
     """Move the marked signature *signature_id* in *source* to the given
     physical *page* (1-based) and normalized top-left (*x*, *y*), writing
@@ -602,19 +634,24 @@ def write_signature_position(
     ``wp:anchor``, ``positionH``/``positionV relativeFrom="page"``, offsets
     in EMU (approval-signature-placement plan §6.5) — the requested point
     IS the displayed rectangle's top-left; no further adjustment is applied
-    by a caller. Image relationship/bytes/crop/rotation and physical size
-    (the drawing's own existing extent, not a value the caller supplies)
-    are preserved exactly; only position changes.
+    by a caller. Image relationship/bytes/crop/rotation are preserved
+    exactly. With *width_pt* omitted the physical size (the drawing's own
+    existing extent) is preserved too and only position changes. With
+    *width_pt* given the signature is resized to that width, its height
+    following the drawing's EXISTING extent ratio (aspect locked; the
+    image never stretches): both ``wp:extent`` and the picture's own
+    ``pic:spPr/a:xfrm/a:ext`` carry the new size.
 
     A previously-inline drawing leaves an unmarked transparent 1x1 PNG
-    spacer at its original extent in its original run, so the paragraph's
-    line/row allocation is unaffected (plan §6.6). An already-floating
-    drawing is reparented without a spacer. Both cases append the moved
-    drawing's OWN run (not a copy) to the destination page's verified
-    anchor paragraph, from `layout.pages`.
+    spacer at its ORIGINAL extent in its original run, so the paragraph's
+    line/row allocation is unaffected (plan §6.6) — also when resized. An
+    already-floating drawing is reparented without a spacer. Both cases
+    append the moved drawing's OWN run (not a copy) to the destination
+    page's verified anchor paragraph, from `layout.pages`.
 
     Raises `SignaturePositionInvalidError` for a non-finite/out-of-range
-    ``x``/``y``, a non-positive ``page``, or a rectangle that would not
+    ``x``/``y``, a non-positive ``page``, a non-finite *width_pt* or one
+    under `MIN_SIGNATURE_WIDTH_PT`, or a (resized) rectangle that would not
     fully fit the destination page. Raises `SignatureLayoutUnsupportedError`
     when *page* has no verified-safe anchor in *layout* (never inserts a
     paragraph/page break to manufacture one). Raises `SignatureIdentityError`
@@ -632,6 +669,13 @@ def write_signature_position(
         raise SignaturePositionInvalidError(f"x/y must be finite numbers, got x={x!r} y={y!r}")
     if not (0.0 <= x <= 1.0) or not (0.0 <= y <= 1.0):
         raise SignaturePositionInvalidError(f"x/y must be within [0, 1], got x={x!r} y={y!r}")
+    if width_pt is not None:
+        if isinstance(width_pt, bool) or not math.isfinite(width_pt):
+            raise SignaturePositionInvalidError(f"width must be a finite number, got {width_pt!r}")
+        if width_pt < MIN_SIGNATURE_WIDTH_PT - 1e-9:
+            raise SignaturePositionInvalidError(
+                f"width must be at least {MIN_SIGNATURE_WIDTH_PT:.2f}pt (10 mm), got {width_pt!r}"
+            )
 
     page_info = next((p for p in layout.pages if p.page == page), None)
     if page_info is None:
@@ -642,12 +686,9 @@ def write_signature_position(
     geometry = layout.drawings.get(signature_id)
     if geometry is None:
         raise SignatureIdentityError(f"{signature_id!r} was not measured in this layout")
-    if (
-        x * page_info.width_pt + geometry.width_pt > page_info.width_pt + 0.5
-        or y * page_info.height_pt + geometry.height_pt > page_info.height_pt + 0.5
-    ):
-        raise SignaturePositionInvalidError(
-            f"signature rectangle does not fit page {page} at x={x!r} y={y!r}"
+    if width_pt is None:
+        _check_rect_fits(
+            page_info, x=x, y=y, width_pt=geometry.width_pt, height_pt=geometry.height_pt
         )
 
     doc = Document(str(source))
@@ -665,6 +706,24 @@ def write_signature_position(
     extent = container.find(qn("wp:extent"))
     width_emu = int(extent.get("cx"))
     height_emu = int(extent.get("cy"))
+    new_width_emu = width_emu
+    new_height_emu = height_emu
+    if width_pt is not None:
+        if width_emu <= 0 or height_emu <= 0:
+            raise SignatureIdentityError(f"{signature_id!r} has no usable extent in {source}")
+        new_width_emu = round(width_pt * EMU_PER_POINT)
+        new_height_emu = round(new_width_emu * height_emu / width_emu)
+        _check_rect_fits(
+            page_info,
+            x=x,
+            y=y,
+            width_pt=new_width_emu / EMU_PER_POINT,
+            height_pt=new_height_emu / EMU_PER_POINT,
+        )
+        pic_ext = container.find(f".//{{{_PIC_NS}}}spPr/{{{_A_NS}}}xfrm/{{{_A_NS}}}ext")
+        if pic_ext is not None:
+            pic_ext.set("cx", str(new_width_emu))
+            pic_ext.set("cy", str(new_height_emu))
 
     drawing = container.getparent()  # w:drawing
     run_element = drawing.getparent()  # w:r
@@ -695,8 +754,8 @@ def write_signature_position(
         drawing,
         x_emu=x_emu,
         y_emu=y_emu,
-        width_emu=width_emu,
-        height_emu=height_emu,
+        width_emu=new_width_emu,
+        height_emu=new_height_emu,
         behind_doc=behind_doc,
     )
 
@@ -719,14 +778,18 @@ def validate_move(
     requested_x: float,
     requested_y: float,
     layout_after: SignatureLayout,
+    requested_width_pt: float | None = None,
 ) -> None:
     """Raise `SignatureLayoutChangedError` unless *after_docx*/*after_pdf*
     differ from *before_docx*/*before_pdf* by nothing but *signature_id*'s
-    position (plan §6.8). Checked, in order: PDF page count; extracted
-    document text (ordered, exact); every OTHER marked signature's identity
-    (image SHA-256) and physical size; and that the moved signature
-    actually landed on *requested_page* within 1 point of
-    (*requested_x*, *requested_y*). Never mutates either input.
+    position (and, with *requested_width_pt*, its size) (plan §6.8).
+    Checked, in order: PDF page count; extracted document text (ordered,
+    exact); every OTHER marked signature's identity (image SHA-256) and
+    physical size; that the moved signature actually landed on
+    *requested_page* within 1 point of (*requested_x*, *requested_y*); and,
+    when *requested_width_pt* is given, that it renders within 1 point of
+    that width and of the height its ORIGINAL extent ratio derives from it.
+    Never mutates either input.
 
     Deliberately does not diff arbitrary UNMARKED image byte-identity
     across the two separate Word conversions — Word's own PDF re-embedding
@@ -785,6 +848,19 @@ def validate_move(
         raise SignatureLayoutChangedError(
             f"moved signature landed {dx:.2f}/{dy:.2f}pt off the requested position"
         )
+    if requested_width_pt is not None:
+        target_before = before_drawings[signature_id]
+        if target_before.width_emu <= 0:
+            raise SignatureLayoutChangedError("moved signature had no measurable original extent")
+        requested_height_pt = (
+            requested_width_pt * target_before.height_emu / target_before.width_emu
+        )
+        dw = abs(geometry.width_pt - requested_width_pt)
+        dh = abs(geometry.height_pt - requested_height_pt)
+        if dw > 1.0 or dh > 1.0:
+            raise SignatureLayoutChangedError(
+                f"resized signature rendered {dw:.2f}/{dh:.2f}pt off the requested size"
+            )
 
 
 def render_signature_free_background(

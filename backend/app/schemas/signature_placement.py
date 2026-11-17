@@ -37,11 +37,19 @@ class SignaturePositionRequest(BaseModel):
     page: int = Field(ge=1)
     x: float = Field(ge=0.0, le=1.0)
     y: float = Field(ge=0.0, le=1.0)
+    # Omitted keeps the signature's current size; given, it is resized to
+    # this width with its aspect ratio locked (minimum enforced server-side).
+    width_pt: float | None = Field(default=None, gt=0)
 
     @field_validator("x", "y")
     @classmethod
     def _finite(cls, value: float) -> float:
         return _require_finite(value)
+
+    @field_validator("width_pt")
+    @classmethod
+    def _finite_width(cls, value: float | None) -> float | None:
+        return None if value is None else _require_finite(value)
 
 
 class SignatureIdentifyRequest(BaseModel):
@@ -85,6 +93,8 @@ class SignatureRead(BaseModel):
     default_page: int | None = None
     default_x: float | None = None
     default_y: float | None = None
+    default_width_pt: float | None = None
+    default_height_pt: float | None = None
     image_url: str
 
 

@@ -293,3 +293,84 @@ def test_candidate_image_non_admin_is_forbidden(api_db, tmp_path) -> None:
         f"/api/v1/documents/{document.id}/signature-editor/candidates/{candidate_id}/image"
     )
     assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# /signature-editor (measured) and /signatures/{id}/position — signature size
+# ---------------------------------------------------------------------------
+
+
+def _measured_layout(signature_id: str):
+    from app.core.signature_layout import SignatureGeometry, SignatureLayout, SignaturePageInfo
+
+    return SignatureLayout(
+        source_sha256="measured",
+        pages=(
+            SignaturePageInfo(page=1, width_pt=595.0, height_pt=842.0, anchor_paragraph_index=0),
+        ),
+        drawings={
+            signature_id: SignatureGeometry(page=1, x=0.6, y=0.7, width_pt=85.04, height_pt=42.52)
+        },
+    )
+
+
+def test_measured_editor_exposes_original_signature_size(api_db, tmp_path, monkeypatch) -> None:
+    from app.services import _pdf_executor
+
+    document, signature_id = _tracked_record(api_db, tmp_path)
+    monkeypatch.setattr(
+        _pdf_executor, "measure_signature_position", lambda _p: _measured_layout(signature_id)
+    )
+    client = _client(api_db, _user(api_db))
+
+    resp = client.get(f"/api/v1/documents/{document.id}/signature-editor", params={"measure": True})
+    assert resp.status_code == 200
+    [signature] = resp.json()["signatures"]
+    assert signature["default_width_pt"] == 85.04
+    assert signature["default_height_pt"] == 42.52
+
+
+def test_position_request_passes_requested_width_to_the_word_worker(
+    api_db, tmp_path, monkeypatch
+) -> None:
+    from app.services import _pdf_executor
+
+    document, signature_id = _tracked_record(api_db, tmp_path)
+    monkeypatch.setattr(
+        _pdf_executor, "measure_signature_position", lambda _p: _measured_layout(signature_id)
+    )
+    before_pdf = tmp_path / "before.pdf"
+    before_pdf.write_bytes(b"%PDF-1.4")
+    monkeypatch.setattr(_pdf_executor, "convert_docx_to_pdf", lambda _p: before_pdf)
+    seen: dict[str, object] = {}
+
+    def _fake_move(*_args: object, **kwargs: object) -> None:
+        from app.api.errors import ConflictError
+
+        # Record what reached the Word worker, then stop the transaction
+        # cleanly before any publish work.
+        seen.update(kwargs)
+        raise ConflictError("SIGNATURE_REVISION_CONFLICT", "stop after the worker call")
+
+    monkeypatch.setattr(_pdf_executor, "move_signature_position", _fake_move)
+    client = _client(api_db, _user(api_db))
+    editor = client.get(f"/api/v1/documents/{document.id}/signature-editor").json()
+    body = {
+        "signature_revision": editor["signature_revision"],
+        "package_revision": editor["package_revision"],
+        "source_sha256": editor["source_sha256"],
+        "page": 1,
+        "x": 0.5,
+        "y": 0.5,
+    }
+
+    url = f"/api/v1/documents/{document.id}/signatures/{signature_id}/position"
+    assert client.put(url, json={**body, "width_pt": 113.4}).status_code == 409
+    assert seen["width_pt"] == 113.4
+
+    seen.clear()
+    assert client.put(url, json=body).status_code == 409
+    assert seen["width_pt"] is None  # omitted → size unchanged
+
+    rejected = client.put(url, json={**body, "width_pt": 0})
+    assert rejected.status_code == 422

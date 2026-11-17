@@ -441,7 +441,9 @@ def test_move_signature_success_appends_revision_and_publishes(
         y: float,
         layout: SignatureLayout,
         before_pdf: Path,
+        width_pt: float | None = None,
     ) -> tuple[SignatureLayout, Path]:
+        assert width_pt is None  # no width requested → size untouched
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_bytes(b"moved-docx-bytes")
         after_layout = _fake_layout(page=page, x=x, y=y, sha="after-sha", signature_id=signature_id)
@@ -481,8 +483,20 @@ def test_move_signature_success_appends_revision_and_publishes(
     assert new_row.action == sps.ACTION_MOVE
     assert new_row.signature_id == signature_id
     assert new_row.signer_user_id == 7  # carried from the original signer, not the correcting admin
-    assert new_row.before_geometry == {"page": 1, "x": 0.2, "y": 0.2}
-    assert new_row.after_geometry == {"page": 1, "x": 0.35, "y": 0.4}
+    assert new_row.before_geometry == {
+        "page": 1,
+        "x": 0.2,
+        "y": 0.2,
+        "width_pt": 90.0,
+        "height_pt": 40.0,
+    }
+    assert new_row.after_geometry == {
+        "page": 1,
+        "x": 0.35,
+        "y": 0.4,
+        "width_pt": 90.0,
+        "height_pt": 40.0,
+    }
     assert (settings.data_dir / new_row.docx_path).is_file()
     assert new_row.published_pdf_path is not None
 
@@ -536,6 +550,374 @@ def test_move_signature_layout_unsupported_page_rejected(
     assert not any(
         p.name.startswith("2-") for p in (retained_root.iterdir() if retained_root.is_dir() else [])
     )
+
+
+def test_move_signature_with_width_resizes_and_records_sizes(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
+    monkeypatch.setattr(sps, "get_settings", lambda: settings)
+    monkeypatch.setattr("app.services.included_papers_service.get_settings", lambda: settings)
+    _book, version, document = _record(db_session, tmp_path)
+    active = _active_row(db_session, version, tmp_path, signer_user_id=7)
+    signer = User(id=7, email="signer5@x.ae", password_hash="x", role="manager", status="active")
+    db_session.add(signer)
+    db_session.commit()
+
+    signature_id = "sig-resized"
+    before_layout = _fake_layout(
+        page=1, x=0.2, y=0.2, sha=active.docx_sha256, signature_id=signature_id
+    )
+    moved_pdf = _pdf(tmp_path / "resized-output.pdf", ["RESIZED-FORM"])
+    requested_widths: list[float | None] = []
+
+    def _fake_move(
+        source: Path,
+        destination: Path,
+        *,
+        signature_id: str,
+        page: int,
+        x: float,
+        y: float,
+        layout: SignatureLayout,
+        before_pdf: Path,
+        width_pt: float | None = None,
+    ) -> tuple[SignatureLayout, Path]:
+        requested_widths.append(width_pt)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"resized-docx-bytes")
+        assert width_pt is not None
+        after_layout = SignatureLayout(
+            source_sha256="after-sha",
+            pages=layout.pages,
+            drawings={
+                signature_id: SignatureGeometry(
+                    page=page, x=x, y=y, width_pt=width_pt, height_pt=width_pt * 40.0 / 90.0
+                )
+            },
+        )
+        return after_layout, moved_pdf
+
+    monkeypatch.setattr(_pdf_executor, "measure_signature_position", lambda _p: before_layout)
+    monkeypatch.setattr(_pdf_executor, "move_signature_position", _fake_move)
+
+    sps.move_signature(
+        db_session,
+        document.id,
+        user=signer,
+        signature_id=signature_id,
+        signature_revision=1,
+        package_revision=0,
+        source_sha256=active.docx_sha256,
+        page=1,
+        x=0.3,
+        y=0.3,
+        width_pt=135.0,
+    )
+
+    assert requested_widths == [135.0]
+    new_row = (
+        db_session.query(SignatureArtifactRevision)
+        .filter(SignatureArtifactRevision.version_id == version.id)
+        .filter(SignatureArtifactRevision.revision == 2)
+        .one()
+    )
+    assert new_row.before_geometry is not None and new_row.after_geometry is not None
+    assert new_row.before_geometry["width_pt"] == 90.0
+    assert new_row.after_geometry["width_pt"] == 135.0
+    assert new_row.after_geometry["height_pt"] == pytest.approx(60.0)
+
+    import json
+
+    from app.db.models import AuditLog
+
+    audit = db_session.query(AuditLog).filter(AuditLog.action == "signature.position_changed").one()
+    payload = json.loads(audit.payload or "{}")
+    assert payload["before_width_pt"] == 90.0
+    assert payload["after_width_pt"] == 135.0
+
+
+# ---------------------------------------------------------------------------
+# _find_probe — measurement must not mistake the transparent spacer for a probe
+# ---------------------------------------------------------------------------
+
+
+def test_find_probe_skips_overlapping_transparent_spacer(tmp_path: Path) -> None:
+    """A nudged signature overlaps the transparent spacer its first move left
+    at the original rect. The spacer comes first in the page and the probe
+    shows through its center, but the probe's OWN rect must be reported."""
+    from app.core.signature_layout import (
+        _distinct_rgb,
+        _find_probe,
+        _probe_png_bytes,
+        _transparent_png_bytes,
+    )
+
+    rgb = _distinct_rgb(3)
+    spacer_rect = pymupdf.Rect(90, 420, 180, 456)  # the original position
+    probe_rect = pymupdf.Rect(120, 420, 210, 456)  # nudged right, covering its center
+    pdf_path = tmp_path / "measure.pdf"
+    doc = pymupdf.open()
+    try:
+        page = doc.new_page(width=595, height=842)
+        page.insert_image(spacer_rect, stream=_transparent_png_bytes())
+        page.insert_image(probe_rect, stream=_probe_png_bytes(rgb))
+        doc.save(pdf_path)
+    finally:
+        doc.close()
+
+    measured = pymupdf.open(pdf_path)
+    try:
+        located = _find_probe(measured, rgb)
+    finally:
+        measured.close()
+
+    assert located is not None
+    page_index, bbox = located
+    assert page_index == 0
+    assert bbox == pytest.approx(tuple(probe_rect))
+
+
+# ---------------------------------------------------------------------------
+# write_signature_position / validate_move — resizing (no Word needed: the
+# DOCX rewrite and the remeasurement check are pure functions of their inputs)
+# ---------------------------------------------------------------------------
+
+_SIG_ID = "0123456789abcdef0123456789abcdef"
+
+
+def _inline_signed_docx(path: Path, tmp_path: Path) -> Path:
+    """A DOCX with one INLINE marked manager signature, 90 x 45 pt (2:1 image)."""
+    from docx import Document as DocxFile
+    from docx.oxml.ns import qn
+    from docx.shared import Pt
+    from PIL import Image
+
+    from app.core.signature_layout import marker_descr, marker_name
+
+    png = tmp_path / "sig-2to1.png"
+    Image.new("RGBA", (60, 30), (0, 0, 200, 255)).save(png)
+    doc = DocxFile()
+    doc.add_paragraph("Body")
+    run = doc.add_paragraph().add_run()
+    run.add_picture(str(png), width=Pt(90))
+    docpr = run._element.find(f".//{qn('wp:docPr')}")
+    docpr.set("name", marker_name(_SIG_ID))
+    docpr.set("descr", marker_descr("manager", _SIG_ID))
+    doc.save(str(path))
+    return path
+
+
+def _a4_layout() -> SignatureLayout:
+    return SignatureLayout(
+        source_sha256="src",
+        pages=(
+            SignaturePageInfo(page=1, width_pt=595.0, height_pt=842.0, anchor_paragraph_index=0),
+        ),
+        drawings={_SIG_ID: SignatureGeometry(page=1, x=0.1, y=0.1, width_pt=90.0, height_pt=45.0)},
+    )
+
+
+def _target_sizes(docx_path: Path) -> tuple[tuple[int, int], tuple[int, int]]:
+    """``((wp:extent cx, cy), (pic a:ext cx, cy))`` of the marked signature."""
+    from docx import Document as DocxFile
+    from docx.oxml.ns import qn
+
+    from app.core.signature_layout import marker_name
+
+    doc = DocxFile(str(docx_path))
+    docpr = next(
+        d for d in doc.element.body.iter(qn("wp:docPr")) if d.get("name") == marker_name(_SIG_ID)
+    )
+    container = docpr.getparent()
+    extent = container.find(qn("wp:extent"))
+    pic_ext = container.find(f".//{qn('pic:spPr')}/{qn('a:xfrm')}/{qn('a:ext')}")
+    return (
+        (int(extent.get("cx")), int(extent.get("cy"))),
+        (int(pic_ext.get("cx")), int(pic_ext.get("cy"))),
+    )
+
+
+def _inline_extents(docx_path: Path) -> list[tuple[int, int]]:
+    from docx import Document as DocxFile
+    from docx.oxml.ns import qn
+
+    doc = DocxFile(str(docx_path))
+    return [
+        (int(inline.find(qn("wp:extent")).get("cx")), int(inline.find(qn("wp:extent")).get("cy")))
+        for inline in doc.element.body.iter(qn("wp:inline"))
+    ]
+
+
+def test_resize_writes_new_extent_and_picture_size_with_locked_aspect(tmp_path: Path) -> None:
+    from app.core.signature_layout import EMU_PER_POINT, write_signature_position
+
+    source = _inline_signed_docx(tmp_path / "source.docx", tmp_path)
+    destination = tmp_path / "out" / "moved.docx"
+    write_signature_position(
+        source,
+        destination,
+        signature_id=_SIG_ID,
+        page=1,
+        x=0.2,
+        y=0.3,
+        layout=_a4_layout(),
+        width_pt=120.0,
+    )
+
+    expected = (120 * EMU_PER_POINT, 60 * EMU_PER_POINT)
+    extent, pic_ext = _target_sizes(destination)
+    assert extent == expected
+    assert pic_ext == expected
+    # The previously-inline signature leaves its spacer at the ORIGINAL size,
+    # so the paragraph's line allocation does not change with the resize.
+    assert _inline_extents(destination) == [(90 * EMU_PER_POINT, 45 * EMU_PER_POINT)]
+    # The source is never modified.
+    assert _target_sizes(source)[0] == (90 * EMU_PER_POINT, 45 * EMU_PER_POINT)
+
+
+def test_move_without_width_keeps_signature_size(tmp_path: Path) -> None:
+    from app.core.signature_layout import EMU_PER_POINT, write_signature_position
+
+    source = _inline_signed_docx(tmp_path / "source.docx", tmp_path)
+    destination = tmp_path / "moved.docx"
+    write_signature_position(
+        source, destination, signature_id=_SIG_ID, page=1, x=0.2, y=0.3, layout=_a4_layout()
+    )
+
+    original = (90 * EMU_PER_POINT, 45 * EMU_PER_POINT)
+    assert _target_sizes(destination) == (original, original)
+
+
+def test_resize_of_an_already_floating_signature_keeps_aspect(tmp_path: Path) -> None:
+    from app.core.signature_layout import EMU_PER_POINT, write_signature_position
+
+    source = _inline_signed_docx(tmp_path / "source.docx", tmp_path)
+    first = tmp_path / "first.docx"
+    write_signature_position(
+        source, first, signature_id=_SIG_ID, page=1, x=0.2, y=0.3, layout=_a4_layout()
+    )
+    second = tmp_path / "second.docx"
+    write_signature_position(
+        first,
+        second,
+        signature_id=_SIG_ID,
+        page=1,
+        x=0.2,
+        y=0.3,
+        layout=_a4_layout(),
+        width_pt=45.0,
+    )
+
+    expected = (45 * EMU_PER_POINT, round(22.5 * EMU_PER_POINT))
+    assert _target_sizes(second) == (expected, expected)
+    # Only the one spacer from the first move; a floating move adds none.
+    assert len(_inline_extents(second)) == 1
+
+
+@pytest.mark.parametrize(
+    ("x", "width_pt"),
+    [
+        (0.2, 28.0),  # just under 10 mm (28.35 pt)
+        (0.8, 120.0),  # 0.8 * 595 + 120 overflows the page's right edge
+        (0.2, float("nan")),
+    ],
+)
+def test_resize_rejects_too_small_or_overflowing_width(
+    tmp_path: Path, x: float, width_pt: float
+) -> None:
+    from app.core.signature_layout import SignaturePositionInvalidError, write_signature_position
+
+    source = _inline_signed_docx(tmp_path / "source.docx", tmp_path)
+    destination = tmp_path / "moved.docx"
+    with pytest.raises(SignaturePositionInvalidError):
+        write_signature_position(
+            source,
+            destination,
+            signature_id=_SIG_ID,
+            page=1,
+            x=x,
+            y=0.3,
+            layout=_a4_layout(),
+            width_pt=width_pt,
+        )
+    assert not destination.exists()
+
+
+def test_resize_accepts_exactly_ten_millimetres(tmp_path: Path) -> None:
+    from app.core.signature_layout import (
+        MIN_SIGNATURE_WIDTH_PT,
+        inspect_signature_drawings,
+        write_signature_position,
+    )
+
+    source = _inline_signed_docx(tmp_path / "source.docx", tmp_path)
+    destination = tmp_path / "moved.docx"
+    write_signature_position(
+        source,
+        destination,
+        signature_id=_SIG_ID,
+        page=1,
+        x=0.2,
+        y=0.3,
+        layout=_a4_layout(),
+        width_pt=MIN_SIGNATURE_WIDTH_PT,
+    )
+    assert inspect_signature_drawings(destination)[0].width_emu == round(
+        MIN_SIGNATURE_WIDTH_PT * 12700
+    )
+
+
+def _validate_resize(tmp_path: Path, *, rendered: tuple[float, float]) -> None:
+    from app.core.signature_layout import validate_move, write_signature_position
+
+    before_docx = _inline_signed_docx(tmp_path / "before.docx", tmp_path)
+    after_docx = tmp_path / "after.docx"
+    write_signature_position(
+        before_docx,
+        after_docx,
+        signature_id=_SIG_ID,
+        page=1,
+        x=0.2,
+        y=0.3,
+        layout=_a4_layout(),
+        width_pt=120.0,
+    )
+    layout_after = SignatureLayout(
+        source_sha256="after",
+        pages=_a4_layout().pages,
+        drawings={
+            _SIG_ID: SignatureGeometry(
+                page=1, x=0.2, y=0.3, width_pt=rendered[0], height_pt=rendered[1]
+            )
+        },
+    )
+    validate_move(
+        before_docx=before_docx,
+        after_docx=after_docx,
+        before_pdf=_pdf(tmp_path / "before.pdf", ["FORM"]),
+        after_pdf=_pdf(tmp_path / "after.pdf", ["FORM"]),
+        signature_id=_SIG_ID,
+        requested_page=1,
+        requested_x=0.2,
+        requested_y=0.3,
+        layout_after=layout_after,
+        requested_width_pt=120.0,
+    )
+
+
+def test_validate_move_accepts_resize_rendered_at_requested_size(tmp_path: Path) -> None:
+    _validate_resize(tmp_path, rendered=(120.4, 59.6))
+
+
+@pytest.mark.parametrize("rendered", [(90.0, 45.0), (120.0, 75.0)])
+def test_validate_move_rejects_resize_rendered_at_wrong_size(
+    tmp_path: Path, rendered: tuple[float, float]
+) -> None:
+    from app.core.signature_layout import SignatureLayoutChangedError
+
+    with pytest.raises(SignatureLayoutChangedError, match="size"):
+        _validate_resize(tmp_path, rendered=rendered)
 
 
 # ---------------------------------------------------------------------------

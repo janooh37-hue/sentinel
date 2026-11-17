@@ -30,6 +30,65 @@ export function mmToPt(mm: number): number {
   return mm * PT_PER_MM
 }
 
+/** The smallest width a signature may be resized to — the server enforces the same floor. */
+export const MIN_SIGNATURE_WIDTH_MM = 10
+export const MIN_SIGNATURE_WIDTH_PT = mmToPt(MIN_SIGNATURE_WIDTH_MM)
+
+/** A signature's placement on its page: normalized top-left + physical width (pt). */
+export interface SignatureFrame {
+  x: number
+  y: number
+  widthPt: number
+}
+
+/** Aspect-locked resize: the height is always `widthPt * aspect`, so the
+ * signature never stretches. The top-left stays put and the width is clamped
+ * to [`MIN_SIGNATURE_WIDTH_PT`, the largest width that still fits the page
+ * from there]. Only when even the minimum would cross the page edge does the
+ * top-left move back so the rectangle stays inside the page. A non-finite
+ * request leaves the frame unchanged. */
+export function resizeToWidth(
+  frame: SignatureFrame,
+  requestedWidthPt: number,
+  aspect: number,
+  pageWidthPt: number,
+  pageHeightPt: number,
+): SignatureFrame {
+  if (!Number.isFinite(requestedWidthPt) || !(aspect > 0) || pageWidthPt <= 0 || pageHeightPt <= 0) {
+    return frame
+  }
+  const pageMax = Math.min(pageWidthPt, pageHeightPt / aspect)
+  const minWidth = Math.min(MIN_SIGNATURE_WIDTH_PT, pageMax)
+  const fitMax = Math.min(
+    pageWidthPt * (1 - frame.x),
+    (pageHeightPt * (1 - frame.y)) / aspect,
+  )
+  const widthPt = Math.max(minWidth, Math.min(requestedWidthPt, fitMax))
+  return {
+    x: Math.max(0, Math.min(frame.x, 1 - widthPt / pageWidthPt)),
+    y: Math.max(0, Math.min(frame.y, 1 - (widthPt * aspect) / pageHeightPt)),
+    widthPt,
+  }
+}
+
+/** Corner-handle drag → requested width (pt). The pointer's reach from the
+ * rectangle's top-left (content px), horizontally or — through the aspect
+ * ratio — vertically, whichever is larger, so dragging along either axis
+ * resizes. Clamp the result with `resizeToWidth`. */
+export function cornerDragWidthPt(
+  box: PageBox,
+  rectLeftPx: number,
+  rectTopPx: number,
+  cx: number,
+  cy: number,
+  aspect: number,
+  pageWidthPt: number,
+): number {
+  if (box.width <= 0 || pageWidthPt <= 0 || !(aspect > 0)) return 0
+  const pxPerPt = box.width / pageWidthPt
+  return Math.max(cx - rectLeftPx, (cy - rectTopPx) / aspect) / pxPerPt
+}
+
 /** Map a signature's normalized (x, y) + physical size onto its page box → absolute px within the overlay. */
 export function placeSignature(
   box: PageBox,
