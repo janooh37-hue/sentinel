@@ -1,27 +1,33 @@
 import { useEffect, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import type { SessionUser } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { WordReportForm } from './InmateReporterApplication'
 
+/**
+ * A fleet reporter's Services: the Report only. Its General Books come from the
+ * vehicle pages (the maintenance request); the General Book form opens only to
+ * revise one of them (`?revise=<id>`).
+ */
 export function FleetReporterApplication({ user, generalBookForm }: { user: SessionUser; generalBookForm: ReactNode }): React.JSX.Element {
   const { t } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const isMobile = useIsMobile()
   const { slug } = useParams<{ slug?: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const canCreate = has('documents.generate') && has('books.view')
-  const canGeneralBook = canCreate && has('books.service.General Book')
+  const canReviseGeneralBook = canCreate && has('books.service.General Book') && /^\d+$/.test(searchParams.get('revise') ?? '')
   const canReport = canCreate && has('books.service.Report')
-  const allowed = capabilitiesLoading || !slug || (slug === 'general_book' && canGeneralBook) || (slug === 'report' && canReport)
+  const allowed = capabilitiesLoading || !slug || (slug === 'general_book' && canReviseGeneralBook) || (slug === 'report' && canReport)
 
   useEffect(() => {
     if (!allowed) navigate('/services', { replace: true })
   }, [allowed, navigate])
 
-  if (slug === 'general_book' && canGeneralBook) return <>{generalBookForm}</>
+  if (slug === 'general_book' && canReviseGeneralBook) return <>{generalBookForm}</>
   if (slug === 'report' && canReport) return <WordReportForm user={user} onBack={() => navigate('/services')} />
 
   return (
@@ -32,12 +38,6 @@ export function FleetReporterApplication({ user, generalBookForm }: { user: Sess
           <h1 className="mt-1 text-[1.7em] font-bold tracking-tight text-foreground">{t('application.servicesTitle')}</h1>
         </header>
         <div className="grid gap-3 sm:grid-cols-2">
-          {canGeneralBook && (
-            <button type="button" onClick={() => navigate('/services/general_book')} className="rounded-2xl border border-hairline bg-surface p-5 text-start hover:border-primary">
-              <span className="block text-lg font-semibold">{t('application.fleetReporter.generalBookTitle')}</span>
-              <span className="mt-1 block text-sm text-muted-foreground">{t('application.fleetReporter.generalBookDescription')}</span>
-            </button>
-          )}
           {canReport && (
             <button type="button" disabled={isMobile} onClick={() => navigate('/services/report')} className="rounded-2xl border border-hairline bg-surface p-5 text-start hover:border-primary disabled:cursor-not-allowed disabled:opacity-60">
               <span className="block text-lg font-semibold">{t('application.inmateReporter.reportTitle')}</span>

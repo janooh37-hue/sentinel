@@ -478,6 +478,22 @@ stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
 
+**General Books and the addressee.** A fleet reporter starts no General Book of its own:
+`POST /documents/generate` (without `revise_of_book_id`) and the Word create answer 403
+`SCOPED_ROLE_SERVICE_FORBIDDEN`. Its General Books come from the vehicle services (the
+maintenance request, 11/1, addressed to the contractor), which is why the role keeps
+`books.service.General Book`; it may revise its own returned ones. Its Report is always
+addressed to its line manager: the server writes the name after «السيد»
+(`book_service.line_manager_addressee`: the line manager's signer-row title, else its
+Arabic or English name, else the account name) and refuses a `recipient_id` (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`).
+
+**Vehicle employees.** The fine, accident and maintenance-request dialogs search
+`GET /vehicles/employees` and resolve `GET /vehicles/employees/{employee_id}`
+(`vehicles.edit`): G number and names only, matched by G number, former ID or name,
+never by passport or Emirates ID. A fleet reporter reaches them through its capabilities;
+`GET /employees/lookup` stays closed to it.
+
 **Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
 (`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
 returned vehicle letter from current fleet data through the ordinary revise path: same

@@ -62,7 +62,7 @@ def word_env(fleet_env: FleetEnv, monkeypatch: pytest.MonkeyPatch) -> FleetEnv:
     return fleet_env
 
 
-def test_general_book_api_rejects_out_of_scope_before_creating_book(
+def test_general_book_api_refuses_reporter_authored_books(
     fleet_env: FleetEnv, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env = fleet_env
@@ -86,14 +86,12 @@ def test_general_book_api_rejects_out_of_scope_before_creating_book(
     assert forbidden.json()["error"]["code"] == "RECORD_TYPE_FORBIDDEN"
     assert env.db.scalar(select(func.count()).select_from(Book)) == before
 
+    # The vehicle services write its General Books; it starts none here.
     payload["classification_code"] = "11/1"
-    allowed = client.post("/api/v1/documents/generate", json=payload)
-    assert allowed.status_code == 202, allowed.text
-    assert allowed.json()["job_id"]
-    book = env.db.scalars(select(Book)).one()
-    assert book.classification_code == "11/1"
-    assert book.created_by_user_id == env.reporter.id
-    _assert_unsubmitted(book)
+    refused = client.post("/api/v1/documents/generate", json=payload)
+    assert refused.status_code == 403, refused.text
+    assert refused.json()["error"]["code"] == "SCOPED_ROLE_SERVICE_FORBIDDEN"
+    assert env.db.scalar(select(func.count()).select_from(Book)) == before
 
 
 @pytest.mark.parametrize("classification_code", ["7/1", "11/1"])
@@ -133,8 +131,8 @@ def test_general_book_service_cannot_choose_signing_manager(fleet_env: FleetEnv)
 @pytest.mark.parametrize(
     ("extra", "code"),
     [
-        ({"classification_code": "15/1"}, "RECORD_TYPE_FORBIDDEN"),
-        ({"classification_code": "13/1"}, "RECORD_TYPE_FORBIDDEN"),
+        ({"classification_code": "11/1"}, "SCOPED_ROLE_SERVICE_FORBIDDEN"),
+        ({"classification_code": "15/1"}, "SCOPED_ROLE_SERVICE_FORBIDDEN"),
         ({"classification_code": "11/1", "manager_id": 12345}, "SCOPED_ROLE_INPUT_FORBIDDEN"),
     ],
 )
@@ -147,20 +145,6 @@ def test_word_create_rejects_out_of_scope_inputs(
     assert response.status_code == 403, response.text
     assert response.json()["error"]["code"] == code
     assert fleet_env.db.scalar(select(func.count()).select_from(Book)) == 0
-
-
-def test_word_create_allowed_classification_starts_unapproved(word_env: FleetEnv) -> None:
-    env = word_env
-    response = env.client(env.reporter).post(
-        "/api/v1/books/word-sessions", json={"subject": "s", "classification_code": "11/1"}
-    )
-    assert response.status_code == 201, response.text
-    book = env.book(response.json()["book_id"])
-    assert book.classification_code == "11/1"
-    assert book.created_by_user_id == env.reporter.id
-    assert book.approval_state == "none"
-    assert book.doc_manager_id is None
-    assert book.approval_steps == []
 
 
 def test_word_report_is_authorised_by_service_alone_and_stays_private(word_env: FleetEnv) -> None:

@@ -2560,6 +2560,17 @@ def resolve_line_manager(db: Session, author: User) -> User:
     return manager
 
 
+def line_manager_addressee(db: Session, author: User) -> str:
+    """The name printed after «السيد» on a line-manager author's Report, as the
+    leave report names its approver: the line manager's one active Manager row's
+    title, Arabic name or English name, else the account."""
+    line_manager = resolve_line_manager(db, author)
+    manager_id = manager_service.sole_active_manager_id(db, line_manager.id)
+    manager = db.get(Manager, manager_id) if manager_id is not None else None
+    named = (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
+    return named or line_manager.display_name or line_manager.email
+
+
 def _is_line_manager_chain(version: BookVersion) -> bool:
     return any(step.stage_label == LINE_MANAGER_STAGE for step in version.approval_steps)
 

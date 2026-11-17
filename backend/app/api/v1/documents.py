@@ -40,7 +40,7 @@ from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.roles import ADMIN_ROLE
-from app.core.scoped_roles import is_scoped_role
+from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -365,6 +365,18 @@ def generate_document(
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )
+    if (
+        payload.template_id == "General Book"
+        and payload.revise_of_book_id is None
+        and routes_to_line_manager(user)
+    ):
+        # The vehicle services (maintenance request) write its General Books;
+        # it revises its own returned ones but never starts one here.
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role writes General Books only through the vehicle services.",
+            http_status=403,
+        )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
