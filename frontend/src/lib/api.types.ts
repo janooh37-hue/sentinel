@@ -1366,8 +1366,8 @@ export interface paths {
         put?: never;
         /**
          * Amend Leave
-         * @description Post-approval amendment (Annual Leave): change the end date with a
-         *     required reason; the employee is notified with old vs new duration.
+         * @description Post-approval amendment (request kinds): change the start and/or end
+         *     date with a required reason; the employee is notified with the new dates.
          */
         post: operations["amend_leave_api_v1_leaves__leave_id__amend_post"];
         delete?: never;
@@ -13132,11 +13132,14 @@ export interface components {
         };
         /**
          * LeaveAmend
-         * @description POST /leaves/{id}/amend — post-approval end-date change (Annual only).
+         * @description POST /leaves/{id}/amend — post-approval date change (request kinds).
          *
-         *     The reason is required: it is sent to the employee in the notification.
+         *     ``start_date`` omitted keeps the current start. The reason is required: it
+         *     is sent to the employee in the notification.
          */
         LeaveAmend: {
+            /** Start Date */
+            start_date?: string | null;
             /**
              * End Date
              * Format: date

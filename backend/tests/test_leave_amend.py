@@ -73,6 +73,43 @@ def test_amend_rejects_end_before_start(db_session):
         )
 
 
+def test_amend_moves_start_date_of_any_approved_request_kind(db_session, monkeypatch):
+    from app.services import notify_dispatch
+
+    monkeypatch.setattr(notify_dispatch, "auto_send_leave_amended", lambda *a, **k: None)
+    leave = _seed(db_session, leave_type="Emergency Leave")
+    row = leave_service.amend_approved_leave(
+        db_session,
+        leave.id,
+        start_date=date(2026, 8, 5),
+        end_date=date(2026, 8, 25),
+        reason="Travel moved",
+        actor="t@x.ae",
+    )
+    assert (row.start_date, row.end_date, row.days, row.status) == (
+        date(2026, 8, 5),
+        date(2026, 8, 25),
+        21,
+        "Approved",
+    )
+    audit = db_session.query(AuditLog).filter(AuditLog.action == "leave.amended").one()
+    assert '"start": "2026-08-01"' in audit.payload
+    assert '"start": "2026-08-05"' in audit.payload
+
+
+def test_amend_rejects_new_start_after_end(db_session):
+    leave = _seed(db_session)
+    with pytest.raises(ValidationFailedError):
+        leave_service.amend_approved_leave(
+            db_session,
+            leave.id,
+            start_date=date(2026, 8, 26),
+            end_date=date(2026, 8, 25),
+            reason="x",
+            actor=None,
+        )
+
+
 def test_leave_amend_schema_requires_reason():
     with pytest.raises(ValidationError):
         LeaveAmend(end_date=date(2026, 8, 20), reason="   ")

@@ -513,9 +513,24 @@ def test_render_leave_amended_arabic_wording():
         days=20,
     )
     ar = st.render_leave_amended(leave, emp, "ar", old_days=25, reason="نقص الرصيد")
-    assert "تم تعديل إجازتك السنوية." in ar
+    assert "تم تعديل إجازة سنوية الخاصة بك." in ar
     assert "المدة الجديدة: 20 يوم (بدلاً من 25)." in ar
     assert "سبب التعديل: نقص الرصيد" in ar
+
+
+def test_render_leave_amended_names_the_leave_type():
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=53,
+        employee_id="G1",
+        leave_type="Emergency Leave",
+        start_date=date(2026, 8, 3),
+        end_date=date(2026, 8, 5),
+        days=3,
+    )
+    text = st.render_leave_amended(leave, emp, "en", old_days=3, reason="Travel moved")
+    assert "Your Emergency Leave has been updated.\n" in text
+    assert "Start: 03/08/2026 (Monday)\n" in text
 
 
 # ── Leave Permit (تصريح خروج) — book-backed, issue time + duration hours ──────

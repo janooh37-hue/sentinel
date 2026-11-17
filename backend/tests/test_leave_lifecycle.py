@@ -84,15 +84,16 @@ class TestEndingSoon:
         assert ll.ending_soon("Annual Leave", "Approved", "2026-07-02", "2026-07-01") is True
 
 
-def test_can_amend_annual_approved_only():
+def test_can_amend_approved_request_kinds_only():
     assert ll.can_amend("Annual Leave", "Approved") is True
     # bilingual label + legacy 'Generated' alias both amendable
     assert ll.can_amend("Annual Leave - إجازة سنوية", "Generated") is True
+    assert ll.can_amend("Emergency Leave", "Approved") is True
+    assert ll.can_amend("Compassionate Leave", "Approved") is True
     assert ll.can_amend("Annual Leave", "Pending") is False
     assert ll.can_amend("Annual Leave", "Cancelled") is False
     assert ll.can_amend("Sick Leave", "Approved") is False
     assert ll.can_amend("National Service", "Approved") is False
-    assert ll.can_amend("Emergency Leave", "Approved") is False
 
 
 @pytest.mark.parametrize(

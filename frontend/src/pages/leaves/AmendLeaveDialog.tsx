@@ -1,8 +1,8 @@
 /**
- * AmendLeaveDialog — post-approval end-date change for an Approved Annual
- * Leave (spec 2026-07-15). Start is fixed; the new day count is derived; a
- * reason is required and is sent to the employee with the notification.
- * Used by BOTH detail surfaces (RecordExpansion + LeaveDetailDrawer).
+ * AmendLeaveDialog — post-approval date change for an Approved request-kind
+ * leave. Start and end are editable; the new day count is derived; a reason
+ * is required and is sent to the employee with the notification. The approval
+ * chain stands. Used by BOTH detail surfaces (RecordExpansion + LeaveDetailDrawer).
  */
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +35,7 @@ interface Props {
 
 export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props): React.JSX.Element {
   const { t } = useTranslation()
+  const [startDate, setStartDate] = useState(leave.start_date.slice(0, 10))
   const [endDate, setEndDate] = useState(leave.end_date.slice(0, 10))
   const [reason, setReason] = useState('')
 
@@ -43,10 +44,11 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStartDate(leave.start_date.slice(0, 10))
       setEndDate(leave.end_date.slice(0, 10))
       setReason('')
     }
-  }, [open, leave.end_date])
+  }, [open, leave.start_date, leave.end_date])
 
   const { amendMutation } = useLeaveDecisionActions({
     leaveId: leave.id,
@@ -58,10 +60,10 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
   })
 
   const newDays = useMemo(() => {
-    const start = new Date(leave.start_date.slice(0, 10))
+    const start = new Date(startDate)
     const end = new Date(endDate)
     return Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1
-  }, [leave.start_date, endDate])
+  }, [startDate, endDate])
 
   const canSave = reason.trim().length > 0 && newDays >= 1 && !amendMutation.isPending
 
@@ -74,13 +76,23 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
         </DialogHeader>
 
         <div className="flex flex-col gap-3 overflow-y-auto px-4 py-4 text-sm">
-          {/* Leave dates — start read-only, end editable */}
+          {/* Leave dates — both editable */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">
+            <div className="flex flex-col gap-1.5">
+              <label
+                htmlFor="amend-start-date"
+                className="text-xs text-muted-foreground"
+              >
                 {t('leaves.amend.startDate')}
-              </span>
-              <div className="font-mono">{leave.start_date.slice(0, 10)}</div>
+              </label>
+              <input
+                id="amend-start-date"
+                type="date"
+                value={startDate}
+                max={endDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -94,7 +106,7 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
                 id="amend-end-date"
                 type="date"
                 value={endDate}
-                min={leave.start_date.slice(0, 10)}
+                min={startDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
@@ -133,7 +145,9 @@ export function AmendLeaveDialog({ open, leave, onOpenChange, onAmended }: Props
           <Button
             type="button"
             disabled={!canSave}
-            onClick={() => amendMutation.mutate({ end_date: endDate, reason: reason.trim() })}
+            onClick={() =>
+              amendMutation.mutate({ start_date: startDate, end_date: endDate, reason: reason.trim() })
+            }
           >
             {t('leaves.amend.save')}
           </Button>

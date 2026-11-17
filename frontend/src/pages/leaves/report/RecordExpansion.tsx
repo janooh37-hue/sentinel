@@ -279,7 +279,7 @@ export function RecordExpansion({
             </div>
           )}
 
-          {/* Edit leave — post-approval amendment for Annual rows */}
+          {/* Edit leave — post-approval date amendment for request kinds */}
           {acts.includes('amend') && (
             <div className="flex flex-wrap items-center gap-2">
               <Button size="sm" variant="secondary" onClick={() => setAmendOpen(true)} className="rounded-full">
