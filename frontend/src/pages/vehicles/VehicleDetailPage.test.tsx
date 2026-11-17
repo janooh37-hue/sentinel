@@ -16,14 +16,15 @@ vi.mock('@/lib/toast', () => ({ toast: { loading: vi.fn(() => 'pending-photo'), 
 
 const mobileViewport = vi.hoisted(() => ({ value: false }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileViewport.value }))
+const capabilityState = vi.hoisted(() => ({ edit: true, delete: true }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     isLoading: false,
     has: (capability: string) =>
       capability === 'vehicles.view' ||
-      capability === 'vehicles.edit' ||
-      capability === 'vehicles.delete',
+      (capability === 'vehicles.edit' && capabilityState.edit) ||
+      (capability === 'vehicles.delete' && capabilityState.delete),
   }),
 }))
 
@@ -191,6 +192,8 @@ function LocationProbe({ onLocation }: { onLocation?: (search: string) => void }
 beforeEach(async () => {
   vi.clearAllMocks()
   mobileViewport.value = false
+  capabilityState.edit = true
+  capabilityState.delete = true
   await i18n.changeLanguage('en')
   i18n.addResource('en', 'translation', 'vehicles.setAsMainPhoto', 'Set as main photo')
   i18n.addResource('en', 'translation', 'vehicles.replaceLicenceFile', 'Replace licence file')
@@ -220,6 +223,31 @@ beforeEach(async () => {
 })
 
 describe('VehicleDetailPage', () => {
+  it.each([false, true])('places the request counter before facts and registers (mobile=%s)', async (mobile) => {
+    mobileViewport.value = mobile
+    renderPage()
+    const counter = await screen.findByRole('region', { name: 'New for this vehicle' })
+    expect(within(counter).getByRole('button', { name: 'New report' })).toBeInTheDocument()
+    expect(within(counter).getByRole('button', { name: 'Add maintenance' })).toBeInTheDocument()
+    expect(within(counter).getByRole('button', { name: 'Add fine' })).toBeInTheDocument()
+    expect(within(counter).getByRole('button', { name: 'Renew' })).toBeInTheDocument()
+    const facts = screen.getByText('Traffic code')
+    const tabs = screen.getByRole('group', { name: 'Vehicle details' })
+    expect(counter.compareDocumentPosition(facts) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(facts.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Toyota Coaster')
+  })
+
+  it.each(['permission', 'archived'])('hides the request counter for a %s restriction', async (restriction) => {
+    if (restriction === 'permission') capabilityState.edit = false
+    else vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle({ archived_at: '2026-11-01T00:00:00Z' }))
+    renderPage()
+    await screen.findByRole('heading', { level: 1, name: /Toyota Coaster/ })
+    expect(screen.queryByRole('region', { name: 'New for this vehicle' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add fine' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Edit vehicle' })).not.toBeInTheDocument()
+  })
+
   it('shows that insurance is not recorded when the vehicle has no insurance date', async () => {
     renderPage()
 
@@ -474,7 +502,7 @@ describe('VehicleDetailPage', () => {
     expect(api.createVehicleMaintenance).toHaveBeenCalledTimes(1)
   })
 
-  it.each([false, true])('disables requests and links to settings without a contractor (mobile=%s)', async (mobile) => {
+  it.each([false, true])('hides requests and links to settings without a contractor (mobile=%s)', async (mobile) => {
     mobileViewport.value = mobile
     vi.mocked(api.vehiclesSummary).mockResolvedValue({
       ...await api.vehiclesSummary(),
@@ -482,9 +510,8 @@ describe('VehicleDetailPage', () => {
     } satisfies VehiclesSummary)
     renderPage('maintenance')
 
-    const action = await screen.findByRole('button', { name: 'Request maintenance' })
-    expect(action).toBeDisabled()
     expect(await screen.findByText('Set a maintenance contractor in vehicle settings before requesting maintenance.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Request maintenance' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Vehicle settings' })).toHaveAttribute('href', '/vehicles')
     expect(api.createVehicleMaintenance).not.toHaveBeenCalled()
   })
