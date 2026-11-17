@@ -23,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Field, FormAlert } from '@/components/forms/DialogShell'
 import { api } from '@/lib/api'
 import type { VehicleSiteRead } from '@/lib/api'
-import { localized } from '@/lib/language'
+import { isArabic, localized } from '@/lib/language'
 import { VEHICLE_QUERY_KEYS, formatCount, invalidateVehicleQueries, vehicleErrorMessage } from '../vehicleUtils'
 import { RequestBody, RequestFooter, RequestShell } from './RequestShell'
 
@@ -106,7 +106,11 @@ function SitesPanel({ onBusyChange }: { onBusyChange: (busy: boolean) => void })
                 key={`${site.id}-${site.name_ar}-${site.name_en}-${i18n.language}`}
                 site={site}
                 busy={busy}
-                onSave={(text) => updateSite.mutate({ siteId: site.id, body: { name_ar: text, name_en: text } })}
+                // A rename changes the session language's name. The other
+                // language follows only while it still holds the same text
+                // (a name typed once); its own wording is kept otherwise, since
+                // the Arabic name is what the letters print.
+                onSave={(text) => updateSite.mutate({ siteId: site.id, body: renameBody(site, text, isArabic(i18n.language)) })}
                 onToggleActive={() => updateSite.mutate({ siteId: site.id, body: { active: !site.active } })}
               />
             ))}
@@ -134,6 +138,17 @@ function SitesPanel({ onBusyChange }: { onBusyChange: (busy: boolean) => void })
       </RequestFooter>
     </>
   )
+}
+
+/** The PATCH body for renaming `site` to `text` in one language. */
+function renameBody(
+  site: VehicleSiteRead,
+  text: string,
+  arabic: boolean,
+): { name_ar?: string; name_en?: string } {
+  const mirrored = site.name_ar.trim() === site.name_en.trim()
+  if (mirrored) return { name_ar: text, name_en: text }
+  return arabic ? { name_ar: text } : { name_en: text }
 }
 
 function SiteRow({ site, busy, onSave, onToggleActive }: {

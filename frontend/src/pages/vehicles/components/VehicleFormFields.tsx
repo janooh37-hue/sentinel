@@ -85,6 +85,7 @@ export function VehicleFormFields({
     register,
     control,
     setValue,
+    getValues,
     watch,
     formState: { errors },
   } = form
@@ -99,13 +100,24 @@ export function VehicleFormFields({
   const customClassMode = classChoice === CUSTOM_CLASS
   const arabic = i18n.language.startsWith('ar')
   const languageField = (ar: keyof VehicleFormValues, en: keyof VehicleFormValues): keyof VehicleFormValues => arabic ? ar : en
-  const paired = (field: 'type_ar' | 'new_site_ar' | 'custom_class_ar', other: 'type_en' | 'new_site_en' | 'custom_class_en') => {
-    const binding = register(field)
+  /**
+   * One input in the session language for a name stored in both halves. Typing
+   * fills the other half too while it is empty or still the same text, so a
+   * name typed once shows in both languages; an other-language value that came
+   * from elsewhere (an accepted licence scan) is kept as it is.
+   */
+  const paired = (ar: 'type_ar' | 'new_site_ar' | 'custom_class_ar', en: 'type_en' | 'new_site_en' | 'custom_class_en') => {
+    const [own, other] = arabic ? [ar, en] : [en, ar]
+    const binding = register(own)
     return {
       ...binding,
       onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+        const previous = getValues(own)
         void binding.onChange(event)
-        setValue(other, event.target.value, { shouldDirty: true, shouldValidate: true })
+        const counterpart = getValues(other)
+        if (!counterpart || counterpart === previous) {
+          setValue(other, event.target.value, { shouldDirty: true, shouldValidate: true })
+        }
       },
     }
   }

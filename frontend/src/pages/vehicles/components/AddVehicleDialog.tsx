@@ -16,7 +16,6 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehiclePhotoRead, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
-import { localized } from '@/lib/language'
 
 import {
   DOCUMENT_ACCEPT,
@@ -103,7 +102,7 @@ function AddVehicleForm({
   onOpenChange: (open: boolean) => void
   onBusyChange: (busy: boolean) => void
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const fieldId = useId()
   const alertId = `${fieldId}-alert`
@@ -245,16 +244,6 @@ function AddVehicleForm({
                   [keyof VehicleFormValues, string]
                 >) {
                   form.setValue(field, value, { shouldDirty: true, shouldValidate: true })
-                }
-                if (fields.type_ar != null || fields.type_en != null) {
-                  const type = localized(fields.type_ar, fields.type_en, i18n.language)
-                  form.setValue('type_ar', type, { shouldDirty: true, shouldValidate: true })
-                  form.setValue('type_en', type, { shouldDirty: true, shouldValidate: true })
-                }
-                if (fields.custom_class_ar != null || fields.custom_class_en != null) {
-                  const name = localized(fields.custom_class_ar, fields.custom_class_en, i18n.language)
-                  form.setValue('custom_class_ar', name, { shouldDirty: true, shouldValidate: true })
-                  form.setValue('custom_class_en', name, { shouldDirty: true, shouldValidate: true })
                 }
               }}
               onFileRetained={(file) => {

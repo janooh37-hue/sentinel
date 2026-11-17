@@ -163,13 +163,16 @@ describe('AddVehicleDialog licence scan', () => {
     expect(screen.getByRole('textbox', { name: 'Plate' })).toHaveValue('14 \\ 58216')
     expect(screen.getByRole('textbox', { name: 'Make' })).toHaveValue('Manual make')
     expect(screen.getByRole('textbox', { name: 'Traffic code' })).toHaveValue('1180021637')
+    // One visible input in the session language; the accepted Arabic wording
+    // from the scan is kept, not overwritten with the English one.
+    expect(screen.getByRole('textbox', { name: 'Vehicle type' })).toHaveValue('Bus')
     expect(api.uploadVehicleFile).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(api.createVehicle).toHaveBeenCalledTimes(1))
     expect(api.createVehicle).toHaveBeenCalledWith(
-      expect.objectContaining({ photo_asset_id: PHOTO_ASSET.id }),
+      expect.objectContaining({ photo_asset_id: PHOTO_ASSET.id, type_ar: 'حافلة', type_en: 'Bus' }),
     )
     expect(api.uploadVehicleFile).toHaveBeenCalledTimes(1)
     expect(api.uploadVehicleFile).toHaveBeenCalledWith(101, 'license', licence)

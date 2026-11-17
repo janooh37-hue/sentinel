@@ -34,7 +34,7 @@ beforeEach(async () => {
 })
 
 describe('Sites request', () => {
-  it.each(['en', 'ar'])('renames and adds one-language names to both API halves in %s', async (language) => {
+  it.each(['en', 'ar'])('renames in the session language and adds one name to both halves in %s', async (language) => {
     await i18n.changeLanguage(language)
     const user = userEvent.setup()
     renderDialog()
@@ -46,7 +46,9 @@ describe('Sites request', () => {
     const row = existing.closest('li')
     if (!row) throw new Error('Site row not found')
     await user.click(within(row).getByRole('button', { name: i18n.t('vehicles.save') }))
-    await waitFor(() => expect(api.updateVehicleSite).toHaveBeenCalledWith(1, { name_ar: name, name_en: name }))
+    // A bilingual site keeps its other-language name: only the session half changes.
+    const renamed = language === 'ar' ? { name_ar: name } : { name_en: name }
+    await waitFor(() => expect(api.updateVehicleSite).toHaveBeenCalledWith(1, renamed))
     await user.type(screen.getByRole('textbox', { name: i18n.t('vehicles.siteName') }), name)
     await user.click(screen.getByRole('button', { name: i18n.t('vehicles.addSite') }))
     await waitFor(() => expect(api.createVehicleSite).toHaveBeenCalledWith({ name_ar: name, name_en: name }))
