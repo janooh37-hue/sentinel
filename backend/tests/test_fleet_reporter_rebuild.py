@@ -131,6 +131,19 @@ def test_rebuilt_accident_letter_keeps_its_issue_date(fleet_env: FleetEnv) -> No
     assert env.book(letter.id).versions[-1].fields["today"] == "05/01/2026"
 
 
+def test_accident_letter_route_returns_the_rebuilt_revision(fleet_env: FleetEnv) -> None:
+    env = fleet_env
+    letter = _returned(env, accident_letter(env, env.reporter))
+    assert _rebuild(env, letter).status_code == 200
+
+    book = env.book(letter.id)
+    again = vehicle_letter_service.generate_accident_letter(
+        env.db, env.vehicle.id, env.accident.id, user=env.reporter
+    )
+    assert again.document_id == book.versions[-1].document_id
+    assert again.document_id != book.versions[0].document_id
+
+
 def test_rebuilt_mileage_log_reads_the_same_month_again(fleet_env: FleetEnv) -> None:
     env = fleet_env
     env.db.add_all(
