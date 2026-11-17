@@ -4778,6 +4778,7 @@
     },
     "fleet": {
       "lineManagerRequired": "Ask an administrator to set your line manager.",
+      "addresseeUnavailable": "That addressee is no longer available. Choose your line manager.",
       "lineManagerNotApplicable": "Only fleet reporter accounts have a line manager.",
       "lineManagerNotEligible": "Choose another active account that can approve records.",
       "branchApproverNotEligible": "Choose an active approver other than the author and the line manager.",
@@ -5355,6 +5356,9 @@
       "title": "Forms",
       "personnel": "Personnel",
       "admin": "Administrative"
+    },
+    "addressee": {
+      "lineManager": "Your line manager"
     },
     "employeePicker": {
       "placeholder": "Pick an employee…",

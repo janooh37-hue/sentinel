@@ -478,6 +478,21 @@ stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
 
+**Addressee.** The server writes the name after «السيد» on a line-manager author's
+papers (`book_service.chain_addressees`): the line manager's signer-row title, else its
+Arabic or English name, else the account name. A Report is always addressed to the line
+manager. A General Book goes to the line manager or, by `addressee: "default_manager"`,
+to the active `is_default_manager` account when that is someone else;
+`GET /books/addressees` (`books.submit`) lists the choices. The author never picks from
+the shared recipient list: the Word create refuses `recipient_id` (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`) and the editor publish replaces any client recipient.
+
+**Vehicle employees.** The fine, accident and maintenance-request dialogs search
+`GET /vehicles/employees` and resolve `GET /vehicles/employees/{employee_id}`
+(`vehicles.edit`): G number and names only, matched by G number, former ID or name,
+never by passport or Emirates ID. A fleet reporter reaches them through its capabilities;
+`GET /employees/lookup` stays closed to it.
+
 **Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
 (`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
 returned vehicle letter from current fleet data through the ordinary revise path: same

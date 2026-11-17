@@ -27,6 +27,7 @@ export type FieldType =
   | 'number'            // not in current backend but TemplateForm handles it
   | 'select'            // not in current backend but TemplateForm handles it
   | 'recipient_picker'  // general-book recipient combobox (forms-fix)
+  | 'addressee_picker'  // fleet reporter's General Book: line manager or default manager
   | 'recipient_multi_picker' // general-book CC: multi-select recipient chips
   | 'violation_combo'   // warning-form: multi-select violation types + custom
   | 'employees_table'   // passport-release list: multi-employee G-number picker

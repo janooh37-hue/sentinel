@@ -5167,6 +5167,7 @@
     },
     "fleet": {
       "lineManagerRequired": "اطلب من المسؤول تعيين مديرك المباشر.",
+      "addresseeUnavailable": "لم يعد هذا المرسَل إليه متاحًا. اختر مديرك المباشر.",
       "lineManagerNotApplicable": "لا يُعيَّن المدير المباشر إلا لحسابات موظفي النقليات.",
       "lineManagerNotEligible": "اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.",
       "branchApproverNotEligible": "اختر معتمِدًا نشطًا غير كاتب المعاملة والمدير المباشر.",
@@ -5788,6 +5789,9 @@
       "title": "النماذج",
       "personnel": "شؤون الموظفين",
       "admin": "النماذج الإدارية"
+    },
+    "addressee": {
+      "lineManager": "مديرك المباشر"
     },
     "employeePicker": {
       "placeholder": "اختر موظفًا…",

@@ -123,6 +123,10 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         shape[id] = z.number().nullable().optional()
         break
 
+      case 'addressee_picker':
+        shape[id] = z.enum(['line_manager', 'default_manager']).optional()
+        break
+
       case 'recipient_multi_picker':
         // CC on General Book — array of recipient *names* (strings). Backend
         // joins them into the {{ cc }} token. Empty array means no CC line.

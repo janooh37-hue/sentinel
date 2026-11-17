@@ -57,6 +57,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import { AuthContext } from '@/lib/authContext'
 import type {
   ApprovedViolationImportRead,
+  ChainAddressee,
   Confidentiality,
   DocumentGenerateRequest,
   JobStatusResponse,
@@ -140,6 +141,9 @@ interface GalleryTile {
   onSelect: () => void
 }
 
+/** The fleet reporter's addressee field, in place of the General Book recipient. */
+const ADDRESSEE_FIELD_ID = 'addressee'
+
 /** Services printed on an English or an Arabic paper: one gallery tile, and a
  *  language tab in the form choosing which backend form kind is generated. */
 const PAPER_LANGUAGES = [
@@ -198,7 +202,10 @@ function StandardApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
-  const scoped = scopedRoleOf(useContext(AuthContext)?.user) !== null
+  const scopedRole = scopedRoleOf(useContext(AuthContext)?.user)
+  const scoped = scopedRole !== null
+  // A fleet reporter's paper goes to their line manager; the server addresses it.
+  const lineManagerAuthor = scopedRole === 'fleet_reporter'
 
   // Per-template email-basket counts → the marker on each gallery tile.
   const { baskets } = useEmailBasket()
@@ -356,11 +363,17 @@ function StandardApplicationPage(): React.JSX.Element {
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   if (schema && scoped) {
-    schema.fields = schema.fields.filter((field) =>
-      field.type !== 'manager_picker' &&
-      field.id !== 'hand_sign_manager' &&
-      (selectedTemplate !== 'Report' || !['recipient_picker', 'recipient_multi_picker'].includes(field.type)),
-    )
+    schema.fields = schema.fields
+      .filter((field) =>
+        field.type !== 'manager_picker' &&
+        field.id !== 'hand_sign_manager' &&
+        (selectedTemplate !== 'Report' || !['recipient_picker', 'recipient_multi_picker'].includes(field.type)),
+      )
+      .map((field) =>
+        lineManagerAuthor && field.type === 'recipient_picker'
+          ? { ...field, id: ADDRESSEE_FIELD_ID, type: 'addressee_picker' as const }
+          : field,
+      )
     schema.needs_manager = false
   }
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
@@ -673,6 +686,7 @@ function StandardApplicationPage(): React.JSX.Element {
         wordSessionMutation.mutate({
           classification_code: classificationCode,
           recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
+          addressee: lineManagerAuthor ? (values[ADDRESSEE_FIELD_ID] as ChainAddressee | undefined) : undefined,
           subject,
           cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
           manager_id: scoped ? null : managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,

@@ -3158,6 +3158,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/addressees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Chain Addressees
+         * @description Whom a line-manager author (fleet reporter) may address a General Book to.
+         *
+         *     Declared before ``/{book_id}`` so the literal segment isn't swallowed by the
+         *     int path param.
+         */
+        get: operations["list_chain_addressees_api_v1_books_addressees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/approvers": {
         parameters: {
             query?: never;
@@ -5877,6 +5900,44 @@ export interface paths {
         get?: never;
         /** Update Maintenance Contractor */
         put: operations["update_maintenance_contractor_api_v1_vehicles_maintenance_contractor_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Vehicle Employees
+         * @description The driver or responsible employee on a fine, accident or maintenance request:
+         *     searched by G number or name, answered with the G number and names only.
+         */
+        get: operations["search_vehicle_employees_api_v1_vehicles_employees_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Employee */
+        get: operations["get_vehicle_employee_api_v1_vehicles_employees__employee_id__get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -10409,6 +10470,19 @@ export interface components {
              * @description Deprecated English alias for description_en.
              */
             description: string;
+        };
+        /**
+         * ChainAddresseeRead
+         * @description One addressee a line-manager author may choose; ``label`` prints after «السيد».
+         */
+        ChainAddresseeRead: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "line_manager" | "default_manager";
+            /** Label */
+            label: string;
         };
         /** ClassificationListResponse */
         ClassificationListResponse: {
@@ -18124,6 +18198,29 @@ export interface components {
             /** Notes En */
             notes_en?: string | null;
         };
+        /**
+         * VehicleEmployeeItem
+         * @description An employee as the vehicle dialogs name them: G number and names only.
+         */
+        VehicleEmployeeItem: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+        };
+        /** VehicleEmployeeSearch */
+        VehicleEmployeeSearch: {
+            /** Items */
+            items: components["schemas"]["VehicleEmployeeItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** VehicleFileRead */
         VehicleFileRead: {
             /** Id */
@@ -19202,6 +19299,8 @@ export interface components {
             classification_code?: string | null;
             /** Recipient Id */
             recipient_id?: number | null;
+            /** Addressee */
+            addressee?: ("line_manager" | "default_manager") | null;
             /** Subject */
             subject: string;
             /** Cc */
@@ -26672,6 +26771,37 @@ export interface operations {
             };
         };
     };
+    list_chain_addressees_api_v1_books_addressees_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChainAddresseeRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_approvers_api_v1_books_approvers_get: {
         parameters: {
             query?: never;
@@ -33009,6 +33139,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehiclesSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_vehicle_employees_api_v1_vehicles_employees_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleEmployeeSearch"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_employee_api_v1_vehicles_employees__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleEmployeeItem"];
                 };
             };
             /** @description Validation Error */

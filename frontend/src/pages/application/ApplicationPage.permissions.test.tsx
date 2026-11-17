@@ -70,7 +70,7 @@ function TestFormValues() {
   const { setValue } = useFormContext()
   return <button type="button" onClick={() => {
     setValue('subject', 'Fleet letter')
-    setValue('recipient_id', 42)
+    setValue('addressee', 'default_manager')
     setValue('cc', ['Operations'])
     setValue('hand_sign_manager', true)
     setValue('hand_sign_employee', true)
@@ -255,18 +255,18 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
   })
 
-  it('filters scoped General Book classifications and manager controls but keeps addressees', async () => {
+  it('filters scoped General Book classifications and manager controls and offers the line-manager addressee', async () => {
     capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1', 'books.category.11/1'])
     renderPage('/services/general_book', 'fleet_reporter')
     expect(await screen.findByText('7/1')).toBeVisible()
     expect(screen.getByText('11/1')).toBeVisible()
     expect(screen.queryByText('1/1')).not.toBeInTheDocument()
-    for (const picker of ['manager_id', 'hand_sign_manager']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
-    for (const picker of ['recipient_id', 'cc']) expect(screen.getByText(picker)).toBeVisible()
+    for (const picker of ['manager_id', 'hand_sign_manager', 'recipient_id']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
+    for (const picker of ['addressee', 'cc']) expect(screen.getByText(picker)).toBeVisible()
     expect(api.getSettings).not.toHaveBeenCalled()
   })
 
-  it.each(['word', 'editor'])('keeps scoped General Book addressees without manager embed (%s)', async (mode) => {
+  it.each(['word', 'editor'])('sends the fleet General Book addressee without manager embed (%s)', async (mode) => {
     capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1'])
     // Keep the mutation pending: this test asserts the outgoing create, not job polling.
     vi.mocked(api.generateDocument).mockImplementation(() => new Promise(() => {}))
@@ -286,9 +286,9 @@ describe('ApplicationPage service permissions', () => {
     if (mode === 'editor') {
       const payload = vi.mocked(api.generateDocument).mock.calls[0][0]
       expect(payload.embed_signature).not.toHaveProperty('manager')
-      expect(payload.fields).toMatchObject({ recipient_id: 42, cc: ['Operations'] })
+      expect(payload.fields).toMatchObject({ addressee: 'default_manager', cc: ['Operations'] })
     } else {
-      expect(api.createWordBook).toHaveBeenCalledWith(expect.objectContaining({ recipient_id: 42, cc: ['Operations'], manager_id: null }))
+      expect(api.createWordBook).toHaveBeenCalledWith(expect.objectContaining({ recipient_id: null, addressee: 'default_manager', cc: ['Operations'], manager_id: null }))
     }
   })
 })
