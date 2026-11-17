@@ -89,6 +89,9 @@ type Values = z.output<typeof schema>
 /** What the letter shows before the book exists. */
 const REF_PLACEHOLDER = 'VA-____'
 
+/** Stable empty fleet for a fixed-vehicle report opened before the list loads. */
+const NO_VEHICLES: readonly VehicleListItem[] = []
+
 /** The subset of a vehicle the dialog needs to lock onto one. */
 export interface AccidentDialogVehicle {
   id: number
@@ -141,16 +144,29 @@ export function AccidentDialog({
       description={t('vehicles.addAccidentDesc')}
       busy={busy}
     >
-      {options ? (
+      {/* A fixed vehicle needs nothing from the fleet list but the paper's
+          extra facts, so its form opens at once; the picker waits for the
+          list, and a failed list says so with a retry instead of loading
+          forever. */}
+      {options || vehicle ? (
         <AccidentForm
           locked={vehicle}
           initialVehicleId={initialVehicleId}
-          options={options}
+          options={options ?? NO_VEHICLES}
           sites={sitesQuery.data ?? []}
           onSaved={onSaved}
           onOpenChange={onOpenChange}
           onBusyChange={setBusy}
         />
+      ) : vehiclesQuery.isError ? (
+        <RequestBody>
+          <p role="alert" className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+            {t('common.loadError')}
+            <Button type="button" variant="secondary" size="sm" onClick={() => void vehiclesQuery.refetch()}>
+              {t('common.retry')}
+            </Button>
+          </p>
+        </RequestBody>
       ) : (
         <RequestBody>
           <Skeleton className="h-9 w-full" />
