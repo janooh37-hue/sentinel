@@ -1,79 +1,67 @@
 /**
  * Official accident letter — `/vehicles/accidents/:accidentId/letter`.
  *
- * One step, because there is nothing to choose: the report already says
- * everything the GSSG-VA paper prints. The page shows the operator the letter
- * it is about to file, then files it.
+ * The letter step of a report: the GSSG-VA paper the operator is about to file,
+ * beside the one thing that may still be missing. The letter is Arabic; a
+ * report written in English has no Arabic location or description yet, so this
+ * page asks for them, once, and only when they are missing (each field shows
+ * the English wording beneath it). The paper fills in while they are typed.
+ * Saving sends the wording with the generation request; the server stores it
+ * on the report and files the letter in one step, and refuses the letter
+ * while either is still missing.
  *
- * The preview is not decoration — it is built from the same rules as
- * `backend/app/core/vehicle_letters.accident_letter_fields`, in the template's
- * own row order, so what is approved is what the DOCX prints: the plate written
- * with a slash, the Arabic vehicle type, the site's Arabic name, «—» wherever
- * the record has no VIN, no police reference or no driver, the date and time as
- * `dd/mm/yyyy HH:MM`, the damage as «3800 درهم», the status as «مفتوح»/«مغلق»
- * and the Arabic description as the body. The driver line is the employee's
- * name alone: the accident template carries no G-number column.
- *
- * Text the paper itself prints is read with an explicit `lng: 'ar'` — the sheet
- * is an Arabic letterhead document in both UI languages, the contract
- * `PaperSheet` and the fines letter hold. Everything around it follows the UI
- * language.
+ * There is no cost on the letter: its damage row prints the insurance
+ * sentence (`AccidentPaper`).
  *
  * The route carries the accident id and nothing else, so the register list is
  * the resolver: `GET /vehicles/accidents` names the vehicle, and the vehicle
  * file (plus the site list, for the site's Arabic name) is fetched only once
- * that vehicle is known — the same two sources the server reads at generation
- * time, so the paper cannot preview a stale plate or type.
+ * that vehicle is known — the same sources the server reads at generation time.
  *
  * A report that already carries a letter is not offered a second one: minting
- * again would file a duplicate book and re-point `letter_book_id` at it. The
- * page then leads to the filed record instead, exactly as the register card
- * does.
+ * again would file a duplicate book. The page then leads to the filed record.
  *
- * Saving is a real generation: `POST /vehicles/{id}/accidents/{id}/letter`
- * mints the VA book through the Records pipeline, so the page hands the
- * operator over to `/books/{book_id}`, where the PDF, the print action and the
- * record live. The route only requires `vehicles.view`; generating requires
- * `vehicles.edit`, so the whole page sits behind that capability instead of
- * ending at a Save button the API would refuse.
+ * Saving is a real generation: the VA book is minted through the Records
+ * pipeline and the operator is handed to `/books/{book_id}`. Generating
+ * requires `vehicles.edit`, so the whole page sits behind that capability.
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, ExternalLink, FileText, Loader2 } from 'lucide-react'
+import { ExternalLink, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { toast } from '@/lib/toast'
 
+import { Field, FieldGrid, FormAlert } from '@/components/forms/DialogShell'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { RequireCapability } from '@/components/shell/RequireCapability'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
-import type { VehicleAccidentRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
-import { isArabic } from '@/lib/language'
+import type { VehicleAccidentRead } from '@/lib/api'
+import { toast } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
-  formatLetterAed,
-  formatLetterDate,
   invalidateVehicleQueries,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
-import { PaperFacts, PaperSheet } from './components/PaperSheet'
+import { AccidentPaper } from './components/AccidentPaper'
 import { PlateChip } from './components/PlateChip'
-import { FormAlert } from '@/components/forms/DialogShell'
+import { RequestPaperLabel, RequestSection } from './components/RequestShell'
+import { ServiceBand } from './components/ServiceLayout'
+import { BAND_BUTTON, SERVICE_WRAP } from './components/serviceStyles'
 
 /** What the reference line shows before the book exists. The real ref
  *  (`VA-0232`) is minted server-side and announced in the save toast. */
 const REF_PLACEHOLDER = 'VA-____'
-
-/** The id of the page's one error region, referenced by the Save button. */
-const ERROR_ID = 'accident-letter-error'
 
 export function VehicleAccidentLetterPage(): React.JSX.Element {
   return (
@@ -89,14 +77,16 @@ function AccidentLetter(): React.JSX.Element {
   // the page says so straight away.
   const reportId = accidentId && /^\d+$/.test(accidentId) ? Number(accidentId) : null
 
-  const { t, i18n } = useTranslation()
-  const isAr = isArabic(i18n.language)
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const fieldId = useId()
+  const errorId = `${fieldId}-error`
   const [error, setError] = useState<string | null>(null)
+  const [locationAr, setLocationAr] = useState('')
+  const [descriptionAr, setDescriptionAr] = useState('')
+  const [invalid, setInvalid] = useState(false)
 
-  // The register list is the only thing that can turn an accident id into a
-  // vehicle id, and it is the query the card that linked here already filled.
   const accidentsQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.accidents,
     queryFn: () => api.listVehicleAccidents(),
@@ -109,8 +99,6 @@ function AccidentLetter(): React.JSX.Element {
     queryFn: () => api.getVehicle(accident?.vehicle_id as number),
     enabled: accident != null,
   })
-  // The vehicle carries `site_id`; the site's Arabic name — which the letter
-  // prints — lives in the site list.
   const sitesQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.sites,
     queryFn: () => api.listVehicleSites(),
@@ -120,17 +108,20 @@ function AccidentLetter(): React.JSX.Element {
 
   const vehicle = vehicleQuery.data
   const sites = sitesQuery.data
+  /** Which Arabic halves the report lacks; only these are asked for. */
+  const needsLocation = accident != null && !accident.location_ar?.trim()
+  const needsDescription = accident != null && !accident.description_ar?.trim()
 
   const generate = useMutation({
-    mutationFn: () =>
-      api.generateAccidentLetter(
-        (accident as VehicleAccidentRead).vehicle_id,
-        (accident as VehicleAccidentRead).id,
-      ),
+    mutationFn: (report: VehicleAccidentRead) =>
+      api.generateAccidentLetter(report.vehicle_id, report.id, {
+        location_ar: needsLocation ? locationAr.trim() : null,
+        description_ar: needsDescription ? descriptionAr.trim() : null,
+      }),
     onMutate: () => setError(null),
     onSuccess: (result) => {
-      // The report now carries `letter_book_id`, and a new book lands in
-      // Records and on the dashboard counters.
+      // The report now carries `letter_book_id` (and its Arabic wording), and
+      // a new book lands in Records and on the dashboard counters.
       invalidateVehicleQueries(queryClient, {
         vehicleId: accident?.vehicle_id,
         registers: ['accidents'],
@@ -152,86 +143,61 @@ function AccidentLetter(): React.JSX.Element {
   // the link was hand-written).
   const notFound = reportId == null || (accidentsQuery.isSuccess && accident == null)
   const filedBookId = accident?.letter_book_id ?? null
-  /** All three sources answered: the paper can be drawn and can be filed. */
   const ready = accident != null && vehicle != null && sites != null
+  const asking = filedBookId == null && (needsLocation || needsDescription)
+  const locationMissing = needsLocation && !locationAr.trim()
+  const descriptionMissing = needsDescription && !descriptionAr.trim()
+
+  const submit = (): void => {
+    if (!accident) return
+    if (locationMissing || descriptionMissing) {
+      setInvalid(true)
+      return
+    }
+    setInvalid(false)
+    generate.mutate(accident)
+  }
+
+  const site = sites?.find((entry) => entry.id === vehicle?.site_id)
+  const driver = accident?.employee_id
+    ? accident.employee_name_ar || accident.employee_name_en || EMPTY_VALUE
+    : null
+  const alert = error ?? (invalid ? t('vehicles.requiredFields') : null)
+  const flag = (bad: boolean): { 'aria-invalid'?: true; 'aria-describedby'?: string } =>
+    invalid && bad ? { 'aria-invalid': true, 'aria-describedby': errorId } : {}
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <header className="shrink-0 px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <Link
-          to="/vehicles/accidents"
-          className="inline-flex items-center gap-1.5 text-[0.8em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none"
-        >
-          {isAr ? (
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          )}
-          {t('vehicles.accidentsTitle')}
-        </Link>
-
-        <div className="mt-1.5 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-foreground md:text-[1.55em]">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <ServiceBand
+          back={{ to: '/vehicles/accidents', label: t('vehicles.accidentsTitle') }}
+          title={
+            <>
               {t('vehicles.accidentTitle')}
-              {accident && (
-                <>
-                  <span aria-hidden className="text-faint">
-                    ·
-                  </span>
-                  <PlateChip plate={accident.vehicle_plate_label} size="lg" />
-                </>
-              )}
-            </h1>
-            <p className="mt-1 hidden text-[0.84em] text-muted-foreground md:block">
-              {t('vehicles.accidentLetterDesc')}
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <RefreshButton />
-            {filedBookId != null ? (
+              {accident && <PlateChip plate={accident.vehicle_plate_label} size="lg" />}
+            </>
+          }
+          description={t('vehicles.accidentLetterDesc')}
+          actions={
+            filedBookId != null ? (
               // Already filed: the destination is the record, not a second book.
-              <Link to={`/books/${filedBookId}`} className={buttonVariants({ size: 'sm' })}>
+              <Link to={`/books/${filedBookId}`} className={BAND_BUTTON}>
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 {t('vehicles.openLetter')}
               </Link>
-            ) : (
-              <Button
-                type="button"
-                size="sm"
-                disabled={!ready || generate.isPending}
-                aria-describedby={error ? ERROR_ID : undefined}
-                onClick={() => generate.mutate()}
-              >
-                {generate.isPending ? (
-                  <Loader2
-                    aria-hidden
-                    strokeWidth={1.8}
-                    className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
-                  />
-                ) : (
-                  <FileText className="h-3.5 w-3.5" aria-hidden />
-                )}
-                {generate.isPending ? t('common.saving') : t('vehicles.saveLetter')}
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
+            ) : null
+          }
+        />
 
-      <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
-        {notFound ? (
-          <section className="rounded-xl border border-border bg-surface">
+        <div className={cn(SERVICE_WRAP, 'pb-16 pt-6')}>
+          {notFound ? (
             <EmptyState
               icon={FileText}
               message={t('vehicles.noAccidents')}
               actionLabel={t('vehicles.accidentsTitle')}
               onAction={() => navigate('/vehicles/accidents')}
             />
-          </section>
-        ) : failed ? (
-          <section className="rounded-xl border border-border bg-surface">
+          ) : failed ? (
             <EmptyState
               icon={FileText}
               message={t('common.loadError')}
@@ -242,134 +208,133 @@ function AccidentLetter(): React.JSX.Element {
                 if (sitesQuery.isError) void sitesQuery.refetch()
               }}
             />
-          </section>
-        ) : accident == null || vehicle == null || sites == null ? (
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-9 w-64" />
-            <Skeleton className="h-[32rem] w-full" />
-          </div>
-        ) : (
-          <>
-            {filedBookId != null && (
-              // Says what happened, and where the filed paper is.
-              <p className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary-soft px-3.5 py-2.5 text-[0.8em] text-foreground">
-                <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
-                <strong className="font-semibold">{t('vehicles.officialLetter')}</strong>
-                <Link
-                  to={`/books/${filedBookId}`}
-                  className="font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none"
-                >
-                  {t('vehicles.openLetter')}
-                </Link>
-              </p>
-            )}
+          ) : !ready ? (
+            <div className="flex flex-col gap-3">
+              <Skeleton className="h-9 w-64" />
+              <Skeleton className="h-[32rem] w-full" />
+            </div>
+          ) : (
+            <form
+              noValidate
+              className={cn(
+                'grid items-start gap-8',
+                asking && 'lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]',
+              )}
+              onSubmit={(event) => {
+                event.preventDefault()
+                submit()
+              }}
+            >
+              {asking && (
+                <div className="flex min-w-0 flex-col gap-6">
+                  <FormAlert id={errorId} message={alert} />
+                  <RequestSection
+                    title={t('vehicles.arabicForLetter')}
+                    note={t('vehicles.arabicForLetterDesc')}
+                  >
+                    <FieldGrid>
+                      {needsLocation && (
+                        <Field
+                          id={`${fieldId}-location`}
+                          label={t('vehicles.locationAr')}
+                          hint={accident.location_en ?? undefined}
+                          required
+                          full
+                        >
+                          <Input
+                            id={`${fieldId}-location`}
+                            dir="rtl"
+                            lang="ar"
+                            value={locationAr}
+                            onChange={(event) => setLocationAr(event.target.value)}
+                            {...flag(locationMissing)}
+                          />
+                        </Field>
+                      )}
+                      {needsDescription && (
+                        <Field
+                          id={`${fieldId}-description`}
+                          label={t('vehicles.descriptionAr')}
+                          hint={accident.description_en ?? undefined}
+                          required
+                          full
+                        >
+                          <Textarea
+                            id={`${fieldId}-description`}
+                            dir="rtl"
+                            lang="ar"
+                            rows={4}
+                            value={descriptionAr}
+                            onChange={(event) => setDescriptionAr(event.target.value)}
+                            {...flag(descriptionMissing)}
+                          />
+                        </Field>
+                      )}
+                    </FieldGrid>
+                  </RequestSection>
+                </div>
+              )}
 
-            <FormAlert id={ERROR_ID} message={error} />
-
-            <section className="mt-3 overflow-hidden rounded-xl border border-border bg-surface">
-              <header className="flex flex-wrap items-baseline justify-between gap-2 border-b border-hairline px-3.5 py-2.5">
-                <h2 className="text-[0.95em] font-semibold text-foreground">
-                  {t('vehicles.paperPreview')}
-                </h2>
-                <span className="font-mono text-[0.76em] text-muted-foreground">
-                  <bdi dir="ltr">{REF_PLACEHOLDER}</bdi>
-                </span>
-              </header>
-              {/* The sheet keeps its document proportions; a narrow viewport
-                  scrolls it rather than reflowing a letter that has one true
-                  layout. */}
-              <div className="overflow-x-auto p-3">
-                <LetterPreview accident={accident} vehicle={vehicle} sites={sites} />
+              <div className="flex min-w-0 flex-col gap-3 lg:sticky lg:top-6">
+                {!asking && <FormAlert id={errorId} message={error} />}
+                <div className="flex items-center justify-between gap-2">
+                  <RequestPaperLabel>{t('vehicles.liveLetter')}</RequestPaperLabel>
+                  <RefreshButton />
+                </div>
+                <div className="overflow-x-auto">
+                  <AccidentPaper
+                    reference={REF_PLACEHOLDER}
+                    facts={{
+                      plateLabel: vehicle.plate_label || plateLabel(vehicle),
+                      vehicleTypeAr: vehicle.type_ar || vehicle.type_en,
+                      vin: vehicle.vin,
+                      siteAr: site ? site.name_ar || site.name_en : EMPTY_VALUE,
+                      date: accident.date,
+                      time: accident.time,
+                      driver,
+                      locationAr: needsLocation ? locationAr : accident.location_ar,
+                      policeRef: accident.police_ref,
+                      status: accident.status,
+                      descriptionAr: needsDescription ? descriptionAr : accident.description_ar,
+                    }}
+                  />
+                </div>
+                {filedBookId == null && (
+                  <div className="flex justify-end">
+                    <Button
+                      type="submit"
+                      size="lg"
+                      className="w-full sm:w-auto sm:min-w-[11rem]"
+                      disabled={generate.isPending}
+                      aria-describedby={alert ? errorId : undefined}
+                    >
+                      {generate.isPending ? (
+                        <Loader2
+                          aria-hidden
+                          strokeWidth={1.8}
+                          className="h-4 w-4 animate-spin motion-reduce:animate-none"
+                        />
+                      ) : (
+                        <FileText className="h-4 w-4" aria-hidden />
+                      )}
+                      {generate.isPending ? t('common.saving') : t('vehicles.saveLetter')}
+                    </Button>
+                  </div>
+                )}
+                {filedBookId != null && (
+                  <Link
+                    to={`/books/${filedBookId}`}
+                    className={cn(buttonVariants({ variant: 'secondary' }), 'self-end')}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    {t('vehicles.openLetter')}
+                  </Link>
+                )}
               </div>
-            </section>
-          </>
-        )}
+            </form>
+          )}
+        </div>
       </div>
     </div>
-  )
-}
-
-/**
- * The paper itself: the GSSG-VA body, row for row.
- *
- * Facts come from the vehicle (plate, Arabic type, VIN, site) and the report
- * (date/time, driver, location, police reference, damage, status) — the same
- * split `vehicle_letter_service.generate_accident_letter` reads them from.
- */
-function LetterPreview({
-  accident,
-  vehicle,
-  sites,
-}: {
-  accident: VehicleAccidentRead
-  vehicle: VehicleRead
-  sites: readonly VehicleSiteRead[]
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const ar = (key: string): string => t(key, { lng: 'ar' })
-
-  // The template writes the plate with a slash («10 / 90363»), not with the
-  // ledger's backslash.
-  const plate = (vehicle.plate_label || plateLabel(vehicle)).replace('\\', '/')
-  const site = sites.find((entry) => entry.id === vehicle.site_id)
-  const clock = accident.time?.slice(0, 5)
-  const dateTime = clock
-    ? `${formatLetterDate(accident.date)} ${clock}`
-    : formatLetterDate(accident.date)
-  // The letter names the driver, never their G-number; an unassigned report
-  // prints the dash, exactly as the field builder does.
-  const driver = accident.employee_id
-    ? accident.employee_name_ar || accident.employee_name_en || EMPTY_VALUE
-    : EMPTY_VALUE
-
-  return (
-    <PaperSheet reference={REF_PLACEHOLDER} title={ar('vehicles.accidentTitle')}>
-      <PaperFacts
-        rows={[
-          {
-            label: ar('vehicles.plate'),
-            value: <bdi dir="ltr">{plate}</bdi>,
-            mono: true,
-          },
-          { label: ar('vehicles.type'), value: vehicle.type_ar },
-          {
-            label: ar('vehicles.vin'),
-            value: <bdi dir="ltr">{vehicle.vin || EMPTY_VALUE}</bdi>,
-            mono: true,
-          },
-          { label: ar('vehicles.site'), value: site?.name_ar || EMPTY_VALUE },
-          {
-            label: ar('vehicles.dateTime'),
-            value: <bdi dir="ltr">{dateTime}</bdi>,
-            mono: true,
-          },
-          { label: ar('vehicles.employee'), value: driver },
-          { label: ar('vehicles.accidentLocation'), value: accident.location_ar },
-          {
-            label: ar('vehicles.policeRef'),
-            value: <bdi dir="ltr">{accident.police_ref || EMPTY_VALUE}</bdi>,
-            mono: true,
-          },
-          {
-            label: ar('vehicles.damageCost'),
-            value: formatLetterAed(accident.damage_cost),
-          },
-          {
-            label: ar('vehicles.status'),
-            value: ar(
-              accident.status === 'open' ? 'vehicles.openStatus' : 'vehicles.closedStatus',
-            ),
-          },
-        ]}
-      />
-
-      {/* The template's «الوصف» heading and the Arabic account beneath it —
-          the operator's own line breaks preserved, since the DOCX prints the
-          text as it was typed. */}
-      <h3 className="mb-1.5 mt-4 text-[0.72rem] font-bold">{ar('vehicles.description')}</h3>
-      <p className="m-0 whitespace-pre-line border border-[#ddd] bg-white p-2.5 text-[0.66rem] leading-relaxed">
-        {accident.description_ar}
-      </p>
-    </PaperSheet>
   )
 }
