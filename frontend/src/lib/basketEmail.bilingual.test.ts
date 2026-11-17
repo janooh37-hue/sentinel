@@ -44,9 +44,15 @@ describe('annual leave table', () => {
       'FROM', 'TO', 'DUTY RESUMPTION DATE', 'COMMENTS',
     ])
     expect(cells(html)).toEqual([
-      '1', 'G3085', 'حارس أمن', 'Abdellahi Abah', 'Omani', '0501234567', '0331',
+      '1', 'G3085', 'حارس أمن', 'Abdellahi Abah', 'Oman', '0501234567', '0331',
       '1/8/2026', '31/8/2026', '1/9/2026', '',
     ])
+  })
+
+  it('prints the short English country name for every stored spelling', () => {
+    const nationalities = ['الإمارات', 'الامارات', 'المملكة العربية السعودية', 'الأردن', 'مصر', 'Atlantis']
+      .map((nationality) => cells(buildBasketBodyHtml([item({ nationality })], undefined, 'en'))[4])
+    expect(nationalities).toEqual(['UAE', 'UAE', 'KSA', 'Jordan', 'Egypt', 'Atlantis'])
   })
 
   it('reads right to left in Arabic with the stored Arabic values', () => {
@@ -121,7 +127,7 @@ describe('compose prefill', () => {
     expect(swapped).toContain('dir="ltr"')
     expect(headers(swapped)).toEqual(headers(en))
     expect(cells(swapped)).toEqual([
-      '1', 'G3085', 'حارس أمن', 'عبدالله محمد أباه', 'Omani', '0501234567', '0331',
+      '1', 'G3085', 'حارس أمن', 'عبدالله محمد أباه', 'Oman', '0501234567', '0331',
       '1/8/2026', '31/8/2026', '1/9/2026', 'عاد مبكراً',
     ])
   })
