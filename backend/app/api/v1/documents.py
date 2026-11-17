@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Annotated, Any, Literal, get_args
+from typing import Annotated, Any, Literal
 
 import anyio
 from fastapi import (
@@ -44,7 +44,7 @@ from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
-from app.schemas.book import BookConfidentiality, ChainAddressee, GenerateAttachmentSpec
+from app.schemas.book import BookConfidentiality, GenerateAttachmentSpec
 from app.schemas.signature_placement import (
     LegacyCandidateRead,
     SignatureEditorRead,
@@ -351,23 +351,6 @@ def _run_generation(
 # ---------------------------------------------------------------------------
 
 
-def _chain_addressed_fields(db: Session, user: User, fields: dict[str, Any]) -> dict[str, Any]:
-    """A line-manager author's General Book names its line manager or the default
-    manager (``fields["addressee"]``). The server writes the name: a recipient id
-    or name from the client (a revise replays the stored fields) is replaced."""
-    key = fields.get("addressee")
-    if key not in (None, *get_args(ChainAddressee)):
-        raise AppError(
-            "ADDRESSEE_UNAVAILABLE",
-            "That addressee is not available; choose your line manager.",
-            http_status=422,
-        )
-    return {
-        **{k: v for k, v in fields.items() if k != "recipient_id"},
-        "recipient_name": book_service.chain_addressee_name(db, user, key),
-    }
-
-
 @documents_router.post(
     "/generate",
     response_model=DocumentGenerateResponse,
@@ -382,9 +365,17 @@ def generate_document(
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )
-    if payload.template_id == "General Book" and routes_to_line_manager(user):
-        payload = payload.model_copy(
-            update={"fields": _chain_addressed_fields(db, user, payload.fields)}
+    if (
+        payload.template_id == "General Book"
+        and payload.revise_of_book_id is None
+        and routes_to_line_manager(user)
+    ):
+        # The vehicle services (maintenance request) write its General Books;
+        # it revises its own returned ones but never starts one here.
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role writes General Books only through the vehicle services.",
+            http_status=403,
         )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:

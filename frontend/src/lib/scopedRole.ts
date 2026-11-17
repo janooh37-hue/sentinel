@@ -24,7 +24,8 @@ export function scopedDestinations(role: ScopedRoleName, has: (cap: string) => b
   return has('vehicles.view') ? ['/', '/services', '/books', '/vehicles'] : ['/', '/services', '/books']
 }
 
-/** The service forms a fleet reporter opens from its two Services tiles. */
+/** The service forms a fleet reporter may open: the Report from its Services tile,
+ *  and the General Book only to revise one the vehicle pages filed (`?revise=`). */
 export const FLEET_REPORTER_SERVICES = ['General Book', 'Report'] as const
 
 /** Whether a scoped role may open `pathname`; everything else redirects to `/`. */

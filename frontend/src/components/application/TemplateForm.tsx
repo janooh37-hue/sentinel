@@ -33,7 +33,6 @@ import { CheckboxField } from './fields/CheckboxField'
 import { ManagerPickerField } from './fields/ManagerPickerField'
 import { SubmitterPickerField } from './fields/SubmitterPickerField'
 import { RecipientPickerField } from './fields/RecipientPickerField'
-import { AddresseePickerField } from './fields/AddresseePickerField'
 import { MultiRecipientPickerField } from './fields/MultiRecipientPickerField'
 import { EmbedSignatureCheckbox } from './fields/EmbedSignatureCheckbox'
 import { SignerSignaturePreview } from './fields/SignerSignaturePreview'
@@ -186,9 +185,6 @@ function renderField(
 
     case 'recipient_picker':
       return <RecipientPickerField key={field.id} {...common} />
-
-    case 'addressee_picker':
-      return <AddresseePickerField key={field.id} {...common} />
 
     case 'recipient_multi_picker':
       return <MultiRecipientPickerField key={field.id} {...common} />

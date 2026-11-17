@@ -875,8 +875,6 @@ export type BookApprovalStepRead = components['schemas']['BookApprovalStepRead']
   assignee_name?: string | null
 }
 export type ApproverOptionRead = components['schemas']['ApproverOptionRead']
-export type ChainAddresseeRead = components['schemas']['ChainAddresseeRead']
-export type ChainAddressee = ChainAddresseeRead['key']
 
 // Book versioning. The generated schema (regenerated for the signing slice)
 // now carries `versions` on BookRead with `manager_sig_embedded` +
@@ -1160,7 +1158,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   SCOPED_ROLE_NOT_OWNER: 'errors.fleet.notOwner',
   SCOPED_ROLE_STATE_LOCKED: 'errors.fleet.stateLocked',
   LINE_MANAGER_REQUIRED: 'errors.fleet.lineManagerRequired',
-  ADDRESSEE_UNAVAILABLE: 'errors.fleet.addresseeUnavailable',
+  SCOPED_ROLE_SERVICE_FORBIDDEN: 'errors.fleet.serviceForbidden',
   LINE_MANAGER_NOT_APPLICABLE: 'errors.fleet.lineManagerNotApplicable',
   LINE_MANAGER_NOT_ELIGIBLE: 'errors.fleet.lineManagerNotEligible',
   BRANCH_APPROVER_NOT_ELIGIBLE: 'errors.fleet.branchApproverNotEligible',
@@ -2459,8 +2457,6 @@ export const api = {
     request<BookRead[]>('GET', `/books/awaiting-scan?scope=${scope}`),
   /** GET /books/approvers — valid approver candidates for the submit picker. */
   listApprovers: () => request<ApproverOptionRead[]>('GET', '/books/approvers'),
-  /** GET /books/addressees — whom a fleet reporter's General Book may be addressed to. */
-  listChainAddressees: () => request<ChainAddresseeRead[]>('GET', '/books/addressees'),
   /** POST /books/{id}/submit — submit a draft book for approval. */
   submitBook: (id: number, body: BookSubmitRequest) =>
     request<BookRead>('POST', `/books/${id}/submit`, body),

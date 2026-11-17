@@ -478,14 +478,15 @@ stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
 
-**Addressee.** The server writes the name after «السيد» on a line-manager author's
-papers (`book_service.chain_addressees`): the line manager's signer-row title, else its
-Arabic or English name, else the account name. A Report is always addressed to the line
-manager. A General Book goes to the line manager or, by `addressee: "default_manager"`,
-to the active `is_default_manager` account when that is someone else;
-`GET /books/addressees` (`books.submit`) lists the choices. The author never picks from
-the shared recipient list: the Word create refuses `recipient_id` (403
-`SCOPED_ROLE_INPUT_FORBIDDEN`) and the editor publish replaces any client recipient.
+**General Books and the addressee.** A fleet reporter starts no General Book of its own:
+`POST /documents/generate` (without `revise_of_book_id`) and the Word create answer 403
+`SCOPED_ROLE_SERVICE_FORBIDDEN`. Its General Books come from the vehicle services (the
+maintenance request, 11/1, addressed to the contractor), which is why the role keeps
+`books.service.General Book`; it may revise its own returned ones. Its Report is always
+addressed to its line manager: the server writes the name after «السيد»
+(`book_service.line_manager_addressee`: the line manager's signer-row title, else its
+Arabic or English name, else the account name) and refuses a `recipient_id` (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`).
 
 **Vehicle employees.** The fine, accident and maintenance-request dialogs search
 `GET /vehicles/employees` and resolve `GET /vehicles/employees/{employee_id}`

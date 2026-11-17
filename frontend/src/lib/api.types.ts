@@ -3158,29 +3158,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/addressees": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Chain Addressees
-         * @description Whom a line-manager author (fleet reporter) may address a General Book to.
-         *
-         *     Declared before ``/{book_id}`` so the literal segment isn't swallowed by the
-         *     int path param.
-         */
-        get: operations["list_chain_addressees_api_v1_books_addressees_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/books/approvers": {
         parameters: {
             query?: never;
@@ -10470,19 +10447,6 @@ export interface components {
              * @description Deprecated English alias for description_en.
              */
             description: string;
-        };
-        /**
-         * ChainAddresseeRead
-         * @description One addressee a line-manager author may choose; ``label`` prints after «السيد».
-         */
-        ChainAddresseeRead: {
-            /**
-             * Key
-             * @enum {string}
-             */
-            key: "line_manager" | "default_manager";
-            /** Label */
-            label: string;
         };
         /** ClassificationListResponse */
         ClassificationListResponse: {
@@ -19299,8 +19263,6 @@ export interface components {
             classification_code?: string | null;
             /** Recipient Id */
             recipient_id?: number | null;
-            /** Addressee */
-            addressee?: ("line_manager" | "default_manager") | null;
             /** Subject */
             subject: string;
             /** Cc */
@@ -26758,37 +26720,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalLogNeighborsResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_chain_addressees_api_v1_books_addressees_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ChainAddresseeRead"][];
                 };
             };
             /** @description Validation Error */

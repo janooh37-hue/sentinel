@@ -13328,60 +13328,6 @@
         }
       }
     },
-    "/api/v1/books/addressees": {
-      "get": {
-        "tags": [
-          "books"
-        ],
-        "summary": "List Chain Addressees",
-        "description": "Whom a line-manager author (fleet reporter) may address a General Book to.\n\nDeclared before ``/{book_id}`` so the literal segment isn't swallowed by the\nint path param.",
-        "operationId": "list_chain_addressees_api_v1_books_addressees_get",
-        "parameters": [
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ChainAddresseeRead"
-                  },
-                  "title": "Response List Chain Addressees Api V1 Books Addressees Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/books/approvers": {
       "get": {
         "tags": [
@@ -44016,29 +43962,6 @@
         "title": "CapabilityRead",
         "description": "One capability in the catalog, with which roles grant it by default."
       },
-      "ChainAddresseeRead": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "enum": [
-              "line_manager",
-              "default_manager"
-            ],
-            "title": "Key"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          }
-        },
-        "type": "object",
-        "required": [
-          "key",
-          "label"
-        ],
-        "title": "ChainAddresseeRead",
-        "description": "One addressee a line-manager author may choose; ``label`` prints after «السيد»."
-      },
       "ClassificationListResponse": {
         "properties": {
           "items": {
@@ -72274,21 +72197,6 @@
               }
             ],
             "title": "Recipient Id"
-          },
-          "addressee": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "line_manager",
-                  "default_manager"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Addressee"
           },
           "subject": {
             "type": "string",

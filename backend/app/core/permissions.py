@@ -739,10 +739,12 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         f"{SERVICE_RECORDS_CAP_PREFIX}Report",
     }
 )
-# Fleet reporter: runs the fleet hub (no deletions) and authors General Books
-# under 7/1 or 11/1, Reports, and the vehicle letters. Like the inmate role it
-# holds no generic books.create/books.edit; its own-paper authoring is a scoped
-# runtime rule (book_service.require_fleet_write_access).
+# Fleet reporter: runs the fleet hub (no deletions) and authors Reports and the
+# vehicle papers. Its General Books are the vehicle services' (the maintenance
+# request, 11/1); it starts none of its own (documents/generate and Word refuse
+# SCOPED_ROLE_SERVICE_FORBIDDEN) and only revises its returned ones. Like the
+# inmate role it holds no generic books.create/books.edit; its own-paper
+# authoring is a scoped runtime rule (book_service.require_fleet_write_access).
 _FLEET_REPORTER_SERVICES: Final[tuple[str, ...]] = (
     "General Book",
     "Report",

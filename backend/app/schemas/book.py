@@ -331,22 +331,9 @@ class GenerateAttachmentSpec(BaseModel):
     attachment_index: int | None = None
 
 
-#: Whom a line-manager author (fleet reporter) addresses a General Book to.
-ChainAddressee = Literal["line_manager", "default_manager"]
-
-
-class ChainAddresseeRead(BaseModel):
-    """One addressee a line-manager author may choose; ``label`` prints after «السيد»."""
-
-    key: ChainAddressee
-    label: str
-
-
 class WordBookCreate(BaseModel):
     classification_code: str | None = None
     recipient_id: int | None = None
-    # Line-manager authors only, in place of recipient_id (default: line manager).
-    addressee: ChainAddressee | None = None
     subject: str
     cc: list[str] = Field(default_factory=list)
     manager_id: int | None = None

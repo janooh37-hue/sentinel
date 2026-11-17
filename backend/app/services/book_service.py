@@ -93,8 +93,6 @@ from app.schemas.book import (
     BookApprovalStepRead,
     BookCreate,
     BookUpdate,
-    ChainAddressee,
-    ChainAddresseeRead,
     ImportedDocRead,
 )
 from app.services import (
@@ -2562,41 +2560,15 @@ def resolve_line_manager(db: Session, author: User) -> User:
     return manager
 
 
-def _account_addressee(db: Session, account: User) -> str:
-    """How a paper addresses an account (as the leave report does): its one
-    active Manager row's title, Arabic name or English name, else the account."""
-    manager_id = manager_service.sole_active_manager_id(db, account.id)
+def line_manager_addressee(db: Session, author: User) -> str:
+    """The name printed after «السيد» on a line-manager author's Report, as the
+    leave report names its approver: the line manager's one active Manager row's
+    title, Arabic name or English name, else the account."""
+    line_manager = resolve_line_manager(db, author)
+    manager_id = manager_service.sole_active_manager_id(db, line_manager.id)
     manager = db.get(Manager, manager_id) if manager_id is not None else None
     named = (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
-    return named or account.display_name or account.email
-
-
-def chain_addressees(db: Session, author: User) -> list[ChainAddresseeRead]:
-    """Whom a line-manager author may address: their line manager, then the
-    default manager when that is someone else."""
-    line_manager = resolve_line_manager(db, author)
-    options = [ChainAddresseeRead(key="line_manager", label=_account_addressee(db, line_manager))]
-    default = db.scalar(
-        select(User).where(User.is_default_manager.is_(True), User.status == "active")
-    )
-    if default is not None and default.id != line_manager.id:
-        options.append(
-            ChainAddresseeRead(key="default_manager", label=_account_addressee(db, default))
-        )
-    return options
-
-
-def chain_addressee_name(db: Session, author: User, key: ChainAddressee | None) -> str:
-    """The name printed after «السيد» for a line-manager author's paper."""
-    wanted = key or "line_manager"
-    for option in chain_addressees(db, author):
-        if option.key == wanted:
-            return option.label
-    raise AppError(
-        "ADDRESSEE_UNAVAILABLE",
-        "That addressee is not available; choose your line manager.",
-        http_status=409,
-    )
+    return named or line_manager.display_name or line_manager.email
 
 
 def _is_line_manager_chain(version: BookVersion) -> bool:

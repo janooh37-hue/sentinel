@@ -36,7 +36,7 @@ from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
 from app.core.roles import FLEET_REPORTER_ROLE, INMATE_REPORTER_ROLE
-from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
+from app.core.scoped_roles import is_scoped_role
 from app.db.models import (
     Book,
     BookEditSession,
@@ -83,7 +83,6 @@ from app.schemas.book import (
     BookThreadItem,
     BookUpdate,
     BookVersionRead,
-    ChainAddresseeRead,
     ClassificationListResponse,
     ClassificationRead,
     InboxSummaryRead,
@@ -351,15 +350,13 @@ def delete_word_template(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _create_fleet_word_book(
+def _create_fleet_word_report(
     db: Session, user: User, payload: WordBookCreate
 ) -> word_book_service.WordSessionInfo:
-    """A fleet reporter's own Word General Book (7/1 or 11/1) or author-signed Report.
+    """A fleet reporter's author-signed Report, addressed to its line manager.
 
-    The role holds no ``books.create``; the classification's category
-    capability decides which General Books it may open. Both papers are
-    addressed server-side: a Report to the line manager, a General Book to the
-    line manager or the default manager (``payload.addressee``).
+    The role starts no General Book of its own: the vehicle services (the
+    maintenance request) write those for it.
     """
     if user.employee_id is None:
         raise AppError(
@@ -373,34 +370,11 @@ def _create_fleet_word_book(
             "This role cannot choose the signing manager; it is assigned at submit.",
             http_status=403,
         )
-    if payload.recipient_id is not None:
-        raise AppError(
-            "SCOPED_ROLE_INPUT_FORBIDDEN",
-            "This role addresses its papers to its line manager or the default manager.",
-            http_status=403,
-        )
     if payload.signer_employee_id is None:
-        _require_record_type_access(
-            db,
-            user,
-            category_id="GS",
-            service_id="General Book",
-            classification_code=payload.classification_code,
-        )
-        return word_book_service.create_word_book(
-            db,
-            user=user,
-            classification_code=payload.classification_code,
-            recipient_id=None,
-            recipient_name=book_service.chain_addressee_name(db, user, payload.addressee),
-            subject=payload.subject,
-            cc=payload.cc,
-            manager_id=None,
-            template_name=payload.template_name,
-            table_rows=payload.table_rows,
-            confidentiality=payload.confidentiality,
-            attachments=payload.attachments,
-            record_access_user=user,
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role writes General Books only through the vehicle services.",
+            http_status=403,
         )
     if payload.signer_employee_id != user.employee_id:
         raise AppError(
@@ -409,7 +383,7 @@ def _create_fleet_word_book(
             http_status=403,
         )
     if (
-        payload.addressee is not None
+        payload.recipient_id is not None
         or payload.classification_code not in (None, "")
         or payload.cc
         or payload.template_name not in (None, "")
@@ -433,7 +407,7 @@ def _create_fleet_word_book(
         user=user,
         signer_employee_id=user.employee_id,
         recipient_id=None,
-        recipient_name=book_service.chain_addressee_name(db, user, None),
+        recipient_name=book_service.line_manager_addressee(db, user),
         subject=payload.subject,
         date=payload.date,
         sign=True,
@@ -466,7 +440,6 @@ def create_word_session(
             )
         if (
             payload.recipient_id is not None
-            or payload.addressee is not None
             or payload.classification_code not in (None, "")
             or payload.cc
             or payload.manager_id is not None
@@ -501,14 +474,8 @@ def create_word_session(
             record_access_user=user,
         )
     elif user.role == FLEET_REPORTER_ROLE:
-        info = _create_fleet_word_book(db, user, payload)
+        info = _create_fleet_word_report(db, user, payload)
     else:
-        if payload.addressee is not None:
-            raise AppError(
-                "ADDRESSEE_NOT_APPLICABLE",
-                "Only an account with a line manager chooses an addressee.",
-                http_status=422,
-            )
         _require_word_capability(db, user, "books.create")
         _require_word_capability(db, user, "books.view")
         service_id = "Report" if payload.signer_employee_id is not None else "General Book"
@@ -1243,24 +1210,6 @@ def get_approval_log_neighbors(
         previous=previous,
         next=following,
     )
-
-
-@router.get("/addressees", response_model=list[ChainAddresseeRead])
-def list_chain_addressees(
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.submit"))],
-) -> list[ChainAddresseeRead]:
-    """Whom a line-manager author (fleet reporter) may address a General Book to.
-
-    Declared before ``/{book_id}`` so the literal segment isn't swallowed by the
-    int path param."""
-    if not routes_to_line_manager(user):
-        raise AppError(
-            "ADDRESSEE_NOT_APPLICABLE",
-            "Only an account with a line manager chooses an addressee.",
-            http_status=422,
-        )
-    return book_service.chain_addressees(db, user)
 
 
 @router.get("/approvers", response_model=list[ApproverOptionRead])

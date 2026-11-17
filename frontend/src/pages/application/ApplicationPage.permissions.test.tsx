@@ -14,6 +14,8 @@ vi.mock('@/lib/api', () => ({
     generateDocument: vi.fn(),
     listBookClassifications: vi.fn(),
     createWordBook: vi.fn(),
+    getBook: vi.fn(),
+    getBookVersionFields: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
   apiErrorMessage: (error: unknown) => String(error),
@@ -70,7 +72,7 @@ function TestFormValues() {
   const { setValue } = useFormContext()
   return <button type="button" onClick={() => {
     setValue('subject', 'Fleet letter')
-    setValue('addressee', 'default_manager')
+    setValue('recipient_id', 42)
     setValue('cc', ['Operations'])
     setValue('hand_sign_manager', true)
     setValue('hand_sign_employee', true)
@@ -233,15 +235,15 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
   })
 
-  it.each([false, true])('shows exactly the fleet General Book and Report tiles (mobile=%s)', (mobile) => {
+  it.each([false, true])('shows the fleet reporter only the Report tile (mobile=%s)', (mobile) => {
     capabilityState.mobile = mobile
     capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.service.Vehicle Fines'])
     renderPage('/services', 'fleet_reporter')
     const tiles = screen.getAllByRole('button')
-    expect(tiles).toHaveLength(2)
-    expect(tiles[0]).toHaveTextContent('General Book')
-    expect(tiles[1]).toHaveTextContent('Report')
-    expect(tiles[1]).toHaveProperty('disabled', mobile)
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toHaveTextContent('Report')
+    expect(tiles[0]).toHaveProperty('disabled', mobile)
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
   })
 
   it.each([false, true])('keeps the inmate violations and Report tiles unchanged (mobile=%s)', (mobile) => {
@@ -255,40 +257,34 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
   })
 
-  it('filters scoped General Book classifications and manager controls and offers the line-manager addressee', async () => {
-    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1', 'books.category.11/1'])
+  it('does not open a new General Book for a fleet reporter', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.category.11/1'])
     renderPage('/services/general_book', 'fleet_reporter')
-    expect(await screen.findByText('7/1')).toBeVisible()
-    expect(screen.getByText('11/1')).toBeVisible()
-    expect(screen.queryByText('1/1')).not.toBeInTheDocument()
-    for (const picker of ['manager_id', 'hand_sign_manager', 'recipient_id']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
-    for (const picker of ['addressee', 'cc']) expect(screen.getByText(picker)).toBeVisible()
-    expect(api.getSettings).not.toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: /Report/ })).toBeVisible()
+    expect(screen.queryByText('subject')).not.toBeInTheDocument()
+    expect(api.getTemplateFields).not.toHaveBeenCalled()
   })
 
-  it.each(['word', 'editor'])('sends the fleet General Book addressee without manager embed (%s)', async (mode) => {
-    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1'])
-    // Keep the mutation pending: this test asserts the outgoing create, not job polling.
+  it('revises a fleet reporter\'s General Book without manager controls, keeping its recipient', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.11/1'])
+    vi.mocked(api.getBook).mockResolvedValue({
+      id: 5, ref_number: '1/11/1/GSSG/5', classification_code: '11/1', approval_state: 'returned',
+      versions: [{ id: 9, version_no: 1, template_id: 'General Book' }],
+    } as never)
+    vi.mocked(api.getBookVersionFields).mockResolvedValue({ fields: { subject: 'Maintenance', recipient_id: 42 } } as never)
+    // Keep the mutation pending: this test asserts the outgoing request, not job polling.
     vi.mocked(api.generateDocument).mockImplementation(() => new Promise(() => {}))
-    vi.mocked(api.createWordBook).mockImplementation(() => new Promise(() => {}))
-    renderPage('/services/general_book', 'fleet_reporter')
-    fireEvent.click(await screen.findByText('Choose classification'))
-    fireEvent.click(screen.getByText('Choose recipient'))
-    if (mode === 'editor') fireEvent.click(screen.getByText('Use editor'))
-    const submitButton = screen.getAllByRole('button', { name: mode === 'editor' ? /Preview/i : /Create.*Word/i })
+    renderPage('/services/general_book?revise=5', 'fleet_reporter')
+    expect(await screen.findByText('recipient_id')).toBeVisible()
+    for (const picker of ['manager_id', 'hand_sign_manager']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Use editor'))
+    const submitButton = screen.getAllByRole('button', { name: /Save|Preview/i })
       .find((button) => button.getAttribute('type') === 'submit')
     expect(submitButton).toBeDefined()
     fireEvent.click(submitButton!)
-    await vi.waitFor(() => {
-      const mutation = mode === 'editor' ? api.generateDocument : api.createWordBook
-      expect(mutation).toHaveBeenCalled()
-    })
-    if (mode === 'editor') {
-      const payload = vi.mocked(api.generateDocument).mock.calls[0][0]
-      expect(payload.embed_signature).not.toHaveProperty('manager')
-      expect(payload.fields).toMatchObject({ addressee: 'default_manager', cc: ['Operations'] })
-    } else {
-      expect(api.createWordBook).toHaveBeenCalledWith(expect.objectContaining({ recipient_id: null, addressee: 'default_manager', cc: ['Operations'], manager_id: null }))
-    }
+    await vi.waitFor(() => expect(api.generateDocument).toHaveBeenCalled())
+    const payload = vi.mocked(api.generateDocument).mock.calls[0][0]
+    expect(payload.embed_signature).not.toHaveProperty('manager')
+    expect(payload.fields).toMatchObject({ recipient_id: 42 })
   })
 })
