@@ -9,7 +9,14 @@ from httpx import Response
 from sqlalchemy import select
 
 from app.api.errors import AppError
-from app.db.models import Book, BookFolder, BookFolderItem, Document, UserPermission
+from app.db.models import (
+    Book,
+    BookEditSession,
+    BookFolder,
+    BookFolderItem,
+    Document,
+    UserPermission,
+)
 from app.services import book_service, document_service, perm_service, vehicle_letter_service
 from tests.fleet_support import (
     FleetEnv,
@@ -203,6 +210,20 @@ def test_denied_record_type_also_closes_the_authors_own_returned_paper(
 
     assert client.get(f"/api/v1/books/{book.id}").status_code == 404
     assert client.get(fields_path).status_code == 404
+
+
+def test_own_general_book_does_not_open_in_word(fleet_env: FleetEnv) -> None:
+    # A Word round-trip would drop the fields approval re-renders the signer from.
+    env = fleet_env
+    book = general_book(env, env.reporter)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+
+    response = env.client(env.reporter).post(f"/api/v1/books/{book.id}/word-sessions")
+
+    _assert_error(response, 403, "SCOPED_ROLE_NOT_OWNER")
+    assert env.db.query(BookEditSession).filter_by(book_id=book.id).count() == 0
 
 
 def test_denied_books_view_closes_direct_reads_and_documents(fleet_env: FleetEnv) -> None:

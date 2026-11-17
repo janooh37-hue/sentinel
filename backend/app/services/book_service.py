@@ -1252,7 +1252,7 @@ def require_fleet_write_access(
 
 
 def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
-    """Authorize Word actions on a fleet reporter's own General Book or Report."""
+    """Authorize Word actions on a fleet reporter's own Report."""
     row = get_book(db, book_id)
     if user.employee_id is None:
         raise _scoped_error(
@@ -1260,11 +1260,12 @@ def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
         )
     if row.voided_at is not None or row.approval_state not in _FLEET_WRITABLE_STATES:
         raise _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
-    is_word_paper = row.category_id == "GS" and (
-        row.ref_number.startswith("REPORT-") or row.classification_code is not None
-    )
-    if not is_word_paper:
-        raise _scoped_error("NOT_OWNER", "This is not a General Book or Report.", 403)
+    # Its General Books are rendered from fields (the vehicle services), and
+    # approval re-renders their closing block for the chain's final signer. A
+    # Word round-trip would drop those fields and keep the default manager
+    # printed under the approver's signature, so only its Report opens in Word.
+    if row.category_id != "GS" or not row.ref_number.startswith("REPORT-"):
+        raise _scoped_error("NOT_OWNER", "Only a Report is edited in Word.", 403)
     from app.services import included_papers_service
 
     creator_id = (
