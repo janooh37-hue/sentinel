@@ -9,6 +9,7 @@ import { toast } from '@/lib/toast'
 import { api, type OdometerMonthRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { VehicleMaintenancePage } from './VehicleMaintenancePage'
+import { MaintenanceDialog } from './components/MaintenanceDialog'
 
 const state = vi.hoisted(() => ({ mobile: false, editable: true }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => state.mobile }))
@@ -63,6 +64,8 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   vi.spyOn(api, 'getVehicleOdometer').mockResolvedValue(MONTH)
   vi.spyOn(api, 'listVehicleMaintenance').mockResolvedValue([])
+  vi.spyOn(api, 'listVehicles').mockResolvedValue([])
+  vi.spyOn(api, 'getVehicle').mockResolvedValue({ id: 42, maintenance: [], current_odometer_km: 1200 } as never)
   vi.spyOn(api, 'saveVehicleOdometer').mockResolvedValue({ ...MONTH.rows[0], closing_km: 1300, km_driven: 300 })
   vi.spyOn(api, 'generateOdometerForm').mockResolvedValue({ book_id: 91, document_id: 92, ref_number: '1/11/93', pdf_available: false })
 })
@@ -119,13 +122,14 @@ describe('monthly vehicle maintenance', () => {
     await screen.findByText('Bus')
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Print form' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: i18n.t('vehicles.addMaintenance') })).not.toBeInTheDocument()
   })
 
   it('stores the month, tab and all-months filter in the URL', async () => {
     const user = userEvent.setup()
     renderPage()
     await screen.findByText('Bus')
-    await user.click(screen.getByRole('button', { name: 'Maintenance records' }))
+    await user.click(screen.getByRole('button', { name: /^Maintenance records/ }))
     await waitFor(() => expect(api.listVehicleMaintenance).toHaveBeenCalledWith('2026-10'))
     await user.click(screen.getByRole('checkbox', { name: 'All months' }))
     await waitFor(() => expect(api.listVehicleMaintenance).toHaveBeenCalledWith(undefined))
@@ -155,5 +159,53 @@ describe('monthly vehicle maintenance', () => {
     expect(await screen.findByText('/books/91')).toBeInTheDocument()
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['dashboard'] })
+  })
+
+  it.each(['en', 'ar'])('starts a maintenance request before the register, with one garage field (%s)', async (language) => {
+    await i18n.changeLanguage(language)
+    vi.mocked(api.listVehicles).mockResolvedValue([
+      { id: 42, plate_code: '14', plate_number: '58216', type_ar: 'حافلة', type_en: 'Bus' },
+    ] as never)
+    const created = { id: 7, vehicle_id: 42, date: '2026-10-01', type: 'service', cost: 350, odometer_km: 1200, vendor_ar: null, vendor_en: null, next_due: null, receipt_file_id: null, created_at: '2026-10-01' }
+    vi.spyOn(api, 'createVehicleMaintenance').mockResolvedValue(created as never)
+    const user = userEvent.setup()
+    renderPage()
+    const start = screen.getByRole('button', { name: i18n.t('vehicles.addMaintenance') })
+    await waitFor(() => expect(start).toBeEnabled())
+    const register = screen.getByRole('group', { name: i18n.t('vehicles.maintenanceTitle') })
+    expect(start.compareDocumentPosition(register) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.click(start)
+    const dialog = within(screen.getByRole('dialog', { name: i18n.t('vehicles.addMaintenance') }))
+    expect(dialog.getByRole('combobox', { name: new RegExp(i18n.t('vehicles.selectedVehicle')) })).toHaveTextContent('58216')
+    const garage = dialog.getByLabelText(i18n.t('vehicles.garage'))
+    expect(dialog.queryByLabelText(/· (AR|EN)/)).not.toBeInTheDocument()
+    expect(await dialog.findByText(i18n.t('vehicles.noPreviousMaintenance'))).toBeInTheDocument()
+    await user.type(garage, language === 'ar' ? 'ورشة الصيانة' : 'Fleet garage')
+    await user.type(dialog.getByLabelText(new RegExp(i18n.t('vehicles.cost'))), '350')
+    await user.click(dialog.getByRole('button', { name: i18n.t('vehicles.save') }))
+    await waitFor(() => expect(api.createVehicleMaintenance).toHaveBeenCalledWith(expect.objectContaining({
+      vehicle_id: 42, cost: 350,
+      vendor_ar: language === 'ar' ? 'ورشة الصيانة' : null,
+      vendor_en: language === 'en' ? 'Fleet garage' : null,
+    })))
+  })
+
+  it('keeps maintenance-request completion linked to the existing request', async () => {
+    const create = vi.spyOn(api, 'createVehicleMaintenance').mockResolvedValue({ id: 7, vehicle_id: 42 } as never)
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <I18nextProvider i18n={i18n}>
+          <MaintenanceDialog open onOpenChange={vi.fn()} vehicle={{ id: 42, plate_number: '58216' }}
+            request={{ id: 91, vehicle_id: 42, type: 'repair', odometer_km: 12550 } as never} />
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+    expect(screen.getByLabelText(/^Odometer/)).toHaveValue(12550)
+    await user.type(screen.getByLabelText(/^Cost/), '350')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(create).toHaveBeenCalledWith(expect.objectContaining({
+      vehicle_id: 42, request_id: 91, type: 'repair', odometer_km: 12550, cost: 350,
+    })))
   })
 })

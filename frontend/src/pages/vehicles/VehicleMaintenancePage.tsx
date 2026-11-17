@@ -1,8 +1,8 @@
 /** Monthly fleet mileage and maintenance records, sharing the selected month. */
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, FileText, Gauge, Trash2, Wrench } from 'lucide-react'
+import { FileText, Gauge, Trash2, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { toast } from '@/lib/toast'
@@ -23,22 +23,24 @@ import { toBase64Url } from '@/lib/pdf'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
-import { useSearchParam } from '@/lib/urlState'
-import { formatNumber, isArabic, localized } from '@/lib/language'
+import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
+import { localized } from '@/lib/language'
 import { MonthSwitcher } from '@/pages/application/statistics/MonthSwitcher'
 import { monthKey, parseMonthKey } from '@/pages/application/statistics/registerModel'
 
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
-  formatAed,
+  formatCount,
   formatIsoDate,
   invalidateVehicleQueries,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
 import { PlateChip } from './components/PlateChip'
-import { TabChip } from './components/TabChip'
+import { AedAmount } from './components/FineAmount'
+import { RegisterBar, RegisterSheet, RegisterStats, RegisterTabs, ServiceCounter, ServicePage } from './components/ServiceLayout'
+import { BAND_BUTTON } from './components/serviceStyles'
 import { OdometerLog } from './components/OdometerLog'
 import { OdometerFormDialog } from './components/OdometerFormDialog'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
@@ -48,16 +50,21 @@ import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 const NO_RECORDS: readonly VehicleMaintenanceRead[] = []
 
 export function VehicleMaintenancePage(): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const lang = i18n.language
-  const isAr = isArabic(lang)
+  const { t } = useTranslation()
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
   const canEdit = has('vehicles.edit')
   const canDelete = has('vehicles.delete')
   const isMobile = useIsMobile()
 
-  const [addOpen, setAddOpen] = useState(false)
+  const addOverlay = useUrlOverlay('action', ['vehicle'])
+  const [initialVehicle] = useSearchParam('vehicle')
+  const fleetQuery = useQuery({
+    queryKey: [...VEHICLE_QUERY_KEYS.list, {}],
+    queryFn: () => api.listVehicles({}),
+    enabled: canEdit,
+    staleTime: 60_000,
+  })
   const [printOpen, setPrintOpen] = useState(false)
   const now = new Date()
   const [rawMonth, setMonth] = useSearchParam('month')
@@ -70,14 +77,12 @@ export function VehicleMaintenancePage(): React.JSX.Element {
   const odometerQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.odometer(month),
     queryFn: () => api.getVehicleOdometer(month),
-    enabled: tab === 'log',
   })
   const [recordToDelete, setRecordToDelete] = useState<VehicleMaintenanceRead | null>(null)
 
   const recordsQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.maintenance(recordsMonth),
     queryFn: () => api.listVehicleMaintenance(recordsMonth),
-    enabled: tab === 'records',
   })
 
   const deleteRecord = useMutation({
@@ -95,74 +100,45 @@ export function VehicleMaintenancePage(): React.JSX.Element {
 
   const records = recordsQuery.data ?? NO_RECORDS
 
-  /** The two figures the register exists to answer, from the server's own
-   *  `due_state` — never re-derived from `next_due` here, which would let the
-   *  page and the reminder disagree about the same date. */
-  const counts = useMemo(() => {
-    let overdue = 0
-    let due = 0
-    for (const record of records) {
-      if (record.due_state === 'overdue') overdue += 1
-      else if (record.due_state === 'due') due += 1
-    }
-    return { overdue, due }
-  }, [records])
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <header className="shrink-0 px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <Link
-          to="/vehicles"
-          className="inline-flex items-center gap-1.5 text-[0.8em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none"
-        >
-          {/* The chevron points the way back, which is rightwards in Arabic. */}
-          {isAr ? (
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          )}
-          {t('vehicles.backHub')}
-        </Link>
+    <ServicePage
+      band={{
+        back: { to: '/vehicles', label: t('vehicles.backHub') },
+        title: t('vehicles.maintenanceTitle'),
+        description: t('vehicles.maintenanceDesc'),
+        actions: canEdit ? (
+          <button type="button" className={BAND_BUTTON} disabled={!odometerQuery.isSuccess} onClick={() => setPrintOpen(true)}>
+            <FileText className="h-3.5 w-3.5" aria-hidden />
+            {t('vehicles.printOdometerForm')}
+          </button>
+        ) : null,
+      }}
+      counter={canEdit ? (
+        <ServiceCounter artwork="vehicle-maintenance" title={t('vehicles.start.maintenance')}
+          description={t('vehicles.addMaintenanceDesc')} actionLabel={t('vehicles.addMaintenance')}
+          vehicles={fleetQuery.data} onStart={(vehicleId) => addOverlay.open('maintenance', { vehicle: String(vehicleId) })} />
+      ) : null}
+    >
+      <RegisterBar>
+        <RegisterTabs label={t('vehicles.maintenanceTitle')} value={tab} onChange={setTab} items={[
+          { key: 'log', label: t('vehicles.monthlyLog') },
+          { key: 'records', label: t('vehicles.maintenanceRecords'), count: recordsQuery.isSuccess ? formatCount(records.length) : undefined },
+        ]} />
+        <RegisterStats items={[
+          { label: t('vehicles.fleetKmDriven'), value: <><bdi dir="ltr">{odometerQuery.data ? formatCount(odometerQuery.data.total_km_driven) : EMPTY_VALUE}</bdi> {t('vehicles.km')}</> },
+          { label: t('vehicles.totalMaintenanceCost'), value: recordsScope === 'all' && tab === 'records'
+            ? recordsQuery.isSuccess ? <AedAmount value={records.reduce((sum, record) => sum + record.cost, 0)} /> : EMPTY_VALUE
+            : odometerQuery.data ? <AedAmount value={odometerQuery.data.total_maintenance_cost} /> : EMPTY_VALUE },
+        ]} />
+      </RegisterBar>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <MonthSwitcher {...coordinate} onChange={(next) => setMonth(monthKey(next.year, next.month))}
+          labels={{ previous: t('vehicles.previousMonth'), next: t('vehicles.nextMonth'), label: t('vehicles.month') }} />
+        <RefreshButton />
+      </div>
 
-        <div className="mt-1.5 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-foreground md:text-[1.55em]">
-              {t('vehicles.maintenanceTitle')}
-            </h1>
-            <p className="mt-1 hidden text-[0.84em] text-muted-foreground md:block">
-              {t('vehicles.maintenanceDesc')}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {canEdit && (tab === 'log' ? (
-              <Button type="button" size="sm" disabled={!odometerQuery.isSuccess} onClick={() => setPrintOpen(true)}>
-                <FileText className="h-3.5 w-3.5" aria-hidden />
-                {t('vehicles.printOdometerForm')}
-              </Button>
-            ) : (
-              <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
-                <Wrench className="h-3.5 w-3.5" aria-hidden />
-                {t('vehicles.addMaintenance')}
-              </Button>
-            ))}
-            <RefreshButton />
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <MonthSwitcher
-            {...coordinate}
-            onChange={(next) => setMonth(monthKey(next.year, next.month))}
-            labels={{ previous: t('vehicles.previousMonth'), next: t('vehicles.nextMonth'), label: t('vehicles.month') }}
-          />
-          <div role="group" aria-label={t('vehicles.maintenanceTitle')} className="flex flex-wrap gap-1.5">
-            <TabChip active={tab === 'log'} label={t('vehicles.monthlyLog')} onClick={() => setTab('log')} />
-            <TabChip active={tab === 'records'} label={t('vehicles.maintenanceRecords')} onClick={() => setTab('records')} />
-          </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
+      <RegisterSheet>
         {tab === 'log' ? (
           odometerQuery.isError ? (
             <EmptyState icon={Gauge} message={t('common.loadError')} actionLabel={t('common.retry')} onAction={() => void odometerQuery.refetch()} />
@@ -176,20 +152,6 @@ export function VehicleMaintenancePage(): React.JSX.Element {
           <input type="checkbox" checked={recordsScope === 'all'} onChange={(event) => setRecordsScope(event.target.checked ? 'all' : null)} />
           {t('vehicles.allMonths')}
         </label>
-        <dl className="mb-4 grid grid-cols-2 gap-2.5 sm:max-w-[26rem]">
-          <SummaryBox
-            state="overdue"
-            count={counts.overdue}
-            known={recordsQuery.isSuccess}
-            lang={lang}
-          />
-          <SummaryBox
-            state="due"
-            count={counts.due}
-            known={recordsQuery.isSuccess}
-            lang={lang}
-          />
-        </dl>
 
         {recordsQuery.isError ? (
           <div className="rounded-xl border border-border bg-surface">
@@ -211,18 +173,13 @@ export function VehicleMaintenancePage(): React.JSX.Element {
             <EmptyState
               icon={Wrench}
               message={t('vehicles.noMaintenance')}
-              // The empty register says what to do next instead of only that it
-              // is empty — but only to an operator who may actually do it.
-              description={canEdit ? t('vehicles.addMaintenanceDesc') : undefined}
-              actionLabel={canEdit ? t('vehicles.addMaintenance') : undefined}
-              onAction={canEdit ? () => setAddOpen(true) : undefined}
             />
           </div>
         ) : (
-          <section className="overflow-hidden rounded-xl border border-border bg-surface">
+          <section>
             <header className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-3 py-2.5">
               <p className="text-[0.72rem] text-muted-foreground">
-                <bdi>{`${formatNumber(records.length, lang)} ${t('vehicles.records')}`}</bdi>
+                <bdi>{`${formatCount(records.length)} ${t('vehicles.records')}`}</bdi>
               </p>
             </header>
 
@@ -275,12 +232,9 @@ export function VehicleMaintenancePage(): React.JSX.Element {
           </section>
         )}
         </>}
-      </div>
+      </RegisterSheet>
 
-      {/* The dialog owns its own mutation, toast and invalidation; the register
-          only owns whether it is open. No vehicle is passed, so it offers the
-          fleet picker. */}
-      {canEdit && <MaintenanceDialog open={addOpen} onOpenChange={setAddOpen} />}
+      {canEdit && <MaintenanceDialog open={addOverlay.value === 'maintenance'} onOpenChange={(open) => { if (!open) addOverlay.close() }} initialVehicleId={initialVehicle ? Number(initialVehicle) : null} />}
       {canEdit && odometerQuery.data && (
         <OdometerFormDialog key={month} month={month} rows={odometerQuery.data.rows} open={printOpen} onOpenChange={setPrintOpen} />
       )}
@@ -306,56 +260,10 @@ export function VehicleMaintenancePage(): React.JSX.Element {
           }}
         />
       )}
-    </div>
+    </ServicePage>
   )
 }
 
-// ── Summary ─────────────────────────────────────────────────────────────────
-
-/**
- * One of the two reminder figures. The badge carries the word and the glyph, so
- * the box never signals its meaning by colour alone; the tint is added only
- * when the count is non-zero, which is what makes a real backlog stand out from
- * a clean register.
- */
-function SummaryBox({
-  state,
-  count,
-  known,
-  lang,
-}: {
-  state: 'overdue' | 'due'
-  count: number
-  /** False until the register has actually been fetched. */
-  known: boolean
-  lang: string
-}): React.JSX.Element {
-  const quiet = !known || count === 0
-  return (
-    <div
-      className={cn(
-        'flex items-center justify-between gap-3 rounded-xl border px-3.5 py-2.5 transition-colors motion-reduce:transition-none',
-        quiet
-          ? 'border-border bg-surface'
-          : state === 'overdue'
-            ? 'border-destructive/40 bg-destructive/5'
-            : 'border-warning/40 bg-warning-soft',
-      )}
-    >
-      <dt>
-        <VehicleStatusBadge family="due" status={state} />
-      </dt>
-      <dd
-        className={cn(
-          'font-mono text-lg font-bold tabular-nums',
-          quiet ? 'text-muted-foreground' : 'text-foreground',
-        )}
-      >
-        {known ? formatNumber(count, lang) : EMPTY_VALUE}
-      </dd>
-    </div>
-  )
-}
 
 // ── Rows and cards ──────────────────────────────────────────────────────────
 
@@ -399,11 +307,11 @@ function MaintenanceRecordRow({
         {record.odometer_km == null ? (
           EMPTY_VALUE
         ) : (
-          <bdi>{`${formatNumber(record.odometer_km, lang)} ${t('vehicles.km')}`}</bdi>
+          <bdi>{`${formatCount(record.odometer_km)} ${t('vehicles.km')}`}</bdi>
         )}
       </TableCell>
       <TableCell className="text-[0.76rem] font-medium">
-        <bdi>{formatAed(record.cost, lang)}</bdi>
+        <AedAmount value={record.cost} />
       </TableCell>
       <TableCell className="text-[0.76rem]" dir="auto">
         {localized(record.vendor_ar, record.vendor_en, lang) || EMPTY_VALUE}
@@ -510,11 +418,11 @@ function MaintenanceRecordCard({
           {record.odometer_km == null ? (
             EMPTY_VALUE
           ) : (
-            <bdi>{`${formatNumber(record.odometer_km, lang)} ${t('vehicles.km')}`}</bdi>
+            <bdi>{`${formatCount(record.odometer_km)} ${t('vehicles.km')}`}</bdi>
           )}
         </Fact>
         <Fact label={t('vehicles.cost')}>
-          <bdi>{formatAed(record.cost, lang)}</bdi>
+          <AedAmount value={record.cost} />
         </Fact>
         <Fact label={t('vehicles.garage')}>
           <span dir="auto">
