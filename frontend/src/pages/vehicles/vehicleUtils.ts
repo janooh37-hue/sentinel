@@ -14,7 +14,7 @@ import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.j
 
 import type { BadgeProps } from '@/components/ui/badge'
 import { apiErrorMessage } from '@/lib/api'
-import type { VehicleFileRead } from '@/lib/api'
+import type { VehicleAccidentInsurance, VehicleAccidentRead, VehicleFileRead } from '@/lib/api'
 import { formatNumber, isArabic, localized } from '@/lib/language'
 import { normalizeDigits } from '@/lib/utils'
 
@@ -27,6 +27,15 @@ export type DueState = 'overdue' | 'due' | 'scheduled'
 export type AccidentStatus = 'open' | 'closed'
 export type MaintenanceType = 'service' | 'repair' | 'tires' | 'other'
 export type PaymentStatus = 'unknown' | 'unpaid' | 'paid'
+export type ClaimStatus = 'not_submitted' | 'submitted' | 'under_repair' | 'settled'
+export type CostPayer = 'insurer' | 'company' | 'driver'
+export const CLAIM_STATUSES: readonly ClaimStatus[] = [
+  'not_submitted',
+  'submitted',
+  'under_repair',
+  'settled',
+]
+export const COST_PAYERS: readonly CostPayer[] = ['insurer', 'company', 'driver']
 
 /** The narrow `t` shape the helpers need — assignable from i18next's `t`. */
 export type Translate = (key: string, options?: Record<string, unknown>) => string
@@ -78,6 +87,67 @@ export function paymentTone(status: PaymentStatus): VehicleTone {
   }
 }
 
+/** Where the insurance claim on an accident report stands. */
+export function claimTone(status: ClaimStatus): VehicleTone {
+  switch (status) {
+    case 'not_submitted':
+      return 'neutral'
+    case 'submitted':
+      return 'info'
+    case 'under_repair':
+      return 'warning'
+    case 'settled':
+      return 'active'
+  }
+}
+
+/** The form's working copy: `''` is «not set». */
+export interface InsuranceDraft {
+  claim_no: string
+  claim_status: ClaimStatus | ''
+  insurer: string
+  repair_garage: string
+  cost_payer: CostPayer | ''
+}
+
+export const EMPTY_INSURANCE: InsuranceDraft = {
+  claim_no: '',
+  claim_status: '',
+  insurer: '',
+  repair_garage: '',
+  cost_payer: '',
+}
+
+export function insuranceDraftOf(accident: VehicleAccidentRead): InsuranceDraft {
+  return {
+    claim_no: accident.claim_no ?? '',
+    claim_status: accident.claim_status ?? '',
+    insurer: accident.insurer ?? '',
+    repair_garage: accident.repair_garage ?? '',
+    cost_payer: accident.cost_payer ?? '',
+  }
+}
+
+export function insurancePayload(draft: InsuranceDraft): VehicleAccidentInsurance {
+  return {
+    claim_no: draft.claim_no.trim() || null,
+    claim_status: draft.claim_status || null,
+    insurer: draft.insurer.trim() || null,
+    repair_garage: draft.repair_garage.trim() || null,
+    cost_payer: draft.cost_payer || null,
+  }
+}
+
+export function hasInsurance(accident: VehicleAccidentRead): boolean {
+  return Boolean(
+    accident.claim_no ||
+      accident.claim_status ||
+      accident.insurer ||
+      accident.repair_garage ||
+      accident.cost_payer,
+  )
+}
+
 // ── Language ────────────────────────────────────────────────────────────────
 
 /** Label for an employee that may be unassigned (imported EVG fines have no
@@ -92,6 +162,17 @@ export function employeeLabel(
 }
 
 // ── Numbers, money, dates ───────────────────────────────────────────────────
+
+const COUNT_FMT = new Intl.NumberFormat('en-US', {
+  numberingSystem: 'latn',
+  maximumFractionDigits: 0,
+})
+
+/** A count or a distance, grouped, in Latin digits in both languages — the
+ *  Vehicle Services rule for every number on screen. */
+export function formatCount(value: number): string {
+  return COUNT_FMT.format(value)
+}
 
 /** Whole dirhams, with the currency word after the amount in both languages
  *  («17,975 AED» / «١٧٩٧٥ د.إ»). Wrap in `<bdi>` at the render site. */
@@ -384,6 +465,7 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
+  ACCIDENT_ARABIC_REQUIRED: 'vehicles.arabicRequired',
   MAINTENANCE_CONTRACTOR_MISSING: 'vehicles.maintenanceContractorRequired',
   MAINTENANCE_REQUEST_NOT_OPEN: 'vehicles.maintenanceRequestNotOpen',
   ODOMETER_CLOSING_BELOW_OPENING: 'vehicles.odometerClosingBelowOpening',
