@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-device="desktop" data-variant="a">
+<html lang="en" data-device="desktop">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,19 +9,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="core.css">
-  <link rel="stylesheet" href="a.css">
-  <link rel="stylesheet" href="b.css">
-  <link rel="stylesheet" href="c.css">
+  <link rel="stylesheet" href="views.css">
 </head>
 <body>
 <!-- Review bar: mockup chrome only. Everything inside .frame is the proposed product UI. -->
 <div class="mockbar">
   <a href="index.html">Vehicles UX</a>
-  <div class="seg" role="group" aria-label="Direction">
-    <button type="button" data-act="variant" data-v="a">A · Sharper register</button>
-    <button type="button" data-act="variant" data-v="b">B · Work queue</button>
-    <button type="button" data-act="variant" data-v="c">C · Counter and paper</button>
-  </div>
+  <span>Counter and paper · request first</span>
   <select id="screen-pick" aria-label="Screen">
     <option value="hub">Vehicle Services hub</option>
     <option value="accidents">Accident reports</option>
@@ -48,9 +42,7 @@
 </div>
 <script src="locale.js"></script>
 <script src="core.js"></script>
-<script src="a.js"></script>
-<script src="b.js"></script>
-<script src="c.js"></script>
+<script src="views.js"></script>
 <script>render()</script>
 </body>
 </html>

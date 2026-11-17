@@ -1,9 +1,9 @@
 /*
- * Vehicles UX mockups: shared state, fabricated data, real product copy and the
- * form content every direction renders. A direction (a.js / b.js / c.js) only
- * decides layout: it registers `V.<id> = { screen(), overlay(spec) }`.
+ * Vehicle Services mockup (direction C, «Counter and paper»): state, fabricated
+ * data, real product copy and the form content. views.js decides layout and
+ * sets `VIEW = { screen(), overlay(spec) }`.
  *
- * Rules decided with the operator and applied in all three directions:
+ * Rules decided with the operator:
  *   1. A form asks in the app language only. No «· AR» / «· EN» pairs and no
  *      field forced in the other language. The Arabic letter asks for its
  *      Arabic wording on the letter step, and only when it is missing.
@@ -12,20 +12,20 @@
  *   3. Insurance details are optional and can be added at any time.
  *   4. A report can be closed without a cost.
  *   5. Numbers use Latin digits, money is whole dirhams with the dirham mark.
+ *   6. A new request is the first thing on every page, ahead of its register.
  * All records below are fabricated.
  */
 'use strict'
 
 const TODAY = '2026-11-17'
-const V = {}
+let VIEW
 const qs = new URLSearchParams(location.search)
 const S = {
-  v: ['a', 'b', 'c'].includes(qs.get('v')) ? qs.get('v') : 'a',
   lang: qs.get('lang') === 'en' ? 'en' : 'ar',
   device: qs.get('device') === 'mobile' ? 'mobile' : 'desktop',
   route: ['hub', 'accidents', 'maintenance', 'vehicle', 'fines'].includes(qs.get('screen')) ? qs.get('screen') : 'hub',
   vehicleId: 2, tab: 'accidents', mTab: 'records',
-  acFilter: 'all', fineFilter: 'all', site: null, expand: null, overlay: null,
+  acFilter: 'all', fineFilter: 'all', site: null, overlay: null,
 }
 
 // ── Copy: real locale first, new strings for what this work adds ────────────
@@ -44,12 +44,10 @@ const NEW = {
     arabicForLetterDesc: 'The letter is issued in Arabic. This report was written in English, so add the Arabic wording once here.',
     locationAr: 'Location in Arabic', descriptionAr: 'Description in Arabic',
     paperPending: 'Arabic wording is added when the letter is issued',
-    needsAttention: 'Needs attention', needsAttentionDesc: 'Items across the fleet that are waiting for an action.', allClear: 'Nothing is waiting.',
-    manageFleet: 'Fleet administration', overview: 'Overview', services: 'Services',
-    q_license_expired: 'Licence expired on {date}', q_license_due: 'Licence expires on {date}',
-    q_accident_open: 'Accident report still open, filed {date}', q_maint_overdue: 'Service overdue since {date}', q_maint_due: 'Service due on {date}',
-    q_fines_unpaid: '{n} unpaid fines', siteName: 'Site name', unchanged: 'This step is unchanged, so it is not part of the mockup.',
-    allStatuses: 'All', total: 'Total', details: 'Details', hideDetails: 'Hide details', vehicleSaved: 'Vehicle added.',
+    manageFleet: 'Fleet administration', siteName: 'Site name', unchanged: 'This step is unchanged, so it is not part of the mockup.',
+    startAccident: 'File an accident report', startMaintenance: 'Log a maintenance job', startFine: 'Record a fine',
+    newForVehicle: 'New for this vehicle', vehicle: 'Vehicle',
+    allStatuses: 'All', total: 'Total', vehicleSaved: 'Vehicle added.',
     navDashboard: 'Dashboard', navEmployees: 'Employees', navVehicles: 'Vehicles', navBooks: 'Books', navLedger: 'Ledger',
     renewalsEmpty: 'Renewals, photos and certificates are unchanged in this mockup.', liveLetter: 'Official letter, as it will be issued',
     reportNo: 'Report', lastService: 'Last service', reminder: 'A reminder appears when the next service date approaches.',
@@ -68,12 +66,10 @@ const NEW = {
     arabicForLetterDesc: 'يصدر الخطاب باللغة العربية. كُتب هذا البلاغ بالإنجليزية، لذا أضف الصياغة العربية هنا مرة واحدة.',
     locationAr: 'الموقع بالعربية', descriptionAr: 'الوصف بالعربية',
     paperPending: 'تُضاف الصياغة العربية عند إصدار الخطاب',
-    needsAttention: 'بحاجة إلى إجراء', needsAttentionDesc: 'بنود في الأسطول تنتظر إجراءً.', allClear: 'لا توجد بنود معلّقة.',
-    manageFleet: 'إدارة الأسطول', overview: 'نظرة عامة', services: 'الخدمات',
-    q_license_expired: 'انتهى الترخيص في {date}', q_license_due: 'ينتهي الترخيص في {date}',
-    q_accident_open: 'بلاغ حادث ما زال مفتوحاً، سُجّل في {date}', q_maint_overdue: 'صيانة متأخرة منذ {date}', q_maint_due: 'صيانة مستحقة في {date}',
-    q_fines_unpaid: '{n} مخالفات غير مسدّدة', siteName: 'اسم الموقع', unchanged: 'هذه الخطوة لم تتغير، لذا ليست ضمن النموذج.',
-    allStatuses: 'الكل', total: 'الإجمالي', details: 'التفاصيل', hideDetails: 'إخفاء التفاصيل', vehicleSaved: 'تمت إضافة المركبة.',
+    manageFleet: 'إدارة الأسطول', siteName: 'اسم الموقع', unchanged: 'هذه الخطوة لم تتغير، لذا ليست ضمن النموذج.',
+    startAccident: 'تسجيل بلاغ حادث', startMaintenance: 'تسجيل عملية صيانة', startFine: 'تسجيل مخالفة',
+    newForVehicle: 'طلب جديد لهذه المركبة', vehicle: 'المركبة',
+    allStatuses: 'الكل', total: 'الإجمالي', vehicleSaved: 'تمت إضافة المركبة.',
     navDashboard: 'لوحة التحكم', navEmployees: 'الموظفون', navVehicles: 'المركبات', navBooks: 'الكتب', navLedger: 'السجل',
     renewalsEmpty: 'التجديدات والصور والشهادات لم تتغير في هذا النموذج.', liveLetter: 'الخطاب الرسمي كما سيصدر',
     reportNo: 'بلاغ', lastService: 'آخر صيانة', reminder: 'يظهر تنبيه عند اقتراب موعد الصيانة القادمة.',
@@ -171,7 +167,6 @@ const K = {
   plate: (p, size = '') => `<span class="plate ${size}">${esc(p)}</span>`,
   date: (iso, time) => `<bdi class="mono ltr">${iso ? esc(iso) + (time ? ' ' + esc(time) : '') : '—'}</bdi>`,
   art: (name) => `<img class="art" src="assets/vehicle-${name}.webp" alt="">`,
-  back: () => `<button type="button" class="link" data-act="go" data-to="hub">${K.ic('chevL', 'flip')}${t('backHub')}</button>`,
   badge(family, status, toggleId) {
     const map = {
       expiry: { valid: ['success', 'check', 'valid'], due: ['warning', 'clock', 'due'], expired: ['danger', 'alert', 'expired'] },
@@ -197,14 +192,14 @@ const K = {
       maintDue: MNT.filter((m) => ['overdue', 'due'].includes(dueState(m.next))).length,
     }
   },
-  /** The four working services, in the hub's order, with their live figure. */
+  /** The four working services, in the hub's order: live figure, register, and the request each one starts. */
   services() {
     const s = K.summary()
     return [
-      { id: 'fines', art: 'fines', title: t('finesService'), desc: t('finesServiceDesc'), n: s.finesCount, unit: t('fines.status.unpaid'), extra: K.aed(s.finesAmount), to: 'fines', hot: s.finesCount > 0 },
-      { id: 'renew', art: 'licence-renewal', title: t('renewService'), desc: t('renewServiceDesc'), n: s.license, unit: t('attention'), to: 'hub', hot: s.license > 0 },
-      { id: 'accidents', art: 'accident', title: t('accidentService'), desc: t('accidentServiceDesc'), n: s.openAccidents, unit: t('openStatus'), to: 'accidents', hot: s.openAccidents > 0 },
-      { id: 'maintenance', art: 'maintenance', title: t('maintenanceService'), desc: t('maintenanceServiceDesc'), n: s.maintDue, unit: t('dueSoon'), to: 'maintenance', hot: s.maintDue > 0 },
+      { id: 'fines', art: 'fines', title: t('finesService'), n: s.finesCount, unit: t('fines.status.unpaid'), to: 'fines', hot: s.finesCount > 0, make: { label: t('addFine'), act: 'noop' } },
+      { id: 'renew', art: 'licence-renewal', title: t('renewService'), n: s.license, unit: t('attention'), to: 'hub', hot: s.license > 0, make: { label: t('renew'), act: 'noop' } },
+      { id: 'accidents', art: 'accident', title: t('accidentService'), n: s.openAccidents, unit: t('openStatus'), to: 'accidents', hot: s.openAccidents > 0, make: { label: t('newReport'), act: 'overlay', kind: 'accident' } },
+      { id: 'maintenance', art: 'maintenance', title: t('maintenanceService'), n: s.maintDue, unit: t('dueSoon'), to: 'maintenance', hot: s.maintDue > 0, make: { label: t('addMaintenance'), act: 'overlay', kind: 'maintenance' } },
     ]
   },
   /** Renew filters the fleet ledger in place today; that behaviour is unchanged, so it is not mocked. */
@@ -215,26 +210,6 @@ const K = {
     { art: 'sites', title: t('sitesService'), act: 'overlay', kind: 'sites' },
     { art: 'register', title: t('importService'), act: 'noop' },
   ],
-  /** Cross-service worklist, most urgent first. */
-  queue() {
-    const q = []
-    for (const v of VEH) {
-      const st = expiryState(v.expiry)
-      if (st !== 'valid') q.push({ rank: st === 'expired' ? 0 : 3, art: 'licence-renewal', veh: v, text: t(st === 'expired' ? 'q_license_expired' : 'q_license_due', { date: K.date(v.expiry) }), badge: K.badge('expiry', st), label: t('renew'), act: 'noop' })
-    }
-    // Insurance details are optional, so a report waits for its closure only, never for them.
-    for (const a of ACC) if (a.status === 'open') q.push({ rank: 1, art: 'accident', veh: vOf(a.veh), text: t('q_accident_open', { date: K.date(a.date) }), badge: K.badge('accident', 'open'), label: t('open'), act: 'go', to: 'accidents' })
-    for (const m of MNT) {
-      const st = dueState(m.next)
-      if (st === 'overdue' || st === 'due') q.push({ rank: st === 'overdue' ? 2 : 4, art: 'maintenance', veh: vOf(m.veh), text: t(st === 'overdue' ? 'q_maint_overdue' : 'q_maint_due', { date: K.date(m.next) }), badge: K.badge('due', st), label: t('addMaintenance'), act: 'overlay', kind: 'maintenance', id: m.veh })
-    }
-    const unpaid = FINES.filter((f) => f.status === 'unpaid')
-    for (const v of VEH) {
-      const mine = unpaid.filter((f) => f.veh === v.id)
-      if (mine.length > 1) q.push({ rank: 5, art: 'fines', veh: v, text: t('q_fines_unpaid', { n: mine.length }), badge: K.aed(sum(mine, (f) => f.amount)), label: t('open'), act: 'go', to: 'fines' })
-    }
-    return q.sort((x, y) => x.rank - y.rank)
-  },
   hasIns: (a) => Object.values(a.ins).some(Boolean),
   /** Only what has been recorded: an optional field that is empty is not shown as a gap. */
   insFacts(a) {
@@ -252,7 +227,7 @@ const K = {
   fines: () => (S.fineFilter === 'all' ? FINES : FINES.filter((f) => f.status === S.fineFilter)),
   topnav: () => `<header class="topnav"><img src="assets/gssg-logo.png" alt=""><strong>GSSG Manager</strong><nav aria-label="GSSG Manager">${['Dashboard', 'Employees', 'Vehicles', 'Books', 'Ledger'].map((n) => `<span class="${n === 'Vehicles' ? 'on' : ''}">${t('nav' + n)}</span>`).join('')}</nav></header>`,
   formAlert: () => `<p class="alert" data-alert role="alert" hidden>${t('requiredFields')}</p>`,
-  /** `data-*` for an item that carries its own action (queue rows, admin buttons). */
+  /** `data-*` for an item that carries its own action (a door's request, an administration link). */
   actAttrs: (x) => `data-act="${x.act}"${x.kind ? ` data-kind="${x.kind}"` : ''}${x.id != null ? ` data-id="${x.id}"` : ''}${x.to ? ` data-to="${x.to}"` : ''}`,
   groups: () => SITES.filter((s) => S.site == null || s.id === S.site).map((site) => ({ site, vehicles: VEH.filter((v) => v.site === site.id) })).filter((g) => g.vehicles.length),
   licence: (v) => `<span class="two-line"><strong style="display:flex;flex-wrap:wrap;align-items:center;gap:.4rem">${K.date(v.expiry)}${K.badge('expiry', expiryState(v.expiry))}</strong><small>${t('insuranceExpiry')} · ${v.ins ? K.date(v.ins) : t('insuranceNotRecorded')}</small></span>`,
@@ -317,14 +292,15 @@ function insuranceFields(i = {}) {
 function spec() {
   const o = S.overlay
   if (!o) return null
-  const lockedV = o.id != null ? vOf(o.id) : null
+  /** The vehicle a maintenance record opens on: fixed by the vehicle file, or picked at the counter. */
+  const lockedV = (o.kind === 'maintenance' && vOf(o.id ?? o.pre)) || null
   if (o.kind === 'accident') {
     const locked = o.id != null ? vOf(o.id) : null
     return {
       form: 'accident', title: t('newReport'), desc: t('addAccidentDesc'), submit: t('save'), paper: paper(null, true),
       sections: [
         { title: t('secIncident'), html: `<div class="grid2">
-          ${locked ? `<div class="fld full"><span class="lbl">${t('selectedVehicle')}</span><div>${K.plate(locked.plate)}</div><input type="hidden" name="veh" value="${locked.id}"></div>` : fld(t('selectedVehicle'), sel('veh', vehicleOptions(), '', 'data-bind-src'), { req: true, full: true })}
+          ${locked ? `<div class="fld full"><span class="lbl">${t('selectedVehicle')}</span><div>${K.plate(locked.plate)}</div><input type="hidden" name="veh" value="${locked.id}"></div>` : fld(t('selectedVehicle'), sel('veh', vehicleOptions(), o.pre ?? ''), { req: true, full: true })}
           ${fld(t('date'), inp('date', `type="date" class="inp mono" value="${TODAY}" required`), { req: true })}
           ${fld(t('time'), inp('time', 'type="time" class="inp mono" value="09:30" required'), { req: true })}
           ${fld(t('driver'), sel('emp', [['', t('unassigned')], ...EMP.map((e) => [e.id, `${loc(e.ar, e.en)} · ${e.id}`])]))}
@@ -410,7 +386,7 @@ function spec() {
 
 /** The GSSG-VA letter. Always Arabic: it prints `location_ar` / `description_ar`. */
 function paper(a, live) {
-  const v = a ? vOf(a.veh) : VEH[0]
+  const v = a ? vOf(a.veh) : vOf(S.overlay?.id ?? S.overlay?.pre) ?? VEH[0]
   const pending = `<span class="pending">${NEW.ar.paperPending}</span>`
   const arabicEntry = S.overlay?.kind === 'letter' || S.lang === 'ar'
   const cell = (name, value) => (live && arabicEntry ? `<span data-bind="${name}" data-empty="…">${esc(value) || '…'}</span>` : esc(value) || pending)
@@ -440,8 +416,13 @@ function toast(message) {
   toast.timer = setTimeout(() => el.classList.remove('show'), 2600)
 }
 const ACTS = {
-  go(el) { S.route = el.dataset.to; if (el.dataset.id) S.vehicleId = Number(el.dataset.id); if (el.dataset.tab) S.tab = el.dataset.tab; S.overlay = null; S.expand = null; render(true) },
-  overlay(el) { S.overlay = { kind: el.dataset.kind, id: el.dataset.id ? Number(el.dataset.id) : null }; render() },
+  go(el) { S.route = el.dataset.to; if (el.dataset.id) S.vehicleId = Number(el.dataset.id); if (el.dataset.tab) S.tab = el.dataset.tab; S.overlay = null; render(true) },
+  /** `data-pick`: the request starts on the vehicle chosen at the counter, still editable in the form. */
+  overlay(el) {
+    const pick = 'pick' in el.dataset ? Number(el.closest('[data-start]').querySelector('select').value) : null
+    S.overlay = { kind: el.dataset.kind, id: el.dataset.id ? Number(el.dataset.id) : null, pre: pick }
+    render()
+  },
   close() { S.overlay = null; render() },
   status(el) { const a = ACC.find((x) => x.id === Number(el.dataset.id)); a.status = a.status === 'open' ? 'closed' : 'open'; toast(t('statusUpdated')); render() },
   acFilter(el) { S.acFilter = S.acFilter === el.dataset.v ? 'all' : el.dataset.v; render() },
@@ -449,11 +430,9 @@ const ACTS = {
   site(el) { S.site = el.dataset.v ? Number(el.dataset.v) : null; render() },
   tab(el) { S.tab = el.dataset.v; render() },
   mtab(el) { S.mTab = el.dataset.v; render() },
-  expand(el) { const id = Number(el.dataset.id); S.expand = S.expand === id ? null : id; render() },
   pay(el) { FINES.find((f) => f.id === Number(el.dataset.id)).status = 'paid'; toast(t('fines.recordPayment')); render() },
   noop() { toast(t('unchanged')) },
   insToggle(el) { const box = el.parentElement.querySelector('[data-ins]'); box.hidden = !box.hidden; el.setAttribute('aria-expanded', String(!box.hidden)); if (!box.hidden) box.querySelector('input').focus() },
-  variant(el) { S.v = el.dataset.v; render(true) },
   lang(el) { S.lang = el.dataset.v; render() },
   device(el) { S.device = el.dataset.v; render() },
 }
@@ -517,15 +496,14 @@ function render(top = false) {
   const scroller = app.querySelector('.scroll'), y = top || !scroller ? 0 : scroller.scrollTop
   const hadOverlay = ov.childElementCount > 0
   document.documentElement.dataset.device = S.device
-  document.documentElement.dataset.variant = S.v
   frame.dir = S.lang === 'ar' ? 'rtl' : 'ltr'
   frame.lang = S.lang
-  app.innerHTML = K.topnav() + V[S.v].screen()
-  ov.innerHTML = S.overlay ? V[S.v].overlay(spec()) : ''
+  app.innerHTML = K.topnav() + VIEW.screen()
+  ov.innerHTML = S.overlay ? VIEW.overlay(spec()) : ''
   const next = app.querySelector('.scroll')
   if (next) next.scrollTop = y
   if (S.overlay && !hadOverlay) ov.querySelector('input:not([type=hidden]), select, textarea')?.focus()
-  for (const b of document.querySelectorAll('.mockbar [data-act]')) b.setAttribute('aria-pressed', String(S[b.dataset.act === 'variant' ? 'v' : b.dataset.act] === b.dataset.v))
+  for (const b of document.querySelectorAll('.mockbar [data-act]')) b.setAttribute('aria-pressed', String(S[b.dataset.act] === b.dataset.v))
   document.getElementById('screen-pick').value = S.route
-  history.replaceState(null, '', `?v=${S.v}&lang=${S.lang}&device=${S.device}&screen=${S.route}`)
+  history.replaceState(null, '', `?lang=${S.lang}&device=${S.device}&screen=${S.route}`)
 }
