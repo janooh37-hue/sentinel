@@ -19,6 +19,7 @@ from app.core.vehicle_letters import (
 from app.db.models import Book, Document, Employee, User, VehicleMaintenanceRequest
 from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
+    AccidentLetterRequest,
     LetterResult,
     VehicleMaintenanceRequestCreate,
     VehicleMaintenanceRequestResult,
@@ -153,8 +154,15 @@ def generate_accident_letter(
     accident_id: int,
     *,
     user: User,
+    arabic: AccidentLetterRequest | None = None,
 ) -> LetterResult:
-    """Generate, file, and link an official accident letter."""
+    """Generate, file, and link an official accident letter.
+
+    The letter is Arabic. A report written in English brings its Arabic
+    location and description here (``arabic``); they are stored on the report
+    before the letter is filed, and a letter is refused while either is still
+    missing.
+    """
     vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
     accident = next(
         (row for row in vehicle.accidents if row.id == accident_id),
@@ -172,21 +180,42 @@ def generate_accident_letter(
     if accident.letter_book_id is not None:
         return _existing_accident_letter(db, accident.letter_book_id)
 
+    if arabic is not None:
+        if arabic.location_ar is not None:
+            accident.location_ar = arabic.location_ar
+        if arabic.description_ar is not None:
+            accident.description_ar = arabic.description_ar
+    if not accident.location_ar or not accident.description_ar:
+        missing = [
+            name
+            for name, value in (
+                ("location_ar", accident.location_ar),
+                ("description_ar", accident.description_ar),
+            )
+            if not value
+        ]
+        db.rollback()
+        raise ValidationFailedError(
+            "ACCIDENT_ARABIC_REQUIRED",
+            "The official letter needs the Arabic location and description.",
+            accident_id=accident_id,
+            missing=missing,
+        )
+
     employee = accident.employee
     employee_label = None
     if employee is not None:
         employee_label = employee.name_ar or employee.name_en
     fields = accident_letter_fields(
         plate_label=vehicle_service.plate_label(vehicle),
-        vehicle_type_ar=vehicle.type_ar,
+        vehicle_type_ar=vehicle.type_ar or vehicle.type_en,
         vin=vehicle.vin,
-        site_ar=vehicle.site.name_ar,
+        site_ar=vehicle.site.name_ar or vehicle.site.name_en,
         date=accident.date,
         time=accident.time,
         employee_label=employee_label,
         location_ar=accident.location_ar,
         police_ref=accident.police_ref,
-        damage_cost=accident.damage_cost,
         status=accident.status,
         description_ar=accident.description_ar,
         today=date.today(),

@@ -28247,6 +28247,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AccidentLetterRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -28392,6 +28409,83 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/insurance": {
+      "put": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Vehicle Accident Insurance",
+        "operationId": "update_vehicle_accident_insurance_api_v1_vehicles__vehicle_id__accidents__accident_id__insurance_put",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "accident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Accident Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleAccidentInsurance"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleAccidentRead"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -36709,6 +36803,35 @@
         ],
         "title": "AbsenceRegisterRowRead",
         "description": "One register row across all employees: who, plus the episode."
+      },
+      "AccidentLetterRequest": {
+        "properties": {
+          "location_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Ar"
+          },
+          "description_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Ar"
+          }
+        },
+        "type": "object",
+        "title": "AccidentLetterRequest",
+        "description": "Arabic wording supplied on the letter step, for a report written in\nEnglish. Omitted fields keep what the report already holds."
       },
       "ActivityItemRead": {
         "properties": {
@@ -67458,6 +67581,75 @@
       },
       "VehicleAccidentCreate": {
         "properties": {
+          "claim_no": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim No"
+          },
+          "claim_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_submitted",
+                  "submitted",
+                  "under_repair",
+                  "settled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Status"
+          },
+          "insurer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurer"
+          },
+          "repair_garage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Garage"
+          },
+          "cost_payer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "insurer",
+                  "company",
+                  "driver"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Payer"
+          },
           "vehicle_id": {
             "type": "integer",
             "title": "Vehicle Id"
@@ -67484,8 +67676,14 @@
             "title": "Time"
           },
           "location_ar": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Location Ar"
           },
           "location_en": {
@@ -67500,8 +67698,14 @@
             "title": "Location En"
           },
           "description_ar": {
-            "type": "string",
-            "minLength": 1,
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Description Ar"
           },
           "description_en": {
@@ -67526,12 +67730,6 @@
             ],
             "title": "Police Ref"
           },
-          "damage_cost": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Damage Cost",
-            "default": 0
-          },
           "photo_file_ids": {
             "items": {
               "type": "integer"
@@ -67544,11 +67742,86 @@
         "required": [
           "vehicle_id",
           "date",
-          "time",
-          "location_ar",
-          "description_ar"
+          "time"
         ],
-        "title": "VehicleAccidentCreate"
+        "title": "VehicleAccidentCreate",
+        "description": "A report written in the operator's language: each of the location and\nthe description needs one language, either one. The official letter asks\nfor the Arabic wording later if it is missing."
+      },
+      "VehicleAccidentInsurance": {
+        "properties": {
+          "claim_no": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 64
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim No"
+          },
+          "claim_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_submitted",
+                  "submitted",
+                  "under_repair",
+                  "settled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Status"
+          },
+          "insurer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurer"
+          },
+          "repair_garage": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 128
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Garage"
+          },
+          "cost_payer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "insurer",
+                  "company",
+                  "driver"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Payer"
+          }
+        },
+        "type": "object",
+        "title": "VehicleAccidentInsurance",
+        "description": "The optional insurance claim on a report. Every field may stay empty;\na blank text means \"not recorded\" and is stored as NULL."
       },
       "VehicleAccidentRead": {
         "properties": {
@@ -67610,7 +67883,14 @@
             "title": "Time"
           },
           "location_ar": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Location Ar"
           },
           "location_en": {
@@ -67625,7 +67905,14 @@
             "title": "Location En"
           },
           "description_ar": {
-            "type": "string",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Description Ar"
           },
           "description_en": {
@@ -67650,9 +67937,71 @@
             ],
             "title": "Police Ref"
           },
-          "damage_cost": {
-            "type": "integer",
-            "title": "Damage Cost"
+          "claim_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim No"
+          },
+          "claim_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "not_submitted",
+                  "submitted",
+                  "under_repair",
+                  "settled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim Status"
+          },
+          "insurer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Insurer"
+          },
+          "repair_garage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Repair Garage"
+          },
+          "cost_payer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "insurer",
+                  "company",
+                  "driver"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Payer"
           },
           "status": {
             "type": "string",
@@ -67748,7 +68097,6 @@
           "description_ar",
           "description_en",
           "police_ref",
-          "damage_cost",
           "status",
           "photo_file_ids",
           "letter_book_id",

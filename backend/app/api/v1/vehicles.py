@@ -19,6 +19,7 @@ from app.db.models import User, VehicleFile
 from app.db.session import get_db
 from app.schemas.vehicle import (
     MONTH_PATTERN,
+    AccidentLetterRequest,
     EvgConfirmRequest,
     EvgConfirmResult,
     EvgPreviewJobCreated,
@@ -34,6 +35,7 @@ from app.schemas.vehicle import (
     OdometerRowRead,
     OdometerUpsert,
     VehicleAccidentCreate,
+    VehicleAccidentInsurance,
     VehicleAccidentRead,
     VehicleAccidentStatusUpdate,
     VehicleCertificateUpdate,
@@ -799,12 +801,14 @@ def generate_vehicle_accident_letter(
     accident_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    payload: AccidentLetterRequest | None = None,
 ) -> LetterResult:
     return vehicle_letter_service.generate_accident_letter(
         db,
         vehicle_id,
         accident_id,
         user=user,
+        arabic=payload or AccidentLetterRequest(),
     )
 
 
@@ -824,6 +828,27 @@ def update_vehicle_accident_status(
         vehicle_id,
         accident_id,
         payload.status,
+        actor=user.email,
+    )
+    return vehicle_service.accident_read(row)
+
+
+@router.put(
+    "/{vehicle_id}/accidents/{accident_id}/insurance",
+    response_model=VehicleAccidentRead,
+)
+def update_vehicle_accident_insurance(
+    vehicle_id: int,
+    accident_id: int,
+    payload: VehicleAccidentInsurance,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleAccidentRead:
+    row = vehicle_service.set_accident_insurance(
+        db,
+        vehicle_id,
+        accident_id,
+        payload,
         actor=user.email,
     )
     return vehicle_service.accident_read(row)

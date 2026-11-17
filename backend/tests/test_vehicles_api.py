@@ -421,7 +421,6 @@ def test_accident_lifecycle_and_delete_capability(
             "description_ar": "تلف في الباب",
             "description_en": "Door damage",
             "police_ref": "ADP-2026-001",
-            "damage_cost": 2400,
             "photo_file_ids": [],
         },
     )
@@ -430,7 +429,8 @@ def test_accident_lifecycle_and_delete_capability(
     assert accident["vehicle_id"] == vehicle["id"]
     assert accident["vehicle_plate_label"] == "14 \\ 58216"
     assert accident["status"] == "open"
-    assert accident["damage_cost"] == 2400
+    # No cost on the report: insurance covers the damage.
+    assert "damage_cost" not in accident
 
     listed_response = admin_client.get("/api/v1/vehicles/accidents")
     assert listed_response.status_code == 200, listed_response.text
@@ -459,6 +459,77 @@ def test_accident_lifecycle_and_delete_capability(
     remaining = admin_client.get("/api/v1/vehicles/accidents")
     assert remaining.status_code == 200, remaining.text
     assert remaining.json() == []
+
+
+def test_accident_is_filed_in_one_language_with_optional_insurance(
+    admin_client: TestClient, vehicle_editor_client: TestClient
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    base = {
+        "vehicle_id": vehicle["id"],
+        "date": "2026-11-03",
+        "time": "16:15",
+        "photo_file_ids": [],
+    }
+
+    missing = admin_client.post(
+        "/api/v1/vehicles/accidents",
+        json={**base, "location_en": "Staff parking", "description_ar": "  "},
+    )
+    assert missing.status_code == 422, missing.text
+
+    created = vehicle_editor_client.post(
+        "/api/v1/vehicles/accidents",
+        json={
+            **base,
+            "location_en": "Staff parking",
+            "description_en": "Rear bumper struck while parked.",
+            "claim_no": " CL-55-90412 ",
+            "insurer": "Gulf Shield Insurance",
+            "claim_status": "submitted",
+        },
+    )
+    assert created.status_code == 201, created.text
+    accident = created.json()
+    assert accident["location_ar"] is None
+    assert accident["description_ar"] is None
+    assert accident["location_en"] == "Staff parking"
+    assert accident["claim_no"] == "CL-55-90412"
+    assert accident["claim_status"] == "submitted"
+    assert accident["repair_garage"] is None
+    assert accident["cost_payer"] is None
+
+    url = f"/api/v1/vehicles/{vehicle['id']}/accidents/{accident['id']}"
+    bad = vehicle_editor_client.put(f"{url}/insurance", json={"cost_payer": "nobody"})
+    assert bad.status_code == 422, bad.text
+
+    updated = vehicle_editor_client.put(
+        f"{url}/insurance",
+        json={
+            "claim_no": "CL-55-90412",
+            "claim_status": "under_repair",
+            "insurer": "Gulf Shield Insurance",
+            "repair_garage": "Al Wathba Auto Workshop",
+            "cost_payer": "insurer",
+        },
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["claim_status"] == "under_repair"
+    assert updated.json()["repair_garage"] == "Al Wathba Auto Workshop"
+    assert updated.json()["status"] == "open"
+
+    # Closed without any cost.
+    closed = vehicle_editor_client.patch(url, json={"status": "closed"})
+    assert closed.status_code == 200, closed.text
+    assert closed.json()["status"] == "closed"
+
+    cleared = vehicle_editor_client.put(f"{url}/insurance", json={})
+    assert cleared.status_code == 200, cleared.text
+    assert all(
+        cleared.json()[name] is None
+        for name in ("claim_no", "claim_status", "insurer", "repair_garage", "cost_payer")
+    )
+    assert cleared.json()["status"] == "closed"
 
 
 def test_maintenance_lifecycle_and_delete_capability(
@@ -1477,7 +1548,6 @@ def test_archive_lifecycle_retains_history_and_guards_every_write_path(
             "description_ar": "تلف",
             "description_en": "Damage",
             "police_ref": None,
-            "damage_cost": 500,
             "photo_file_ids": [],
         },
     )
@@ -1600,7 +1670,6 @@ def test_archive_lifecycle_retains_history_and_guards_every_write_path(
                 "description_ar": "a",
                 "description_en": "a",
                 "police_ref": None,
-                "damage_cost": 0,
                 "photo_file_ids": [],
             },
         ),

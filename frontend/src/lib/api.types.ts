@@ -6457,6 +6457,23 @@ export interface paths {
         patch: operations["update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch"];
         trace?: never;
     };
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/insurance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Vehicle Accident Insurance */
+        put: operations["update_vehicle_accident_insurance_api_v1_vehicles__vehicle_id__accidents__accident_id__insurance_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/{vehicle_id}/maintenance-requests": {
         parameters: {
             query?: never;
@@ -8207,6 +8224,17 @@ export interface components {
             days: number;
             /** Notes */
             notes?: string | null;
+        };
+        /**
+         * AccidentLetterRequest
+         * @description Arabic wording supplied on the letter step, for a report written in
+         *     English. Omitted fields keep what the report already holds.
+         */
+        AccidentLetterRequest: {
+            /** Location Ar */
+            location_ar?: string | null;
+            /** Description Ar */
+            description_ar?: string | null;
         };
         /** ActivityItemRead */
         ActivityItemRead: {
@@ -17818,8 +17846,23 @@ export interface components {
                 [key: string]: components["schemas"]["VaultEntry"][];
             };
         };
-        /** VehicleAccidentCreate */
+        /**
+         * VehicleAccidentCreate
+         * @description A report written in the operator's language: each of the location and
+         *     the description needs one language, either one. The official letter asks
+         *     for the Arabic wording later if it is missing.
+         */
         VehicleAccidentCreate: {
+            /** Claim No */
+            claim_no?: string | null;
+            /** Claim Status */
+            claim_status?: ("not_submitted" | "submitted" | "under_repair" | "settled") | null;
+            /** Insurer */
+            insurer?: string | null;
+            /** Repair Garage */
+            repair_garage?: string | null;
+            /** Cost Payer */
+            cost_payer?: ("insurer" | "company" | "driver") | null;
             /** Vehicle Id */
             vehicle_id: number;
             /** Employee Id */
@@ -17832,22 +17875,34 @@ export interface components {
             /** Time */
             time: string;
             /** Location Ar */
-            location_ar: string;
+            location_ar?: string | null;
             /** Location En */
             location_en?: string | null;
             /** Description Ar */
-            description_ar: string;
+            description_ar?: string | null;
             /** Description En */
             description_en?: string | null;
             /** Police Ref */
             police_ref?: string | null;
-            /**
-             * Damage Cost
-             * @default 0
-             */
-            damage_cost: number;
             /** Photo File Ids */
             photo_file_ids?: number[];
+        };
+        /**
+         * VehicleAccidentInsurance
+         * @description The optional insurance claim on a report. Every field may stay empty;
+         *     a blank text means "not recorded" and is stored as NULL.
+         */
+        VehicleAccidentInsurance: {
+            /** Claim No */
+            claim_no?: string | null;
+            /** Claim Status */
+            claim_status?: ("not_submitted" | "submitted" | "under_repair" | "settled") | null;
+            /** Insurer */
+            insurer?: string | null;
+            /** Repair Garage */
+            repair_garage?: string | null;
+            /** Cost Payer */
+            cost_payer?: ("insurer" | "company" | "driver") | null;
         };
         /** VehicleAccidentRead */
         VehicleAccidentRead: {
@@ -17869,17 +17924,25 @@ export interface components {
             /** Time */
             time: string | null;
             /** Location Ar */
-            location_ar: string;
+            location_ar: string | null;
             /** Location En */
             location_en: string | null;
             /** Description Ar */
-            description_ar: string;
+            description_ar: string | null;
             /** Description En */
             description_en: string | null;
             /** Police Ref */
             police_ref: string | null;
-            /** Damage Cost */
-            damage_cost: number;
+            /** Claim No */
+            claim_no?: string | null;
+            /** Claim Status */
+            claim_status?: ("not_submitted" | "submitted" | "under_repair" | "settled") | null;
+            /** Insurer */
+            insurer?: string | null;
+            /** Repair Garage */
+            repair_garage?: string | null;
+            /** Cost Payer */
+            cost_payer?: ("insurer" | "company" | "driver") | null;
             /**
              * Status
              * @enum {string}
@@ -34344,7 +34407,11 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AccidentLetterRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -34413,6 +34480,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VehicleAccidentStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleAccidentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_accident_insurance_api_v1_vehicles__vehicle_id__accidents__accident_id__insurance_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                accident_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleAccidentInsurance"];
             };
         };
         responses: {

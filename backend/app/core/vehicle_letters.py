@@ -79,6 +79,13 @@ def fines_letter_fields(
     }
 
 
+#: What the accident letter prints in its «تكلفة الضرر» row: there is no cost
+#: figure on the report, insurance covers the damage and the technician
+#: estimates it. The frontend paper preview prints the same sentence
+#: (`vehicles.damageCoverLine`, Arabic).
+ACCIDENT_DAMAGE_COVER_AR = "يغطيها التأمين. يقدّر الفني التكلفة."
+
+
 def accident_letter_fields(
     *,
     plate_label: str,
@@ -90,7 +97,6 @@ def accident_letter_fields(
     employee_label: str | None,
     location_ar: str,
     police_ref: str | None,
-    damage_cost: int,
     status: str,
     description_ar: str,
     today: date,
@@ -110,7 +116,7 @@ def accident_letter_fields(
         "employee": employee_label or "—",
         "location": location_ar,
         "police_ref": police_ref or "—",
-        "damage_cost": f"{damage_cost} درهم",
+        "damage_cost": ACCIDENT_DAMAGE_COVER_AR,
         "status": "مفتوح" if status == "open" else "مغلق",
         "description": description_ar,
         "hijri_date": hijri_label(today),
