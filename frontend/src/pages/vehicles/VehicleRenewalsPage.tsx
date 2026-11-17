@@ -95,7 +95,9 @@ export function VehicleRenewalsPage(): React.JSX.Element {
           </Table>}
         </RegisterSheet>
       </ServicePage>
-      {canEdit && overlay.value === 'renew' && (!fixed || selected) && <RenewLicenseDialog open vehicle={fixed ? selected : null} initialVehicleId={selected?.id} onOpenChange={(open) => { if (!open) overlay.close() }} />}
+      {/* Mounted once the fleet is known, so a deep link's vehicle is the
+          one the request starts on (the dialog reads it only at mount). */}
+      {canEdit && fleetQuery.isSuccess && overlay.value === 'renew' && (!fixed || selected) && <RenewLicenseDialog open vehicle={fixed ? selected : null} initialVehicleId={selected?.id} onOpenChange={(open) => { if (!open) overlay.close() }} />}
     </>
   )
 }

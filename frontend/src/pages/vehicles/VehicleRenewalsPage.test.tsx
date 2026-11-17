@@ -90,6 +90,14 @@ describe('VehicleRenewalsPage', () => {
     expect(within(dialog).getByLabelText(/^New expiry date/)).toHaveValue('2028-01-01')
   })
 
+  it('starts a deep-linked renewal on the vehicle the link names', async () => {
+    renderPage('/vehicles/renewals?action=renew&vehicle=1')
+    const dialog = await screen.findByRole('dialog', { name: 'Renew vehicle license' })
+    // Vehicle 1 is not the most urgent one; the link still wins once the fleet loads.
+    await waitFor(() => expect(within(dialog).getByRole('combobox', { name: /Vehicle/ })).toHaveTextContent('12345'))
+    await waitFor(() => expect(within(dialog).getByLabelText(/^New start date/)).toHaveValue('2027-01-02'))
+  })
+
   it('fixes the row vehicle and preserves an operator-edited expiry', async () => {
     const user = userEvent.setup()
     renderPage()
