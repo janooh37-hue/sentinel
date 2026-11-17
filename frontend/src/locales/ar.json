@@ -4459,6 +4459,7 @@
     },
     "outlook": {
       "hasAttachment": "يحتوي مرفقاً",
+      "tableLanguage": "لغة الجدول",
       "tabs": {
         "all": "الكل",
         "unread": "غير المقروء"

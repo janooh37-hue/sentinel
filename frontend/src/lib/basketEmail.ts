@@ -7,7 +7,13 @@
  * remain structural. Letter content is not routed through UI i18n:
  *   • Sick   → blue header (#4472C4), LTR, English columns
  *              (S.N · ID · Name · From · To · Leave Days · Location)
- *   • Annual + other leave kinds → red header (#C00000), RTL, Arabic columns
+ *   • Annual leave, Duty Resumption, HR Request → red header, a table the
+ *              operator shows in Arabic (RTL) or English (LTR); intro and
+ *              closing stay Arabic. Annual / Duty Resumption columns:
+ *              (S.N · ID · Designation · NAME · Nationality · Mobile · Location ·
+ *              [FROM · TO] · DUTY RESUMPTION DATE · COMMENTS); HR Request:
+ *              (# · ID · Name · Type of Certificate · The entity), coloured cells
+ *   • Other leave kinds → red header (#C00000), RTL, Arabic columns
  *              (م · الرقم الوظيفي · المسمى الوظيفي · الاسم · تاريخ الإجازة · ولغاية)
  *   • Non-leave forms → red header, RTL, generic columns
  *              (م · الرقم الوظيفي · المسمى الوظيفي · الاسم · البيان)
@@ -23,6 +29,7 @@ import type { ComposeReference } from '@/components/ledger/ReferencePicker'
 import { basketKey, filenameForItem, type BasketKey, type EmailBasketItem } from './emailBasket'
 import type { DraftOverrides } from './draftTemplates'
 import type { DraftTemplateFields } from './messageTemplates'
+import { nationalityEn } from './nationalityEn'
 
 /** Only keys in the renderer's value map are substituted; unknown tokens stay literal. */
 export function substituteDraftText(text: string, values: Record<string, string>): string {
@@ -136,12 +143,15 @@ function tableHtml(
   headerBg: string,
   cols: string[],
   rows: Cell[][],
+  colStyles: string[] = [],
 ): string {
   const head = `<tr>${cols.map((c) => `<th style="${thStyle(headerBg)}">${esc(c)}</th>`).join('')}</tr>`
-  const td = (c: Cell): string =>
-    typeof c === 'string'
-      ? `<td style="${TD_STYLE}">${esc(c)}</td>`
-      : `<td style="${TD_LIST_STYLE}">${c.html}</td>`
+  const td = (c: Cell, col: number): string => {
+    const extra = colStyles[col] ? `;${colStyles[col]}` : ''
+    return typeof c === 'string'
+      ? `<td style="${TD_STYLE}${extra}">${esc(c)}</td>`
+      : `<td style="${TD_LIST_STYLE}${extra}">${c.html}</td>`
+  }
   const body = rows.map((r) => `<tr>${r.map(td).join('')}</tr>`).join('')
   return (
     `<table dir="${dir}" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">` +
@@ -294,23 +304,190 @@ function passportBody(items: EmailBasketItem[], plural: boolean): Omit<DraftPart
   }
 }
 
-// ── Duty Resumption Form = return-from-leave letter ───────────────────────────
+// ── Bilingual tables: Annual leave, Duty Resumption, HR Request ───────────────
+// The operator picks the table language in the compose (remembered per device):
+// English reads LTR, Arabic RTL. Intro and closing stay Arabic either way.
 const DUTY_RESUMPTION_FORM = 'Duty Resumption Form'
+const HR_REQUEST_FORM = 'HR Request Form'
 
-function returnBody(items: EmailBasketItem[], plural: boolean): Omit<DraftParts, 'closing'> {
-  const who = plural ? 'المذكورين بالجدول أدناه' : 'المذكور بالجدول أدناه'
-  const intro = RED_GREETING + p(`نفيدكم علماً بعودة ${who} من الإجازة حسب ما هو موضح .`)
-  const rows = items.map((i, idx) => [
-    String(idx + 1),
-    i.employeeId,
-    positionArOf(i),
-    nameArOf(i),
-    i.resumptionDate ? dmy(i.resumptionDate) : '',
-  ])
-  return {
-    intro,
-    table: tableHtml('rtl', HEADER_RED, ['#', 'الرقم الوظيفي', 'المسمى الوظيفي', 'الاسم', 'تاريخ استئناف الواجب'], rows),
+export type TableLanguage = 'ar' | 'en'
+const TABLE_LANGUAGE_KEY = 'gssg.basketTableLanguage'
+
+/** The last table language picked on this device; Arabic until one is. */
+export function loadTableLanguage(): TableLanguage {
+  try {
+    return localStorage.getItem(TABLE_LANGUAGE_KEY) === 'en' ? 'en' : 'ar'
+  } catch {
+    return 'ar'
   }
+}
+
+export function saveTableLanguage(lang: TableLanguage): void {
+  try {
+    localStorage.setItem(TABLE_LANGUAGE_KEY, lang)
+  } catch {
+    /* private mode / quota: the choice just isn't remembered */
+  }
+}
+
+/** Site code printed in every row's Location column. */
+const SITE_CODE = '0331'
+
+interface Column {
+  en: string
+  ar: string
+  cell: (item: EmailBasketItem, idx: number, lang: TableLanguage) => string
+  style?: string // extra inline td style (HR Request cell colours)
+}
+
+interface BilingualLetter {
+  intro: (plural: boolean) => string
+  cols: Column[]
+}
+
+/** The day after an ISO date (the employee is due back), as `d/m/yyyy`. */
+function dayAfter(iso?: string): string {
+  if (!iso) return ''
+  const day = Date.parse(iso.slice(0, 10))
+  return Number.isNaN(day) ? '' : dmy(new Date(day + 86_400_000).toISOString())
+}
+
+const SN_COL: Column = { en: 'S.N', ar: 'م', cell: (_i, idx) => String(idx + 1) }
+const ID_COL: Column = { en: 'ID', ar: 'الرقم الوظيفي', cell: (i) => i.employeeId }
+const DESIGNATION_COL: Column = {
+  en: 'Designation',
+  ar: 'المسمى الوظيفي',
+  cell: (i, _idx, lang) => (lang === 'en' ? i.positionEn || i.positionAr || '' : positionArOf(i)),
+}
+const NAME_COL: Column = {
+  en: 'NAME',
+  ar: 'الاسم',
+  cell: (i, _idx, lang) => (lang === 'en' ? nameEnOf(i) : nameArOf(i)),
+}
+const NATIONALITY_COL: Column = {
+  en: 'Nationality',
+  ar: 'الجنسية',
+  cell: (i, _idx, lang) => (lang === 'en' ? nationalityEn(i.nationality) : (i.nationality ?? '')),
+}
+const MOBILE_COL: Column = { en: 'Mobile', ar: 'رقم الهاتف', cell: (i) => i.phone ?? '' }
+const LOCATION_COL: Column = { en: 'Location', ar: 'الموقع', cell: () => SITE_CODE }
+const COMMENTS_COL: Column = { en: 'COMMENTS', ar: 'ملاحظات', cell: () => '' } // HR fills it in
+const EMPLOYEE_COLS = [SN_COL, ID_COL, DESIGNATION_COL, NAME_COL, NATIONALITY_COL, MOBILE_COL, LOCATION_COL]
+
+const ANNUAL_LETTER: BilingualLetter = {
+  intro: (plural) => RED_GREETING + p(leaveIntroLine('Annual', plural)),
+  cols: [
+    ...EMPLOYEE_COLS,
+    { en: 'FROM', ar: 'تاريخ الإجازة', cell: (i) => (i.startDate ? dmy(i.startDate) : '') },
+    { en: 'TO', ar: 'ولغاية', cell: (i) => (i.endDate ? dmy(i.endDate) : '') },
+    { en: 'DUTY RESUMPTION DATE', ar: 'تاريخ استئناف الواجب', cell: (i) => dayAfter(i.endDate) },
+    COMMENTS_COL,
+  ],
+}
+
+const RETURN_LETTER: BilingualLetter = {
+  intro: (plural) => {
+    const who = plural ? 'المذكورين بالجدول أدناه' : 'المذكور بالجدول أدناه'
+    return RED_GREETING + p(`نفيدكم علماً بعودة ${who} من الإجازة حسب ما هو موضح .`)
+  },
+  cols: [
+    ...EMPLOYEE_COLS,
+    {
+      en: 'DUTY RESUMPTION DATE',
+      ar: 'تاريخ استئناف الواجب',
+      cell: (i) => (i.resumptionDate ? dmy(i.resumptionDate) : ''),
+    },
+    COMMENTS_COL,
+  ],
+}
+
+/** Requested-document names as the office writes them in the HR Request table. */
+const HR_DOC_LABELS: Record<string, Record<TableLanguage, string>> = {
+  insurance_card: { en: 'Insurance Card', ar: 'بطاقة التأمين' },
+  id_card: { en: 'ID Card', ar: 'بطاقة الهوية' },
+  employment_certificate: { en: 'To Whom It May Concern Certificate', ar: 'شهادة لمن يهمه الأمر' },
+  salary_certificate: { en: 'Salary Certificate', ar: 'شهادة راتب' },
+  salary_transfer_letter: { en: 'Salary Transfer Letter', ar: 'خطاب تحويل الراتب' },
+  salary_pay_slip: { en: 'Salary Pay Slip', ar: 'قسيمة الراتب' },
+  experience_certificate: { en: 'Experience Certificate', ar: 'شهادة خبرة' },
+}
+const HR_BLUE = '#D9E2F3'
+const HR_PINK = '#FFCCCC'
+
+const HR_LETTER: BilingualLetter = {
+  intro: (plural) => RED_GREETING + p(genericIntroLine(plural)),
+  cols: [
+    {
+      en: '#',
+      ar: 'م',
+      cell: (_i, idx) => String(idx + 1),
+      style: `background:${HEADER_RED};color:#ffffff;font-weight:bold`,
+    },
+    { ...ID_COL, style: `background:${HR_PINK};font-weight:bold` },
+    { ...NAME_COL, en: 'Name', style: `background:${HR_BLUE};font-weight:bold` },
+    {
+      en: 'Type of Certificate',
+      ar: 'نوع الشهادة',
+      cell: (i, _idx, lang) =>
+        [
+          ...(i.hrDocs ?? []).map((key) => (Object.hasOwn(HR_DOC_LABELS, key) ? HR_DOC_LABELS[key][lang] : key)),
+          ...(i.hrDocOther ? [i.hrDocOther] : []),
+        ].join(' + '),
+      style: `background:${HR_PINK}`,
+    },
+    {
+      en: 'The entity',
+      ar: 'الجهة',
+      cell: (i) => i.addressedTo ?? '',
+      style: `background:${HR_BLUE};font-weight:bold`,
+    },
+  ],
+}
+
+function bilingualLetter(items: EmailBasketItem[]): BilingualLetter | undefined {
+  const first = items[0]
+  if (first.leaveType === 'Annual') return ANNUAL_LETTER
+  if (first.formKind === DUTY_RESUMPTION_FORM) return RETURN_LETTER
+  if (first.formKind === HR_REQUEST_FORM) return HR_LETTER
+  return undefined
+}
+
+function bilingualTable(items: EmailBasketItem[], cols: Column[], lang: TableLanguage): string {
+  return tableHtml(
+    lang === 'en' ? 'ltr' : 'rtl',
+    HEADER_RED,
+    cols.map((c) => c[lang]),
+    items.map((item, idx) => cols.map((c) => c.cell(item, idx, lang))),
+    cols.map((c) => c.style ?? ''),
+  )
+}
+
+/**
+ * Translate the letter's table inside an (operator-edited) body from one
+ * prebuilt language variant to the other. Only cells still holding the
+ * generated text are translated; typed COMMENTS, corrected cells and added
+ * rows stay as the operator left them.
+ */
+export function swapLetterTable(bodyHtml: string, from: string, to: string): string {
+  const doc = new DOMParser().parseFromString(bodyHtml, 'text/html')
+  const current = doc.querySelector('table')
+  const source = new DOMParser().parseFromString(from, 'text/html').querySelector('table')
+  const target = new DOMParser().parseFromString(to, 'text/html').querySelector('table')
+  if (!current || !source || !target) return bodyHtml
+  current.setAttribute('dir', target.getAttribute('dir') ?? 'rtl')
+  const sourceRows = source.querySelectorAll('tr')
+  const targetRows = target.querySelectorAll('tr')
+  current.querySelectorAll('tr').forEach((row, r) => {
+    if (r >= sourceRows.length) return
+    const sourceCells = sourceRows[r].querySelectorAll('th, td')
+    const targetCells = targetRows[r].querySelectorAll('th, td')
+    row.querySelectorAll('th, td').forEach((cell, c) => {
+      if (c >= sourceCells.length) return
+      if (cell.textContent?.trim() !== sourceCells[c].textContent?.trim()) return
+      cell.innerHTML = targetCells[c].innerHTML
+    })
+  })
+  return doc.body.innerHTML
 }
 
 // ── Salary Deduction Form ─────────────────────────────────────────────────────
@@ -423,13 +600,22 @@ function defaultBasketSubject(items: EmailBasketItem[]): string {
 }
 
 /** Default structural parts are shared by compose and the template editor. */
-function basketEmailParts(items: EmailBasketItem[]): DraftParts {
+function basketEmailParts(items: EmailBasketItem[], lang: TableLanguage = 'ar'): DraftParts {
   if (items.length === 0) return { intro: '', table: '', closing: '' }
   const plural = items.length > 1
   const leaveType = items[0].leaveType
   const formKind = items[0].formKind
 
   if (isTransfer(items[0])) return transferEmailParts(items[0])
+
+  const letter = bilingualLetter(items)
+  if (letter) {
+    return {
+      intro: letter.intro(plural),
+      table: bilingualTable(items, letter.cols, lang),
+      closing: STANDARD_CLOSING,
+    }
+  }
 
   let body: Omit<DraftParts, 'closing'>
   let closing = STANDARD_CLOSING
@@ -455,8 +641,6 @@ function basketEmailParts(items: EmailBasketItem[]): DraftParts {
     closing = PASSPORT_CLOSING
   } else if (RESIGNATION_FORMS.includes(formKind)) {
     body = resignationBody(items, plural)
-  } else if (formKind === DUTY_RESUMPTION_FORM) {
-    body = returnBody(items, plural)
   } else if (formKind === SALARY_DEDUCTION_FORM) {
     body = deductionBody(items, plural)
   } else if (isDisciplinary(formKind)) {
@@ -502,8 +686,12 @@ export function buildBasketSubject(items: EmailBasketItem[], overrides?: DraftOv
   return subject ? substituteDraftText(subject, basketDraftValues(items)) : defaultBasketSubject(items)
 }
 
-export function buildBasketBodyHtml(items: EmailBasketItem[], overrides?: DraftOverrides): string {
-  const parts = basketEmailParts(items)
+export function buildBasketBodyHtml(
+  items: EmailBasketItem[],
+  overrides?: DraftOverrides,
+  lang: TableLanguage = 'ar',
+): string {
+  const parts = basketEmailParts(items, lang)
   const override = basketOverride(items, overrides)
   if (!override.intro && !override.closing) return parts.intro + parts.table + parts.closing
   const values = basketDraftValues(items)
@@ -525,7 +713,12 @@ export function buildBasketPrefill(
   references: ComposeReference[]
   attachRefPdf: true
   basketKey: BasketKey
+  /** Present when the letter's table can be shown in Arabic or English. */
+  tableLanguage?: TableLanguage
+  tableVariants?: Record<TableLanguage, string>
 } {
+  const letter = items.length > 0 ? bilingualLetter(items) : undefined
+  const tableLanguage = letter ? loadTableLanguage() : 'ar'
   const references: ComposeReference[] = items.map((i) => ({
     kind: 'book',
     id: i.bookId,
@@ -537,9 +730,16 @@ export function buildBasketPrefill(
   return {
     to,
     subject: buildBasketSubject(items, overrides),
-    bodyHtml: buildBasketBodyHtml(items, overrides),
+    bodyHtml: buildBasketBodyHtml(items, overrides, tableLanguage),
     references,
     attachRefPdf: true,
     basketKey: items.length > 0 ? basketKey(items[0]) : '',
+    ...(letter && {
+      tableLanguage,
+      tableVariants: {
+        ar: bilingualTable(items, letter.cols, 'ar'),
+        en: bilingualTable(items, letter.cols, 'en'),
+      },
+    }),
   }
 }
