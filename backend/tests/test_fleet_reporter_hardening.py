@@ -180,6 +180,30 @@ def test_denied_record_type_hides_the_paper_on_list_open_and_documents(
     assert document_id not in readable_documents
 
 
+def _deny(env: FleetEnv, capability: str) -> None:
+    env.db.add(UserPermission(user_id=env.reporter.id, capability=capability, effect="deny"))
+    env.db.commit()
+    perm_service._invalidate_caps_cache(env.db, env.reporter.id)
+
+
+def test_denied_books_view_closes_direct_reads_and_documents(fleet_env: FleetEnv) -> None:
+    env = fleet_env
+    letter = fines_letter(env, env.reporter)
+    document_id = letter.versions[-1].document_id
+    assert document_id is not None
+    client = env.client(env.reporter)
+    assert client.get(f"/api/v1/books/{letter.id}").status_code == 200
+
+    _deny(env, "books.view")
+
+    _assert_error(client.get(f"/api/v1/books/{letter.id}"), 403, "FORBIDDEN")
+    _assert_error(client.get(f"/api/v1/documents/{document_id}/download"), 403, "FORBIDDEN")
+    readable = env.db.scalars(
+        select(Book.id).where(book_service.full_read_access_clause(env.db, env.reporter))
+    ).all()
+    assert letter.id not in readable
+
+
 # 5. An existing accident letter is returned only to a reader ---------------------
 
 

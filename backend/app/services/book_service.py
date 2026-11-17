@@ -690,6 +690,9 @@ def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
     read gate does, so a direct send still opens a general Record without it.
     Deleted Records and revision-scoped access are the caller's to add.
     """
+    if is_scoped_role(user) and not perm_service.has_capability(db, user, "books.view"):
+        # A scoped role is never a send recipient: without books.view it reads nothing.
+        return false()
     if user.role == FLEET_REPORTER_ROLE:
         # The record-type denials AND the fleet matrix (``_record_type_clause``),
         # as the Python mirror ``_scoped_book_visible`` applies them.
@@ -905,7 +908,15 @@ def resolve_book_read_access(
     if is_scoped_role(user):
         # Scoped role: never full books.view semantics — current version
         # only, gated by the role's state/ownership matrix, never a
-        # historical revision even when the current paper is shared.
+        # historical revision even when the current paper is shared. It is
+        # never a send recipient, so a denied books.view hides every record.
+        if not perm_service.has_capability(db, user, "books.view"):
+            raise AppError(
+                "FORBIDDEN",
+                "Missing capability: books.view",
+                http_status=403,
+                details={"capability": "books.view"},
+            )
         if not _scoped_book_visible(db, book, user) or not _confidentiality_allows(
             db, user, book, existing=True
         ):
