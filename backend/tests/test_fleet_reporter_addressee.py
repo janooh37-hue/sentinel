@@ -134,6 +134,16 @@ def test_reporter_starts_no_editor_general_book(env: FleetEnv) -> None:
     assert _book_count(env) == 0
 
 
+@pytest.mark.parametrize("template_id", ["Report", "Vehicle Fines", "Vehicle Accident Report"])
+def test_reporter_starts_no_other_paper_through_generate(env: FleetEnv, template_id: str) -> None:
+    # Its Report is the Word Report (author-signed, addressed to its line
+    # manager) and its vehicle letters come from the vehicle services.
+    response = _generate_general_book(env, template_id=template_id, classification_code=None)
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "SCOPED_ROLE_SERVICE_FORBIDDEN"
+    assert _book_count(env) == 0
+
+
 def test_reporter_revises_its_own_returned_general_book(env: FleetEnv) -> None:
     book = general_book(env, env.reporter)
     book.approval_state = "returned"

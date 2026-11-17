@@ -365,16 +365,16 @@ def generate_document(
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )
-    if (
-        payload.template_id == "General Book"
-        and payload.revise_of_book_id is None
-        and routes_to_line_manager(user)
+    if routes_to_line_manager(user) and (
+        payload.template_id != "General Book" or payload.revise_of_book_id is None
     ):
-        # The vehicle services (maintenance request) write its General Books;
-        # it revises its own returned ones but never starts one here.
+        # Its only generic generation is revising its own returned General Book.
+        # The vehicle services write its General Books and vehicle letters, and
+        # its Report is the Word Report (author-signed, addressed to its line
+        # manager); none of them starts here.
         raise AppError(
             "SCOPED_ROLE_SERVICE_FORBIDDEN",
-            "This role writes General Books only through the vehicle services.",
+            "This role revises only its own General Books here.",
             http_status=403,
         )
     revise_book: Book | None = None
