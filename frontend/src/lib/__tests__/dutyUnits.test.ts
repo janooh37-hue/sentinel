@@ -10,14 +10,23 @@
 import { describe, expect, it } from 'vitest'
 
 import type { EmployeeListItem } from '@/lib/api'
-import { SEED_UNITS, UNASSIGNED, groupByUnit, unitTallies } from '@/lib/dutyUnits'
+import {
+  ENDED_SERVICE,
+  SEED_UNITS,
+  TRANSFERRED,
+  UNASSIGNED,
+  departedTallies,
+  groupByUnit,
+  groupRoster,
+  unitTallies,
+} from '@/lib/dutyUnits'
 
-function person(id: string, unit: string | null, post = 'Gate 1'): EmployeeListItem {
+function person(id: string, unit: string | null, post = 'Gate 1', status = 'Active'): EmployeeListItem {
   return {
     id,
     name_en: `Person ${id}`,
     name_ar: null,
-    status: 'Active',
+    status,
     duty_unit: unit,
     duty_post: post,
   } as EmployeeListItem
@@ -70,5 +79,58 @@ describe('unitTallies', () => {
 
     expect(rail.at(-1)?.key).toBe(UNASSIGNED)
     expect(rail.filter((item) => item.key === '')).toHaveLength(0)
+  })
+})
+
+describe('groupRoster', () => {
+  const labels = { [ENDED_SERVICE]: 'Ended service', [TRANSFERRED]: 'Transferred' }
+  const rail = (people: EmployeeListItem[]) => {
+    const grouped = groupRoster(people)
+    return [...unitTallies(grouped.units, 'Unassigned'), ...departedTallies(grouped.departed, labels)]
+  }
+
+  it('keeps departed staff out of their old unit and out of Unassigned', () => {
+    const grouped = groupRoster([
+      person('G-1', SEED_UNITS[0]),
+      person('G-2', SEED_UNITS[0], 'Gate 1', 'Resigned'),
+      person('G-3', null, '', 'Transferred'),
+      person('G-4', SEED_UNITS[0], 'Gate 1', 'Loaned'),
+    ])
+
+    expect(grouped.units.get(SEED_UNITS[0])?.get('Gate 1')?.map((e) => e.id)).toEqual(['G-1', 'G-4'])
+    expect(grouped.units.has(UNASSIGNED)).toBe(false)
+    expect([...grouped.departed.keys()]).toEqual([ENDED_SERVICE, TRANSFERRED])
+  })
+
+  it('lists Ended service then Transferred after Unassigned, counting only departed staff', () => {
+    const items = rail([
+      person('G-1', null),
+      person('G-2', SEED_UNITS[0], 'Gate 1', 'Transferred'),
+      person('G-3', null, '', 'Terminated'),
+      person('G-4', null, '', 'Resigned'),
+    ])
+
+    expect(items.slice(-3)).toEqual([
+      { key: UNASSIGNED, label: 'Unassigned', count: 1 },
+      { key: ENDED_SERVICE, label: 'Ended service', count: 2 },
+      { key: TRANSFERRED, label: 'Transferred', count: 1 },
+    ])
+    expect(items.find((item) => item.key === SEED_UNITS[0])?.count).toBe(0)
+  })
+
+  it('groups Ended service by status, Resigned before Terminated', () => {
+    const grouped = groupRoster([
+      person('G-1', null, '', 'Terminated'),
+      person('G-2', null, '', 'Resigned'),
+    ])
+
+    expect([...(grouped.departed.get(ENDED_SERVICE)?.keys() ?? [])]).toEqual(['Resigned', 'Terminated'])
+  })
+
+  it('shows a departed group only when someone is in it', () => {
+    const items = rail([person('G-1', SEED_UNITS[0]), person('G-2', null, '', 'Resigned')])
+
+    expect(items.some((item) => item.key === TRANSFERRED)).toBe(false)
+    expect(items.at(-1)?.key).toBe(ENDED_SERVICE)
   })
 })

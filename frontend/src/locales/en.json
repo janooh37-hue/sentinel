@@ -6085,6 +6085,8 @@
       "unassignedCount_other": "Unassigned: {{count}}"
     },
     "unassigned": "Unassigned",
+    "endedService": "Ended service",
+    "transferred": "Transferred",
     "column": {
       "id": "No.",
       "name": "Name",
@@ -6095,7 +6097,10 @@
       "searchPlaceholder": "Search by name or number…",
       "noPost": "No post set",
       "empty": "No employees in this unit.",
-      "selectRow": "Select {{name}}"
+      "selectRow": "Select {{name}}",
+      "departedSummary": "{{employees}} employees",
+      "endedServiceNote": "Resigned and terminated staff. Not counted in the units and cannot be posted.",
+      "transferredNote": "Serving at another site. Not counted in the units and cannot be posted; on return they go back to their last post."
     },
     "field": {
       "unit": "Unit",

@@ -6,6 +6,10 @@
  * Selection state is owned by the parent page; this component renders it and
  * reports toggles. `groupedByPost` is a Map<post, employees[]> for the active
  * unit (empty-string post key = "no post").
+ *
+ * A departed group (Ended service, Transferred) is keyed by status instead of
+ * post and is read-only: a departed employee cannot be selected for a
+ * transfer or given a duty location.
  */
 
 import { useTranslation } from 'react-i18next'
@@ -21,6 +25,8 @@ export interface RosterTableProps {
   selected: ReadonlySet<string>
   onToggle: (id: string, on: boolean) => void
   onAssign: (employee: EmployeeLookupItem) => void
+  /** The rows are a departed group, keyed by employee status. */
+  departed?: boolean
 }
 
 export function RosterTable({
@@ -28,6 +34,7 @@ export function RosterTable({
   selected,
   onToggle,
   onAssign,
+  departed = false,
 }: RosterTableProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
 
@@ -50,9 +57,17 @@ export function RosterTable({
         return (
           <div key={post || '__none__'} className="pb-1">
             <div className="flex items-center gap-2.5 px-5 pb-1.5 pt-2.5">
-              <span className="h-[7px] w-[7px] shrink-0 rounded-full bg-accent" aria-hidden />
+              <span
+                className={cn(
+                  'h-[7px] w-[7px] shrink-0 rounded-full',
+                  departed ? 'bg-muted-foreground' : 'bg-accent',
+                )}
+                aria-hidden
+              />
               <span className="text-[0.84em] font-bold" dir="auto">
-                {post || t('dutyLocations.roster.noPost')}
+                {departed
+                  ? t(`employees.status.${post}`, { defaultValue: post })
+                  : post || t('dutyLocations.roster.noPost')}
               </span>
               <span className="font-mono text-[0.72em] text-faint">{rows.length}</span>
             </div>
@@ -60,7 +75,7 @@ export function RosterTable({
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr>
-                  <th className="w-9 px-5 py-1.5" />
+                  {!departed && <th className="w-9 px-5 py-1.5" />}
                   <th className="px-5 py-1.5 text-start text-[0.68em] font-bold uppercase tracking-[0.05em] text-faint">
                     {t('dutyLocations.column.id')}
                   </th>
@@ -70,7 +85,7 @@ export function RosterTable({
                   <th className="px-5 py-1.5 text-start text-[0.68em] font-bold uppercase tracking-[0.05em] text-faint">
                     {t('dutyLocations.column.position')}
                   </th>
-                  <th className="w-9 px-5 py-1.5" />
+                  {!departed && <th className="w-9 px-5 py-1.5" />}
                 </tr>
               </thead>
               <tbody>
@@ -84,17 +99,19 @@ export function RosterTable({
                         isSel ? 'bg-primary-soft' : 'hover:bg-surface-raised',
                       )}
                     >
-                      <td className="px-5 py-2">
-                        <input
-                          type="checkbox"
-                          checked={isSel}
-                          aria-label={t('dutyLocations.roster.selectRow', {
-                            name: pickEmployeeName(e, i18n.language),
-                          })}
-                          onChange={(ev) => onToggle(e.id, ev.target.checked)}
-                          className="h-4 w-4 cursor-pointer accent-primary"
-                        />
-                      </td>
+                      {!departed && (
+                        <td className="px-5 py-2">
+                          <input
+                            type="checkbox"
+                            checked={isSel}
+                            aria-label={t('dutyLocations.roster.selectRow', {
+                              name: pickEmployeeName(e, i18n.language),
+                            })}
+                            onChange={(ev) => onToggle(e.id, ev.target.checked)}
+                            className="h-4 w-4 cursor-pointer accent-primary"
+                          />
+                        </td>
+                      )}
                       <td className="px-5 py-2 font-mono font-semibold text-primary">{e.id}</td>
                       <td className="px-5 py-2" dir="auto">
                         {pickEmployeeName(e, i18n.language)}
@@ -102,17 +119,19 @@ export function RosterTable({
                       <td className="px-5 py-2 text-[0.92em] text-muted-foreground" dir="auto">
                         {(i18n.language === 'ar' && e.position_ar) || e.position || '—'}
                       </td>
-                      <td className="px-5 py-2">
-                        <button
-                          type="button"
-                          onClick={() => onAssign(e)}
-                          aria-label={t('dutyLocations.assign.edit')}
-                          title={t('dutyLocations.assign.edit')}
-                          className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-tinted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 group-hover:opacity-100"
-                        >
-                          <Pencil className="h-3.5 w-3.5" aria-hidden />
-                        </button>
-                      </td>
+                      {!departed && (
+                        <td className="px-5 py-2">
+                          <button
+                            type="button"
+                            onClick={() => onAssign(e)}
+                            aria-label={t('dutyLocations.assign.edit')}
+                            title={t('dutyLocations.assign.edit')}
+                            className="rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-surface-tinted hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 group-hover:opacity-100"
+                          >
+                            <Pencil className="h-3.5 w-3.5" aria-hidden />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   )
                 })}

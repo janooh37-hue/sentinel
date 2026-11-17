@@ -6609,6 +6609,8 @@
       "unassignedCount_other": "غير محدد: {{count}}"
     },
     "unassigned": "غير محدد",
+    "endedService": "منتهي الخدمة",
+    "transferred": "منقول",
     "column": {
       "id": "الرقم",
       "name": "الاسم",
@@ -6619,7 +6621,10 @@
       "searchPlaceholder": "بحث بالاسم أو الرقم…",
       "noPost": "بدون نقطة محددة",
       "empty": "لا يوجد موظفون في هذه الوحدة.",
-      "selectRow": "اختيار {{name}}"
+      "selectRow": "اختيار {{name}}",
+      "departedSummary": "{{employees}} موظف",
+      "endedServiceNote": "الموظفون المستقيلون والمفصولون. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم.",
+      "transferredNote": "يعملون في جهة أخرى. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم، ويعودون إلى آخر موقع عمل لهم عند انتهاء النقل."
     },
     "field": {
       "unit": "الوحدة",
