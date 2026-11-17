@@ -90,13 +90,16 @@ function SitesPanel({ onBusyChange }: { onBusyChange: (busy: boolean) => void })
     <>
       <RequestBody>
         <FormAlert id={alertId} message={error} />
-        {sitesQuery.isError ? (
-          <div className="flex flex-wrap items-center gap-3">
+        {/* A failed refresh keeps the rows (and any unsaved names in them) on
+            screen; only a list that never loaded is replaced by the error. */}
+        {sitesQuery.isError && (
+          <div role="alert" className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-muted-foreground">{t('common.loadError')}</p>
             <Button type="button" variant="secondary" onClick={() => void sitesQuery.refetch()}>{t('common.retry')}</Button>
           </div>
-        ) : !sites ? (
-          <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
+        )}
+        {!sites ? (
+          sitesQuery.isError ? null : <div className="space-y-2"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></div>
         ) : sites.length === 0 ? (
           <p className="text-sm text-muted-foreground">{t('vehicles.noRecords')}</p>
         ) : (
