@@ -1,4 +1,4 @@
-"""Migration 0120: departed employees' duty locations are backfilled and reversible."""
+"""Migration 0121: departed employees' duty locations are backfilled and reversible."""
 
 from pathlib import Path
 
@@ -10,8 +10,8 @@ from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0120_duty_departure_events"
-PARENT = "0119_employee_former_ids"
+HEAD = "0121_duty_departure_events"
+PARENT = "0120_user_line_manager"
 
 
 def _config(database: Path) -> Config:
@@ -120,7 +120,7 @@ def test_backfill_round_trip(tmp_path: Path) -> None:
 
         command.downgrade(config, PARENT)
         with engine.begin() as connection:
-            # Back to the pre-0120 world: departed staff keep their last post.
+            # Back to the pre-0121 world: departed staff keep their last post.
             assert _employees(connection) == {
                 "G1": ("Unit A", "Gate"),
                 "G2": ("Unit A", "Gate"),

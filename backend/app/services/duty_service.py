@@ -42,7 +42,7 @@ from app.schemas.employee import EMPLOYEE_STATUS_TRANSFERRED, WORKING_STATUSES
 from app.services import book_service, document_service, workforce_schedule_service
 
 # Event types written when an employee's status crosses the working boundary.
-# They carry no actor when the scheduler or the 0120 backfill writes them.
+# They carry no actor when the scheduler or the 0121 backfill writes them.
 EVENT_SERVICE_END: Final = "service_end"
 EVENT_TRANSFER_OUT: Final = "transfer_out"
 EVENT_REINSTATEMENT: Final = "reinstatement"

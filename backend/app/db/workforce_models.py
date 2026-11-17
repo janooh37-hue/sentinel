@@ -845,7 +845,7 @@ class DutyAssignmentEvent(Base):
             "'service_end', 'transfer_out', 'reinstatement')",
             name="ck_duty_assignment_events_event_type",
         ),
-        # Status-driven moves are also written by the scheduler and the 0120
+        # Status-driven moves are also written by the scheduler and the 0121
         # backfill, which act for no user.
         CheckConstraint(
             "actor_user_id IS NOT NULL OR event_type IN "

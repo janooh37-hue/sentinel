@@ -100,7 +100,7 @@ def _item_id(engine: Engine, drawing: str) -> int:
 
 def test_uniform_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0120_duty_departure_events"]
+    assert script.get_heads() == ["0121_duty_departure_events"]
     assert script.get_revision(HEAD).down_revision == PARENT
 
 

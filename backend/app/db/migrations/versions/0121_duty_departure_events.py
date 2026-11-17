@@ -1,7 +1,7 @@
 """Departed employees leave the duty-unit structure.
 
-Revision ID: 0120_duty_departure_events
-Revises: 0119_employee_former_ids
+Revision ID: 0121_duty_departure_events
+Revises: 0120_user_line_manager
 
 Adds three ``duty_assignment_events`` types written when an employee's status
 crosses the working boundary: ``service_end`` (Resigned/Terminated),
@@ -28,8 +28,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0120_duty_departure_events"
-down_revision: str | Sequence[str] | None = "0119_employee_former_ids"
+revision: str = "0121_duty_departure_events"
+down_revision: str | Sequence[str] | None = "0120_user_line_manager"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
