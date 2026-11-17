@@ -27,7 +27,7 @@ import {
 } from './navCustomization'
 import { useWaitingSignals } from './useWaitingSignals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
-import type { NavItem } from './navItems'
+import { NAV_ITEMS, type NavItem } from './navItems'
 
 interface DockSlotVisualProps {
   Icon: LucideIcon
@@ -134,11 +134,17 @@ function ScopedRoleBottomTabBar({ role }: { role: ScopedRoleName }): React.JSX.E
     '/books': { key: 'nav.records', Icon: BookText },
     '/vehicles': { key: 'nav.vehicles', Icon: Car },
   }
-  const entries = scopedDestinations(role, has).map((to) => ({
-    to,
-    labelKey: entryByDestination[to]!.key,
-    Icon: entryByDestination[to]!.Icon,
-  }))
+  // The same capability gate the top nav and drawer apply to these destinations.
+  const entries = scopedDestinations(role, has)
+    .filter((to) => {
+      const item = NAV_ITEMS.find((navItem) => navItem.to === to)
+      return !item || isNavEntryAllowed(item, has)
+    })
+    .map((to) => ({
+      to,
+      labelKey: entryByDestination[to]!.key,
+      Icon: entryByDestination[to]!.Icon,
+    }))
 
   return (
     <nav
