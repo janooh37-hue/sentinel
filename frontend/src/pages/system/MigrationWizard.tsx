@@ -19,6 +19,7 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage, type MigrationResult, type MigrationStatus } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
@@ -385,12 +386,9 @@ export function MigrationGate({ children }: MigrationGateProps): React.JSX.Eleme
     queryFn: () => api.getMigrationStatus(),
     // Don't retry on error — a missing/slow server shouldn't block the UI.
     retry: false,
-    // First-launch v3 import is an admin action; inmate_reporter's route
-    // allowlist blocks GET /system/migration-status outright. Wait for auth
-    // to resolve first — firing while `user` is still loading would race
-    // ahead of the role check below (`enabled` recomputes too late to cancel
-    // an already-inflight request).
-    enabled: authStatus === 'authed' && user?.role !== 'inmate_reporter',
+    // Scoped roles cannot use migration endpoints. Wait for the session before
+    // fetching so an unresolved identity cannot race ahead of this gate.
+    enabled: authStatus === 'authed' && scopedRoleOf(user) === null,
   })
 
   const skipped = (() => {

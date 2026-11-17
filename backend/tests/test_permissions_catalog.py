@@ -40,7 +40,9 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
 
 def test_static_role_default_counts_are_preserved():
     assert {
-        role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
+        role: len(caps)
+        for role, caps in ROLE_DEFAULTS.items()
+        if role not in ("inmate_reporter", "fleet_reporter")
     } == {
         "operator": 19,
         "manager": 45,
@@ -77,6 +79,34 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
             "books.category.13/1",
             "books.service.Report",
             "books.servicerecords.Report",
+        }
+    )
+
+
+def test_fleet_reporter_preset_is_exactly_its_fixed_ceiling():
+    """Security contract: no deletions, no generic books.create/edit/approve, and
+    only the 7/1 and 11/1 categories plus its five paper services."""
+    papers = (
+        "General Book",
+        "Report",
+        "Vehicle Fines",
+        "Vehicle Accident Report",
+        "Vehicle Mileage Log",
+    )
+    assert (
+        ROLE_DEFAULTS["fleet_reporter"]
+        == permissions.FLEET_REPORTER_CAPS
+        == {
+            "app.access",
+            "documents.generate",
+            "books.view",
+            "books.submit",
+            "vehicles.view",
+            "vehicles.edit",
+            "books.category.7/1",
+            "books.category.11/1",
+            *(f"books.service.{paper}" for paper in papers),
+            *(f"books.servicerecords.{paper}" for paper in papers),
         }
     )
 
@@ -154,10 +184,12 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
         )
         if service_id in permissions.OPT_IN_SERVICE_IDS:
             expected_roles = ("admin",)
-        elif entry.id in inmate_dynamic_ids:
-            expected_roles = ("operator", "manager", "admin", "inmate_reporter")
         else:
             expected_roles = ("operator", "manager", "admin")
+            if entry.id in inmate_dynamic_ids:
+                expected_roles = (*expected_roles, "inmate_reporter")
+            if entry.id in permissions.FLEET_REPORTER_CAPS:
+                expected_roles = (*expected_roles, "fleet_reporter")
         assert entry.default_roles == expected_roles, entry.id
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
     assert capability_catalog_service.get_catalog_entry(db_session, "missing.cap") is None

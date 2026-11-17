@@ -3142,6 +3142,22 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "fleetReporter": {
+      "approveFinish": "Approve and finish",
+      "forward": "Forward to branch manager",
+      "forwardHint": "Choose a branch manager to continue the approval chain.",
+      "note": "Note (optional)",
+      "noCandidatesTitle": "No eligible branch managers",
+      "noCandidatesBody": "Ask an administrator to grant approval access to another active account.",
+      "forwarded": "Forwarded to branch manager",
+      "lineManager": "Line manager",
+      "stale": "Record or employee data changed. Reload before continuing.",
+      "resubmit": "Resubmit",
+      "rebuild": "Rebuild letter",
+      "rebuildHint": "Correct the fine or accident in the fleet hub first, then rebuild.",
+      "rebuilding": "Rebuilding letter…",
+      "rebuilt": "Letter rebuilt. Submit it when it's ready."
+    },
     "thread": {
       "reply": "Reply",
       "createFrom": "Create from",
@@ -4766,6 +4782,28 @@
       "signerMismatch": "The signer must be the employee linked to your account.",
       "stagedImportOwner": "This staged import belongs to another user."
     },
+    "fleet": {
+      "lineManagerRequired": "Ask an administrator to set your line manager.",
+      "lineManagerNotApplicable": "Only fleet reporter accounts have a line manager.",
+      "lineManagerNotEligible": "Choose another active account that can approve records.",
+      "branchApproverNotEligible": "Choose an active approver other than the author and the line manager.",
+      "notLineManagerStage": "This record is no longer waiting for your approval as line manager. Reload to see its current stage.",
+      "routeForbidden": "This page isn't available for your account.",
+      "scopeFixed": "This account's role has a fixed set of permissions. It can't be widened for one user.",
+      "inputForbidden": "Your role can't set this option. Your approval route and signatures are set for you.",
+      "employeeRequired": "Ask an administrator to link your employee record.",
+      "identityChanged": "Your employee record changed since this paper was signed. Reload before continuing.",
+      "notOwner": "You can only change your own papers.",
+      "stateLocked": "This paper can no longer be edited. Reload to see its current state.",
+      "notAVehicleLetter": "Only Fines, Accident and Odometer letters can be rebuilt.",
+      "letterSourceChanged": "Some fines on this letter were removed, archived or moved to another vehicle. Create a new letter from the fleet hub.",
+      "letterSourceChangedFines": "These fines were removed, archived or moved to another vehicle: {{fines}}. Create a new letter from the fleet hub.",
+      "chainAuthorOnly": "Only the author can submit or rebuild this paper; it goes to their line manager.",
+      "foldersForbidden": "Folders aren't available for your account.",
+      "accidentLetterNotVisible": "This accident already has a letter you can't open.",
+      "accidentNotFound": "This letter's accident no longer exists.",
+      "odometerNoVehicles": "Select at least one active vehicle for the monthly mileage log."
+    },
     "boundary": {
       "bodyLead": "This screen lost its connection.",
       "bodyReassure": "Nothing you did is lost",
@@ -5071,6 +5109,11 @@
       "other": "Other"
     },
     "nsCategory": "Record",
+    "fleetReporter": {
+      "generalBookTitle": "General Book",
+      "generalBookDescription": "Create a classified record and send it to your line manager.",
+      "reportDescription": "Create a report in Word and send it to your line manager."
+    },
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
       "description": "Save an unfinished report, then send it to the configured approval manager.",
@@ -5413,6 +5456,22 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Today at a glance",
+    "fleetReporter": {
+      "eyebrow": "Fleet",
+      "title": "Paper workspace",
+      "subtitle": "Create General Books, Reports, and vehicle letters, and follow their progress with your line manager.",
+      "newReport": "New paper",
+      "yourReports": "Your papers",
+      "yourReportsHint": "Continue drafts and review papers returned or rejected by your line manager.",
+      "pending": "Pending approval",
+      "pendingHint": "Papers waiting for approval.",
+      "pendingEmpty": "No papers are pending approval.",
+      "approved": "Approved",
+      "approvedHint": "Papers ready to read or print.",
+      "approvedEmpty": "No approved papers yet.",
+      "untitled": "Untitled paper",
+      "loadError": "Papers couldn't be loaded."
+    },
     "inmateReporter": {
       "eyebrow": "Inmate conduct violations",
       "title": "Report workspace",
@@ -6341,7 +6400,9 @@
         "operator": "Operator",
         "operatorHint": "Standard day-to-day access",
         "inmate_reporter": "Inmate violation reporter",
-        "inmate_reporterHint": "Create and track inmate violation reports"
+        "inmate_reporterHint": "Create and track inmate violation reports",
+        "fleet_reporter": "Fleet reporter",
+        "fleet_reporterHint": "Manage fleet records and submit vehicle papers for approval"
       }
     },
     "active": {
@@ -6393,7 +6454,8 @@
         "create_user": "Account created",
         "disable": "Disabled",
         "reactivate": "Restored",
-        "password_setup": "Password set up"
+        "password_setup": "Password set up",
+        "set_line_manager": "Line manager changed"
       }
     },
     "reject": {
@@ -6444,7 +6506,12 @@
       "admin": "Admin",
       "manager": "Manager",
       "operator": "Operator",
-      "inmate_reporter": "Inmate violation reporter"
+      "inmate_reporter": "Inmate violation reporter",
+      "fleet_reporter": "Fleet reporter"
+    },
+    "lineManager": {
+      "label": "Line manager",
+      "notSet": "Not set"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",

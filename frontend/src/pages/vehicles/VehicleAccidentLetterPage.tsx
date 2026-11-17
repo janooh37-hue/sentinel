@@ -66,6 +66,7 @@ import {
 } from './vehicleUtils'
 import { PaperFacts, PaperSheet } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
+import { VehicleRecordLink } from './components/VehicleRecordLink'
 import { FormAlert } from '@/components/forms/DialogShell'
 
 /** What the reference line shows before the book exists. The real ref
@@ -192,10 +193,10 @@ function AccidentLetter(): React.JSX.Element {
             <RefreshButton />
             {filedBookId != null ? (
               // Already filed: the destination is the record, not a second book.
-              <Link to={`/books/${filedBookId}`} className={buttonVariants({ size: 'sm' })}>
+              <VehicleRecordLink bookId={filedBookId} fallback={<bdi dir="ltr">#{filedBookId}</bdi>} className={buttonVariants({ size: 'sm' })}>
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 {t('vehicles.openLetter')}
-              </Link>
+              </VehicleRecordLink>
             ) : (
               <Button
                 type="button"
@@ -255,12 +256,13 @@ function AccidentLetter(): React.JSX.Element {
               <p className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary-soft px-3.5 py-2.5 text-[0.8em] text-foreground">
                 <FileText className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />
                 <strong className="font-semibold">{t('vehicles.officialLetter')}</strong>
-                <Link
-                  to={`/books/${filedBookId}`}
+                <VehicleRecordLink
+                  bookId={filedBookId}
+                  fallback={<bdi dir="ltr">#{filedBookId}</bdi>}
                   className="font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none"
                 >
                   {t('vehicles.openLetter')}
-                </Link>
+                </VehicleRecordLink>
               </p>
             )}
 

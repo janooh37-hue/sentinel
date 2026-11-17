@@ -10,12 +10,13 @@ import { ConfidentialityChip } from './ConfidentialityChip'
 import { SendRecordDialog } from './SendRecordDialog'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
-import { canSendForApproval, inmateReporterActionFor } from './book-detail-drawer-utils'
-import { useInmateReportSubmit } from './useInmateReportSubmit'
+import { canSendForApproval, scopedReporterActionFor } from './book-detail-drawer-utils'
+import { useScopedReporterSubmit } from './useScopedReporterSubmit'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { AuthContext } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { serviceHref } from '@/lib/quickActions'
 
 export type NotificationChoice = 'enabled' | 'skipped'
@@ -39,7 +40,7 @@ export function SavedRecordActions({
   const navigate = useNavigate()
   const { has } = useCapabilities()
   const user = useContext(AuthContext)?.user ?? null
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const isScopedRole = scopedRoleOf(user) !== null
   const isMobile = useIsMobile()
   const [approvalOpen, setApprovalOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
@@ -54,14 +55,16 @@ export function SavedRecordActions({
     current?.signed_pdf_url || current?.pdf_url || bookQuery.data?.imported_doc?.pdf_url,
   )
   const reporterAction = bookQuery.data
-    ? inmateReporterActionFor(bookQuery.data, user?.id)
+    ? scopedReporterActionFor(bookQuery.data, user?.id)
     : 'read-only'
-  const canSubmit = !!bookQuery.data?.can_write && (isInmateReporter
-    ? reporterAction === 'edit-submit'
+  const canSubmit = !!bookQuery.data?.can_write && (isScopedRole
+    ? has('books.submit') && reporterAction === 'edit-submit'
     : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') }))
-  const reporterSubmitMutation = useInmateReportSubmit({
+  const reporterSubmitMutation = useScopedReporterSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
-    onRevise: (id) => navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${id}`),
+    onRevise: (id) => navigate(scopedRoleOf(user) === 'inmate_reporter'
+      ? `${serviceHref('Inmate Conduct Violations')}?revise=${id}`
+      : `/books/${id}`),
   })
   const print = () => {
     const opened = window.open(`/books/${bookId}?print=1`, '_blank')
@@ -88,7 +91,7 @@ export function SavedRecordActions({
     <button
       type="button"
       onClick={() => {
-        if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
+        if (isScopedRole) reporterSubmitMutation.mutate(bookId)
         else setApprovalOpen(true)
       }}
       className={cn(
@@ -159,7 +162,7 @@ export function SavedRecordActions({
 
       {bookQuery.data !== undefined && !printable && (
         <p className="mt-3 text-sm text-muted-foreground">
-          {isInmateReporter ? t('application.pdfUnavailableNoDocx') : t('books.completion.printUnavailable')}
+          {isScopedRole ? t('application.pdfUnavailableNoDocx') : t('books.completion.printUnavailable')}
         </p>
       )}
 
@@ -181,7 +184,7 @@ export function SavedRecordActions({
         )}
       </div>
 
-      {!isInmateReporter && approvalOpen && (
+      {!isScopedRole && approvalOpen && (
         <SubmitForApprovalDialog bookId={bookId} onClose={() => setApprovalOpen(false)} />
       )}
       {bookQuery.data && (

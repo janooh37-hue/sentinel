@@ -30,14 +30,14 @@ export function inmateReportFieldLabel(
   return `${base} · ${t(INMATE_FIELD_LOCALE_KEY[inmateCell[2]])} · ${Number(inmateCell[1]) + 1}`
 }
 
-export function notifyInmateReportSubmitError(
+export function notifyScopedReporterSubmitError(
   error: unknown,
   t: (key: string) => string,
   language: string,
   schema?: ReportFieldSchema | null,
   onRevise?: () => void,
 ): void {
-  const message = inmateReportSubmitErrorMessage(error, t)
+  const message = scopedReporterSubmitErrorMessage(error, t)
   if (error instanceof ApiError && error.code === 'INMATE_REPORT_INCOMPLETE') {
     const fields = Array.isArray(error.details.fields)
       ? error.details.fields.filter((field): field is string => typeof field === 'string')
@@ -53,7 +53,7 @@ export function notifyInmateReportSubmitError(
   }
 }
 
-export function inmateReportSubmitErrorMessage(error: unknown, t: (key: string) => string): string {
+export function scopedReporterSubmitErrorMessage(error: unknown, t: (key: string) => string): string {
   if (!(error instanceof ApiError)) return apiErrorMessage(error)
   switch (error.code) {
     case 'INMATE_REPORT_INCOMPLETE':
@@ -64,6 +64,12 @@ export function inmateReportSubmitErrorMessage(error: unknown, t: (key: string) 
     case 'INMATE_REPORTER_NOT_OWNER':
     case 'INMATE_REPORTER_IDENTITY_CHANGED':
       return t('application.inmateReporter.stale')
+    case 'SCOPED_ROLE_STATE_LOCKED':
+    case 'SCOPED_ROLE_NOT_OWNER':
+    case 'SCOPED_ROLE_IDENTITY_CHANGED':
+      return t('books.fleetReporter.stale')
+    case 'SCOPED_ROLE_EMPLOYEE_REQUIRED':
+      return t('application.inmateReporter.unlinked')
     default:
       return apiErrorMessage(error)
   }
@@ -76,7 +82,7 @@ interface Options {
 }
 
 /** The fixed-scope reporter submit: always routed to the configured manager. */
-export function useInmateReportSubmit(options: Options = {}) {
+export function useScopedReporterSubmit(options: Options = {}) {
   const qc = useQueryClient()
   const { t, i18n } = useTranslation()
   return useMutation({
@@ -91,7 +97,7 @@ export function useInmateReportSubmit(options: Options = {}) {
       options.onSuccess?.()
     },
     onError: async (error, bookId) => {
-      options.onError?.(error, inmateReportSubmitErrorMessage(error, t), bookId)
+      options.onError?.(error, scopedReporterSubmitErrorMessage(error, t), bookId)
       let schema: ReportFieldSchema | undefined
       if (error instanceof ApiError && error.code === 'INMATE_REPORT_INCOMPLETE') {
         try {
@@ -104,7 +110,7 @@ export function useInmateReportSubmit(options: Options = {}) {
           // Keep the original submission error visible even if labels cannot load.
         }
       }
-      notifyInmateReportSubmitError(error, t, i18n.language, schema,
+      notifyScopedReporterSubmitError(error, t, i18n.language, schema,
         options.onRevise ? () => options.onRevise?.(bookId) : undefined)
     },
   })

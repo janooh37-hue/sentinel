@@ -190,6 +190,12 @@ def test_legacy_deny_keeps_the_stray_record_hidden_without_hiding_permit_letters
     with engine.connect() as connection:
         repaired = _overrides(connection, user_id)
     assert repaired == {k: v for k, v in merged.items() if k != overreach}
+    # The ORM maps the current schema (later ``users`` columns included). Later
+    # revisions are schema-only (0119 adds a table, 0120 a nullable users column),
+    # so the overrides above are unchanged at head.
+    command.upgrade(config, "head")
+    with engine.connect() as connection:
+        assert _overrides(connection, user_id) == repaired
     with Session(engine) as db:
         user = db.get(User, user_id)
         assert user is not None

@@ -26,18 +26,18 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
-import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { scopedReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
 import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
-import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf } from './recordPapers'
 import { buildRecordBasketItem } from './recordsBasket'
+import { MineChip, type MineToggleState } from './FormRail'
 import { openRecord, recordLinkProps, useListReturnFocus } from './useRecordNavContext'
 import type { RecordNavState } from './useRecordNavContext'
 
@@ -52,7 +52,8 @@ export interface BooksMobileListProps {
   rows: BookRead[]
   hasFilters: boolean
   isAr: boolean
-  isInmateReporter: boolean
+  isScopedRole: boolean
+  newRecordPath: string
   canSubmit: boolean
   userId: number | undefined
   highlightedId: number | null
@@ -61,6 +62,8 @@ export interface BooksMobileListProps {
   onClearFilters: () => void
   /** Search box rendered beside "Select", above the cards. */
   search?: React.ReactNode
+  /** Own-papers filter for the compact scoped-role Records shell. */
+  mine?: MineToggleState
 }
 
 const FLASH_MS = 1800
@@ -72,13 +75,15 @@ export function BooksMobileList({
   rows,
   hasFilters,
   isAr,
-  isInmateReporter,
+  isScopedRole,
+  newRecordPath,
   canSubmit,
   userId,
   highlightedId,
   onSubmit: submitBook,
   onClearFilters,
   search,
+  mine,
 }: BooksMobileListProps): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -93,7 +98,7 @@ export function BooksMobileList({
   // ── Select mode ───────────────────────────────────────────────────────────
   const [selectMode, setSelectMode] = useState(false)
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
-  const canBulk = !isInmateReporter
+  const canBulk = !isScopedRole
   const canDelete = canBulk && has('books.delete')
   // Drop ticks for rows that left the list (filter relaxed/tightened), so they
   // cannot silently reappear later. Adjusting state during render, guarded.
@@ -103,7 +108,7 @@ export function BooksMobileList({
   const pickedRows = mobileRows.filter((row) => picked.has(row.id))
   const deletableRows = canDelete
     ? pickedRows.filter(
-        (row) => deleteBlockReason(row, { has, isInmateReporter }) === null,
+        (row) => deleteBlockReason(row, { has, isScopedRole }) === null,
       )
     : []
   const skippedCount = canDelete ? pickedRows.length - deletableRows.length : 0
@@ -178,9 +183,10 @@ export function BooksMobileList({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {search || showSelectToggle ? (
-        <div className="flex shrink-0 items-center gap-2 px-6 pb-2">
+      {search || mine || showSelectToggle ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 px-6 pb-2">
           {search}
+          {mine && <MineChip {...mine} variant="chip" />}
           {showSelectToggle ? (
             <button
               type="button"
@@ -223,7 +229,7 @@ export function BooksMobileList({
                   icon={BookOpen}
                   message={hasFilters ? t('books.list.noMatch') : t('books.emptyUnfiltered')}
                   actionLabel={hasFilters ? t('books.filters.clear') : t('books.newRecord')}
-                  onAction={hasFilters ? onClearFilters : () => navigate(newRecordHref(isInmateReporter))}
+                  onAction={hasFilters ? onClearFilters : () => navigate(newRecordPath)}
                 />
               </div>
             ) : (
@@ -234,14 +240,14 @@ export function BooksMobileList({
                     row={row}
                     isAr={isAr}
                     canSubmit={
-                      row.can_write && (isInmateReporter
-                        ? inmateReporterActionFor(row, userId) === 'edit-submit'
+                      row.can_write && (isScopedRole
+                        ? canSubmit && scopedReporterActionFor(row, userId) === 'edit-submit'
                         : canSubmit)
                     }
                     highlighted={row.id === highlightedId || row.id === flashId}
                     selectMode={selectMode}
                     picked={picked.has(row.id)}
-                    paperCount={paperCountOf(row, { inmateReporter: isInmateReporter })}
+                    paperCount={paperCountOf(row, { isScopedRole })}
                     link={recordLinkProps(row.id, linkNav)}
                     onLinkClick={handleLinkClick(row.id)}
                     onTogglePick={() => togglePick(row.id)}

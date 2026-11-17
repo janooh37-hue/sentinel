@@ -19,7 +19,8 @@ from sqlalchemy import event, func, select
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.api.errors import AppError, NotFoundError
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
+from app.core.roles import ADMIN_ROLE, MANAGER_ROLE
+from app.core.scoped_roles import SCOPED_ROLES, is_scoped_role
 from app.db.models import (
     AuditLog,
     Book,
@@ -82,7 +83,7 @@ def _audit(db: Session, user: User, action: str, book: Book, payload: dict[str, 
 
 def can_change_confidentiality(user: User, book: Book) -> bool:
     """Creator, manager, or admin (the caller must also be able to open it)."""
-    if user.role == INMATE_REPORTER_ROLE:
+    if is_scoped_role(user):
         return False
     return _is_manager_or_admin(user) or (
         book.created_by_user_id is not None and book.created_by_user_id == user.id
@@ -274,7 +275,7 @@ def user_directory(db: Session, *, exclude_user_id: int | None = None) -> list[D
     """
     users = db.scalars(
         select(User)
-        .where(User.status == "active", User.role != INMATE_REPORTER_ROLE)
+        .where(User.status == "active", User.role.not_in(SCOPED_ROLES))
         .order_by(User.id)
     ).all()
     emp_ids = {u.employee_id for u in users if u.employee_id}
@@ -301,8 +302,8 @@ def user_directory(db: Session, *, exclude_user_id: int | None = None) -> list[D
 
 
 def recipient_candidates(db: Session, user: User, level: str | None) -> list[DirectoryEntry]:
-    if user.role == INMATE_REPORTER_ROLE:
-        raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
+    if is_scoped_role(user):
+        raise AppError("FORBIDDEN", "This role cannot send records.", http_status=403)
     entries = user_directory(db, exclude_user_id=user.id)
     if level == "secret":
         entries = [e for e in entries if e.cleared]
@@ -359,8 +360,8 @@ def send(
     include_references: bool = True,
 ) -> tuple[list[BookRecipientRead], list[BookSendSkipped], list[BookReferenceSendResult]]:
     """Send (or forward) ``book`` to users. Anyone with full access may send."""
-    if user.role == INMATE_REPORTER_ROLE:
-        raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
+    if is_scoped_role(user):
+        raise AppError("FORBIDDEN", "This role cannot send records.", http_status=403)
     book_service.require_full_book_access(db, user, book)
     if book.confidentiality == "personal":
         if not make_directed:
@@ -383,9 +384,7 @@ def send(
     invalid = [
         uid
         for uid in targets
-        if uid not in found
-        or found[uid].status != "active"
-        or found[uid].role == INMATE_REPORTER_ROLE
+        if uid not in found or found[uid].status != "active" or is_scoped_role(found[uid])
     ]
     if invalid:
         raise AppError(

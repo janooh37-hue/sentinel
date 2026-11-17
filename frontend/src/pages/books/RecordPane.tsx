@@ -31,6 +31,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PenLine,
+  RefreshCw,
   Send,
   Trash2,
   Upload,
@@ -64,6 +65,7 @@ import { Hint } from '@/components/ui/hint'
 import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { currentBookDocId } from '@/lib/bookDocument'
@@ -74,7 +76,7 @@ import { useFocusTrap } from '@/lib/useFocusTrap'
 import { useInlineReason } from '@/lib/useInlineReason'
 import { cn } from '@/lib/utils'
 
-import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { scopedReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
@@ -82,6 +84,7 @@ import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
 import { useInboxActions } from '@/components/books/useInboxActions'
+import { useVehicleLetterRebuild } from '@/components/books/useVehicleLetterRebuild'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -177,6 +180,7 @@ export function RecordPane({
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
   const manage = useManagePaper(book?.id ?? null, book?.ref_number ?? undefined)
+  const rebuildMutation = useVehicleLetterRebuild()
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const pagesRef = useRef<HTMLInputElement | null>(null)
@@ -192,13 +196,13 @@ export function RecordPane({
   // Relative times ("2 days ago") are computed once per mounted pane; they need no ticking.
   const [now] = useState(() => Date.now())
   const { user } = useAuth()
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const isScopedRole = scopedRoleOf(user) !== null
   const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
   const includedBookId = book?.id ?? null
   const includedDetail = useQuery({
     queryKey: ['books', 'detail', includedBookId],
     queryFn: () => api.getBook(includedBookId!),
-    enabled: !isInmateReporter && includedPapersOpen && includedBookId !== null,
+    enabled: !isScopedRole && includedPapersOpen && includedBookId !== null,
   })
 
   // The list row can lack approver names; the detail (same cache entry the
@@ -212,8 +216,8 @@ export function RecordPane({
   // Papers: signed → generated → imported → scans (shared with the record page
   // and the full-preview overlay, which receives this exact list).
   const papers = useMemo(
-    () => (book ? papersOf(book, { inmateReporter: isInmateReporter }) : []),
-    [book, isInmateReporter],
+    () => (book ? papersOf(book, { isScopedRole }) : []),
+    [book, isScopedRole],
   )
 
   // The record's default paper (signed once filed, else the first non-signed).
@@ -289,7 +293,8 @@ export function RecordPane({
     )
   }
 
-  const state = book.approval_state
+  const actionBook = statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book
+  const state = actionBook.approval_state
   const label = serviceLabel(book.service_id)
   const artwork = serviceArtwork(book.service_id)
   const glyph = serviceGlyph(book.service_id)
@@ -380,31 +385,34 @@ export function RecordPane({
   // ── Next step: the one status sentence + the footer's workflow buttons ─────
   // Word-authored books and an inmate's own report never get "Continue editing":
   // `recordNextStep` leaves it out (BookWordActions carries the Word actions).
-  const versions = book.versions ?? []
+  const versions = actionBook.versions ?? []
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
   const currentVersion =
-    (book.selected_version_id != null
-      ? versions.find((v) => v.id === book.selected_version_id)
+    (actionBook.selected_version_id != null
+      ? versions.find((v) => v.id === actionBook.selected_version_id)
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
-  const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
-  const reporterAction = inmateReporterActionFor(book, user?.id)
+  const canMutateCurrent = actionBook.can_write && actionBook.access_scope !== 'assigned_revision' && isLiveCurrent
+  const reporterAction = scopedReporterActionFor(actionBook, user?.id)
   const isInmateReport =
-    isInmateReporter && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
+    scopedRoleOf(user) === 'inmate_reporter' && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
+  const canEditScopedWord = isScopedRole && has('documents.generate') && reporterAction !== 'read-only' &&
+    (isInmateReport || book.is_word_book || book.service_id === 'Report')
   const steps = currentVersion?.approval_steps ?? book.approval_steps ?? []
   const hasDocument = currentBookDocId(book) !== undefined || Boolean(book.imported_doc?.pdf_url)
   const canManageIncludedPapers =
-    !isInmateReporter &&
+    !isScopedRole &&
     canMutateCurrent &&
     currentVersion?.document_id != null &&
     isIncludedPapersOwner(book, user?.id)
-  const ns: NextStep = recordNextStep(statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book, {
+  const ns: NextStep = recordNextStep(actionBook, {
     has,
     canEdit,
     canGenerate: has('documents.generate') && book.can_write,
     canMutateCurrent,
-    isInmateReporter,
-    inmateAction: reporterAction,
+    isScopedRole,
+    isInmateReport,
+    reporterAction: reporterAction,
     isAssignee: isLiveCurrent && isApproverAssignee(steps, user?.id),
     isReviewer: isLiveCurrent && myPendingReviewerStep(steps, user?.id) != null,
     hasDocument,
@@ -428,7 +436,17 @@ export function RecordPane({
     const base = { id, disabled: false, reason: reasonOf(id) }
     switch (id) {
       case 'sendForApproval':
-        return { ...base, label: t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
+        return { ...base, label: t(isScopedRole && state === 'returned' ? 'books.fleetReporter.resubmit' : review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
+      case 'rebuildVehicleLetter':
+        return {
+          ...base,
+          label: t(rebuildMutation.isPending ? 'books.fleetReporter.rebuilding' : 'books.fleetReporter.rebuild'),
+          disabled: rebuildMutation.isPending,
+          icon: <RefreshCw className="h-3.5 w-3.5" aria-hidden />,
+          onClick: () => {
+            if (currentVersion && !rebuildMutation.isPending) rebuildMutation.mutate({ bookId: book.id, versionId: currentVersion.id })
+          },
+        }
       case 'continueEditing':
         return { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
       case 'revise':
@@ -440,9 +458,7 @@ export function RecordPane({
           ? { ...base, label: t('books.record.downloadSigned'), icon: <Download className="h-3.5 w-3.5" aria-hidden />, onClick: () => downloadPaper(signedPaper) }
           : null
       case 'sign':
-        return review
-          ? { ...base, label: t('books.approval.markReviewed'), icon: <CheckCheck className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
-          : { ...base, label: t('books.approval.signApprove'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
+        return { ...base, label: t(statusDetail.data?.can_forward_to_branch ? 'books.fleetReporter.approveFinish' : review ? 'books.approval.markReviewed' : 'books.approval.signApprove'), icon: review ? <CheckCheck className="h-3.5 w-3.5" aria-hidden /> : <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
       case 'approveReviewed':
         return { ...base, label: t('books.reviewers.approveReviewed'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
       default:
@@ -462,12 +478,11 @@ export function RecordPane({
   // ── More ▾ ────────────────────────────────────────────────────────────────
   // WordReopenButton gates its own trigger (finished, not voided, no active session) but
   // must stay mounted for the whole record: the reopen response flips `edit_session`
-  // active, and unmounting then would drop the retained inmate-reporter handoff
-  // (a late response behind the lock screen would never present after unlock).
-  const hasWordReopen = !isInmateReporter || isInmateReport
+  // active before a deferred handoff is presented after unlock.
+  const hasWordReopen = !isScopedRole || canEditScopedWord
   const showScanSignedInMenu = ns.overflow.includes('scanSigned') && !scanSignedShown
   const showAddToPdf = canManageIncludedPapers
-  const showEmail = !isInmateReporter && ns.overflow.includes('email')
+  const showEmail = !isScopedRole && ns.overflow.includes('email')
   const emailReason = reasonOf('email')
   const deleteId = ns.overflow.find((id) => id === 'deleteDraft' || id === 'deleteRecord')
   const showDelete = deleteId !== undefined
@@ -481,7 +496,7 @@ export function RecordPane({
   const includedDocumentId = includedDetail.data ? currentBookDocId(includedDetail.data) : undefined
 
   const emptyState = (() => {
-    if (!isInmateReporter && book.imported_doc) {
+    if (!isScopedRole && book.imported_doc) {
       // Imported record whose vault file isn't a PDF (e.g. .docx): no inline
       // preview, so offer the original for download.
       return (
@@ -529,7 +544,7 @@ export function RecordPane({
     return <DocumentState kind="empty" body={t('books.record.noDocument')} />
   })()
 
-  const canManagePapers = !isInmateReporter && canEdit
+  const canManagePapers = !isScopedRole && canEdit
   const paperHandlers = {
     onDeletePaper: canManagePapers ? setDeleteTarget : undefined,
     onReplacePaper: canManagePapers
@@ -671,7 +686,7 @@ export function RecordPane({
               onSelectKey={setPickedKey}
               mode="pane"
               onOpenFull={() => setFullOpen(true)}
-              onUpload={!isInmateReporter && canScan ? () => fileInput?.click() : undefined}
+              onUpload={!isScopedRole && canScan ? () => fileInput?.click() : undefined}
               uploadBusy={addScan.busy}
               emptySlot={emptyState}
               {...paperHandlers}
@@ -682,10 +697,10 @@ export function RecordPane({
 
       {/* Footer: Word session · ≤2 workflow buttons · Open record · More */}
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-hairline px-3 py-2.5">
-        {(!isInmateReporter || isInmateReport) && (
+        {(!isScopedRole || canEditScopedWord) && (
           <WordSessionActions
             book={book}
-            onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
+            onFinished={canEditScopedWord ? () => onSubmit(book.id) : undefined}
           />
         )}
         {workflow.map((action) => (
@@ -701,6 +716,9 @@ export function RecordPane({
             {action.label}
           </PaneBtn>
         ))}
+        {ns.primary === 'rebuildVehicleLetter' && (
+          <p className="basis-full text-[0.75em] text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>
+        )}
         <Link
           {...recordLinkProps(book.id, nav())}
           onClick={(e) => {
@@ -743,7 +761,7 @@ export function RecordPane({
                     {hasOtherMoreItems && <DropdownMenuSeparator />}
                   </>
                 )}
-                {book.can_send && (
+                {!isScopedRole && book.can_send && (
                   <DropdownMenuItem onSelect={() => setSendOpen(true)}>
                     <Send className="h-3.5 w-3.5" aria-hidden />
                     {t('books.send.menu')}
@@ -757,7 +775,7 @@ export function RecordPane({
                     <Link2 className="h-3.5 w-3.5" aria-hidden />{t('books.thread.linkRecord')}
                   </DropdownMenuItem>
                 )}
-                {book.can_change_confidentiality && (
+                {!isScopedRole && book.can_change_confidentiality && (
                   <DropdownMenuItem onSelect={() => setLevelOpen(true)}>
                     <Lock className="h-3.5 w-3.5" aria-hidden />
                     {t('books.confidentiality.menu')}
@@ -820,7 +838,7 @@ export function RecordPane({
           book={book}
           hideTrigger
           onTriggerChange={setWordTrigger}
-          onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
+          onFinished={canEditScopedWord ? () => onSubmit(book.id) : undefined}
         />
       )}
 

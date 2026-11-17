@@ -26,7 +26,7 @@ vi.mock('react-router-dom', async (original) => ({
   ...await original<typeof RouterModule>(),
   useNavigate: () => navigate,
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role } : null }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: auth.authenticated ? { role: auth.role, scoped_role: auth.role === 'inmate_reporter' || auth.role === 'fleet_reporter' ? auth.role : null } : null }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: (cap: string) => !auth.denied.has(cap) }) }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }))
 
@@ -40,6 +40,8 @@ const BOOK: BookRead = {
   included_papers_revision: 0, included_papers_fixed_page_count: 0, included_papers_total_page_count: 0,
   access_scope: 'full', can_write: true, can_sign: false, can_review: false,
   confidentiality: 'general', can_send: true, can_change_confidentiality: true,
+  can_forward_to_branch: false,
+  can_rebuild_vehicle_letter: false,
 }
 const REFERENCE: BookThreadItem = {
   book_id: 8, ref_number: 'REF-8', subject: 'Reference subject', confidentiality: 'secret',

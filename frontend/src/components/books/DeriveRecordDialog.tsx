@@ -6,6 +6,7 @@ import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage, type BookRead, type Confidentiality } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 import { ClassificationField } from '@/components/application/fields/ClassificationField'
@@ -29,7 +30,7 @@ const ERROR_KEYS: Record<string, string | undefined> = {
 export function DeriveRecordDialog({ book, kind, open, onOpenChange }: Props): React.JSX.Element | null {
   const { user } = useAuth()
   const { has } = useCapabilities()
-  if (!user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view')) return null
+  if (!user || scopedRoleOf(user) !== null || book.access_scope !== 'full' || !has('books.create') || !has('books.view')) return null
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
       {open && <Body key={`${book.id}-${kind}`} book={book} kind={kind} close={() => onOpenChange(false)} />}

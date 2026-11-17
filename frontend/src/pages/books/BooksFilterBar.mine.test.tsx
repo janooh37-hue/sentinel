@@ -39,7 +39,7 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
 }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ user: { id: 1, role: state.role } }),
+  useAuth: () => ({ user: { id: 1, role: state.role, scoped_role: state.role === 'inmate_reporter' || state.role === 'fleet_reporter' ? state.role : null } }),
 }))
 vi.mock('./useMyRecordsCount', () => ({
   useMyRecordsCount: () => ({ count: state.count }),
@@ -91,6 +91,17 @@ describe('BooksFilterBar — Created by me', () => {
     state.role = 'inmate_reporter'
     setup()
     expect(screen.queryByRole('button', { name: /من إنشائي/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /بانتظار النسخة الممسوحة/ })).not.toBeInTheDocument()
+  })
+
+  it('lets fleet reporters filter their own papers and shows the count', async () => {
+    state.role = 'fleet_reporter'
+    const { onChange } = setup()
+    const chip = screen.getByRole('button', { name: /من إنشائي/ })
+    expect(chip).toHaveTextContent('7')
+    expect(chip).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(chip)
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ mine: true }))
     expect(screen.queryByRole('button', { name: /بانتظار النسخة الممسوحة/ })).not.toBeInTheDocument()
   })
 

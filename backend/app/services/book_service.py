@@ -39,7 +39,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.classifications import CLASSIFICATIONS, get_classification
 from app.core.clock import ORGANIZATION_TIMEZONE
-from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
+from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES, VEHICLE_LETTER_FORMS
 from app.core.form_kind import (
     OTHER_SERVICE_ID,
     SERVICE_IDS,
@@ -57,7 +57,13 @@ from app.core.record_categories import (
     record_services,
     service_filing_category,
 )
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
+from app.core.roles import ADMIN_ROLE, FLEET_REPORTER_ROLE, INMATE_REPORTER_ROLE
+from app.core.scoped_roles import (
+    LINE_MANAGER_ROLES,
+    category_exempt_services,
+    is_scoped_role,
+    routes_to_line_manager,
+)
 from app.db.models import (
     AuditLog,
     Book,
@@ -92,6 +98,7 @@ from app.schemas.book import (
 from app.services import (
     employee_service,
     inmate_violation_whatsapp,
+    manager_service,
     perm_service,
     user_signature_service,
 )
@@ -296,7 +303,7 @@ _INMATE_REPORTER_OWNER_ONLY_STATES: Final[tuple[str, ...]] = ("none", "returned"
 _INMATE_REPORTER_SHARED_STATES: Final[tuple[str, ...]] = ("pending", "approved")
 
 
-def _inmate_reporter_original_creator_subquery() -> Any:
+def _original_creator_subquery() -> Any:
     """Correlated scalar subquery mirroring
     ``included_papers_service.original_creator_user_id`` in SQL: the lowest
     ``version_no``'s ``created_by_user_id`` for the correlated ``Book``."""
@@ -313,7 +320,7 @@ def _inmate_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
     """SQL: Report books are private; violation visibility retains its old rules."""
     report_clause = and_(Book.category_id == "GS", Book.ref_number.like("REPORT-%"))
     report_owner = or_(
-        _inmate_reporter_original_creator_subquery() == user.id,
+        _original_creator_subquery() == user.id,
         Book.submitted_by_user_id == user.id,
     )
     return and_(
@@ -333,7 +340,7 @@ def _inmate_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
                     Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
                     and_(
                         Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
-                        _inmate_reporter_original_creator_subquery() == user.id,
+                        _original_creator_subquery() == user.id,
                     ),
                 ),
             ),
@@ -362,6 +369,116 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
         from app.services import included_papers_service
 
         return included_papers_service.original_creator_user_id(book) == user_id
+    return False
+
+
+#: States in which a filed vehicle paper by anyone is shared with every fleet reporter.
+_FLEET_SHARED_STATES: Final[tuple[str, ...]] = ("pending", "approved")
+
+
+def _fleet_reporter_author_clause() -> ColumnElement[bool]:
+    """SQL: the correlated Book's author — original version creator, else the
+    Book's creator (a Word draft has no version yet)."""
+    original_creator = (
+        select(BookVersion.created_by_user_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.asc())
+        .limit(1)
+        .correlate(Book)
+        .scalar_subquery()
+    )
+    return func.coalesce(original_creator, Book.created_by_user_id)
+
+
+def _fleet_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
+    """SQL: a fleet reporter opens their own papers in every state, and filed,
+    final vehicle papers by anyone. Python mirror: ``_fleet_reporter_book_visible``.
+
+    A vehicle paper is filed and final when it is pending or approved, or when
+    it is an unsubmitted ``auto`` letter (filed on generation) by an author
+    whose papers do not go through the line-manager chain. Another fleet
+    reporter's draft, returned or rejected paper stays private, and so does
+    every General Book or Report not authored by the caller.
+    """
+    author = _fleet_reporter_author_clause()
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .correlate(Book)
+        .scalar_subquery()
+    )
+    chain_author = exists(
+        select(User.id)
+        .where(User.id == author, User.role.in_(sorted(LINE_MANAGER_ROLES)))
+        .correlate(Book)
+    )
+    filed_vehicle_paper = and_(
+        newest_template_id.is_not(None),
+        newest_template_id.in_(sorted(VEHICLE_LETTER_FORMS)),
+        or_(
+            Book.approval_state.in_(_FLEET_SHARED_STATES),
+            and_(
+                Book.approval_state == "none",
+                Book.submitted_by_user_id.is_(None),
+                not_(chain_author),
+            ),
+        ),
+    )
+    return and_(
+        Book.deleted_at.is_(None),
+        Book.voided_at.is_(None),
+        or_(author == user.id, filed_vehicle_paper),
+    )
+
+
+def _fleet_reporter_book_visible(db: Session, book: Book, user_id: int) -> bool:
+    """Python-side mirror of ``_fleet_reporter_visibility_clause``."""
+    from app.services import included_papers_service
+
+    if book.deleted_at is not None or book.voided_at is not None:
+        return False
+    author_id = included_papers_service.original_creator_user_id(book)
+    if author_id is None:
+        author_id = book.created_by_user_id
+    if author_id is not None and author_id == user_id:
+        return True
+    newest = book.versions[-1] if book.versions else None
+    if newest is None or newest.template_id not in VEHICLE_LETTER_FORMS:
+        return False
+    if book.approval_state in _FLEET_SHARED_STATES:
+        return True
+    if book.approval_state != "none" or book.submitted_by_user_id is not None:
+        return False
+    author = db.get(User, author_id) if author_id is not None else None
+    return author is None or author.role not in LINE_MANAGER_ROLES
+
+
+def _scoped_visibility_clause(user: User) -> ColumnElement[bool]:
+    """SQL record matrix of the caller's scoped role; an unknown one sees nothing."""
+    if user.role == INMATE_REPORTER_ROLE:
+        return _inmate_reporter_visibility_clause(user)
+    if user.role == FLEET_REPORTER_ROLE:
+        return _fleet_reporter_visibility_clause(user)
+    return false()
+
+
+def _scoped_book_visible(db: Session, book: Book, user: User) -> bool:
+    """Python mirror of ``_scoped_visibility_clause``."""
+    if user.role == INMATE_REPORTER_ROLE:
+        return _inmate_reporter_book_visible(book, user.id)
+    if user.role == FLEET_REPORTER_ROLE:
+        if not _fleet_reporter_book_visible(db, book, user.id):
+            return False
+        # The SQL side ANDs the denied record types (``_record_type_clause``).
+        try:
+            assert_record_type_visible(db, user, book)
+        except AppError as exc:
+            if exc.code != "RECORD_TYPE_FORBIDDEN":
+                raise
+            return False
+        return True
     return False
 
 
@@ -486,7 +603,7 @@ def _confidentiality_clause(
     record-type rules). Python mirror: ``_confidentiality_allows``."""
     level = Book.confidentiality
     creator = Book.created_by_user_id == user.id
-    if user.role == INMATE_REPORTER_ROLE:
+    if is_scoped_role(user):
         return and_(
             type_ok,
             or_(level == "general", and_(level.in_(("personal", "directed")), creator)),
@@ -511,7 +628,7 @@ def _confidentiality_allows(
         return existing
     level = book.confidentiality
     creator = book.created_by_user_id is not None and book.created_by_user_id == user.id
-    if user.role == INMATE_REPORTER_ROLE:
+    if is_scoped_role(user):
         return existing and (level == "general" or (level in ("personal", "directed") and creator))
     if level == "personal":
         return creator
@@ -533,16 +650,27 @@ def _record_type_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
-        clauses.append(not_(record_gate_category_in_clause(denied_categories)))
+        clauses.append(not_(_category_gate_hidden_clause(user, denied_categories)))
     if denied_services:
         clauses.append(
             not_(
                 or_(*[record_service_clause(service_id) for service_id in sorted(denied_services)])
             )
         )
-    if user.role == INMATE_REPORTER_ROLE:
-        clauses.append(_inmate_reporter_visibility_clause(user))
+    if is_scoped_role(user):
+        clauses.append(_scoped_visibility_clause(user))
     return and_(*clauses) if clauses else None
+
+
+def _category_gate_hidden_clause(user: User, denied_categories: set[str]) -> ColumnElement[bool]:
+    """SQL: the correlated Book is hidden by a denied record category. Services the
+    user's scoped role exempts from the category gate never are. Python mirror:
+    ``assert_record_type_visible``."""
+    hidden = record_gate_category_in_clause(denied_categories)
+    exempt = category_exempt_services(user)
+    if exempt:
+        hidden = and_(hidden, not_(or_(*[service_clause(s) for s in sorted(exempt)])))
+    return hidden
 
 
 def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -562,8 +690,14 @@ def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
     read gate does, so a direct send still opens a general Record without it.
     Deleted Records and revision-scoped access are the caller's to add.
     """
-    if user.role == INMATE_REPORTER_ROLE:
-        return _confidentiality_clause(db, user, _inmate_reporter_visibility_clause(user))
+    if user.role == FLEET_REPORTER_ROLE:
+        # The record-type denials AND the fleet matrix (``_record_type_clause``),
+        # as the Python mirror ``_scoped_book_visible`` applies them.
+        fleet_types = _record_type_clause(db, user)
+        assert fleet_types is not None  # always carries the scoped matrix
+        return _confidentiality_clause(db, user, fleet_types)
+    if is_scoped_role(user):
+        return _confidentiality_clause(db, user, _scoped_visibility_clause(user))
     type_ok: ColumnElement[bool] = false()
     if perm_service.has_capability(db, user, "books.view"):
         record_types = _record_type_clause(db, user)
@@ -599,7 +733,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
     if OTHER_SERVICE_ID in denied_services:
         linked_hidden.append(_stray_record_clause())
     if denied_categories:
-        linked_hidden.append(record_gate_category_in_clause(denied_categories))
+        linked_hidden.append(_category_gate_hidden_clause(user, denied_categories))
     if linked_hidden:
         linked_document = aliased(Document)
         linked_to_hidden_record = exists(
@@ -621,7 +755,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .correlate(Document)
         )
         clauses.append(not_(linked_to_hidden_record))
-    if user.role == INMATE_REPORTER_ROLE:
+    if is_scoped_role(user):
         current_version_id = (
             select(BookVersion.id)
             .where(BookVersion.book_id == Book.id)
@@ -636,7 +770,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .where(
                 BookVersion.document_id == Document.id,
                 BookVersion.id == current_version_id,
-                _inmate_reporter_visibility_clause(user),
+                _scoped_visibility_clause(user),
             )
             .correlate(Document)
         )
@@ -669,7 +803,7 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
 
     not_hidden = not_(owning_book_matches(not_(level_ok)))
     visible = not_hidden if type_ok is None else and_(type_ok, not_hidden)
-    if user.role == INMATE_REPORTER_ROLE:
+    if is_scoped_role(user):
         return visible
     received = owning_book_matches(and_(active_recipient_clause(user.id), level_ok))
     return or_(visible, received)
@@ -696,7 +830,10 @@ def require_record_type_access(
         classification_code=classification_code,
         category_id=category_id,
     )
-    category_denied = any(f"books.category.{code}" not in caps for code in gate_categories)
+    category_exempt = service_id is not None and service_id in category_exempt_services(user)
+    category_denied = not category_exempt and any(
+        f"books.category.{code}" not in caps for code in gate_categories
+    )
     service_denied = service_id is not None and any(
         f"books.service.{gate}" not in caps
         for gate in record_services(service_id=service_id, category_id=category_id)
@@ -732,6 +869,9 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
         category_id=row.category_id,
     )
     gate_services = record_services(service_id=service_id, category_id=row.category_id)
+    if service_id in category_exempt_services(user):
+        # Mirrors ``_category_gate_hidden_clause``.
+        denied_categories = set()
     if not denied_categories.isdisjoint(gate_categories) or not denied_services.isdisjoint(
         gate_services
     ):
@@ -762,11 +902,11 @@ def resolve_book_read_access(
     ids = frozenset(version.id for version in versions)
     if version_id is not None and version_id not in ids:
         raise NotFoundError("VERSION_NOT_FOUND", "Revision not found")
-    if user.role == INMATE_REPORTER_ROLE:
-        # Fixed-scope reporter: never full books.view semantics — current
-        # version only, gated by the state/ownership matrix, never a
-        # historical revision even when the current report is shared.
-        if not _inmate_reporter_book_visible(book, user.id) or not _confidentiality_allows(
+    if is_scoped_role(user):
+        # Scoped role: never full books.view semantics — current version
+        # only, gated by the role's state/ownership matrix, never a
+        # historical revision even when the current paper is shared.
+        if not _scoped_book_visible(db, book, user) or not _confidentiality_allows(
             db, user, book, existing=True
         ):
             raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
@@ -859,9 +999,7 @@ def require_full_book_access(db: Session, user: User, row: Book, *, write: bool 
             if exc.code != "RECORD_TYPE_FORBIDDEN":
                 raise
             record_type_error = exc
-    reporter_hidden = user.role == INMATE_REPORTER_ROLE and not _inmate_reporter_book_visible(
-        row, user.id
-    )
+    reporter_hidden = is_scoped_role(user) and not _scoped_book_visible(db, row, user)
     existing = has_view and record_type_error is None and not reporter_hidden
     if _confidentiality_allows(db, user, row, existing=existing, write=write):
         return
@@ -1043,12 +1181,108 @@ def require_inmate_report_word_access(db: Session, user: User, book_id: int) -> 
     return row
 
 
+#: Version templates a fleet reporter authors: General Books (rich editor or
+#: Word), Word-authored Reports, and the fleet hub's vehicle papers.
+_FLEET_AUTHORED_TEMPLATES: Final[frozenset[str]] = frozenset(
+    {"General Book", "Report", *VEHICLE_LETTER_FORMS}
+)
+#: States in which a fleet reporter may revise or (re)submit their own paper.
+_FLEET_WRITABLE_STATES: Final[tuple[str, ...]] = ("none", "returned")
+
+
+def _scoped_error(code: str, message: str, http_status: int) -> AppError:
+    return AppError(f"SCOPED_ROLE_{code}", message, http_status=http_status)
+
+
+def require_fleet_write_access(
+    db: Session, user: User, book: Book, *, action: Literal["revise", "submit"]
+) -> BookVersion:
+    """Gate a fleet reporter's write on their own unsubmitted or returned paper.
+
+    The role holds no ``books.create``/``books.edit``; this is its only write
+    authority. A Report must stay signed by the reporter's linked employee.
+    """
+    from app.services import included_papers_service
+
+    if user.employee_id is None:
+        raise _scoped_error(
+            "EMPLOYEE_REQUIRED", "Your account has no linked employee record yet.", 409
+        )
+    if book.deleted_at is not None or book.voided_at is not None:
+        raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+    version = _current_version(book)
+    if version is None:
+        raise _scoped_error("NOT_OWNER", "This paper has no finished version.", 403)
+    if version.template_id not in _FLEET_AUTHORED_TEMPLATES:
+        raise _scoped_error("NOT_OWNER", "This role cannot write this record.", 403)
+    if included_papers_service.original_creator_user_id(book) != user.id:
+        raise _scoped_error("NOT_OWNER", "You are not the author of this record.", 403)
+    if book.approval_state not in _FLEET_WRITABLE_STATES:
+        raise _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
+    if is_report(book):
+        employee_numbers = [
+            user.employee_id,
+            *employee_service.former_ids_by_employee(db, [user.employee_id])[user.employee_id],
+        ]
+        if (version.fields or {}).get("signer_employee_id") not in employee_numbers:
+            raise _scoped_error(
+                "IDENTITY_CHANGED",
+                "Your linked employee record changed since this Report was created.",
+                409,
+            )
+        if action == "submit" and (
+            not (version.fields or {}).get("signed") or version.status != "approved"
+        ):
+            raise AppError("SIGNATURE_REQUIRED", "A signed Report is required.", http_status=409)
+    return version
+
+
+def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
+    """Authorize Word actions on a fleet reporter's own General Book or Report."""
+    row = get_book(db, book_id)
+    if user.employee_id is None:
+        raise _scoped_error(
+            "EMPLOYEE_REQUIRED", "Your account has no linked employee record yet.", 409
+        )
+    if row.voided_at is not None or row.approval_state not in _FLEET_WRITABLE_STATES:
+        raise _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
+    is_word_paper = row.category_id == "GS" and (
+        row.ref_number.startswith("REPORT-") or row.classification_code is not None
+    )
+    if not is_word_paper:
+        raise _scoped_error("NOT_OWNER", "This is not a General Book or Report.", 403)
+    from app.services import included_papers_service
+
+    creator_id = (
+        included_papers_service.original_creator_user_id(row)
+        if row.versions
+        else row.created_by_user_id
+    )
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if creator_id != user.id or (session is not None and session.user_id != user.id):
+        raise _scoped_error("NOT_OWNER", "You are not the author of this record.", 403)
+    if row.versions:
+        require_fleet_write_access(db, user, row, action="revise")
+    return row
+
+
+def require_scoped_word_access(db: Session, user: User, book_id: int) -> Book:
+    """Word authority of a scoped role, which holds no ``books.edit``."""
+    if user.role == FLEET_REPORTER_ROLE:
+        return require_fleet_word_access(db, user, book_id)
+    return require_inmate_report_word_access(db, user, book_id)
+
+
 def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
     """Require revise authority; ``None`` skips only the non-reporter book check."""
     if user.role == INMATE_REPORTER_ROLE:
         if book is None:
             raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
         return require_inmate_report_write_access(db, user, book, action="revise")
+    if user.role == FLEET_REPORTER_ROLE:
+        if book is None:
+            raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+        return require_fleet_write_access(db, user, book, action="revise")
     if not perm_service.has_capability(db, user, "books.edit"):
         raise AppError(
             "FORBIDDEN",
@@ -2035,6 +2269,22 @@ def submit_for_approval(
             "BRANCH_APPROVER_REQUIRED", "Choose a branch manager before submitting this form."
         )
     caller = db.get(User, submitted_by_user_id)
+    # The chain follows the paper's author, never the submitter.
+    if _line_manager_chain_author(db, book) is not None or (
+        caller is not None and routes_to_line_manager(caller)
+    ):
+        return _submit_to_line_manager(
+            db,
+            book,
+            version,
+            caller,
+            choices_made=bool(
+                priority != "Normal"
+                or approver_user_id is not None
+                or reviewer_user_ids
+                or branch_approver_user_id is not None
+            ),
+        )
     report = is_report(book)
     inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
     if version.status == "awaiting_scan":
@@ -2278,6 +2528,219 @@ def decide_step(
     return book
 
 
+# ─── Line-manager chain ───────────────────────────────────────────────────────
+# Papers by a scoped role with ``routes_to_line_manager`` (fleet_reporter) go
+# to the author's admin-set line manager, who may approve and finish or forward
+# them into an optional branch stage. Keyed on the step's stage label, never on
+# form_policy.BRANCH_MANAGER_STAGE_FORMS (Administrative Leave's own chain).
+LINE_MANAGER_STAGE: Final[str] = "line_manager"
+BRANCH_MANAGER_STAGE: Final[str] = "branch_manager"
+
+
+def _is_chain_approver(db: Session, user: User | None) -> bool:
+    """An active account allowed to approve that signs as exactly one active
+    ``Manager`` row, so the paper always names the account that finishes it."""
+    return (
+        user is not None
+        and user.status == "active"
+        and perm_service.has_capability(db, user, "books.approve")
+        and manager_service.sole_active_manager_id(db, user.id) is not None
+    )
+
+
+def resolve_line_manager(db: Session, author: User) -> User:
+    """The author's line manager: another active account allowed to approve."""
+    manager = db.get(User, author.line_manager_user_id) if author.line_manager_user_id else None
+    if manager is None or manager.id == author.id or not _is_chain_approver(db, manager):
+        raise AppError(
+            "LINE_MANAGER_REQUIRED",
+            "Ask an administrator to set your line manager.",
+            http_status=409,
+        )
+    return manager
+
+
+def _is_line_manager_chain(version: BookVersion) -> bool:
+    return any(step.stage_label == LINE_MANAGER_STAGE for step in version.approval_steps)
+
+
+def _line_manager_chain_author(db: Session, book: Book) -> User | None:
+    """The paper's original author when their role routes to a line manager."""
+    from app.services import included_papers_service
+
+    author_id = included_papers_service.original_creator_user_id(book)
+    if author_id is None:
+        author_id = book.created_by_user_id
+    author = db.get(User, author_id) if author_id is not None else None
+    return author if author is not None and routes_to_line_manager(author) else None
+
+
+def _submit_to_line_manager(
+    db: Session, book: Book, version: BookVersion, caller: User | None, *, choices_made: bool
+) -> Book:
+    """(Re)build the chain as one pending line-manager step, from the author's own
+    line manager. Only the author may submit their paper."""
+    author = _line_manager_chain_author(db, book)
+    if caller is None or author is None or author.id != caller.id:
+        raise AppError(
+            "SCOPED_ROLE_CHAIN_AUTHOR_ONLY",
+            "Only the author can submit this paper; it goes to their line manager.",
+            http_status=403,
+        )
+    if choices_made:
+        raise AppError(
+            "SCOPED_ROLE_INPUT_FORBIDDEN",
+            "This role cannot choose an approver, reviewers, or priority.",
+            http_status=403,
+        )
+    require_fleet_write_access(db, caller, book, action="submit")
+    line_manager = resolve_line_manager(db, caller)
+    for step in version.approval_steps:
+        retain_revision_access(db, version, step)
+    version.approval_steps.clear()
+    version.approval_steps.append(
+        BookApprovalStep(
+            book_id=book.id,
+            step_order=0,
+            stage_label=LINE_MANAGER_STAGE,
+            assignee_user_id=line_manager.id,
+            kind="approver",
+            state="pending",
+        )
+    )
+    book.priority = "Normal"
+    book.submitted_by_user_id = caller.id
+    book.doc_manager_id = manager_service.sole_active_manager_id(db, line_manager.id)
+    capture_approval_context(
+        db, book, version, submitted_by_user_id=caller.id, submitted_at=datetime.now(UTC)
+    )
+    _recompute_approval_state(book)
+    _commit_approval_state(db, book, user_id=caller.id)
+    return book
+
+
+def is_line_manager_assignee(book: Book, user_id: int) -> bool:
+    """``user_id`` holds the pending line-manager step of the current revision."""
+    if book.approval_state != "pending" or book.voided_at is not None:
+        return False
+    current = _current_pending_step(book)
+    return (
+        current is not None
+        and current.stage_label == LINE_MANAGER_STAGE
+        and current.assignee_user_id == user_id
+    )
+
+
+def _require_line_manager_stage(book: Book, user_id: int) -> BookApprovalStep:
+    current = _current_pending_step(book)
+    if current is None or not is_line_manager_assignee(book, user_id):
+        raise AppError(
+            "NOT_LINE_MANAGER_STAGE",
+            "Only the line manager can act on this paper at its current stage.",
+            http_status=409,
+        )
+    return current
+
+
+def vehicle_letter_rebuild_refusal(db: Session, user: User, book: Book) -> AppError | None:
+    """Why ``user`` may not rebuild ``book`` from current fleet data now, or ``None``.
+
+    One rule for the rebuild route and ``BookRead.can_rebuild_vehicle_letter``:
+    a vehicle letter of the line-manager chain, rebuilt only by its author while
+    unsubmitted or returned. The route's own capability gates are the caller's.
+    """
+    version = _current_version(book)
+    if version is None or version.template_id not in VEHICLE_LETTER_FORMS:
+        return ValidationFailedError("NOT_A_VEHICLE_LETTER", "This record is not a vehicle letter.")
+    if book.deleted_at is not None or book.voided_at is not None:
+        return NotFoundError("BOOK_NOT_FOUND", "Record not found")
+    author = _line_manager_chain_author(db, book)
+    if author is None:
+        return _scoped_error("NOT_OWNER", "Only a fleet reporter's own letter is rebuilt.", 403)
+    if author.id != user.id:
+        return AppError(
+            "SCOPED_ROLE_CHAIN_AUTHOR_ONLY",
+            "Only the author can rebuild this letter.",
+            http_status=403,
+        )
+    if book.approval_state not in _FLEET_WRITABLE_STATES:
+        return _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
+    return None
+
+
+def _branch_excluded_user_ids(book: Book, line_step: BookApprovalStep) -> set[int]:
+    """The author and the line manager can never be the branch manager."""
+    from app.services import included_papers_service
+
+    return {
+        uid
+        for uid in (
+            line_step.assignee_user_id,
+            book.submitted_by_user_id,
+            book.created_by_user_id,
+            included_papers_service.original_creator_user_id(book),
+        )
+        if uid is not None
+    }
+
+
+def branch_candidates(db: Session, book_id: int, *, user_id: int) -> list[ApproverOptionRead]:
+    """Branch managers the pending line manager may forward to."""
+    book = _get_book_with_versions(db, book_id)
+    line_step = _require_line_manager_stage(book, user_id)
+    excluded = _branch_excluded_user_ids(book, line_step)
+    return [
+        option
+        for option in list_approver_candidates(db)
+        if option.id not in excluded
+        and manager_service.sole_active_manager_id(db, option.id) is not None
+    ]
+
+
+def forward_to_branch(
+    db: Session,
+    book_id: int,
+    *,
+    user_id: int,
+    version_id: int,
+    branch_approver_user_id: int,
+    note: str | None = None,
+) -> Book:
+    """Approve the line-manager stage unsigned and append a pending branch stage."""
+    book = _get_book_with_versions(db, book_id)
+    version = _require_current_revision(db, book, version_id)
+    line_step = _require_line_manager_stage(book, user_id)
+    _require_assignment_action(db, book, user_id)
+    branch_approver = db.get(User, branch_approver_user_id)
+    if branch_approver_user_id in _branch_excluded_user_ids(
+        book, line_step
+    ) or not _is_chain_approver(db, branch_approver):
+        raise ValidationFailedError(
+            "BRANCH_APPROVER_NOT_ELIGIBLE",
+            "Choose another active account allowed to approve, not the author or yourself.",
+        )
+    now = datetime.now(UTC).replace(tzinfo=None)
+    line_step.state = "approved"
+    line_step.note = note.strip() if note and note.strip() else None
+    line_step.decided_at = now
+    retain_revision_access(db, version, line_step)
+    version.approval_steps.append(
+        BookApprovalStep(
+            book_id=book.id,
+            step_order=1,
+            stage_label=BRANCH_MANAGER_STAGE,
+            assignee_user_id=branch_approver_user_id,
+            kind="approver",
+            state="pending",
+            created_at=now,
+        )
+    )
+    book.doc_manager_id = manager_service.sole_active_manager_id(db, branch_approver_user_id)
+    _recompute_approval_state(book)
+    _commit_approval_state(db, book, user_id=user_id)
+    return book
+
+
 # ─── Administrative state override ────────────────────────────────────────────
 # Record states an override can force. `voided` is the one pseudo-state: it is
 # stored as approval_state="none" + Book.voided_at, because "discarded draft" is
@@ -2485,7 +2948,14 @@ def sign_book(
     if current.assignee_user_id != user_id:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
     report_version = _current_version(book)
-    if report_version is not None and is_report(book):
+    # A Report keeps its author's signature; a fleet vehicle paper has no slot.
+    if report_version is not None and (
+        is_report(book)
+        or (
+            report_version.template_id in VEHICLE_LETTER_FORMS
+            and _is_line_manager_chain(report_version)
+        )
+    ):
         current.state = "approved"
         current.note = note
         current.decided_at = datetime.now(UTC).replace(tzinfo=None)

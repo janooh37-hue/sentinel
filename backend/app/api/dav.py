@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.scoped_roles import is_scoped_role
 from app.db.models import Book, User
 from app.db.session import get_db
 from app.services import book_service, perm_service, word_session_repo
@@ -106,8 +106,8 @@ async def dav_handler(
         try:
             book_service.require_full_book_access(db, owner, book, write=True)
             if method in ("PUT", "LOCK"):
-                if owner.role == INMATE_REPORTER_ROLE:
-                    book_service.require_inmate_report_word_access(db, owner, book.id)
+                if is_scoped_role(owner):
+                    book_service.require_scoped_word_access(db, owner, book.id)
                 elif not perm_service.has_capability(db, owner, "books.edit"):
                     return respond(Response(status_code=404), sess.id)
         except AppError:

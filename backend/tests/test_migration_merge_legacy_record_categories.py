@@ -9,7 +9,7 @@ from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, Engine, create_engine, inspect, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.api.deps import get_optional_user
 from app.api.errors import AppError
@@ -56,6 +56,17 @@ HR_SERVICES = (
     "Expense Claim Form",
 )
 OPT_IN_HR_SERVICES = frozenset(HR_SERVICES[11:])
+#: ``users`` columns added by migrations after REVISION. The ORM model maps them,
+#: but a database stopped at REVISION lacks them; never select them here, and
+#: raise if a code path under test ever reads one.
+LATER_USER_COLUMNS = (User.line_manager_user_id,)  # 0120_user_line_manager
+
+
+def _user_at_revision(db: Session, user_id: int) -> User | None:
+    """Load a ``User`` from a database migrated only up to REVISION."""
+    return db.get(
+        User, user_id, options=[defer(column, raiseload=True) for column in LATER_USER_COLUMNS]
+    )
 
 
 def _config(database: Path) -> Config:
@@ -222,7 +233,7 @@ def test_migrated_legacy_deny_preserves_record_creation_gate(
         )
     command.upgrade(config, REVISION)
     with Session(engine) as db:
-        user = db.get(User, user_id)
+        user = _user_at_revision(db, user_id)
         assert user is not None
         caps = perm_service.effective_caps(db, user)
         assert f"books.service.{service_id}" not in caps
@@ -251,7 +262,7 @@ def test_migrated_gs_deny_blocks_direct_book_post(migration: tuple[Config, Engin
     with Session(engine) as db:
         # Apply current startup presets, not only historical migration seeds.
         perm_service.seed_role_defaults(db)
-        user = db.get(User, user_id)
+        user = _user_at_revision(db, user_id)
         assert user is not None
         assert {"books.create", "books.view"} <= perm_service.effective_caps(db, user)
         app = create_app()
@@ -349,7 +360,7 @@ def test_permanent_legacy_deny_outlives_an_expired_target_deny(
         _override(connection, user_id, "books.servicerecords.HR Request Form", "deny", "2020-01-01")
     command.upgrade(config, REVISION)
     with Session(engine) as db:
-        user = db.get(User, user_id)
+        user = _user_at_revision(db, user_id)
         assert user is not None
         assert "books.servicerecords.HR Request Form" not in perm_service.effective_caps(db, user)
 
@@ -391,7 +402,7 @@ def test_legacy_deny_keeps_existing_off_map_records_hidden(
         before = _snapshot(connection, "user_permissions")
     command.upgrade(config, REVISION)
     with Session(engine) as db:
-        user = db.get(User, user_id)
+        user = _user_at_revision(db, user_id)
         row = db.get(Book, book_id)
         assert user is not None and row is not None
         assert target not in perm_service.effective_caps(db, user)
