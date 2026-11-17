@@ -130,9 +130,7 @@ class WorkCrewSchedule(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     crew_id: Mapped[int] = mapped_column(ForeignKey("work_crews.id"), nullable=False)
-    pattern_id: Mapped[int] = mapped_column(
-        ForeignKey("work_rotation_patterns.id"), nullable=False
-    )
+    pattern_id: Mapped[int] = mapped_column(ForeignKey("work_rotation_patterns.id"), nullable=False)
     anchor_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     effective_from: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     effective_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -332,7 +330,9 @@ class WorkAttendancePolicy(Base):
     early_exit_grace_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     match_before_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
     match_after_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
-    require_checkout: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    require_checkout: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="1"
+    )
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
     effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -443,9 +443,7 @@ class AttendancePunch(Base):
 class AttendancePunchAssignment(Base):
     __tablename__ = "attendance_punch_assignments"
 
-    punch_id: Mapped[int] = mapped_column(
-        ForeignKey("attendance_punches.id"), primary_key=True
-    )
+    punch_id: Mapped[int] = mapped_column(ForeignKey("attendance_punches.id"), primary_key=True)
     attendance_case_id: Mapped[int] = mapped_column(
         ForeignKey("attendance_cases.id"), nullable=False
     )
@@ -481,9 +479,7 @@ class AttendancePunchProfile(Base):
     computed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
     __table_args__ = (
-        CheckConstraint(
-            "sample_days > 0", name="ck_attendance_punch_profiles_sample_positive"
-        ),
+        CheckConstraint("sample_days > 0", name="ck_attendance_punch_profiles_sample_positive"),
         CheckConstraint("window_days > 0", name="ck_attendance_punch_profiles_window_positive"),
         CheckConstraint(
             "arrival_early_offset <= arrival_typical_offset",
@@ -494,8 +490,7 @@ class AttendancePunchProfile(Base):
             name="ck_attendance_punch_profiles_departure_pair",
         ),
         CheckConstraint(
-            "departure_late_offset IS NULL "
-            "OR departure_typical_offset <= departure_late_offset",
+            "departure_late_offset IS NULL OR departure_typical_offset <= departure_late_offset",
             name="ck_attendance_punch_profiles_departure_order",
         ),
     )
@@ -513,7 +508,9 @@ class AttendanceSyncState(Base):
     window_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     fresh_through: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_event_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    last_import_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_import_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_error_summary: Mapped[str | None] = mapped_column(String(512), nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(
@@ -563,7 +560,9 @@ class AttendanceEvaluationQueue(Base):
             "julianday(window_end_at) - julianday(window_start_at) <= 31.0",
             name="ck_attendance_evaluation_queue_window_bounded",
         ),
-        CheckConstraint("attempts >= 0", name="ck_attendance_evaluation_queue_attempts_nonnegative"),
+        CheckConstraint(
+            "attempts >= 0", name="ck_attendance_evaluation_queue_attempts_nonnegative"
+        ),
         CheckConstraint(
             "json_valid(reason_codes) AND json_type(reason_codes) = 'array' "
             "AND json_array_length(reason_codes) BETWEEN 1 AND 32",
@@ -616,7 +615,6 @@ class AttendanceCase(Base):
         order_by="AttendanceAdjustment.created_at",
     )
 
-
     __table_args__ = (
         UniqueConstraint(
             "employee_id", "scheduled_start_at", name="uq_attendance_cases_employee_scheduled_start"
@@ -641,7 +639,9 @@ class AttendanceEvaluation(Base):
     __tablename__ = "attendance_evaluations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    attendance_case_id: Mapped[int] = mapped_column(ForeignKey("attendance_cases.id"), nullable=False)
+    attendance_case_id: Mapped[int] = mapped_column(
+        ForeignKey("attendance_cases.id"), nullable=False
+    )
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     provider_person_id: Mapped[int | None] = mapped_column(
         ForeignKey("attendance_provider_people.id"), nullable=True
@@ -655,7 +655,9 @@ class AttendanceEvaluation(Base):
     reason_code: Mapped[str] = mapped_column(String(128), nullable=False)
     late_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     early_exit_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    missing_checkout: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    missing_checkout: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     sync_fresh_through: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     policy_id: Mapped[int | None] = mapped_column(
         ForeignKey("work_attendance_policies.id"), nullable=True
@@ -675,11 +677,8 @@ class AttendanceEvaluation(Base):
     )
     adjustments_based_on: Mapped[list[AttendanceAdjustment]] = relationship(
         back_populates="base_evaluation",
-        primaryjoin=(
-            "foreign(AttendanceAdjustment.base_evaluation_id) == AttendanceEvaluation.id"
-        ),
+        primaryjoin=("foreign(AttendanceAdjustment.base_evaluation_id) == AttendanceEvaluation.id"),
     )
-
 
     __table_args__ = (
         UniqueConstraint(
@@ -730,7 +729,6 @@ class AttendanceEvaluationPunchSource(Base):
     evaluation: Mapped[AttendanceEvaluation] = relationship(back_populates="punch_sources")
     punch: Mapped[AttendancePunch] = relationship()
 
-
     __table_args__ = (
         UniqueConstraint(
             "evaluation_id", "ordinal", name="uq_attendance_evaluation_punch_sources_ordinal"
@@ -748,7 +746,9 @@ class AttendanceEvaluationLeaveSource(Base):
     leave_id: Mapped[int] = mapped_column(
         ForeignKey("leaves.id", ondelete="RESTRICT"), primary_key=True
     )
-    is_primary: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     evaluation: Mapped[AttendanceEvaluation] = relationship(back_populates="leave_sources")
     leave: Mapped[Leave] = relationship("Leave")
     __table_args__ = (
@@ -761,13 +761,13 @@ class AttendanceEvaluationLeaveSource(Base):
     )
 
 
-
-
 class AttendanceAdjustment(Base):
     __tablename__ = "attendance_adjustments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    attendance_case_id: Mapped[int] = mapped_column(ForeignKey("attendance_cases.id"), nullable=False)
+    attendance_case_id: Mapped[int] = mapped_column(
+        ForeignKey("attendance_cases.id"), nullable=False
+    )
     base_evaluation_id: Mapped[int] = mapped_column(Integer, nullable=False)
     replacement_presence_state: Mapped[str | None] = mapped_column(String(32), nullable=True)
     replacement_first_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -787,9 +787,7 @@ class AttendanceAdjustment(Base):
     attendance_case: Mapped[AttendanceCase] = relationship(back_populates="adjustments")
     base_evaluation: Mapped[AttendanceEvaluation] = relationship(
         back_populates="adjustments_based_on",
-        primaryjoin=(
-            "foreign(AttendanceAdjustment.base_evaluation_id) == AttendanceEvaluation.id"
-        ),
+        primaryjoin=("foreign(AttendanceAdjustment.base_evaluation_id) == AttendanceEvaluation.id"),
     )
 
     __table_args__ = (
@@ -837,11 +835,15 @@ class DutyAssignmentEvent(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "event_type IN ('baseline', 'initial_placement', 'transfer', 'manual_change')",
+            "event_type IN ('baseline', 'initial_placement', 'transfer', 'manual_change', "
+            "'service_end', 'transfer_out', 'reinstatement')",
             name="ck_duty_assignment_events_event_type",
         ),
+        # Status-driven moves are also written by the scheduler and the 0120
+        # backfill, which act for no user.
         CheckConstraint(
-            "actor_user_id IS NOT NULL OR event_type = 'baseline'",
+            "actor_user_id IS NOT NULL OR event_type IN "
+            "('baseline', 'service_end', 'transfer_out', 'reinstatement')",
             name="ck_duty_assignment_events_actor_required",
         ),
         CheckConstraint(
@@ -860,9 +862,7 @@ class UserWorkforceScope(Base):
     __tablename__ = "user_workforce_scopes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     scope_kind: Mapped[str] = mapped_column(String(16), nullable=False)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)

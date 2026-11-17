@@ -777,8 +777,14 @@ def _record_pending_resignation(
     if scheduled:
         employee.pending_status = EMPLOYEE_STATUS_RESIGNED
     else:
+        # Imported here: duty_service imports this module.
+        from app.services import duty_service
+
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
+        duty_service.apply_status_change(
+            db, employee=employee, from_status=from_status, actor_user_id=actor_user_id
+        )
     # A working employee carries no transfer fields, but a pending Transferred
     # being superseded by the letter must not leave its site behind.
     employee.transfer_site = None
