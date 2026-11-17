@@ -44,7 +44,7 @@ export function RosterTable({
   if (isEmpty) {
     return (
       <p className="px-5 py-12 text-center text-sm text-muted-foreground">
-        {t('dutyLocations.roster.empty')}
+        {t(departed ? 'dutyLocations.roster.noMatch' : 'dutyLocations.roster.empty')}
       </p>
     )
   }

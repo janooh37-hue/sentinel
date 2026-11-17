@@ -643,7 +643,7 @@
         "transfer": "Transferred",
         "service_end": "Service ended",
         "transfer_out": "Transferred out",
-        "reinstatement": "Reinstated",
+        "reinstatement": "Returned to post",
         "toEndedService": "Ended service",
         "toTransferred": "Transferred",
         "returnedTo": "Returned to",
@@ -6098,7 +6098,9 @@
       "noPost": "No post set",
       "empty": "No employees in this unit.",
       "selectRow": "Select {{name}}",
-      "departedSummary": "{{employees}} employees",
+      "departedSummary_one": "1 employee",
+      "departedSummary_other": "{{count}} employees",
+      "noMatch": "No matching employees.",
       "endedServiceNote": "Resigned and terminated staff. Not counted in the units and cannot be posted.",
       "transferredNote": "Serving at another site. Not counted in the units and cannot be posted; on return they go back to their last post."
     },
@@ -6147,7 +6149,8 @@
       "generating": "Generating the transfer letter…",
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
-      "movedNoBook_other": "Moved {{count}} employees"
+      "movedNoBook_other": "Moved {{count}} employees",
+      "departedError": "A resigned, terminated or transferred employee cannot be given a duty location."
     },
     "completion": {
       "detail_one": "1 employee transferred",
@@ -7414,6 +7417,7 @@
       "deduction_other": "Deduction: {{count}} days",
       "fromTo": "{{from}} to {{to}}",
       "returnedTo": "Returned to {{place}}",
+      "leftFrom": "Left {{place}}",
       "statusChange": "Status change",
       "statusScheduled": "Scheduled status change",
       "statusCancelled": "Scheduled change cancelled",

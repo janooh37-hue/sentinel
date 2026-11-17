@@ -207,7 +207,7 @@ export function DutyLocationsPage(): React.JSX.Element {
                     <div className="text-[0.78em] text-muted-foreground">
                       {activeIsDeparted
                         ? t('dutyLocations.roster.departedSummary', {
-                            employees: activeUnitCount,
+                            count: activeUnitCount,
                           })
                         : t('dutyLocations.roster.summary', {
                             employees: activeUnitCount,

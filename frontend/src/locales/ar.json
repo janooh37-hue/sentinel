@@ -6622,7 +6622,13 @@
       "noPost": "بدون نقطة محددة",
       "empty": "لا يوجد موظفون في هذه الوحدة.",
       "selectRow": "اختيار {{name}}",
-      "departedSummary": "{{employees}} موظف",
+      "departedSummary_zero": "لا يوجد موظفون",
+      "departedSummary_one": "موظف واحد",
+      "departedSummary_two": "موظفان",
+      "departedSummary_few": "{{count}} موظفين",
+      "departedSummary_many": "{{count}} موظفًا",
+      "departedSummary_other": "{{count}} موظف",
+      "noMatch": "لا يوجد موظفون مطابقون.",
       "endedServiceNote": "الموظفون المستقيلون والمفصولون. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم.",
       "transferredNote": "يعملون في جهة أخرى. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم، ويعودون إلى آخر موقع عمل لهم عند انتهاء النقل."
     },
@@ -6685,7 +6691,8 @@
       "movedNoBook_two": "تم نقل موظفين اثنين",
       "movedNoBook_few": "تم نقل {{count}} موظفين",
       "movedNoBook_many": "تم نقل {{count}} موظفًا",
-      "movedNoBook_other": "تم نقل {{count}} موظف"
+      "movedNoBook_other": "تم نقل {{count}} موظف",
+      "departedError": "لا يمكن تحديد مكان عمل لموظف مستقيل أو مفصول أو منقول."
     },
     "completion": {
       "detail_zero": "لم يتم نقل أي موظف",
@@ -8012,6 +8019,7 @@
       "deduction": "الخصم (أيام): {{count}}",
       "fromTo": "من {{from}} إلى {{to}}",
       "returnedTo": "العودة إلى {{place}}",
+      "leftFrom": "مغادرة {{place}}",
       "statusChange": "تغيير الحالة",
       "statusScheduled": "تغيير مجدول في الحالة",
       "statusCancelled": "إلغاء تغيير مجدول",

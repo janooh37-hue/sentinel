@@ -230,10 +230,10 @@ function placementCells(item: ActivityStatementItem, lang: 'ar' | 'en', t: TFunc
       : '-'
     let detail = to
     if (item.event_type === 'transfer') detail = t('statementPrint.paper.fromTo', { from, to })
-    else if (item.event_type === 'service_end')
-      detail = t('statementPrint.paper.fromTo', { from, to: t('employees.activity.dutyLocation.toEndedService') })
-    else if (item.event_type === 'transfer_out')
-      detail = t('statementPrint.paper.fromTo', { from, to: t('employees.activity.dutyLocation.toTransferred') })
+    else if (item.event_type === 'service_end' || item.event_type === 'transfer_out')
+      detail = t('statementPrint.paper.leftFrom', {
+        place: item.from_unit ? from : t('employees.activity.dutyLocation.unassigned'),
+      })
     else if (item.event_type === 'reinstatement') detail = t('statementPrint.paper.returnedTo', { place: to })
     return [
       event,

@@ -270,7 +270,9 @@ function PersonDetail({
             >
               <span className="flex min-w-0 items-center gap-1.5 truncate" dir="auto">
                 <span aria-hidden>{activityEmoji(a.kind)}</span>
-                {a.summary}
+                {a.kind === 'duty_location' && a.event_type
+                  ? t(`employees.activity.dutyLocation.${a.event_type}`, { defaultValue: a.summary })
+                  : a.summary}
               </span>
               {/* dir="ltr" + stripped bidi marks: the Arabic medium date is
                   numeric (DD/MM/YYYY) and its embedded RLM marks scramble it.
