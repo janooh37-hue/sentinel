@@ -97,6 +97,10 @@ const NO_VEHICLES: readonly VehicleListItem[] = []
 const selectClass =
   'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background'
 
+/** The administration row's actions: links and in-page requests read alike. */
+const ADMIN_LINK =
+  'rounded-sm font-medium text-primary-text underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background'
+
 /** One site group of the ledger, in render order. `finesAmount` is the sum of
  *  the group's own server-side per-vehicle totals — the one figure that makes
  *  the group header worth reading beyond its name. */
@@ -481,10 +485,10 @@ export function VehiclesHubPage(): React.JSX.Element {
         {canEdit && (
           <nav aria-label={t('vehicles.manageFleet')} className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[0.76rem]">
             <span className="font-semibold text-muted-foreground">{t('vehicles.manageFleet')}</span>
-            <Button type="button" variant="link" className="h-auto p-0 text-[inherit]" onClick={() => actionOverlay.open('add')}>{t('vehicles.addVehicleService')}</Button>
-            <Link to="/vehicles/edit" className="font-medium text-primary-text underline-offset-4 hover:underline">{t('vehicles.editVehicleService')}</Link>
-            <Button type="button" variant="link" className="h-auto p-0 text-[inherit]" onClick={() => actionOverlay.open('sites')}>{t('vehicles.sitesService')}</Button>
-            <Link to="/vehicles/import" className="font-medium text-primary-text underline-offset-4 hover:underline">{t('vehicles.importService')}</Link>
+            <button type="button" className={ADMIN_LINK} onClick={() => actionOverlay.open('add')}>{t('vehicles.addVehicleService')}</button>
+            <Link to="/vehicles/edit" className={ADMIN_LINK}>{t('vehicles.editVehicleService')}</Link>
+            <button type="button" className={ADMIN_LINK} onClick={() => actionOverlay.open('sites')}>{t('vehicles.sitesService')}</button>
+            <Link to="/vehicles/import" className={ADMIN_LINK}>{t('vehicles.importService')}</Link>
           </nav>
         )}
         <section

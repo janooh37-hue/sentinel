@@ -66,9 +66,19 @@ export function RequestShell({
             'data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-bottom-2 data-[state=open]:duration-200',
             'motion-reduce:animate-none',
           )}
-          onOpenAutoFocus={() => {
+          onOpenAutoFocus={(event) => {
             openerRef.current =
               document.activeElement instanceof HTMLElement ? document.activeElement : null
+            // The request starts at its first field. While the form is still
+            // loading, focus rests on the page itself (its title is announced),
+            // not on Cancel, where one Enter would throw the request away.
+            const page = event.currentTarget as HTMLElement | null
+            const first = page?.querySelector<HTMLElement>(
+              'form :is(input:not([type=hidden]), textarea, select, button[role=combobox])',
+            )
+            event.preventDefault()
+            const target = first ?? page
+            target?.focus()
           }}
           onCloseAutoFocus={(event) => {
             // Radix only restores its own Trigger, which a controlled request
@@ -84,7 +94,7 @@ export function RequestShell({
             <div className={SERVICE_WRAP}>
               <Dialog.Close
                 disabled={busy}
-                className="mb-1 inline-flex items-center gap-1 rounded-sm text-[0.76rem] font-semibold text-primary-foreground/80 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground disabled:opacity-50 motion-reduce:transition-none"
+                className="-mx-1 mb-1 inline-flex items-center gap-1 rounded-sm px-1 text-[0.76rem] font-semibold text-primary-foreground/80 transition-colors hover:text-primary-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground disabled:opacity-50 motion-reduce:transition-none"
               >
                 <Back className="h-3.5 w-3.5" strokeWidth={1.9} aria-hidden />
                 {t('common.cancel')}
