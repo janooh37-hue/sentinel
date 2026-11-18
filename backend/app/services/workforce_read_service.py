@@ -100,7 +100,7 @@ def _case_leave_fields(
     for case_id, evaluation in evaluations.items():
         values = effective.get(case_id)
         reason = values["reason_code"] if values else None
-        kind = workforce_leave.LEAVE_KIND_BY_REASON.get(reason)
+        kind = workforce_leave.LEAVE_KIND_BY_REASON.get(reason) if reason else None
         label = labels.get(evaluation.id) if kind and reason == evaluation.reason_code else None
         result[case_id] = kind, label
     return result

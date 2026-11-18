@@ -261,7 +261,7 @@ def _case_metrics(
     *,
     cases: list[AttendanceCase],
     sync_health: dict[str, dict[str, Any]],
-    live_leave_by_employee: dict[str, str],
+    live_leave_by_employee: dict[str, leave_lifecycle.LeaveKind],
     latest: dict[int, AttendanceEvaluation] | None = None,
     adjustments: dict[int, AttendanceAdjustment] | None = None,
 ) -> dict[str, Any]:

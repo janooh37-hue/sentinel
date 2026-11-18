@@ -117,7 +117,9 @@ def _matching_punches(
     window_end = _as_db_utc(_as_utc(end))
     punches = db.scalars(
         select(AttendancePunch)
-        .outerjoin(AttendancePunchAssignment, AttendancePunchAssignment.punch_id == AttendancePunch.id)
+        .outerjoin(
+            AttendancePunchAssignment, AttendancePunchAssignment.punch_id == AttendancePunch.id
+        )
         .where(
             AttendancePunch.provider_person_id == provider_person_id,
             AttendancePunch.occurred_at >= window_start,
@@ -127,7 +129,9 @@ def _matching_punches(
                 AttendancePunchAssignment.attendance_case_id == case.id,
             ),
         )
-        .order_by(AttendancePunch.occurred_at, AttendancePunch.external_event_id, AttendancePunch.id)
+        .order_by(
+            AttendancePunch.occurred_at, AttendancePunch.external_event_id, AttendancePunch.id
+        )
     ).all()
     return list(punches)
 
@@ -372,7 +376,9 @@ def _primary_leave_id(
     if not source_leave_ids or reason_code is None:
         return None
     winning_kind = LEAVE_KIND_BY_REASON.get(reason_code)
-    leaves = db.scalars(select(Leave).where(Leave.id.in_(source_leave_ids)).order_by(Leave.id)).all()
+    leaves = db.scalars(
+        select(Leave).where(Leave.id.in_(source_leave_ids)).order_by(Leave.id)
+    ).all()
     for leave in leaves:
         kind = leave_lifecycle.excusing_kind(
             leave.leave_type, leave.status, deleted=leave.deleted_at is not None
@@ -397,8 +403,12 @@ def evaluate_case(
     """
     case = db.scalar(select(AttendanceCase).where(AttendanceCase.id == case_id).with_for_update())
     if case is None:
-        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.", case_id=case_id)
-    if evaluation_start_at is not None and _as_utc(case.scheduled_start_at) < _as_utc(evaluation_start_at):
+        raise NotFoundError(
+            "ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.", case_id=case_id
+        )
+    if evaluation_start_at is not None and _as_utc(case.scheduled_start_at) < _as_utc(
+        evaluation_start_at
+    ):
         return None
 
     policy = attendance_policy.policy_for_case(db, case)
@@ -412,9 +422,7 @@ def evaluate_case(
     )
     leave_reason = leave.reason_code if leave is not None else None
     leave_ids = leave.source_leave_ids if leave is not None else ()
-    primary_leave_id = _primary_leave_id(
-        db, source_leave_ids=leave_ids, reason_code=leave_reason
-    )
+    primary_leave_id = _primary_leave_id(db, source_leave_ids=leave_ids, reason_code=leave_reason)
     profile = attendance_profile_service.profile_for(
         db, employee_id=case.employee_id, shift_code=case.shift_code_snapshot
     )

@@ -43,7 +43,9 @@ _RECORD_KIND_ALIASES = {
 
 # Pydantic supplies a clear validation error for timezone-naive values before
 # the cross-field ordering checks compare their timestamps.
-UtcDateTime = Annotated[AwareDatetime, Field(description="Timezone-aware timestamp normalized to UTC.")]
+UtcDateTime = Annotated[
+    AwareDatetime, Field(description="Timezone-aware timestamp normalized to UTC.")
+]
 
 
 class WorkforceConfiguration(BaseModel):
@@ -62,7 +64,9 @@ class WorkforceConfiguration(BaseModel):
     initial_backfill_start_at: UtcDateTime
     evaluation_start_at: UtcDateTime
     nationality_fold_min_count: int = Field(strict=True, ge=1, le=100_000)
-    excusing_record_kinds: list[str] = Field(default_factory=list, max_length=len(EXCUSING_RECORD_KINDS))
+    excusing_record_kinds: list[str] = Field(
+        default_factory=list, max_length=len(EXCUSING_RECORD_KINDS)
+    )
     provider_person_retention_days: int = Field(strict=True, ge=1, le=36_500)
     punch_retention_days: int = Field(strict=True, ge=1, le=36_500)
     attendance_retention_days: int = Field(strict=True, ge=1, le=36_500)
@@ -107,23 +111,16 @@ class WorkforceConfiguration(BaseModel):
             self.duty_assignment_baseline_at is not None
             and self.evaluation_start_at < self.duty_assignment_baseline_at
         ):
-            raise ValueError(
-                "evaluation_start_at must be at or after duty_assignment_baseline_at"
-            )
+            raise ValueError("evaluation_start_at must be at or after duty_assignment_baseline_at")
         if self.provider_person_retention_days < self.punch_retention_days:
-            raise ValueError(
-                "provider_person_retention_days must be at least punch_retention_days"
-            )
+            raise ValueError("provider_person_retention_days must be at least punch_retention_days")
         if self.punch_retention_days < self.attendance_retention_days:
             raise ValueError("punch_retention_days must be at least attendance_retention_days")
         if self.duty_event_retention_days < self.attendance_retention_days:
-            raise ValueError(
-                "duty_event_retention_days must be at least attendance_retention_days"
-            )
+            raise ValueError("duty_event_retention_days must be at least attendance_retention_days")
         if self.audit_retention_days < self.attendance_retention_days:
             raise ValueError("audit_retention_days must be at least attendance_retention_days")
         return self
-
 
 
 ScopeKind = Literal["organization", "department", "duty_unit", "duty_post"]
@@ -767,8 +764,6 @@ class CrewScheduleReplaceWrite(BaseModel):
     effective_from: UtcDateTime
 
 
-
-
 class CrewScheduleWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -782,6 +777,7 @@ class CrewScheduleWrite(BaseModel):
         if self.effective_to is not None and self.effective_to <= self.effective_from:
             raise ValueError("effective_to must be after effective_from")
         return self
+
 
 class CrewSchedulePreviewWrite(CrewScheduleWrite):
     """Side-effect-free bounded horizon for an anchor candidate."""
@@ -999,9 +995,7 @@ class WorkforceConfigurationRead(BaseModel):
     @model_validator(mode="after")
     def validate_state(self) -> WorkforceConfigurationRead:
         if self.configured != (self.configuration is not None):
-            raise ValueError(
-                "configured must match whether configuration is present"
-            )
+            raise ValueError("configured must match whether configuration is present")
         return self
 
 
@@ -1022,6 +1016,8 @@ class ConfigurationPatch(BaseModel):
     attendance_retention_days: int | None = Field(default=None, strict=True, ge=1, le=36_500)
     duty_event_retention_days: int | None = Field(default=None, strict=True, ge=1, le=36_500)
     audit_retention_days: int | None = Field(default=None, strict=True, ge=1, le=36_500)
+
+
 __all__ = [
     "EXCUSING_RECORD_KINDS",
     "AdjustmentRevokeWrite",
