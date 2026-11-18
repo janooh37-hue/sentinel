@@ -25,6 +25,7 @@ import {
   QUICK_CORRECTION_REASONS,
   buildQuickCorrectionPayload,
   buildQuickCorrectionReason,
+  quickCorrectionDateRequirements,
   quickCorrectionDraftFromCase,
   validateQuickCorrection,
   type QuickCorrectionAction,
@@ -248,8 +249,9 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
   const endDate = attendanceCase ? toLocalInput(attendanceCase.scheduled_end_at).slice(0, 10) : ''
   const overnight = startDate !== endDate
   const showDates = overnight || datesExpanded
+  const dateRequirements = attendanceCase && draft ? quickCorrectionDateRequirements(attendanceCase, draft) : null
   const dateChoices = attendanceCase
-    ? [...new Set([startDate, endDate, shiftIsoDate(startDate, 1), draft?.inDate ?? '', draft?.outDate ?? ''])]
+    ? [...new Set([shiftIsoDate(startDate, -1), startDate, endDate, shiftIsoDate(startDate, 1), draft?.inDate ?? '', draft?.outDate ?? ''])]
       .filter((date) => date !== '')
     : []
 
@@ -390,7 +392,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                             {showDates && <label htmlFor="quick-correction-in-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.inDate')}
                               <select id="quick-correction-in-date" required
-                                value={draft.inDateConfirmed ? draft.inDate : ''}
+                                value={dateRequirements?.inDateRequired ? '' : draft.inDate}
                                 aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, inDate: event.target.value, inDateConfirmed: event.target.value !== '' })}>
                                 <option value="">{t('attendance.quickCorrection.chooseDate')}</option>
@@ -409,7 +411,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                             {showDates && <label htmlFor="quick-correction-out-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.outDate')}
                               <select id="quick-correction-out-date" required={draft.outTime !== ''}
-                                value={draft.outDateConfirmed ? draft.outDate : ''}
+                                value={dateRequirements?.outDateRequired ? '' : draft.outDate}
                                 aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, outDate: event.target.value, outDateConfirmed: event.target.value !== '' })}>
                                 <option value="">{t('attendance.quickCorrection.chooseDate')}</option>

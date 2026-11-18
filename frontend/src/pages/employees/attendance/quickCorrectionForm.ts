@@ -15,6 +15,7 @@ export interface QuickCorrectionDraft {
   action: QuickCorrectionAction
   inDate: string
   outDate: string
+  /** Dates confirmed by effective evidence or an explicit operator selection. */
   inDateConfirmed: boolean
   outDateConfirmed: boolean
   inTime: string
@@ -54,8 +55,8 @@ export function quickCorrectionDraftFromCase(attendanceCase: QuickCorrectionCase
       : effective?.presence_state === 'excused_leave' ? 'leave' : 'present',
     inDate: firstIn.slice(0, 10) || startDate,
     outDate: finalOut.slice(0, 10) || endDate,
-    inDateConfirmed: firstIn !== '' || startDate === endDate,
-    outDateConfirmed: finalOut !== '' || startDate === endDate,
+    inDateConfirmed: firstIn !== '',
+    outDateConfirmed: finalOut !== '',
     inTime: firstIn.slice(11),
     outTime: finalOut.slice(11),
     leaveKind,
@@ -66,6 +67,20 @@ export function quickCorrectionDraftFromCase(attendanceCase: QuickCorrectionCase
 }
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
+
+/** New times across a possible midnight boundary require an explicit date choice. */
+export function quickCorrectionDateRequirements(attendanceCase: QuickCorrectionCase, draft: QuickCorrectionDraft): {
+  inDateRequired: boolean
+  outDateRequired: boolean
+} {
+  const start = toLocalInput(attendanceCase.scheduled_start_at)
+  const end = toLocalInput(attendanceCase.scheduled_end_at)
+  const overnight = start.slice(0, 10) !== end.slice(0, 10)
+  return {
+    inDateRequired: !draft.inDateConfirmed && TIME.test(draft.inTime) && (overnight || draft.inTime > end.slice(11)),
+    outDateRequired: !draft.outDateConfirmed && TIME.test(draft.outTime) && (overnight || draft.outTime <= draft.inTime),
+  }
+}
 
 /** Convert explicitly selected Dubai dates and wall times without guessing a rollover. */
 export function quickCorrectionTimes(draft: QuickCorrectionDraft): {
@@ -78,8 +93,7 @@ export function quickCorrectionTimes(draft: QuickCorrectionDraft): {
   if (!TIME.test(draft.inTime) || (draft.outTime !== '' && !TIME.test(draft.outTime))) {
     throw new Error('invalidTime')
   }
-  if (!draft.inDateConfirmed || draft.inDate === ''
-    || (draft.outTime !== '' && (!draft.outDateConfirmed || draft.outDate === ''))) {
+  if (draft.inDate === '' || (draft.outTime !== '' && draft.outDate === '')) {
     throw new Error('dateRequired')
   }
   const inDate = draft.inDate
@@ -104,6 +118,8 @@ export function validateQuickCorrection(
     return typeof attendanceCase.effective?.adjustment_id === 'number' ? null : 'clearUnavailable'
   }
   if (draft.action !== 'present') return null
+  const dates = quickCorrectionDateRequirements(attendanceCase, draft)
+  if (dates.inDateRequired || dates.outDateRequired) return 'dateRequired'
   try {
     const times = quickCorrectionTimes(draft)
     if (Date.parse(times.firstInAt) > now.getTime()

@@ -207,6 +207,51 @@ describe('quick correction snapshots', () => {
     expect(entered).toMatchObject({ inDate: '2026-11-17', outDate: '2026-11-18' })
   })
 
+  it('requires a date choice for a new 23:55 arrival before an after-midnight shift', () => {
+    const earlyMorning = {
+      ...attendanceCase,
+      operational_date: '2026-11-18',
+      scheduled_start_at: '2026-11-17T20:30:00Z',
+      scheduled_end_at: '2026-11-18T04:30:00Z',
+      effective: { presence_state: 'unknown' },
+    }
+    const entered = {
+      ...quickCorrectionDraftFromCase(earlyMorning),
+      inTime: '23:55', reason: draft.reason, details: draft.details,
+    }
+    expect(validateQuickCorrection(earlyMorning, entered, now)).toBe('dateRequired')
+    expect(() => buildQuickCorrectionPayload(earlyMorning, entered, labels, now)).toThrow('dateRequired')
+    expect(buildQuickCorrectionPayload(earlyMorning, {
+      ...entered, inDate: '2026-11-17', inDateConfirmed: true,
+    }, labels, now)).toMatchObject({
+      replacement_first_in_at: '2026-11-17T19:55:00.000Z',
+      replacement_late_minutes: 0,
+    })
+    const withDeparture = {
+      ...entered, inDate: '2026-11-17', inDateConfirmed: true, outTime: '08:30',
+    }
+    expect(validateQuickCorrection(earlyMorning, withDeparture, now)).toBe('dateRequired')
+    expect(buildQuickCorrectionPayload(earlyMorning, {
+      ...withDeparture, outDate: '2026-11-18', outDateConfirmed: true,
+    }, labels, now)).toMatchObject({
+      replacement_first_in_at: '2026-11-17T19:55:00.000Z',
+      replacement_final_out_at: '2026-11-18T04:30:00.000Z',
+    })
+  })
+
+  it('keeps ordinary new day-shift times simple on the scheduled date', () => {
+    const unrecorded = { ...attendanceCase, effective: { presence_state: 'unknown' } }
+    const entered = {
+      ...quickCorrectionDraftFromCase(unrecorded),
+      inTime: '06:55', outTime: '15:05', reason: draft.reason, details: draft.details,
+    }
+    expect(validateQuickCorrection(unrecorded, entered, now)).toBeNull()
+    expect(buildQuickCorrectionPayload(unrecorded, entered, labels, now)).toMatchObject({
+      replacement_first_in_at: '2026-11-17T02:55:00.000Z',
+      replacement_final_out_at: '2026-11-17T11:05:00.000Z',
+    })
+  })
+
   it.each([
     [{ inTime: '' }, 'inRequired'],
     [{ inTime: '24:05' }, 'invalidTime'],
