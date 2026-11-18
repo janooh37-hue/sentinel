@@ -808,17 +808,21 @@ def get_workforce_snapshot(
             employee.id not in membership_employee_ids for employee in active_scoped
         ),
     }
-    # Unlike current_shift's last-occurrence fallback, on_site is strictly now.
-    on_site = {
-        case.employee_id
-        for case in cases
-        if case.scheduled_start_at <= naive_now < case.scheduled_end_at
-        and attendance_correction_service.overlay(
-            {"presence_state": latest[case.id].presence_state if case.id in latest else None},
+    # Unlike current_shift's fallback, on_site requires an open shift and no effective checkout.
+    on_site: set[str] = set()
+    for case in cases:
+        if not case.scheduled_start_at <= naive_now < case.scheduled_end_at:
+            continue
+        evaluation = latest.get(case.id)
+        effective = attendance_correction_service.overlay(
+            {
+                "presence_state": evaluation.presence_state if evaluation is not None else None,
+                "final_out_at": evaluation.final_out_at if evaluation is not None else None,
+            },
             adjustments.get(case.id),
-        )["presence_state"]
-        == "on_duty"
-    }
+        )
+        if effective["presence_state"] == "on_duty" and effective["final_out_at"] is None:
+            on_site.add(case.employee_id)
     value["aggregate"] = {
         "active_employees": len(active_scoped),
         "on_site": len(on_site),

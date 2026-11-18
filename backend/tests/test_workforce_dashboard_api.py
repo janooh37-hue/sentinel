@@ -1267,6 +1267,72 @@ def test_snapshot_on_site_counts_distinct_scoped_people_with_effective_presence(
     assert response.json()["aggregate"]["on_site"] == expected
 
 
+@pytest.mark.parametrize(
+    ("automatic_checkout", "corrected", "corrected_checkout", "expected"),
+    [
+        pytest.param(True, False, False, 1, id="automatic-checkout"),
+        pytest.param(False, True, True, 1, id="correction-sets-checkout"),
+        pytest.param(True, True, False, 2, id="correction-clears-checkout"),
+    ],
+)
+def test_snapshot_on_site_uses_effective_checkout(
+    workforce_api_db: Session,
+    automatic_checkout: bool,
+    corrected: bool,
+    corrected_checkout: bool,
+    expected: int,
+) -> None:
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="on-site-checkout@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    assert case is not None
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    checkout_at = NOW - timedelta(minutes=30)
+    evaluation.first_in_at = case.scheduled_start_at
+    evaluation.latest_in_at = case.scheduled_start_at
+    evaluation.final_out_at = checkout_at if automatic_checkout else None
+    workforce_api_db.commit()
+
+    if corrected:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "on_duty",
+                "replacement_first_in_at": evaluation.first_in_at,
+                "replacement_latest_in_at": evaluation.latest_in_at,
+                "replacement_final_out_at": checkout_at if corrected_checkout else None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Verified current checkout",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+            actor=admin,
+        )
+        workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=NOW.replace(tzinfo=UTC),
+    ).value
+
+    assert value["self"]["presence_state"] == "on_duty"
+    assert value["self"]["final_out_at"] == (checkout_at if expected == 1 else None)
+    assert value["aggregate"]["on_site"] == expected
+
+
 @pytest.mark.parametrize("before_start", [False, True])
 def test_snapshot_on_site_does_not_count_fallback_cases_outside_shift(
     workforce_api_db: Session, before_start: bool
