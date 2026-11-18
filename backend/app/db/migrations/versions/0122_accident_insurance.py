@@ -13,8 +13,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0120_accident_insurance"
-down_revision: str | Sequence[str] | None = "0119_employee_former_ids"
+revision: str = "0122_accident_insurance"
+down_revision: str | Sequence[str] | None = "0121_duty_departure_events"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

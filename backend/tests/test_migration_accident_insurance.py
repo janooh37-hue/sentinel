@@ -1,4 +1,4 @@
-"""Migration 0120: one-language accident reports and optional insurance details."""
+"""Migration 0122: one-language accident reports and optional insurance details."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-REVISION = "0120_accident_insurance"
-PARENT = "0119_employee_former_ids"
+REVISION = "0122_accident_insurance"
+PARENT = "0121_duty_departure_events"
 INSURANCE_COLUMNS = ("claim_no", "claim_status", "insurer", "repair_garage", "cost_payer")
 
 
