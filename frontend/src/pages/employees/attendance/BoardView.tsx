@@ -5,6 +5,7 @@
 
 import { useTranslation } from 'react-i18next'
 
+import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
@@ -76,8 +77,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                     }`}>
                       <h4 className="text-[0.8em] font-bold">{post}</h4>
                       <span className="ms-auto font-mono text-[0.7em] text-muted-foreground">
-                        {stats.seen}/{stats.due}
-                        {stats.leave > 0 ? ` +${stats.leave}` : ''}
+                        <bdi dir="ltr">{stats.seen}/{stats.due}{stats.leave > 0 ? ` +${stats.leave}` : ''}</bdi>
                       </span>
                     </header>
                     <div className="mt-2 grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,12rem),1fr))]">
@@ -96,8 +96,8 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                         })
                         const details = t('attendance.board.personDetails', {
                           name,
-                          employeeId: row.employee_id,
-                          date: operationalDate,
+                          employeeId: bidi(row.employee_id),
+                          date: bidi(operationalDate),
                           shift: shiftLabel,
                           state: label,
                           in: siteTime(row.first_punch_at),

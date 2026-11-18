@@ -16,8 +16,9 @@ function formatShiftTime(value: string | null | undefined, locale: string, timez
   if (!value) return '—'
   const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
   return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
     numberingSystem: 'latn',
     timeZone: hasOffset ? timezone : 'UTC',
   }).format(new Date(hasOffset ? value : `${value}Z`))

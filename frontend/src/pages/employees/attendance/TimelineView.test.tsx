@@ -91,6 +91,16 @@ describe('TimelineView', () => {
     expect(person.querySelector('[data-on-site="true"]')).not.toBeNull()
   })
 
+  it.each([
+    ['en', '2026-11-18T03:10:00Z', '+10m'],
+    ['ar', '2026-11-18T03:10:00Z', '+10 د'],
+    ['ar', '2026-11-18T02:50:00Z', '−10 د'],
+  ])('localizes the isolated median offset in %s at %s', async (language, first_punch_at, expected) => {
+    await i18n.changeLanguage(language)
+    timeline([row({ first_punch_at, last_punch_at: first_punch_at })])
+    expect(screen.getByText(expected)).toHaveAttribute('dir', 'ltr')
+  })
+
   it('keeps every named person, blue leave subtype and purple National Service visible without punches', () => {
     timeline([
       row({ punch_count: 0, first_punch_at: null, last_punch_at: null, on_leave: true, leave_kind: 'national_service' }),

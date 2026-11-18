@@ -43,12 +43,14 @@ export function PunchLogWidget({ tier }: WidgetProps): React.JSX.Element | null 
               <li key={punch.punch_id} className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-start gap-2 py-2 text-[0.75em] @[32rem]/widget:grid-cols-[3.5rem_minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
                 <bdi dir="ltr" className="font-mono tabular-nums">{siteTime(punch.occurred_at)}</bdi>
                 <span className="min-w-0">
-                  <bdi className="block break-words font-medium">{pickEmployeeName(punch, i18n.language)}</bdi>
+                  {/* Inline `bdi` inside a block: isolates the name without letting
+                      an Arabic name flip its own cell's alignment in an English UI. */}
+                  <span className="block break-words font-medium"><bdi>{pickEmployeeName(punch, i18n.language)}</bdi></span>
                   <bdi dir="ltr" className="block font-mono text-muted-foreground">{punch.employee_id}</bdi>
                   <span className="block break-words text-muted-foreground @[32rem]/widget:hidden">{punch.duty_post ?? '—'} · {punch.device ?? '—'}</span>
                 </span>
-                <bdi className="hidden break-words text-muted-foreground @[32rem]/widget:block">{punch.duty_post ?? '—'}</bdi>
-                <bdi className="hidden break-words text-muted-foreground @[32rem]/widget:block">{punch.device ?? '—'}</bdi>
+                <span className="hidden break-words text-muted-foreground @[32rem]/widget:block"><bdi>{punch.duty_post ?? '—'}</bdi></span>
+                <span className="hidden break-words text-muted-foreground @[32rem]/widget:block"><bdi>{punch.device ?? '—'}</bdi></span>
                 <span className="font-medium">{t(`dashboard.widgets.punch_log.direction.${punch.direction}`)}</span>
               </li>
             ))}

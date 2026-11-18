@@ -166,10 +166,21 @@ describe('WorkforcePulseWidget', () => {
     expect(screen.getByText('On-duty punch')).toBeInTheDocument()
     expect(screen.getByText('Punch in')).toBeInTheDocument()
     expect(screen.getByText('Punch out')).toBeInTheDocument()
-    expect(screen.getByText('8:06 AM')).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('4:01 PM')).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('8:00 AM – 4:00 PM')).toBeInTheDocument()
-    expect(screen.queryByText('4:03 PM')).not.toBeInTheDocument()
+    expect(screen.getByText('08:06')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toBeInTheDocument()
+    expect(screen.queryByText('16:03')).not.toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'])('uses zero-padded 24-hour punches in %s', async (language) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      first_punch_at: '2026-08-24T03:02:00Z',
+    }))
+    await i18n.changeLanguage(language)
+    renderWidget()
+    expect(await screen.findByText('07:02')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toHaveAttribute('dir', 'ltr')
   })
 
   it.each([
@@ -186,7 +197,7 @@ describe('WorkforcePulseWidget', () => {
   })
 
   it.each([
-    [null, '2026-08-24T12:03:00Z', '4:03 PM'],
+    [null, '2026-08-24T12:03:00Z', '16:03'],
     [null, '2026-08-24T04:06:00Z', '—'],
     [null, null, '—'],
   ])('never replaces a missing Out with the scheduled end', async (final_out_at, last_punch_at, expected) => {
@@ -299,7 +310,7 @@ describe('WorkforcePulseWidget', () => {
     ['LEAVE_NATIONAL_SERVICE', 'National service leave'],
     ['LEAVE_SICK', 'Sick leave'],
     ['LEAVE_ANNUAL', 'Annual leave'],
-    ['LEAVE_DUTY', 'Duty Leave'],
+    ['LEAVE_DUTY', 'Duty leave'],
     ['LEAVE_OTHER', 'Other leave'],
     ['SHIFT_OVERRIDE_OFF', 'Off duty by shift override'],
     ['SHIFT_OVERRIDE_WORK', 'Scheduled by shift override'],

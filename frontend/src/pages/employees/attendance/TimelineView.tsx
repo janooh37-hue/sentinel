@@ -6,6 +6,7 @@
 
 import { useTranslation } from 'react-i18next'
 
+import { bidi } from '@/lib/bidi'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
@@ -102,7 +103,7 @@ export function TimelineView({
               {median !== null && (
                 <span className="ms-auto text-[0.72em] text-muted-foreground">
                   {t('attendance.timeline.median')}{' '}
-                  <bdi dir="ltr" className="font-mono">{median >= 0 ? '+' : '−'}{Math.abs(median)}m</bdi>
+                  <bdi dir="ltr" className="font-mono">{t('attendance.timeline.medianOffset', { sign: median >= 0 ? '+' : '−', minutes: Math.abs(median) })}</bdi>
                 </span>
               )}
             </header>
@@ -184,8 +185,8 @@ function TimelineRow({
         onClick={() => onOpenEmployee(row.employee_id)}
         aria-label={t('attendance.timeline.rowLabel', {
           name,
-          employeeId: row.employee_id,
-          date: operationalDate,
+          employeeId: bidi(row.employee_id),
+          date: bidi(operationalDate),
           shift,
           state: status,
           in: siteTime(row.first_punch_at),

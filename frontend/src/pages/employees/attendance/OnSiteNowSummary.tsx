@@ -43,11 +43,11 @@ export function OnSiteNowSummary({ rows, operationalDate, now }: Props): React.J
       </header>
       <dl className={`mt-3 grid grid-cols-2 gap-x-4 gap-y-3 ${today ? 'sm:grid-cols-5' : 'sm:grid-cols-4'}`}>
         {BUCKETS.filter((bucket) => today || bucket !== 'onSite').map((bucket) => (
-          <div key={bucket}>
+          <div key={bucket} className="flex flex-col-reverse">
+            <dt className="text-[0.75em] text-muted-foreground">{t(`attendance.onSiteNow.${bucket}`)}</dt>
             <dd className="text-[1.2em] font-semibold tabular-nums">
               <bdi dir="ltr">{summary[bucket]}</bdi>
             </dd>
-            <dt className="text-[0.75em] text-muted-foreground">{t(`attendance.onSiteNow.${bucket}`)}</dt>
           </div>
         ))}
       </dl>

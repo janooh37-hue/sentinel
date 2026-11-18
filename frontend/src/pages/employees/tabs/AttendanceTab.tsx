@@ -438,7 +438,7 @@ function AttendanceTabContent({
               aria-label={t('attendance.tab.previousMonth')}
               className="min-h-11 min-w-11 rounded-lg border border-border px-2 py-1 text-[0.78em] text-primary hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 sm:min-w-8"
             >
-              <span aria-hidden="true" className="inline-block rtl:rotate-180">‹</span>
+              <span aria-hidden="true">‹</span>
             </button>
             <button
               type="button"
@@ -446,7 +446,7 @@ function AttendanceTabContent({
               aria-label={t('attendance.tab.nextMonth')}
               className="min-h-11 min-w-11 rounded-lg border border-border px-2 py-1 text-[0.78em] text-primary hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8 sm:min-w-8"
             >
-              <span aria-hidden="true" className="inline-block rtl:rotate-180">›</span>
+              <span aria-hidden="true">›</span>
             </button>
           </div>
         </header>

@@ -19,9 +19,9 @@ export interface StatusLabelFacts {
   leaveLabel?: string | null
 }
 
-/** Leave subtype in the reader's language: `leaves.type.<English label>`, else the label itself. */
-export function leaveSubtypeLabel(t: TFunction, leaveLabel: string): string {
-  return t(`leaves.type.${leaveLabel}`, { defaultValue: leaveLabel })
+/** Leave subtype in the reader's language, or null when no translation exists. */
+export function leaveSubtypeLabel(t: TFunction, leaveLabel: string): string | null {
+  return t(`leaves.type.${leaveLabel}`, { defaultValue: '' }) || null
 }
 
 export function attendanceStatusLabel(t: TFunction, state: RowState, facts: StatusLabelFacts = {}): string {
@@ -32,7 +32,8 @@ export function attendanceStatusLabel(t: TFunction, state: RowState, facts: Stat
       const label = facts.leaveLabel?.trim()
       if (!label || label === 'National Service') return t('attendance.state.leave')
       if (label === 'Others') return t('attendance.state.leaveOther')
-      return t('attendance.state.leaveWith', { subtype: leaveSubtypeLabel(t, label) })
+      const subtype = leaveSubtypeLabel(t, label)
+      return subtype ? t('attendance.state.leaveWith', { subtype }) : t('attendance.state.leave')
     }
     case 'verified':
       if (facts.onSite) return t('attendance.state.onSite')

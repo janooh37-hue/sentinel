@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from 'i18next'
+import { bidi } from '@/lib/bidi'
 import ar from '@/locales/ar.json'
 
 import type { CorrectionTarget } from './attendanceCorrectionContext'
@@ -43,8 +44,8 @@ describe('BoardView', () => {
   it('gives every tile a visible verdict and a complete accessible name and tooltip', () => {
     const { container } = renderBoard()
     const tile = screen.getByRole('button', { name: /Open employee file.*Ahmed Ali/ })
-    expect(tile).toHaveAccessibleName('Open employee file · Ahmed Ali · G-1042 · 2026-11-18 · Morning · On site · In 06:58 · Out —')
-    expect(tile).toHaveAttribute('title', 'Ahmed Ali · G-1042 · 2026-11-18 · Morning · On site · In 06:58 · Out —')
+    expect(tile).toHaveAccessibleName(`Open employee file · Ahmed Ali · ${bidi('G-1042')} · ${bidi('2026-11-18')} · Morning · On site · In 06:58 · Out —`)
+    expect(tile).toHaveAttribute('title', `Ahmed Ali · ${bidi('G-1042')} · ${bidi('2026-11-18')} · Morning · On site · In 06:58 · Out —`)
     expect(tile).toHaveTextContent('On site')
     expect(tile).toHaveTextContent('In 06:58')
     expect(tile).toHaveTextContent('Out —')
@@ -65,6 +66,20 @@ describe('BoardView', () => {
     expect(screen.getByText('National Service: 1')).toBeInTheDocument()
     expect(screen.getByText('On leave: 1')).toBeInTheDocument()
     expect(screen.getByTestId('attendance-board-post')).toHaveTextContent('0/0 +2')
+  })
+
+  it.each([
+    ['en', 'On leave'],
+    ['ar', 'في إجازة'],
+  ])('does not expose an untranslated leave subtype in %s', async (language, label) => {
+    i18n.addResourceBundle('ar', 'translation', ar)
+    await i18n.changeLanguage(language)
+    const { container } = renderBoard([
+      row({ on_leave: true, leave_kind: 'other', leave_label: 'Unknown Leave', punch_count: 0, first_punch_at: null }),
+    ])
+    expect(screen.getByText(label)).toBeInTheDocument()
+    expect(container).not.toHaveTextContent('Unknown Leave')
+    expect(screen.getByRole('button', { name: /^(Open employee file|فتح ملف الموظف)/ })).not.toHaveAttribute('title', expect.stringContaining('Unknown Leave'))
   })
 
   it('shows a completed departure from the second punch without an on-site halo', () => {

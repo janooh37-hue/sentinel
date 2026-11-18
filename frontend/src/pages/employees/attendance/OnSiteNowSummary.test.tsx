@@ -54,6 +54,9 @@ describe('OnSiteNowSummary', () => {
     }
     expect(screen.getByText('11:40').closest('bdi')).toHaveAttribute('dir', 'ltr')
     expect(countFor('On site').querySelector('bdi')).toHaveAttribute('dir', 'ltr')
+    const term = screen.getByText('On site', { selector: 'dt' })
+    expect(term.nextElementSibling).toBe(countFor('On site'))
+    expect(term.parentElement).toHaveClass('flex', 'flex-col-reverse')
   })
 
   it('uses a day record without any on-site-now claim for a past date', () => {
