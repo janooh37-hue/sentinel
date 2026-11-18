@@ -284,8 +284,11 @@ input::placeholder { color: var(--text-muted); opacity: 1; }
 .empty .icon { inline-size: 24px; block-size: 24px; margin-block-end: 13px; }
 .page-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-block-start: 18px; font-size: 11px; color: var(--text-muted); }
 .attention { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 18px 19px; min-inline-size: 0; }
-.attention h2 { font-size: 14px; }
-.attention-intro { margin-block: 5px 14px; color: var(--text-muted); font-size: 11px; line-height: 1.8; }
+/* Desktop: the summary's "Needs a decision" anchor is the queue's headline, so the card's own title only shows once the layout stacks. */
+.attention-title { display: none; font-size: 14px; margin-block-end: 5px; }
+.attention-intro { margin-block: 0 14px; color: var(--text-muted); font-size: 11px; line-height: 1.8; }
+.attention:focus { outline: none; }
+.attention:focus-visible { box-shadow: var(--focus-ring); }
 .attention-breakdown { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 11px; margin-block-end: 15px; color: var(--text-muted); }
 .attention-row { display: flex; align-items: flex-start; gap: 10px; padding-block: 11px; border-block-start: 1px solid var(--hairline); }
 .attention-row .dot { margin-block-start: 6px; }
@@ -370,6 +373,7 @@ input::placeholder { color: var(--text-muted); opacity: 1; }
   .summary,.main-grid { grid-template-columns: minmax(0,1fr); }
   .summary-decision { padding-block: 12px; border-inline-start: 0; border-block-start: 1px solid var(--hairline); flex-direction: row; justify-content: space-between; align-items: center; }
   .summary-decision p { max-inline-size: none; }
+  .attention-title { display: block; }
   .attention { margin-block-start: 18px; }
   .board-posts { grid-template-columns: 1fr; }
 }
@@ -493,7 +497,7 @@ const D = {
     morning: 'Morning', early: 'Early', afternoon: 'Afternoon', evening: 'Evening',
     onSiteNow: 'On site now', daySummary: 'Day summary', asOf: 'As of {time}', peopleCount: '{count} {count#person|people}',
     onSite: 'On site', left: 'Left', notArrived: 'Not arrived', leave: 'On leave', nationalService: 'National Service',
-    split: 'Absent {absent} · Awaited {awaited}', residual: 'Not placed yet · {count}',
+    splitAbsent: 'Absent {count}', splitAwaited: 'Awaited {count}', residual: 'Not placed yet · {count}',
     residualHint: 'Shift not started, or no Out recorded', needsDecision: 'Needs a decision · {count}',
     decisionHint: 'Not narrowed by filters', rowStatus: 'Row status', who: 'People',
     filter: 'Filter ({count})', filterPlain: 'Filter', filterHint: 'Halo = on site now · notch = corrected',
@@ -528,7 +532,7 @@ const D = {
     morning: 'الصباحية', early: 'المبكرة', afternoon: 'الظهيرة', evening: 'المسائية',
     onSiteNow: 'الموجودون في الموقع الآن', daySummary: 'ملخص اليوم', asOf: 'حتى {time}', peopleCount: 'الموظفون: {count}',
     onSite: 'في الموقع', left: 'غادروا', notArrived: 'لم يصلوا', leave: 'في إجازة', nationalService: 'الخدمة الوطنية',
-    split: 'غائب {absent} · مُنتظَر {awaited}', residual: 'لم يُصنَّفوا بعد · {count}',
+    splitAbsent: 'غائب {count}', splitAwaited: 'مُنتظَر {count}', residual: 'لم يُصنَّفوا بعد · {count}',
     residualHint: 'لم تبدأ الوردية، أو لم يُسجَّل الخروج', needsDecision: 'يحتاج قراراً · {count}',
     decisionHint: 'لا تتأثر بالمرشحات', rowStatus: 'حالة الصف', who: 'الموظفون',
     filter: 'المرشحات ({count})', filterPlain: 'المرشحات', filterHint: 'الهالة = في الموقع الآن · العلامة = مُصحَّح',
@@ -850,11 +854,11 @@ function summary(rows) {
       <div class="bucket-keys" role="group" aria-label="${t('who')}" data-tier="who" style="--key-count:${keys.length}">
         ${keys.map(b=>`<button type="button" id="who-${b}" class="bucket-key" data-who="${b}" data-count="${c[b]}" aria-pressed="${state.who===b}" aria-disabled="${c[b]===0}" tabindex="${state.whoFocus===b?0:-1}">
           <span class="key-value"><i class="swatch" data-bucket="${b}" aria-hidden="true"></i>${num(c[b])}</span><span class="key-label">${t(b)}</span>
-          ${b==='notArrived'?`<span class="key-split">${t('split',{absent:num(split.absent),awaited:num(split.awaited)})}</span>`:''}
+          ${b==='notArrived'?splitText(split):''}
         </button>`).join('')}
       </div>
     </div></div>
-    <div class="summary-decision"><a href="#attention-queue" data-action="attention" class="decision-anchor ${decisionCount?'has-decisions':''}">${t('needsDecision',{count:num(decisionCount)})}${icon('chevron','directional')}</a><p>${t('decisionHint')}</p></div>
+    <div class="summary-decision"><a href="#attention-queue" id="decision-anchor" data-action="attention" class="decision-anchor ${decisionCount?'has-decisions':''}">${t('needsDecision',{count:num(decisionCount)})}${icon('chevron','directional')}</a><p>${t('decisionHint')}</p></div>
   </section>`;
 }
 function stateChips(prefix) {
@@ -913,7 +917,7 @@ function timeline(rows) {
 }
 function attention() {
   const rows=attentionRows(),shown=state.attentionExpanded?rows:rows.slice(0,6);
-  return `<aside class="attention" id="attention-queue" aria-labelledby="attention-title"><h2 id="attention-title" tabindex="-1">${t('attention')} · ${num(rows.length)}</h2><p class="attention-intro">${t('attentionIntro')}</p>
+  return `<aside class="attention" id="attention-queue" tabindex="-1" aria-labelledby="decision-anchor"><h2 id="attention-title" class="attention-title">${t('attention')} · ${num(rows.length)}</h2><p class="attention-intro">${t('attentionIntro')}</p>
     <div class="attention-breakdown">${['absent','unpaired','late'].map(s=>`<span>${t(s)} ${num(rows.filter(p=>rowState(p,input)===s).length)}</span>`).join('')}</div>
     ${shown.map(p=>`<article class="attention-row">${dot(p)}<div><span class="person-name">${local(p)}</span><p>${num(p.id)} · ${label(p)}${p.corrected?' · '+t('corrected'):''} · ${t('shift',{count:num(p.shift_id)})}</p><p>${local(UNITS[p.unit])} · ${local(POSTS[p.post])}</p></div></article>`).join('')}
     ${rows.length>shown.length||state.attentionExpanded?`<button type="button" class="btn attention-more" data-action="attention-more"><span>${t(state.attentionExpanded?'fewerDecisions':'allDecisions',{count:num(rows.length)})}</span>${icon('chevron','directional')}</button>`:''}<p class="attention-note">${t('attentionNote')}</p>
@@ -941,6 +945,16 @@ function shell(address) {
   return `<header class="app-nav"><div class="app-nav-inner"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 3 35 9v11c0 8-8 14-15 17C13 34 5 28 5 20V9L20 3Z" stroke="currentColor" stroke-width="1.7"/><path d="M12 15h16M12 20h16M15 25h10" stroke="currentColor" stroke-width="1.7"/></svg><div class="brand-copy"><bdi dir="ltr">${t('brand')}</bdi><small>${t('brandFull')}</small></div></div><nav class="app-links" aria-label="${t('brand')}"><span>${t('dashboard')}</span><span aria-current="page">${t('employees')}</span><span>${t('users')}</span></nav><div class="nav-meta"><span class="nav-snapshot">${t('sample')}</span><span>${t('frozen')} ${time(NOW)}</span><span class="avatar" title="${t('actor')}">${t('actorInitials')}</span></div></div></header>
     <nav class="screen-strip" aria-label="${t('employees')}"><div class="screen-inner"><span aria-current="page">${t('attendance')}</span></div></nav>
     <div class="address-strip"><code><bdi dir="ltr">${esc(address)}</bdi></code></div><main class="page" id="main">${attendance()}</main>`;
+}
+// Only nonzero parts of the Not arrived sub-split are shown; a lone nonzero part still shows.
+function splitText(split) {
+  const parts=[['splitAbsent',split.absent],['splitAwaited',split.awaited]].filter(([,n])=>n>0).map(([key,n])=>t(key,{count:num(n)}));
+  return parts.length?`<span class="key-split">${parts.join(' · ')}</span>`:'';
+}
+// The queue is named by the summary anchor while that anchor sits directly above it; once stacked, by its own title.
+function syncAttentionLabel() {
+  const aside=document.getElementById('attention-queue'),title=document.getElementById('attention-title');
+  if(aside&&title)aside.setAttribute('aria-labelledby',getComputedStyle(title).display==='none'?'decision-anchor':'attention-title');
 }
 function drawLeaders() {
   const visual=document.querySelector('.summary-visual'),svg=visual?.querySelector('.leaders');
@@ -977,7 +991,7 @@ function render(focusId) {
   renderSheet();
   const announcement=t('result',{people:uniquePeople(filteredRows()),rows:filteredRows().length}),live=document.getElementById('result-announcement');
   if(live.textContent!==announcement)live.textContent=announcement;
-  requestAnimationFrame(drawLeaders);
+  requestAnimationFrame(()=>{syncAttentionLabel();drawLeaders();});
   if(focusId)document.getElementById(focusId)?.focus({preventScroll:true});
 }
 function clearFilters() {
@@ -1011,7 +1025,7 @@ document.addEventListener('click',event=>{
   else if(btn.dataset.action==='close-sheet') {state.sheet=false;render('open-filters');return;}
   else if(btn.dataset.action==='attention-more')state.attentionExpanded=!state.attentionExpanded;
   else if(btn.dataset.action==='attention') {
-    event.preventDefault();document.getElementById('attention-title').focus();document.getElementById('attention-queue').scrollIntoView({block:'start',behavior:'instant'});return;
+    event.preventDefault();const queue=document.getElementById('attention-queue');queue.focus({preventScroll:true});queue.scrollIntoView({block:'start',behavior:'instant'});return;
   } else return;
   event.preventDefault();render(id);
 });
@@ -1050,7 +1064,7 @@ document.getElementById('filter-sheet').addEventListener('click',event=>{
   const box=event.currentTarget.getBoundingClientRect();
   if(event.clientY<box.y) {state.sheet=false;render('open-filters');}
 });
-addEventListener('resize',drawLeaders);
+addEventListener('resize',()=>{syncAttentionLabel();drawLeaders();});
 function setPreset(preset,paint=true) {
   for(const key of ['lang','theme','mobile','view','query','shift','company','who','corrected','sheet','printHeader','attentionExpanded'])if(Object.hasOwn(preset,key))state[key]=preset[key];
   if(preset.date)changeDate(preset.date);
