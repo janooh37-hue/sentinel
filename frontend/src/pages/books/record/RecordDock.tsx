@@ -221,7 +221,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
       case 'rebuildVehicleLetter':
         return book.can_rebuild_vehicle_letter === true ? {
           id,
-          tone: 'primary',
+          tone: nextStep.primary === id ? 'primary' : 'plain',
           icon: view.rebuildBusy ? <Spinner /> : <RefreshCw className={ICON} aria-hidden="true" />,
           label: t(view.rebuildBusy ? 'books.fleetReporter.rebuilding' : 'books.fleetReporter.rebuild'),
           disabled: view.rebuildBusy,
@@ -378,7 +378,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
               <span>{t(key)}</span>
             </p>
           ))}
-          {nextStep.primary === 'rebuildVehicleLetter' && (
+          {(nextStep.primary === 'rebuildVehicleLetter' || nextStep.secondary.includes('rebuildVehicleLetter')) && (
             <p className="mb-2 text-[0.76em] leading-snug text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>
           )}
           <div data-record-dock className="flex items-stretch gap-1.5">

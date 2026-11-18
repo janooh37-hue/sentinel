@@ -425,8 +425,8 @@ may call, each self-service or gated inside its handler:
 | `GET /templates`, `GET /templates/{template_id}/fields`, `GET /general-book/recipients` | Rich-editor form metadata and the General Book addressee picker. |
 | `POST /documents/generate` | Publication; `authorize_interactive_generation` checks `documents.generate`, `books.view` and the service and category capabilities. |
 | `GET /documents/{document_id}/download` | Record-owned document download; in-handler record access, PDF only for a scoped role. |
-| `POST /books/word-sessions`, `GET /books/{book_id}/word-sessions`, `.../status`, `.../preview`, `POST .../finish`, `DELETE /books/{book_id}/word-sessions`, `POST /books/{book_id}/word-sessions` | Word authoring of the reporter's own General Books and Reports (`book_service.require_scoped_word_access`). |
-| `GET /books/by-ref/{ref}`, `GET /books/{book_id}`, `GET .../versions/{version_id}/fields`, `.../annotations`, `.../signed-document`, `GET /books/{book_id}/imported-document` | Record reads; `resolve_book_read_access` and the role's visibility matrix decide in the handler. |
+| `POST /books/word-sessions`, `GET /books/{book_id}/word-sessions`, `.../status`, `.../preview`, `POST .../finish`, `DELETE /books/{book_id}/word-sessions`, `POST /books/{book_id}/word-sessions` | Word authoring of the reporter's own Reports (`book_service.require_scoped_word_access`). |
+| `GET /books/by-ref/{ref}`, `GET /books/{book_id}`, `GET .../versions/{version_id}/fields`, `.../annotations`, `.../signed-document`, `GET /books/{book_id}/imported-document` | Record reads; `resolve_book_read_access` and the role's visibility matrix decide in the handler. A scoped role is never a send recipient, so without `books.view` it reads no record. |
 | `GET /notifications/decisions`, `POST /notifications/decisions/seen`, `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/subscribe` | The author is told when a paper is returned, rejected or finished. |
 | `POST /books/{book_id}/seen` | Opening one decision marks it seen; writes only the caller's own markers, after `resolve_book_read_access`. |
 
@@ -458,8 +458,10 @@ and `require_record_type_access`. A General Book under 13/1 is still refused.
 
 **Writes without `books.create`/`books.edit`.** A fleet reporter authors through
 `book_service.require_fleet_write_access` (own General Book, Report or vehicle paper in
-`none`/`returned`; a Report must stay signed by the linked employee) and
-`require_fleet_word_access` (Word and DAV). Papers it creates start `approval_state="none"`
+`none`/`returned`, and only while it can still read it; a Report must stay signed by the
+linked employee) and `require_fleet_word_access` (Word and DAV, own Reports only: its
+General Books are rendered from fields, which approval re-renders for the final signer).
+Papers it creates start `approval_state="none"`
 with no signing manager. It cannot choose an approver, reviewers, priority or manager (403
 `SCOPED_ROLE_INPUT_FORBIDDEN`).
 
@@ -478,13 +480,38 @@ stage. Both stages are keyed on the step's `stage_label`, separate from
 `form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
 same gate.
 
-**Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
+**General Books and the addressee.** A fleet reporter starts no General Book of its own:
+`POST /documents/generate` (without `revise_of_book_id`) and the Word create answer 403
+`SCOPED_ROLE_SERVICE_FORBIDDEN`; `POST /documents/generate` accepts from it only a revision of
+its own General Book (its Report is the Word Report, its vehicle letters come from the
+vehicle services). The revision's preview (`commit=false`) carries the same
+`revise_of_book_id` as an authorization context only: the route runs
+`book_service.require_revise_access` for that book, then renders the preview without it,
+so nothing is revised, filed or numbered (every other role still gets
+`REVISE_REQUIRES_COMMIT` for a revise preview). The Services form revises it through the
+editor path (preview, then save), never the Word create. Its General Books come from the vehicle services (the
+maintenance request, 11/1, addressed to the contractor), which is why the role keeps
+`books.service.General Book`; it may revise its own returned ones. Its Report is always
+addressed to its line manager: the server writes the name after «السيد»
+(`book_service.line_manager_addressee`: the line manager's signer-row title, else its
+Arabic or English name, else the account name) and refuses a `recipient_id` (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`).
+
+**Vehicle employees.** The fine, accident and maintenance-request dialogs search
+`GET /vehicles/employees` and resolve `GET /vehicles/employees/{employee_id}`
+(`vehicles.edit`): G number and names only, matched by G number, former ID or name,
+never by passport or Emirates ID. A fleet reporter reaches them through its capabilities;
+`GET /employees/lookup` stays closed to it.
+
+**Rebuilding a vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
 (`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
 returned vehicle letter from current fleet data through the ordinary revise path: same
 reference and paper date, a new revision, earlier steps kept as history, state `none`.
 `book_service.vehicle_letter_rebuild_refusal` is the one rule behind the route and
 `BookRead.can_rebuild_vehicle_letter`. Fines letters keep their source selection in the
 version's `_letter_source` field (older letters fall back to the `letter.generated` audit).
+The record pane, record page and mobile dock and More sheet offer Rebuild on the
+author's returned letter (primary) and on its unsubmitted letter (beside Send for approval).
 
 **Tests:** `backend/tests/test_fleet_reporter_scope.py` (route policy, allowlist parity,
 shared routes exist, ceiling, line-manager admin route, migration),

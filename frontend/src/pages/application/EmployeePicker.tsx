@@ -1,7 +1,8 @@
 /**
  * EmployeePicker — searchable combobox for the form-card Employee field.
  *
- * Calls GET /api/v1/employees/lookup?q=... for restricted service lookup.
+ * Calls GET /api/v1/employees/lookup?q=... for restricted service lookup by
+ * default; a caller with its own narrower lookup passes it as `source`.
  * On select, propagates the employee id upward.
  *
  * Visual vocabulary is TAMM (spec §6.8): 10px×14px input padding, 10px
@@ -21,10 +22,33 @@ import { useTranslation } from 'react-i18next'
 import { User } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import type { EmployeeLookupItem } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
+
+/** What a picker row shows: the G number, names, and the department when the source has it. */
+export interface EmployeePickerRow {
+  id: string
+  name_en: string
+  name_ar?: string | null
+  department?: string | null
+}
+
+/** Where the picker searches and how it resolves the selected id. */
+export interface EmployeePickerSource {
+  /** Query-key prefixes; the default keeps the shared `employee-lookup` cache. */
+  searchKey: string
+  selectedKey: string
+  search: (q: string | undefined) => Promise<{ items: EmployeePickerRow[] }>
+  get: (id: string) => Promise<EmployeePickerRow>
+}
+
+const SERVICE_LOOKUP: EmployeePickerSource = {
+  searchKey: 'employees-picker',
+  selectedKey: 'employee-lookup',
+  search: (q) => api.lookupEmployees({ q, limit: 50 }),
+  get: api.getEmployeeLookup,
+}
 
 interface EmployeePickerProps {
   selectedId: string | null
@@ -33,12 +57,14 @@ interface EmployeePickerProps {
    * generic label — pass one when a field needs a more specific name
    * (e.g. "Link to employee" vs. just "Employee"). */
   ariaLabel?: string
+  source?: EmployeePickerSource
 }
 
 export function EmployeePicker({
   selectedId,
   onSelect,
   ariaLabel,
+  source = SERVICE_LOOKUP,
 }: EmployeePickerProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const listboxId = useId()
@@ -59,22 +85,22 @@ export function EmployeePicker({
     isError,
     refetch,
   } = useQuery({
-    queryKey: ['employees-picker', query],
-    queryFn: () => api.lookupEmployees({ q: query.trim() || undefined, limit: 50 }),
+    queryKey: [source.searchKey, query],
+    queryFn: () => source.search(query.trim() || undefined),
     enabled: open,
     staleTime: 15_000,
   })
 
   const { data: selectedData, isError: selectedError } = useQuery({
-    queryKey: ['employee-lookup', selectedId],
-    queryFn: () => api.getEmployeeLookup(selectedId!),
+    queryKey: [source.selectedKey, selectedId],
+    queryFn: () => source.get(selectedId!),
     enabled: !!selectedId,
     staleTime: 30_000,
   })
 
-  const rows: EmployeeLookupItem[] = data?.items ?? []
+  const rows: EmployeePickerRow[] = data?.items ?? []
 
-  function displayName(item: EmployeeLookupItem): string {
+  function displayName(item: EmployeePickerRow): string {
     return pickEmployeeName(item, i18n.language)
   }
 

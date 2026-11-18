@@ -311,6 +311,20 @@ describe('RecordDock', () => {
     expect(more.queryByRole('button', { name: /Rebuild letter/ }) !== null).toBe(can_rebuild_vehicle_letter)
   })
 
+  it('offers Rebuild beside Submit on an unsubmitted letter, in the dock and More', async () => {
+    const { actions } = mount(bookOf('none', {
+      service_id: 'Vehicle Fines', can_rebuild_vehicle_letter: true, original_creator_user_id: 7,
+    }), { scoped: true, reporterAction: 'edit-submit', caps: ['books.submit', 'vehicles.edit'] })
+    const dock = within(dockEl())
+    expect(dock.getByRole('button', { name: /Submit|Send for/ })).toBeVisible()
+    await userEvent.click(dock.getByRole('button', { name: 'Rebuild letter' }))
+    expect(actions.rebuildVehicleLetter).toHaveBeenCalledOnce()
+    expect(screen.getByText('Correct the fine or accident in the fleet hub first, then rebuild.')).toBeVisible()
+    await userEvent.click(dock.getByRole('button', { name: 'More' }))
+    const more = within(await screen.findByRole('dialog', { name: 'More' }))
+    expect(more.getByRole('button', { name: /Rebuild letter/ })).toBeVisible()
+  })
+
   describe('More sheet', () => {
     it('opens from More with the Tools groups', async () => {
       mount(bookOf('none'))

@@ -96,7 +96,7 @@ SCOPED_SHARED_ROUTES: Final[frozenset[RouteKey]] = frozenset(
         ("GET", "/api/v1/general-book/recipients"),
         ("POST", "/api/v1/documents/generate"),
         ("GET", "/api/v1/documents/{document_id}/download"),
-        # Word authoring of own General Books and Reports; authorized in the handler.
+        # Word authoring of own Reports; authorized in the handler.
         ("POST", "/api/v1/books/word-sessions"),
         ("GET", "/api/v1/books/{book_id}/word-sessions"),
         ("GET", "/api/v1/books/{book_id}/word-sessions/status"),

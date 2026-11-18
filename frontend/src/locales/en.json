@@ -4784,6 +4784,7 @@
     },
     "fleet": {
       "lineManagerRequired": "Ask an administrator to set your line manager.",
+      "serviceForbidden": "Fleet accounts write General Books only from the vehicle pages.",
       "lineManagerNotApplicable": "Only fleet reporter accounts have a line manager.",
       "lineManagerNotEligible": "Choose another active account that can approve records.",
       "branchApproverNotEligible": "Choose an active approver other than the author and the line manager.",
@@ -5110,8 +5111,6 @@
     },
     "nsCategory": "Record",
     "fleetReporter": {
-      "generalBookTitle": "General Book",
-      "generalBookDescription": "Create a classified record and send it to your line manager.",
       "reportDescription": "Create a report in Word and send it to your line manager."
     },
     "inmateReporter": {

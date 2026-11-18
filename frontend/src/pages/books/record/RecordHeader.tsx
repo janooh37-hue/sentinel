@@ -454,7 +454,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             <HeaderBtn
               icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
               label={t('books.fleetReporter.rebuild')}
-              tone="navy-solid"
+              tone={primary ? 'navy-solid' : 'plain'}
               pending={view.rebuildBusy}
               pendingLabel={t('books.fleetReporter.rebuilding')}
               onClick={actions.rebuildVehicleLetter}

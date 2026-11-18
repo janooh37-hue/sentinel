@@ -7,10 +7,20 @@ import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Label } from '@/components/ui/label'
-import { EmployeePicker } from '@/pages/application/EmployeePicker'
+import { api } from '@/lib/api'
+import { EmployeePicker, type EmployeePickerSource } from '@/pages/application/EmployeePicker'
+
+/** The vehicle dialogs learn only the G number and names (anyone who edits vehicles). */
+const VEHICLE_EMPLOYEES: EmployeePickerSource = {
+  searchKey: 'vehicle-employees',
+  selectedKey: 'vehicle-employee',
+  search: (q) => api.searchVehicleEmployees({ q, limit: 50 }),
+  get: api.getVehicleEmployee,
+}
 
 /**
- * The optional driver on a fine or an accident report. `EmployeePicker` is a
+ * The optional employee on a fine, an accident report or a maintenance
+ * request. `EmployeePicker` is a
  * combobox without an id to label, so the group carries the label instead —
  * a screen reader announces «Employee» on entry — and the hint states what an
  * empty selection means, because an imported fine legitimately has no driver.
@@ -30,7 +40,7 @@ export function VehicleEmployeeField({
     <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
       <Label id={labelId}>{t('vehicles.employeePicker')}</Label>
       <div role="group" aria-labelledby={labelId}>
-        <EmployeePicker selectedId={employeeId} onSelect={onChange} />
+        <EmployeePicker selectedId={employeeId} onSelect={onChange} source={VEHICLE_EMPLOYEES} />
       </div>
       <span className="text-[0.72em] leading-snug text-muted-foreground">{hint}</span>
     </div>

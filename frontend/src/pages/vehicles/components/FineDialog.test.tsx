@@ -15,8 +15,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...mod,
     api: {
       ...mod.api,
-      getEmployeeLookup: vi.fn(),
-      lookupEmployees: vi.fn(),
+      getVehicleEmployee: vi.fn(),
+      searchVehicleEmployees: vi.fn(),
       updateVehicleFine: vi.fn(),
     },
   }
@@ -97,10 +97,10 @@ function renderDialog() {
 describe('FineDialog edit mode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(api.getEmployeeLookup).mockImplementation(async (employeeId) => {
+    vi.mocked(api.getVehicleEmployee).mockImplementation(async (employeeId) => {
       return (employeeId === currentEmployee.id ? currentEmployee : replacementEmployee) as never
     })
-    vi.mocked(api.lookupEmployees).mockResolvedValue({
+    vi.mocked(api.searchVehicleEmployees).mockResolvedValue({
       items: [replacementEmployee],
       total: 1,
       limit: 50,

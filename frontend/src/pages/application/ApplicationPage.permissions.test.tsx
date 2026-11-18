@@ -14,6 +14,8 @@ vi.mock('@/lib/api', () => ({
     generateDocument: vi.fn(),
     listBookClassifications: vi.fn(),
     createWordBook: vi.fn(),
+    getBook: vi.fn(),
+    getBookVersionFields: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
   apiErrorMessage: (error: unknown) => String(error),
@@ -28,17 +30,15 @@ vi.mock('@/lib/useCapabilities', () => ({
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => capabilityState.mobile }))
 vi.mock('@/lib/applicationFormSchema', () => ({ buildZodSchema: () => z.object({}).passthrough() }))
 vi.mock('@/components/application/TemplateForm', () => ({
-  TemplateForm: ({ isClassificationAllowed, schema, onClassificationChange, onBodyModeChange, form }: {
+  TemplateForm: ({ isClassificationAllowed, schema, onClassificationChange, form }: {
     isClassificationAllowed?: (code: string) => boolean
     schema: { fields: { id: string }[] }
     onClassificationChange: (code: string) => void
-    onBodyModeChange: (mode: 'editor' | 'word') => void
     form: UseFormReturn
   }) => (
     <FormProvider {...form}>
       {['7/1', '11/1', '1/1'].filter((code) => !isClassificationAllowed || isClassificationAllowed(code)).map((code) => <span key={code}>{code}</span>)}
       <button type="button" onClick={() => onClassificationChange('7/1')}>Choose classification</button>
-      <button type="button" onClick={() => onBodyModeChange('editor')}>Use editor</button>
       <TestFormValues />
       {schema.fields.map((field) => <span key={field.id}>{field.id}</span>)}
     </FormProvider>
@@ -46,7 +46,17 @@ vi.mock('@/components/application/TemplateForm', () => ({
 }))
 vi.mock('@/components/application/AttachmentsBlock', () => ({ AttachmentsBlock: () => null }))
 vi.mock('./EmployeeHeader', () => ({ EmployeeHeader: () => null }))
-vi.mock('./JobStatus', () => ({ JobStatus: () => null }))
+// A generated job finishes at once: the Preview tab then offers Save.
+vi.mock('./JobStatus', async () => {
+  // The mock factory is hoisted before static imports, so React must load inside it.
+  const { useEffect } = await import('react')
+  return {
+    JobStatus: ({ jobId, onDone }: { jobId: string; onDone: (job: unknown) => void }) => {
+      useEffect(() => onDone({ job_id: jobId, status: 'done', book_id: null, documents: [] }), [jobId, onDone])
+      return null
+    },
+  }
+})
 vi.mock('@/lib/formDrafts', () => ({
   clearAllDrafts: vi.fn(),
   clearDraft: vi.fn(),
@@ -233,15 +243,15 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
   })
 
-  it.each([false, true])('shows exactly the fleet General Book and Report tiles (mobile=%s)', (mobile) => {
+  it.each([false, true])('shows the fleet reporter only the Report tile (mobile=%s)', (mobile) => {
     capabilityState.mobile = mobile
     capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.service.Vehicle Fines'])
     renderPage('/services', 'fleet_reporter')
     const tiles = screen.getAllByRole('button')
-    expect(tiles).toHaveLength(2)
-    expect(tiles[0]).toHaveTextContent('General Book')
-    expect(tiles[1]).toHaveTextContent('Report')
-    expect(tiles[1]).toHaveProperty('disabled', mobile)
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toHaveTextContent('Report')
+    expect(tiles[0]).toHaveProperty('disabled', mobile)
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
   })
 
   it.each([false, true])('keeps the inmate violations and Report tiles unchanged (mobile=%s)', (mobile) => {
@@ -255,40 +265,44 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
   })
 
-  it('filters scoped General Book classifications and manager controls but keeps addressees', async () => {
-    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1', 'books.category.11/1'])
+  it('does not open a new General Book for a fleet reporter', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.category.11/1'])
     renderPage('/services/general_book', 'fleet_reporter')
-    expect(await screen.findByText('7/1')).toBeVisible()
-    expect(screen.getByText('11/1')).toBeVisible()
-    expect(screen.queryByText('1/1')).not.toBeInTheDocument()
-    for (const picker of ['manager_id', 'hand_sign_manager']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
-    for (const picker of ['recipient_id', 'cc']) expect(screen.getByText(picker)).toBeVisible()
-    expect(api.getSettings).not.toHaveBeenCalled()
+    expect(await screen.findByRole('button', { name: /Report/ })).toBeVisible()
+    expect(screen.queryByText('subject')).not.toBeInTheDocument()
+    expect(api.getTemplateFields).not.toHaveBeenCalled()
   })
 
-  it.each(['word', 'editor'])('keeps scoped General Book addressees without manager embed (%s)', async (mode) => {
-    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.7/1'])
-    // Keep the mutation pending: this test asserts the outgoing create, not job polling.
-    vi.mocked(api.generateDocument).mockImplementation(() => new Promise(() => {}))
-    vi.mocked(api.createWordBook).mockImplementation(() => new Promise(() => {}))
-    renderPage('/services/general_book', 'fleet_reporter')
-    fireEvent.click(await screen.findByText('Choose classification'))
-    fireEvent.click(screen.getByText('Choose recipient'))
-    if (mode === 'editor') fireEvent.click(screen.getByText('Use editor'))
-    const submitButton = screen.getAllByRole('button', { name: mode === 'editor' ? /Preview/i : /Create.*Word/i })
+  it('revises a fleet reporter\'s General Book without manager controls, keeping its recipient', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.11/1'])
+    vi.mocked(api.getBook).mockResolvedValue({
+      id: 5, ref_number: '1/11/1/GSSG/5', classification_code: '11/1', approval_state: 'returned',
+      versions: [{ id: 9, version_no: 1, template_id: 'General Book' }],
+    } as never)
+    vi.mocked(api.getBookVersionFields).mockResolvedValue({ fields: { subject: 'Maintenance', recipient_id: 42 } } as never)
+    vi.mocked(api.generateDocument)
+      .mockResolvedValueOnce({ job_id: 'preview' } as never)
+      // Keep the save pending: this test asserts the outgoing request, not the saved record.
+      .mockImplementationOnce(() => new Promise(() => {}))
+    renderPage('/services/general_book?revise=5', 'fleet_reporter')
+    expect(await screen.findByText('recipient_id')).toBeVisible()
+    for (const picker of ['manager_id', 'hand_sign_manager']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
+
+    // The real form has no body-mode toggle: the revision previews, then saves.
+    const previewButton = screen.getAllByRole('button', { name: /Preview/i })
       .find((button) => button.getAttribute('type') === 'submit')
-    expect(submitButton).toBeDefined()
-    fireEvent.click(submitButton!)
-    await vi.waitFor(() => {
-      const mutation = mode === 'editor' ? api.generateDocument : api.createWordBook
-      expect(mutation).toHaveBeenCalled()
-    })
-    if (mode === 'editor') {
-      const payload = vi.mocked(api.generateDocument).mock.calls[0][0]
-      expect(payload.embed_signature).not.toHaveProperty('manager')
-      expect(payload.fields).toMatchObject({ recipient_id: 42, cc: ['Operations'] })
-    } else {
-      expect(api.createWordBook).toHaveBeenCalledWith(expect.objectContaining({ recipient_id: 42, cc: ['Operations'], manager_id: null }))
-    }
+    expect(previewButton).toBeDefined()
+    fireEvent.click(previewButton!)
+    await vi.waitFor(() => expect(api.generateDocument).toHaveBeenCalledTimes(1))
+    const preview = vi.mocked(api.generateDocument).mock.calls[0][0]
+    expect(preview).toMatchObject({ commit: false, revise_of_book_id: 5, classification_code: '11/1' })
+    expect(preview.embed_signature).not.toHaveProperty('manager')
+    expect(preview.fields).toMatchObject({ recipient_id: 42 })
+
+    fireEvent.click(await screen.findByRole('button', { name: /Save to Records/i }))
+    await vi.waitFor(() => expect(api.generateDocument).toHaveBeenCalledTimes(2))
+    const save = vi.mocked(api.generateDocument).mock.calls[1][0]
+    expect(save).toMatchObject({ commit: true, revise_of_book_id: 5, classification_code: '11/1' })
+    expect(api.createWordBook).not.toHaveBeenCalled()
   })
 })

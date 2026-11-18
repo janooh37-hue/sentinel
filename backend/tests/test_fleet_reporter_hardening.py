@@ -9,7 +9,14 @@ from httpx import Response
 from sqlalchemy import select
 
 from app.api.errors import AppError
-from app.db.models import Book, BookFolder, BookFolderItem, Document, UserPermission
+from app.db.models import (
+    Book,
+    BookEditSession,
+    BookFolder,
+    BookFolderItem,
+    Document,
+    UserPermission,
+)
 from app.services import book_service, document_service, perm_service, vehicle_letter_service
 from tests.fleet_support import (
     FleetEnv,
@@ -178,6 +185,63 @@ def test_denied_record_type_hides_the_paper_on_list_open_and_documents(
         )
     )
     assert document_id not in readable_documents
+
+
+def _deny(env: FleetEnv, capability: str) -> None:
+    env.db.add(UserPermission(user_id=env.reporter.id, capability=capability, effect="deny"))
+    env.db.commit()
+    perm_service._invalidate_caps_cache(env.db, env.reporter.id)
+
+
+def test_denied_record_type_also_closes_the_authors_own_returned_paper(
+    fleet_env: FleetEnv,
+) -> None:
+    env = fleet_env
+    book = general_book(env, env.reporter)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+    version_id = current_version_id(book)
+    client = env.client(env.reporter)
+    fields_path = f"/api/v1/books/{book.id}/versions/{version_id}/fields"
+    assert client.get(fields_path).status_code == 200
+
+    _deny(env, "books.category.11/1")
+
+    assert client.get(f"/api/v1/books/{book.id}").status_code == 404
+    assert client.get(fields_path).status_code == 404
+
+
+def test_own_general_book_does_not_open_in_word(fleet_env: FleetEnv) -> None:
+    # A Word round-trip would drop the fields approval re-renders the signer from.
+    env = fleet_env
+    book = general_book(env, env.reporter)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+
+    response = env.client(env.reporter).post(f"/api/v1/books/{book.id}/word-sessions")
+
+    _assert_error(response, 403, "SCOPED_ROLE_NOT_OWNER")
+    assert env.db.query(BookEditSession).filter_by(book_id=book.id).count() == 0
+
+
+def test_denied_books_view_closes_direct_reads_and_documents(fleet_env: FleetEnv) -> None:
+    env = fleet_env
+    letter = fines_letter(env, env.reporter)
+    document_id = letter.versions[-1].document_id
+    assert document_id is not None
+    client = env.client(env.reporter)
+    assert client.get(f"/api/v1/books/{letter.id}").status_code == 200
+
+    _deny(env, "books.view")
+
+    _assert_error(client.get(f"/api/v1/books/{letter.id}"), 403, "FORBIDDEN")
+    _assert_error(client.get(f"/api/v1/documents/{document_id}/download"), 403, "FORBIDDEN")
+    readable = env.db.scalars(
+        select(Book.id).where(book_service.full_read_access_clause(env.db, env.reporter))
+    ).all()
+    assert letter.id not in readable
 
 
 # 5. An existing accident letter is returned only to a reader ---------------------

@@ -5173,6 +5173,7 @@
     },
     "fleet": {
       "lineManagerRequired": "اطلب من المسؤول تعيين مديرك المباشر.",
+      "serviceForbidden": "تكتب حسابات النقليات الكتب العامة من صفحات المركبات فقط.",
       "lineManagerNotApplicable": "لا يُعيَّن المدير المباشر إلا لحسابات موظفي النقليات.",
       "lineManagerNotEligible": "اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.",
       "branchApproverNotEligible": "اختر معتمِدًا نشطًا غير كاتب المعاملة والمدير المباشر.",
@@ -5543,8 +5544,6 @@
     },
     "nsCategory": "سجل",
     "fleetReporter": {
-      "generalBookTitle": "كتاب عام",
-      "generalBookDescription": "أنشئ معاملة مصنّفة وأرسلها إلى مديرك المباشر.",
       "reportDescription": "أنشئ تقريرًا في Word وأرسله إلى مديرك المباشر."
     },
     "inmateReporter": {

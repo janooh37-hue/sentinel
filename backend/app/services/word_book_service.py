@@ -601,6 +601,7 @@ def create_report_word_book(
     confidentiality: BookConfidentiality = "general",
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     record_access_user: User | None = None,
+    recipient_name: str | None = None,
 ) -> WordSessionInfo:
     """Create a no-ref Report on the report paper with an empty, Word-editable body.
 
@@ -657,7 +658,9 @@ def create_report_word_book(
         "subject": subject,
         "body": GENERAL_BOOK_BODY_SENTINEL,
         "body_html": "",  # empty → {{ body }} anchor clears; body written in Word
-        "recipient_name": _resolve_recipient(db, recipient_id),
+        "recipient_name": (
+            recipient_name if recipient_name is not None else _resolve_recipient(db, recipient_id)
+        ),
         "cc": "",
         "submitter_g": user.employee_id or "",  # footer = signed-in account
     }

@@ -350,13 +350,13 @@ def delete_word_template(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-def _create_fleet_word_book(
+def _create_fleet_word_report(
     db: Session, user: User, payload: WordBookCreate
 ) -> word_book_service.WordSessionInfo:
-    """A fleet reporter's own Word General Book (7/1 or 11/1) or author-signed Report.
+    """A fleet reporter's author-signed Report, addressed to its line manager.
 
-    The role holds no ``books.create``; the classification's category
-    capability decides which General Books it may open.
+    The role starts no General Book of its own: the vehicle services (the
+    maintenance request) write those for it.
     """
     if user.employee_id is None:
         raise AppError(
@@ -371,26 +371,10 @@ def _create_fleet_word_book(
             http_status=403,
         )
     if payload.signer_employee_id is None:
-        _require_record_type_access(
-            db,
-            user,
-            category_id="GS",
-            service_id="General Book",
-            classification_code=payload.classification_code,
-        )
-        return word_book_service.create_word_book(
-            db,
-            user=user,
-            classification_code=payload.classification_code,
-            recipient_id=payload.recipient_id,
-            subject=payload.subject,
-            cc=payload.cc,
-            manager_id=None,
-            template_name=payload.template_name,
-            table_rows=payload.table_rows,
-            confidentiality=payload.confidentiality,
-            attachments=payload.attachments,
-            record_access_user=user,
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role writes General Books only through the vehicle services.",
+            http_status=403,
         )
     if payload.signer_employee_id != user.employee_id:
         raise AppError(
@@ -407,7 +391,7 @@ def _create_fleet_word_book(
     ):
         raise AppError(
             "SCOPED_ROLE_INPUT_FORBIDDEN",
-            "This role can create only an unaddressed Report.",
+            "This role's Report goes to its line manager, with no other options.",
             http_status=403,
         )
     from app.services import report_service
@@ -423,6 +407,7 @@ def _create_fleet_word_book(
         user=user,
         signer_employee_id=user.employee_id,
         recipient_id=None,
+        recipient_name=book_service.line_manager_addressee(db, user),
         subject=payload.subject,
         date=payload.date,
         sign=True,
@@ -489,7 +474,7 @@ def create_word_session(
             record_access_user=user,
         )
     elif user.role == FLEET_REPORTER_ROLE:
-        info = _create_fleet_word_book(db, user, payload)
+        info = _create_fleet_word_report(db, user, payload)
     else:
         _require_word_capability(db, user, "books.create")
         _require_word_capability(db, user, "books.view")

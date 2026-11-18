@@ -89,12 +89,14 @@ def list_employees(
     present: bool = False,
     working: bool = False,
     on_leave: bool = False,
+    identity_only: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
-    ``q`` also matches former IDs and ``uae_id_no``/``passport_no``. When the exact/ILIKE pass
+    ``q`` also matches former IDs and ``uae_id_no``/``passport_no``; ``identity_only``
+    keeps it to the G number, former IDs and names. When the exact/ILIKE pass
     returns zero rows and ``q`` isn't pure digits, falls back to rapidfuzz
     name matching (``token_sort_ratio`` >= ``extraction_service._MATCH_THRESHOLD``),
     ordered by score then name (or by ``end_date`` when ``pending=True``, to
@@ -118,12 +120,18 @@ def list_employees(
 
     if q:
         needle = f"%{stripped}%"
-        clause = or_(
+        identity_clauses = [
             Employee.id.ilike(needle),
             Employee.name_en.ilike(needle),
             Employee.name_ar.ilike(needle),
-            Employee.uae_id_no.ilike(needle),
-            Employee.passport_no.ilike(needle),
+        ]
+        if not identity_only:
+            identity_clauses += [
+                Employee.uae_id_no.ilike(needle),
+                Employee.passport_no.ilike(needle),
+            ]
+        clause = or_(
+            *identity_clauses,
             select(EmployeeFormerId.id)
             .where(
                 EmployeeFormerId.employee_id == Employee.id,

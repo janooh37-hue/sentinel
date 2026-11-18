@@ -247,7 +247,9 @@ export function RecordMoreSheet({
       onSelect: () => openOverlay('forward-to-branch'),
     })
   }
-  if (nextStep.primary === 'rebuildVehicleLetter' && book.can_rebuild_vehicle_letter === true) {
+  const rebuildOffered =
+    nextStep.primary === 'rebuildVehicleLetter' || nextStep.secondary.includes('rebuildVehicleLetter')
+  if (rebuildOffered && book.can_rebuild_vehicle_letter === true) {
     editingRows.push({
       id: 'rebuildVehicleLetter',
       icon: iconOf(RefreshCw),

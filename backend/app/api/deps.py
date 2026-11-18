@@ -26,9 +26,11 @@ from app.services import auth_service, perm_service
 
 COOKIE_NAME = "gssg_session"
 
-#: Capabilities each matched route requires through ``require_capability``
-#: dependencies (router- and route-level, nested), memoized per route object.
-_ROUTE_CAPS: dict[int, frozenset[str]] = {}
+#: Attribute memoizing, on each matched route, the capabilities it requires through
+#: ``require_capability`` dependencies (router- and route-level, nested). Stored on
+#: the route, not keyed by ``id(route)``: an id outlives its route and is reused by
+#: a later app's route (every test builds an app), which then read another's caps.
+_ROUTE_CAPS_ATTR = "_gssg_required_capabilities"
 
 
 def _dependant_caps(dependant: Dependant) -> set[str]:
@@ -43,11 +45,11 @@ def _dependant_caps(dependant: Dependant) -> set[str]:
 
 def route_capabilities(route: Any) -> frozenset[str]:
     """The ``require_capability`` ids a matched route depends on."""
-    cached = _ROUTE_CAPS.get(id(route))
+    cached: frozenset[str] | None = getattr(route, _ROUTE_CAPS_ATTR, None)
     if cached is None:
         dependant = getattr(route, "dependant", None)
         cached = frozenset(_dependant_caps(dependant)) if dependant is not None else frozenset()
-        _ROUTE_CAPS[id(route)] = cached
+        setattr(route, _ROUTE_CAPS_ATTR, cached)
     return cached
 
 

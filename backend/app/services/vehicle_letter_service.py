@@ -82,15 +82,13 @@ def _existing_accident_letter(db: Session, book_id: int, user: User) -> LetterRe
             http_status=409,
         ) from exc
 
-    primary = db.scalar(
-        select(Document)
-        .where(
-            Document.ref_number == book.ref_number,
-            Document.template_id == "Vehicle Accident Report",
-            Document.role == "primary",
-        )
-        .order_by(Document.id)
-        .limit(1)
+    # The current revision's paper: a rebuilt or revised letter keeps its earlier
+    # documents under the same reference as history.
+    current = book.versions[-1] if book.versions else None
+    primary = (
+        db.get(Document, current.document_id)
+        if current is not None and current.document_id is not None
+        else None
     )
     if primary is None:
         raise AppError(
@@ -415,6 +413,10 @@ def rebuild_vehicle_letter(db: Session, book_id: int, *, version_id: int, user: 
     for key in _PAPER_DATE_KEYS:
         if key in stored and key in fields:
             fields[key] = stored[key]
+    if template_id != "Vehicle Mileage Log":
+        # The fines and accident papers print their Gregorian issue date as
+        # ``today``, which the renderer would otherwise fill with the rebuild day.
+        fields["today"] = book.created_at.strftime("%d/%m/%Y")
     document_service.authorize_interactive_generation(
         db, user, template_id, classification_code=classification_code
     )

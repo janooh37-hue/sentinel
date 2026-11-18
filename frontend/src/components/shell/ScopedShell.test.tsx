@@ -10,7 +10,7 @@ import { NavDrawer } from './NavDrawer'
 import { TopNav } from './TopNav'
 
 const session = vi.hoisted(() => ({ user: { role: 'operator', scoped_role: 'fleet_reporter' as 'fleet_reporter' | 'inmate_reporter' } }))
-const capabilities = vi.hoisted(() => ({ vehicles: true }))
+const capabilities = vi.hoisted(() => ({ vehicles: true, denied: new Set<string>() }))
 vi.mock('@/lib/authContext', async () => {
   // The mock factory is hoisted before static imports, so React must load inside it.
   const { createContext } = await import('react')
@@ -19,7 +19,7 @@ vi.mock('@/lib/authContext', async () => {
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     isLoading: false,
-    has: (cap: string) => cap !== 'vehicles.view' || capabilities.vehicles,
+    has: (cap: string) => (cap !== 'vehicles.view' || capabilities.vehicles) && !capabilities.denied.has(cap),
   }),
 }))
 vi.mock('@/lib/api', () => ({ api: { getSettings: vi.fn(), updateSettings: vi.fn() } }))
@@ -33,6 +33,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   session.user.scoped_role = 'fleet_reporter'
   capabilities.vehicles = true
+  capabilities.denied = new Set()
 })
 afterEach(async () => {
   cleanup()
@@ -72,6 +73,15 @@ describe.each(['en', 'ar'])('scoped navigation (%s)', (language) => {
 
     expect(screen.queryByRole('link', { name: i18n.t('nav.vehicles') })).not.toBeInTheDocument()
     expect(within(screen.getByRole('navigation')).getAllByRole('link').map((link) => link.getAttribute('href')).sort()).toEqual(['/', '/books', '/services'])
+  })
+
+  it.each(Object.keys(surfaces) as (keyof typeof surfaces)[])('hides Records and Services denied by override in the %s', async (surface) => {
+    await i18n.changeLanguage(language)
+    capabilities.denied = new Set(['books.view', 'documents.generate'])
+    const client = new QueryClient()
+    render(<QueryClientProvider client={client}><MemoryRouter>{surfaces[surface]}</MemoryRouter></QueryClientProvider>)
+
+    expect(within(screen.getByRole('navigation')).getAllByRole('link').map((link) => link.getAttribute('href')).sort()).toEqual(['/', '/vehicles'])
   })
 
   it.each(Object.keys(surfaces) as (keyof typeof surfaces)[])('preserves inmate-only labels and destinations in the %s', async (surface) => {

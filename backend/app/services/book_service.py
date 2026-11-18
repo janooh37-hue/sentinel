@@ -690,6 +690,9 @@ def full_read_access_clause(db: Session, user: User) -> ColumnElement[bool]:
     read gate does, so a direct send still opens a general Record without it.
     Deleted Records and revision-scoped access are the caller's to add.
     """
+    if is_scoped_role(user) and not perm_service.has_capability(db, user, "books.view"):
+        # A scoped role is never a send recipient: without books.view it reads nothing.
+        return false()
     if user.role == FLEET_REPORTER_ROLE:
         # The record-type denials AND the fleet matrix (``_record_type_clause``),
         # as the Python mirror ``_scoped_book_visible`` applies them.
@@ -905,7 +908,15 @@ def resolve_book_read_access(
     if is_scoped_role(user):
         # Scoped role: never full books.view semantics — current version
         # only, gated by the role's state/ownership matrix, never a
-        # historical revision even when the current paper is shared.
+        # historical revision even when the current paper is shared. It is
+        # never a send recipient, so a denied books.view hides every record.
+        if not perm_service.has_capability(db, user, "books.view"):
+            raise AppError(
+                "FORBIDDEN",
+                "Missing capability: books.view",
+                http_status=403,
+                details={"capability": "books.view"},
+            )
         if not _scoped_book_visible(db, book, user) or not _confidentiality_allows(
             db, user, book, existing=True
         ):
@@ -1234,11 +1245,14 @@ def require_fleet_write_access(
             not (version.fields or {}).get("signed") or version.status != "approved"
         ):
             raise AppError("SIGNATURE_REQUIRED", "A signed Report is required.", http_status=409)
+    # Its own paper is still subject to its record-type, books.view and level
+    # gates: what an admin hid from it is not writable either.
+    resolve_book_read_access(db, user, book)
     return version
 
 
 def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
-    """Authorize Word actions on a fleet reporter's own General Book or Report."""
+    """Authorize Word actions on a fleet reporter's own Report."""
     row = get_book(db, book_id)
     if user.employee_id is None:
         raise _scoped_error(
@@ -1246,11 +1260,12 @@ def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
         )
     if row.voided_at is not None or row.approval_state not in _FLEET_WRITABLE_STATES:
         raise _scoped_error("STATE_LOCKED", "This record can no longer be edited.", 409)
-    is_word_paper = row.category_id == "GS" and (
-        row.ref_number.startswith("REPORT-") or row.classification_code is not None
-    )
-    if not is_word_paper:
-        raise _scoped_error("NOT_OWNER", "This is not a General Book or Report.", 403)
+    # Its General Books are rendered from fields (the vehicle services), and
+    # approval re-renders their closing block for the chain's final signer. A
+    # Word round-trip would drop those fields and keep the default manager
+    # printed under the approver's signature, so only its Report opens in Word.
+    if row.category_id != "GS" or not row.ref_number.startswith("REPORT-"):
+        raise _scoped_error("NOT_OWNER", "Only a Report is edited in Word.", 403)
     from app.services import included_papers_service
 
     creator_id = (
@@ -1263,6 +1278,8 @@ def require_fleet_word_access(db: Session, user: User, book_id: int) -> Book:
         raise _scoped_error("NOT_OWNER", "You are not the author of this record.", 403)
     if row.versions:
         require_fleet_write_access(db, user, row, action="revise")
+    else:
+        resolve_book_read_access(db, user, row)
     return row
 
 
@@ -2558,6 +2575,17 @@ def resolve_line_manager(db: Session, author: User) -> User:
             http_status=409,
         )
     return manager
+
+
+def line_manager_addressee(db: Session, author: User) -> str:
+    """The name printed after «السيد» on a line-manager author's Report, as the
+    leave report names its approver: the line manager's one active Manager row's
+    title, Arabic name or English name, else the account."""
+    line_manager = resolve_line_manager(db, author)
+    manager_id = manager_service.sole_active_manager_id(db, line_manager.id)
+    manager = db.get(Manager, manager_id) if manager_id is not None else None
+    named = (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
+    return named or line_manager.display_name or line_manager.email
 
 
 def _is_line_manager_chain(version: BookVersion) -> bool:

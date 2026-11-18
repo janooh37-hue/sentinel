@@ -40,7 +40,7 @@ from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.roles import ADMIN_ROLE
-from app.core.scoped_roles import is_scoped_role
+from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -365,12 +365,39 @@ def generate_document(
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )
+    if routes_to_line_manager(user) and (
+        payload.template_id != "General Book" or payload.revise_of_book_id is None
+    ):
+        # Its only generic generation is revising its own returned General Book.
+        # The vehicle services write its General Books and vehicle letters, and
+        # its Report is the Word Report (author-signed, addressed to its line
+        # manager); none of them starts here.
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role revises only its own General Books here.",
+            http_status=403,
+        )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
-        book_service.require_revise_access(db, user, revise_book)
+        previous_version = book_service.require_revise_access(db, user, revise_book)
+        if routes_to_line_manager(user) and (
+            previous_version is None or previous_version.template_id != "General Book"
+        ):
+            # Its vehicle letters are rebuilt and its Report reopens in Word;
+            # free General Book content never replaces either.
+            raise AppError(
+                "SCOPED_ROLE_SERVICE_FORBIDDEN",
+                "This role revises only its own General Books here.",
+                http_status=403,
+            )
+        if not payload.commit and routes_to_line_manager(user):
+            # Its revision's preview: the book only authorizes the render. The
+            # preview itself revises, files and allocates nothing.
+            payload = payload.model_copy(update={"revise_of_book_id": None})
+            revise_book = None
     else:
         book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
     # Refuse a duplicate of a live record's leave now, with its reference number,

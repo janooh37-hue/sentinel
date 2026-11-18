@@ -314,6 +314,8 @@ export type VehicleUpdate = components['schemas']['VehicleUpdate']
 export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
 export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
 export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
+export type VehicleEmployeeItem = components['schemas']['VehicleEmployeeItem']
+export type VehicleEmployeeSearch = components['schemas']['VehicleEmployeeSearch']
 export type VehicleFileRead = components['schemas']['VehicleFileRead']
 export type VehicleCertificateUpdate = components['schemas']['VehicleCertificateUpdate']
 export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
@@ -1156,6 +1158,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   SCOPED_ROLE_NOT_OWNER: 'errors.fleet.notOwner',
   SCOPED_ROLE_STATE_LOCKED: 'errors.fleet.stateLocked',
   LINE_MANAGER_REQUIRED: 'errors.fleet.lineManagerRequired',
+  SCOPED_ROLE_SERVICE_FORBIDDEN: 'errors.fleet.serviceForbidden',
   LINE_MANAGER_NOT_APPLICABLE: 'errors.fleet.lineManagerNotApplicable',
   LINE_MANAGER_NOT_ELIGIBLE: 'errors.fleet.lineManagerNotEligible',
   BRANCH_APPROVER_NOT_ELIGIBLE: 'errors.fleet.branchApproverNotEligible',
@@ -1710,6 +1713,11 @@ export const api = {
       maintenance_contractor_id: maintenanceContractorId,
     }),
   listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
+  /** GET /vehicles/employees — G number and names only, for the vehicle dialogs. */
+  searchVehicleEmployees: (params: { q?: string; limit?: number } = {}) =>
+    request<VehicleEmployeeSearch>('GET', `/vehicles/employees${qs({ ...params })}`),
+  getVehicleEmployee: (id: string) =>
+    request<VehicleEmployeeItem>('GET', `/vehicles/employees/${encodeURIComponent(id)}`),
   createVehicleSite: (body: VehicleSiteCreate) =>
     request<VehicleSiteRead>('POST', '/vehicles/sites', body),
   updateVehicleSite: (siteId: number, body: VehicleSiteUpdate) =>

@@ -11,13 +11,12 @@ import { toast } from '@/lib/toast'
 
 import en from '@/locales/en.json'
 import type * as ApiModule from '@/lib/api'
-import type { JobStatusResponse, SessionUser } from '@/lib/api'
+import type { JobStatusResponse } from '@/lib/api'
 import { api, ApiError } from '@/lib/api'
 import { ApplicationPage } from './ApplicationPage'
 import { messageTemplatesApi } from '@/lib/messageTemplates'
 import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import { clearDraft } from '@/lib/formDrafts'
-import { AuthContext, type AuthContextValue } from '@/lib/authContext'
 
 const jobStatusState = vi.hoisted(() => ({
   handlers: new Map<string, (job: JobStatusResponse) => void>(),
@@ -120,20 +119,6 @@ vi.mock('@/components/books/SavedRecordActions', () => ({
     <div data-testid="saved-actions">saved:{bookId}</div>
   ),
 }))
-vi.mock('@/pages/books/WordHandoffDialog', () => ({
-  WordHandoffDialog: ({ session, open, onClose, onFinished }: {
-    session: { book_id: number } | null
-    open: boolean
-    onClose: () => void
-    onFinished: (book: { id: number }) => void
-  }) => open && session ? (
-    <div role="dialog" aria-label="Inline Word handoff">
-      <span>Reserved book {session.book_id}</span>
-      <button type="button" onClick={onClose}>Close handoff</button>
-      <button type="button" onClick={() => onFinished({ id: session.book_id })}>Finish handoff</button>
-    </div>
-  ) : null,
-}))
 
 const mockedApi = vi.mocked(api)
 
@@ -155,28 +140,16 @@ function completedSavedJob(jobId: string): JobStatusResponse {
   } as JobStatusResponse
 }
 
-function renderPage(route = '/services/demo?employee_id=G1', scoped = false) {
+function renderPage(route = '/services/demo?employee_id=G1') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const fleetUser: SessionUser = {
-    id: 7, email: 'fleet@example.test', employee_id: 'G7', name_en: 'Fleet reporter', name_ar: null,
-    position: null, department: null, photo_url: null, role: 'fleet_reporter', scoped_role: 'fleet_reporter',
-    status: 'active', is_admin: false, is_manager: false, has_signature: true, idle_lock_seconds: 300, lock_layout: 'default',
-  }
-  const auth: AuthContextValue = {
-    user: fleetUser, status: 'authed', login: async () => fleetUser, logout: async () => undefined,
-    refetch: async () => undefined, setUser: () => undefined,
-  }
   return render(
     <QueryClientProvider client={queryClient}>
-      <AuthContext.Provider value={scoped ? auth : null}>
       <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/services/:slug?" element={<ApplicationPage />} />
           <Route path="/books/:id/word" element={<div>Word session</div>} />
-          <Route path="/books/:id" element={<div>Finished record</div>} />
         </Routes>
       </MemoryRouter>
-      </AuthContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -292,31 +265,6 @@ describe('ApplicationPage generated handoff reset', () => {
     })))
     expect(clearDraft).toHaveBeenCalledWith(templateId)
     expect(await screen.findByText('Word session')).toBeVisible()
-  })
-
-  it.each(['close', 'finish'])('opens scoped Word General Books inline and handles %s without the books.edit route', async (action) => {
-    mockedApi.listTemplates.mockResolvedValue({
-      items: [{ id: 'General Book', name_en: 'General Book', name_ar: 'كتاب عام', category: 'admin' }],
-    } as never)
-    mockedApi.getTemplateFields.mockResolvedValue({
-      meta: {}, fields: [{ id: 'body', type: 'arabic_rich_full' }], attachment_slots: [],
-    } as never)
-    mockedApi.createWordBook.mockResolvedValue({ book_id: 99, token: 'fleet-word-session' } as never)
-    const user = userEvent.setup()
-    renderPage('/services/general_book', true)
-    await user.type(await screen.findByRole('textbox', { name: 'Subject' }), 'Fleet General Book')
-    await user.click(screen.getByRole('button', { name: 'Set classification' }))
-    await user.click(screen.getByRole('button', { name: en.books.word.createAndOpen }))
-
-    expect(await screen.findByRole('dialog', { name: 'Inline Word handoff' })).toHaveTextContent('Reserved book 99')
-    expect(screen.queryByText('Word session')).not.toBeInTheDocument()
-    expect(mockedApi.createWordBook).toHaveBeenCalledWith(expect.objectContaining({
-      subject: 'Fleet General Book', manager_id: null, recipient_id: null, cc: [],
-    }))
-    await user.click(screen.getByRole('button', { name: action === 'close' ? 'Close handoff' : 'Finish handoff' }))
-    expect(screen.queryByRole('dialog', { name: 'Inline Word handoff' })).not.toBeInTheDocument()
-    if (action === 'finish') expect(await screen.findByText('Finished record')).toBeVisible()
-    else expect(screen.getByRole('textbox', { name: 'Subject' })).toBeVisible()
   })
 
   it.each(['General Book', 'Report'])('blocks Word creation of %s when a required attachment is absent', async (templateId) => {
