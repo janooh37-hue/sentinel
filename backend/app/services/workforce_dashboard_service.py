@@ -304,14 +304,23 @@ def _case_metrics(
 def _current_cases(
     db: Session, *, scope: Any, as_of_naive: datetime, operational_date: date
 ) -> list[AttendanceCase]:
-    all_today = list(
+    # Keep today's fallback candidates, plus yesterday's still-running overnight cases.
+    candidates = list(
         db.scalars(
-            select(AttendanceCase).where(AttendanceCase.operational_date == operational_date)
+            select(AttendanceCase).where(
+                AttendanceCase.operational_date >= operational_date - timedelta(days=1),
+                AttendanceCase.operational_date <= operational_date,
+                or_(
+                    AttendanceCase.operational_date == operational_date,
+                    (AttendanceCase.scheduled_start_at <= as_of_naive)
+                    & (AttendanceCase.scheduled_end_at > as_of_naive),
+                ),
+            )
         )
     )
     current = [
         case
-        for case in all_today
+        for case in candidates
         if case.scheduled_start_at <= as_of_naive < case.scheduled_end_at
         and _case_in_scope(case, scope)
     ]
@@ -320,10 +329,10 @@ def _current_cases(
     # honest read without pretending that the roster is currently on duty.
     if current:
         return current
-    latest_start = max((case.scheduled_start_at for case in all_today), default=None)
+    latest_start = max((case.scheduled_start_at for case in candidates), default=None)
     return [
         case
-        for case in all_today
+        for case in candidates
         if case.scheduled_start_at == latest_start and _case_in_scope(case, scope)
     ]
 
@@ -387,7 +396,13 @@ def _self_block(
         db.scalars(
             select(AttendanceCase).where(
                 AttendanceCase.employee_id == employee_id,
-                AttendanceCase.operational_date == operational_date,
+                AttendanceCase.operational_date >= operational_date - timedelta(days=1),
+                AttendanceCase.operational_date <= operational_date,
+                or_(
+                    AttendanceCase.operational_date == operational_date,
+                    (AttendanceCase.scheduled_start_at <= as_of_naive)
+                    & (AttendanceCase.scheduled_end_at > as_of_naive),
+                ),
             )
         )
     )
@@ -813,7 +828,7 @@ def get_workforce_snapshot(
             employee.id not in membership_employee_ids for employee in active_scoped
         ),
     }
-    # Unlike current_shift's fallback, on_site requires an open shift and no effective checkout.
+    # Current cases include overnight staff; fallback cases must not claim "on site now".
     on_site: set[str] = set()
     for case in cases:
         if not case.scheduled_start_at <= naive_now < case.scheduled_end_at:

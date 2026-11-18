@@ -1469,3 +1469,187 @@ def test_snapshot_on_site_does_not_count_fallback_cases_outside_shift(
     ).value
 
     assert value["aggregate"]["on_site"] == 0
+
+
+@pytest.mark.parametrize(
+    ("today_case", "automatic_checkout", "corrected_checkout", "expected"),
+    [
+        pytest.param(False, False, None, 1, id="overnight-only"),
+        pytest.param(True, False, None, 1, id="overlapping-today-case"),
+        pytest.param(False, False, True, 0, id="overnight-correction-sets-checkout"),
+        pytest.param(False, True, False, 1, id="overnight-correction-clears-checkout"),
+    ],
+)
+def test_snapshot_on_site_includes_running_previous_date_cases(
+    workforce_api_db: Session,
+    today_case: bool,
+    automatic_checkout: bool,
+    corrected_checkout: bool | None,
+    expected: int,
+) -> None:
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="on-site-overnight@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    midnight = datetime.combine(TODAY, time(), tzinfo=ZoneInfo("Asia/Dubai"))
+    now = midnight + timedelta(hours=2)
+    starts_at = (midnight - timedelta(hours=2)).astimezone(UTC).replace(tzinfo=None)
+    ends_at = (midnight + timedelta(hours=6)).astimezone(UTC).replace(tzinfo=None)
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    assert case is not None
+    case.operational_date = TODAY - timedelta(days=1)
+    case.scheduled_start_at = starts_at
+    case.scheduled_end_at = ends_at
+    checkout_at = starts_at + timedelta(hours=3)
+    for evaluation in workforce_api_db.scalars(select(AttendanceEvaluation)):
+        if evaluation.attendance_case_id == case.id:
+            evaluation.first_in_at = starts_at
+            evaluation.latest_in_at = starts_at
+            evaluation.final_out_at = checkout_at if automatic_checkout else None
+        else:
+            evaluation.presence_state = "absent"
+    if today_case:
+        overlapping = AttendanceCase(
+            employee_id=case.employee_id,
+            shift_occurrence_id=case.shift_occurrence_id,
+            employee_status_snapshot="Active",
+            shift_code_snapshot=case.shift_code_snapshot,
+            organization_snapshot_state="captured",
+            department_snapshot=case.department_snapshot,
+            scheduled_start_at=starts_at + timedelta(hours=3),
+            scheduled_end_at=ends_at,
+            operational_date=TODAY,
+        )
+        workforce_api_db.add(overlapping)
+        workforce_api_db.flush()
+        workforce_api_db.add(
+            AttendanceEvaluation(
+                attendance_case_id=overlapping.id,
+                revision=1,
+                presence_state="on_duty",
+                reason_code="PUNCH_IN_ACTIVE",
+                missing_checkout=False,
+                algorithm_version="v1",
+                input_fingerprint="on-site-overlapping-today",
+                evaluated_at=now.astimezone(UTC).replace(tzinfo=None),
+            )
+        )
+    workforce_api_db.commit()
+
+    if corrected_checkout is not None:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "on_duty",
+                "replacement_first_in_at": starts_at,
+                "replacement_latest_in_at": starts_at,
+                "replacement_final_out_at": checkout_at if corrected_checkout else None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Verified overnight checkout",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+            actor=admin,
+        )
+        workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=None,
+        include_aggregate=True,
+        now=now,
+    ).value
+
+    assert value["aggregate"]["on_site"] == expected
+
+
+@pytest.mark.parametrize("corrected", [False, True])
+@pytest.mark.parametrize("hour", [2, 6], ids=["running-overnight", "overnight-ended"])
+def test_snapshot_self_and_current_shift_prefer_running_overnight_case(
+    workforce_api_db: Session, corrected: bool, hour: int
+) -> None:
+    from app.db.models import AppSetting
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation, AttendanceSyncState
+
+    admin = _create_user(workforce_api_db, email="current-overnight@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    midnight = datetime.combine(TODAY, time(), tzinfo=ZoneInfo("Asia/Dubai"))
+    now = midnight + timedelta(hours=hour)
+    naive_now = now.astimezone(UTC).replace(tzinfo=None)
+    starts_at = (midnight - timedelta(hours=2)).astimezone(UTC).replace(tzinfo=None)
+    ends_at = starts_at + timedelta(hours=8)
+    overnight = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    later = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-B")
+    )
+    assert overnight is not None and later is not None
+    overnight.operational_date = TODAY - timedelta(days=1)
+    overnight.scheduled_start_at = starts_at
+    overnight.scheduled_end_at = ends_at
+    later.employee_id = overnight.employee_id
+    later.scheduled_start_at = starts_at + timedelta(days=1)
+    later.scheduled_end_at = ends_at + timedelta(days=1)
+    for evaluation in workforce_api_db.scalars(select(AttendanceEvaluation)):
+        if evaluation.attendance_case_id == overnight.id:
+            evaluation.first_in_at = starts_at
+            evaluation.latest_in_at = starts_at
+        else:
+            evaluation.presence_state = "scheduled"
+    workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(60)))
+    for sync in workforce_api_db.scalars(select(AttendanceSyncState)):
+        sync.fresh_through = naive_now
+        sync.last_success_at = naive_now
+    workforce_api_db.commit()
+    corrected_in = starts_at + timedelta(minutes=10)
+    corrected_out = starts_at + timedelta(hours=3)
+    if corrected:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=overnight.id,
+            snapshot={
+                "replacement_presence_state": "completed",
+                "replacement_first_in_at": corrected_in,
+                "replacement_latest_in_at": corrected_in,
+                "replacement_final_out_at": corrected_out,
+                "replacement_late_minutes": 0,
+                "replacement_early_exit_minutes": 0,
+                "replacement_missing_checkout": False,
+                "reason": "Confirmed overnight attendance times",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, overnight.id),
+            actor=admin,
+        )
+        workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=overnight.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+
+    running = hour == 2
+    selected = overnight if running else later
+    expected_presence = ("completed" if corrected else "on_duty") if running else "scheduled"
+    assert value["self"]["scheduled_start_at"] == selected.scheduled_start_at
+    assert value["self"]["scheduled_end_at"] == selected.scheduled_end_at
+    assert value["self"]["presence_state"] == expected_presence
+    assert value["self"]["first_in_at"] == (
+        (corrected_in if corrected else starts_at) if running else None
+    )
+    assert value["self"]["final_out_at"] == (corrected_out if running and corrected else None)
+    assert value["self"]["corrected"] is (running and corrected)
+    assert value["current_shift"]["starts_at"] == selected.scheduled_start_at
+    assert value["current_shift"]["ends_at"] == selected.scheduled_end_at
+    assert value["current_shift"]["scheduled"] == 1
+    assert value["current_shift"]["working"] == (1 if running else 0)
