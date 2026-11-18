@@ -227,6 +227,9 @@ class EmployeeLookupItem(ORMBase):
     position_ar: str | None = None
     duty_unit: str | None = None
     duty_post: str | None = None
+    # The duty roster groups departed (Resigned/Terminated/Transferred) staff
+    # apart from the units.
+    status: str
 
 
 class EmployeeLookupRead(EmployeeLookupItem):

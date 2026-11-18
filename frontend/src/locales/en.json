@@ -641,6 +641,12 @@
         "label": "Duty location",
         "initial_placement": "Initial placement",
         "transfer": "Transferred",
+        "service_end": "Service ended",
+        "transfer_out": "Transferred out",
+        "reinstatement": "Returned to post",
+        "toEndedService": "Ended service",
+        "toTransferred": "Transferred",
+        "returnedTo": "Returned to",
         "unassigned": "Unassigned",
         "openEmployeeActivity": "Open employee activity",
         "historyBegins": "History begins at"
@@ -6137,6 +6143,8 @@
       "unassignedCount_other": "Unassigned: {{count}}"
     },
     "unassigned": "Unassigned",
+    "endedService": "Ended service",
+    "transferred": "Transferred",
     "column": {
       "id": "No.",
       "name": "Name",
@@ -6147,7 +6155,12 @@
       "searchPlaceholder": "Search by name or number…",
       "noPost": "No post set",
       "empty": "No employees in this unit.",
-      "selectRow": "Select {{name}}"
+      "selectRow": "Select {{name}}",
+      "departedSummary_one": "1 employee",
+      "departedSummary_other": "{{count}} employees",
+      "noMatch": "No matching employees.",
+      "endedServiceNote": "Resigned and terminated staff. Not counted in the units and cannot be posted.",
+      "transferredNote": "Serving at another site. Not counted in the units and cannot be posted; on return they go back to their last post."
     },
     "field": {
       "unit": "Unit",
@@ -6194,7 +6207,8 @@
       "generating": "Generating the transfer letter…",
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
-      "movedNoBook_other": "Moved {{count}} employees"
+      "movedNoBook_other": "Moved {{count}} employees",
+      "departedError": "A resigned, terminated or transferred employee cannot be given a duty location."
     },
     "completion": {
       "detail_one": "1 employee transferred",
@@ -7468,6 +7482,8 @@
       "deduction_one": "Deduction: {{count}} day",
       "deduction_other": "Deduction: {{count}} days",
       "fromTo": "{{from}} to {{to}}",
+      "returnedTo": "Returned to {{place}}",
+      "leftFrom": "Left {{place}}",
       "statusChange": "Status change",
       "statusScheduled": "Scheduled status change",
       "statusCancelled": "Scheduled change cancelled",

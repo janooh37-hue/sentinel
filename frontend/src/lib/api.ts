@@ -1176,6 +1176,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   EMPLOYEE_ID_TAKEN: 'employees.idChange.takenError',
   EMPLOYEE_ID_REASON_INVALID: 'employees.idChange.reasonInvalid',
   EMPLOYEE_ID_VAULT_CONFLICT: 'employees.idChange.vaultConflict',
+  DUTY_EMPLOYEE_DEPARTED: 'dutyLocations.transfer.departedError',
 }
 
 /** Localized user-facing error text. A module's own `codeKey` mapping wins

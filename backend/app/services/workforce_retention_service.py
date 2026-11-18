@@ -6,11 +6,12 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditLog
+from app.db.models import AuditLog, Employee
 from app.db.workforce_models import (
+    DUTY_DEPARTURE_EVENT_TYPES,
     AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
@@ -20,6 +21,7 @@ from app.db.workforce_models import (
     AttendancePunchAssignment,
     DutyAssignmentEvent,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.schemas.workforce import WorkforceConfiguration
 
 DEFAULT_BATCH_SIZE = 100
@@ -70,7 +72,9 @@ def _purge_expired_case_units(db: Session, *, cutoff: datetime, batch_size: int)
     # therefore go first.  Evaluation relationships delete source rows before
     # their parent; deleting those rows manually would double-schedule them.
     assignments = db.scalars(
-        select(AttendancePunchAssignment).where(AttendancePunchAssignment.attendance_case_id.in_(case_ids))
+        select(AttendancePunchAssignment).where(
+            AttendancePunchAssignment.attendance_case_id.in_(case_ids)
+        )
     ).all()
     adjustments = db.scalars(
         select(AttendanceAdjustment).where(AttendanceAdjustment.attendance_case_id.in_(case_ids))
@@ -141,9 +145,23 @@ def _purge_unmapped_provider_people(db: Session, *, cutoff: datetime, batch_size
 
 
 def _purge_unreferenced_duty_events(db: Session, *, cutoff: datetime, batch_size: int) -> int:
+    # A departed employee's latest departure holds the only copy of the post a
+    # return restores (the employee row was cleared), so it outlives retention.
+    restorable_departures = (
+        select(func.max(DutyAssignmentEvent.id))
+        .join(Employee, Employee.id == DutyAssignmentEvent.employee_id)
+        .where(
+            DutyAssignmentEvent.event_type.in_(DUTY_DEPARTURE_EVENT_TYPES),
+            Employee.status.not_in(WORKING_STATUSES),
+        )
+        .group_by(DutyAssignmentEvent.employee_id)
+    )
     candidates = db.scalars(
         select(DutyAssignmentEvent)
-        .where(DutyAssignmentEvent.effective_at < cutoff)
+        .where(
+            DutyAssignmentEvent.effective_at < cutoff,
+            DutyAssignmentEvent.id.not_in(restorable_departures),
+        )
         .order_by(DutyAssignmentEvent.effective_at, DutyAssignmentEvent.id)
         .limit(batch_size)
     ).all()
