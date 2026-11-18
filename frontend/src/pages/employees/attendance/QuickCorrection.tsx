@@ -419,7 +419,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                           </div>
                         </div>
                         <p id="quick-correction-time-hint" className="text-xs text-muted-foreground">{t('attendance.quickCorrection.timeHint')}</p>
-                        {overnight && <p id="quick-correction-date-hint" className="text-xs text-muted-foreground">{t('attendance.quickCorrection.overnightHint')}</p>}
+                        {showDates && <p id="quick-correction-date-hint" className="text-xs text-muted-foreground">{t(overnight ? 'attendance.quickCorrection.overnightHint' : 'attendance.quickCorrection.datesHint')}</p>}
                         {validation !== null && validation !== 'reasonRequired' && <p role="alert" className="text-sm text-destructive-text">{t(`attendance.quickCorrection.errors.${validation}`)}</p>}
                       </>}
                       {draft.action === 'leave' && <div className="grid gap-1.5">

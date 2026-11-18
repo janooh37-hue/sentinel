@@ -210,7 +210,7 @@ describe('WorkforcePulseWidget', () => {
 
   it.each([
     ['en', 'In', 'Out'],
-    ['ar', 'الدخول', 'الخروج'],
+    ['ar', 'دخول', 'خروج'],
   ])('uses the corrected arrival and cleared Out from the self snapshot in %s', async (language, inLabel, outLabel) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
