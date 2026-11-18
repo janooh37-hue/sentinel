@@ -360,9 +360,9 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                             </label>
                             {overnight && <label htmlFor="quick-correction-in-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.inDate')}
-                              <select id="quick-correction-in-date" dir="ltr" required
+                              <select id="quick-correction-in-date" required
                                 value={draft.inDateConfirmed ? draft.inDate : ''}
-                                aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'isolate-bidi tabular-nums')}
+                                aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, inDate: event.target.value, inDateConfirmed: event.target.value !== '' })}>
                                 <option value="">{t('attendance.quickCorrection.chooseDate')}</option>
                                 {dateChoices.map((date) => <option key={date} value={date}>{date}</option>)}
@@ -379,9 +379,9 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                             </label>
                             {overnight && <label htmlFor="quick-correction-out-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.outDate')}
-                              <select id="quick-correction-out-date" dir="ltr" required={draft.outTime !== ''}
+                              <select id="quick-correction-out-date" required={draft.outTime !== ''}
                                 value={draft.outDateConfirmed ? draft.outDate : ''}
-                                aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'isolate-bidi tabular-nums')}
+                                aria-describedby="quick-correction-date-hint" className={cn(CONTROL, 'tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, outDate: event.target.value, outDateConfirmed: event.target.value !== '' })}>
                                 <option value="">{t('attendance.quickCorrection.chooseDate')}</option>
                                 {dateChoices.map((date) => <option key={date} value={date}>{date}</option>)}

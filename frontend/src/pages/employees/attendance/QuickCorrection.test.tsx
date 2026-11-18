@@ -208,8 +208,6 @@ describe('QuickCorrection', () => {
     const outDate = screen.getByLabelText(language === 'en' ? 'Out date' : 'تاريخ الخروج')
     expect(inDate).toHaveValue('2026-11-18')
     expect(outDate).toHaveValue('2026-11-18')
-    expect(inDate).toHaveAttribute('dir', 'ltr')
-    expect(outDate).toHaveAttribute('dir', 'ltr')
     await enterReason(user)
     await user.click(screen.getByRole('button', { name: i18n.t('attendance.quickCorrection.save') }))
     await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', expect.objectContaining({

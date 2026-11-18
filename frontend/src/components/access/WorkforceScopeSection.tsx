@@ -143,21 +143,21 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
         {t('access.permissions.scope.selfHint')}
       </p>
       {conflict ? (
-        <div role="alert" className="mt-3 space-y-2 text-sm text-destructive-text">
-          <p>{t('access.permissions.scope.conflict')}</p>
+        <div className="mt-3 space-y-2 text-sm text-destructive-text">
+          <p role="alert">{t('access.permissions.scope.conflict')}</p>
           {scopesQuery.isFetching ? (
-            <p>{t('access.permissions.scope.latestLoading')}</p>
+            <p role="status">{t('access.permissions.scope.latestLoading')}</p>
           ) : scopesQuery.isError ? (
             <>
-              <p>{t('access.permissions.scope.refreshError')}</p>
+              <p role="alert">{t('access.permissions.scope.refreshError')}</p>
               <Button type="button" variant="ghost" onClick={() => void refreshConflict()} className="min-h-11">
                 {t('access.permissions.scope.retry')}
               </Button>
             </>
           ) : (
             <div className="text-foreground">
-              <p className="font-semibold">{t('access.permissions.scope.serverScope')}</p>
-              <ul aria-label={t('access.permissions.scope.serverScope')} className="mt-1 space-y-1">
+              <p id={`${headingId}-server`} className="font-semibold">{t('access.permissions.scope.serverScope')}</p>
+              <ul aria-labelledby={`${headingId}-server`} className="mt-1 space-y-1">
                 {scopesQuery.data?.data.scopes?.length ? scopesQuery.data.data.scopes.map((entry) => (
                   <li key={scopeKey(entry)} className="min-w-0 break-words">
                     <bdi dir="auto">{entry.scope_kind === 'organization' ? t('access.permissions.scope.organization') : scopeLabel(entry)}</bdi>
