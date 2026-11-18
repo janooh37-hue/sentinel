@@ -252,6 +252,7 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
     )
     db.commit()
 
+
 def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
     workforce_api_db: Session,
 ) -> None:
@@ -380,12 +381,8 @@ def test_deleted_sick_leave_is_absent_from_dashboard_leave_composition(
 ) -> None:
     from app.db.models import Leave
 
-    admin = _create_user(
-        workforce_api_db, email="deleted-leave-dashboard@test.ae", role="admin"
-    )
-    employee = _add_employee(
-        workforce_api_db, "G-DELETED-SICK", name="Deleted sick leave"
-    )
+    admin = _create_user(workforce_api_db, email="deleted-leave-dashboard@test.ae", role="admin")
+    employee = _add_employee(workforce_api_db, "G-DELETED-SICK", name="Deleted sick leave")
     workforce_api_db.add(
         Leave(
             employee_id=employee.id,
@@ -411,12 +408,8 @@ def test_approved_unknown_request_leave_does_not_enter_dashboard_annual_bucket(
 ) -> None:
     from app.db.models import Leave
 
-    admin = _create_user(
-        workforce_api_db, email="typed-leave-dashboard@test.ae", role="admin"
-    )
-    unknown = _add_employee(
-        workforce_api_db, "G-UNKNOWN-LEAVE", name="Unknown request leave"
-    )
+    admin = _create_user(workforce_api_db, email="typed-leave-dashboard@test.ae", role="admin")
+    unknown = _add_employee(workforce_api_db, "G-UNKNOWN-LEAVE", name="Unknown request leave")
     annual = _add_employee(workforce_api_db, "G-ANNUAL-LEAVE", name="Annual leave")
     workforce_api_db.add_all(
         [
@@ -563,7 +556,11 @@ def test_narrow_scope_managers_can_traverse_coverage_ancestors_without_leakage(
         )
         department = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "department", "department": "Operations"},
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": "Operations",
+            },
         )
         unit = client.get(
             "/api/v1/workforce/dashboard/coverage",
@@ -621,7 +618,11 @@ def test_coverage_normalizes_legacy_snapshot_whitespace_before_scope_intersectio
         )
         department = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "department", "department": " Operations "},
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "department",
+                "department": " Operations ",
+            },
         )
         unit = client.get(
             "/api/v1/workforce/dashboard/coverage",
@@ -707,7 +708,11 @@ def test_coverage_requires_the_matching_parent_filters(workforce_api_db: Session
     with _client_for(workforce_api_db, admin) as client:
         organization_with_parent = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "organization", "department": "Operations"},
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "organization",
+                "department": "Operations",
+            },
         )
         department_without_parent = client.get(
             "/api/v1/workforce/dashboard/coverage",
@@ -715,7 +720,11 @@ def test_coverage_requires_the_matching_parent_filters(workforce_api_db: Session
         )
         post_without_unit = client.get(
             "/api/v1/workforce/dashboard/coverage",
-            params={"operational_date": TODAY.isoformat(), "parent_kind": "duty_unit", "department": "Operations"},
+            params={
+                "operational_date": TODAY.isoformat(),
+                "parent_kind": "duty_unit",
+                "department": "Operations",
+            },
         )
 
     assert organization_with_parent.status_code == 422
@@ -774,10 +783,10 @@ def test_stale_source_and_queued_recalculation_suppress_attendance_judgments(
 
     admin = _create_user(workforce_api_db, email="health-admin@test.ae", role="admin")
     _seed_coverage_cases(workforce_api_db, admin)
-    workforce_api_db.add(
-        AppSetting(key="workforce.stale_after_minutes", value=json.dumps(30))
+    workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(30)))
+    punches = workforce_api_db.get(
+        AttendanceSyncState, {"provider": "biotime", "stream": "punches"}
     )
-    punches = workforce_api_db.get(AttendanceSyncState, {"provider": "biotime", "stream": "punches"})
     assert punches is not None
     punches.fresh_through = NOW - timedelta(hours=1)
     workforce_api_db.add(
@@ -955,3 +964,323 @@ def test_office_hours_group_is_not_reported_as_an_on_duty_crew(
         {"code": "alpha", "name_en": "Alpha", "name_ar": None}
     ]
     assert all(entry["code"] != OFFICE_CREW_CODE for entry in body["current_shift"]["crews"])
+
+
+@pytest.mark.parametrize("corrected", [False, True])
+def test_snapshot_self_exposes_punch_bounds_and_effective_final_out(
+    workforce_api_db: Session, corrected: bool
+) -> None:
+    from app.db.workforce_models import (
+        AttendanceCase,
+        AttendanceEvaluation,
+        AttendanceProviderPerson,
+        AttendancePunch,
+        AttendancePunchAssignment,
+        WorkAttendancePolicy,
+    )
+
+    admin = _create_user(workforce_api_db, email="self-punches@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    admin.employee_id = "G-COVERAGE-A"
+    cases = list(workforce_api_db.scalars(select(AttendanceCase).order_by(AttendanceCase.id)))
+    case = cases[0]
+    first_at = case.scheduled_start_at - timedelta(minutes=10)
+    last_at = NOW - timedelta(minutes=20)
+    final_out = NOW - timedelta(minutes=30)
+    corrected_out = NOW - timedelta(minutes=5)
+    person = AttendanceProviderPerson(
+        provider="biotime",
+        external_person_id="self-punches",
+        employee_id=case.employee_id,
+        mapping_state="verified",
+        verified_by_user_id=admin.id,
+        verified_at=NOW,
+        active=True,
+    )
+    workforce_api_db.add_all(
+        [
+            person,
+            WorkAttendancePolicy(
+                grace_minutes=15,
+                absence_after_minutes=60,
+                early_exit_grace_minutes=15,
+                match_before_minutes=30,
+                match_after_minutes=30,
+                effective_from=TODAY,
+                created_by_user_id=admin.id,
+                approved_by_user_id=admin.id,
+                approved_at=NOW,
+            ),
+            AttendanceEvaluation(
+                attendance_case_id=case.id,
+                revision=2,
+                presence_state="on_duty",
+                reason_code="PUNCH_IN_ACTIVE",
+                first_in_at=NOW - timedelta(hours=2),
+                latest_in_at=NOW - timedelta(hours=1),
+                final_out_at=final_out,
+                missing_checkout=False,
+                algorithm_version="v1",
+                input_fingerprint="self-latest-evaluation",
+                evaluated_at=NOW,
+            ),
+        ]
+    )
+    workforce_api_db.flush()
+    for index, occurred_at in enumerate(
+        [
+            last_at,
+            first_at,
+            first_at - timedelta(hours=2),
+            last_at + timedelta(minutes=1),
+        ]
+    ):
+        punch = AttendancePunch(
+            provider="biotime",
+            external_event_id=f"self-{index}",
+            provider_person_id=person.id,
+            occurred_at=occurred_at,
+            direction="unknown",
+            normalized_payload_hash=f"self-{index}",
+        )
+        workforce_api_db.add(punch)
+        workforce_api_db.flush()
+        if index == 3:
+            workforce_api_db.add(
+                AttendancePunchAssignment(
+                    punch_id=punch.id,
+                    attendance_case_id=cases[1].id,
+                    algorithm_version="v1",
+                )
+            )
+    workforce_api_db.commit()
+    if corrected:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "completed",
+                "replacement_first_in_at": first_at + timedelta(minutes=2),
+                "replacement_latest_in_at": first_at + timedelta(minutes=2),
+                "replacement_final_out_at": corrected_out,
+                "replacement_late_minutes": 0,
+                "replacement_early_exit_minutes": 0,
+                "replacement_missing_checkout": False,
+                "reason": "Confirmed checkout",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+            actor=admin,
+        )
+        workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    block = response.json()["self"]
+    assert datetime.fromisoformat(block["first_punch_at"]).replace(tzinfo=None) == first_at
+    assert datetime.fromisoformat(block["last_punch_at"]).replace(tzinfo=None) == last_at
+    assert datetime.fromisoformat(block["final_out_at"]).replace(tzinfo=None) == (
+        corrected_out if corrected else final_out
+    )
+    assert block["leave_kind"] is None
+
+
+def test_snapshot_self_without_case_has_explicit_nullable_punch_fields(
+    workforce_api_db: Session,
+) -> None:
+    employee = _add_employee(workforce_api_db, "G-NO-CASE", name="No case")
+    block = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=None,
+        self_employee_id=employee.id,
+        include_aggregate=False,
+        now=NOW.replace(tzinfo=UTC),
+    ).value["self"]
+
+    assert {
+        key: block[key] for key in ("first_punch_at", "last_punch_at", "final_out_at", "leave_kind")
+    } == {
+        "first_punch_at": None,
+        "last_punch_at": None,
+        "final_out_at": None,
+        "leave_kind": None,
+    }
+
+
+@pytest.mark.parametrize("has_case", [False, True])
+def test_snapshot_self_duty_leave_kind_and_other_leave_bucket(
+    workforce_api_db: Session, has_case: bool
+) -> None:
+    from app.db.models import Leave
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="self-duty@test.ae", role="admin")
+    if has_case:
+        _seed_coverage_cases(workforce_api_db, admin)
+        employee_id = "G-COVERAGE-A"
+        case = workforce_api_db.scalar(
+            select(AttendanceCase).where(AttendanceCase.employee_id == employee_id)
+        )
+        evaluation = workforce_api_db.scalar(
+            select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+        )
+        evaluation.presence_state = "excused_leave"
+        evaluation.reason_code = "LEAVE_DUTY"
+    else:
+        employee_id = _add_employee(
+            workforce_api_db, "G-DUTY-NO-CASE", name="Duty leave without case"
+        ).id
+    admin.employee_id = employee_id
+    workforce_api_db.add(
+        Leave(
+            employee_id=employee_id,
+            leave_type="Duty Leave",
+            start_date=TODAY,
+            end_date=TODAY,
+            days=1,
+            status="Approved",
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["self"]["leave_kind"] == "duty"
+    assert response.json()["leave_today"] == {
+        "annual": 0,
+        "sick": 0,
+        "national_service": 0,
+        "other": 1,
+    }
+
+
+@pytest.mark.parametrize(
+    ("automatic_presence", "corrected_presence", "expected"),
+    [
+        ("on_duty", None, 2),
+        ("on_duty", "absent", 1),
+        ("absent", "on_duty", 2),
+        ("on_duty", "completed", 1),
+    ],
+)
+def test_snapshot_on_site_counts_distinct_scoped_people_with_effective_presence(
+    workforce_api_db: Session,
+    automatic_presence: str,
+    corrected_presence: str | None,
+    expected: int,
+) -> None:
+    from app.db.models import Employee
+    from app.db.workforce_models import (
+        AttendanceCase,
+        AttendanceEvaluation,
+        UserWorkforceScope,
+    )
+
+    manager = _create_user(workforce_api_db, email="on-site-manager@test.ae", role="manager")
+    _grant(workforce_api_db, manager, "workforce.dashboard.view")
+    _seed_coverage_cases(workforce_api_db, manager)
+    workforce_api_db.add(
+        UserWorkforceScope(
+            user_id=manager.id,
+            scope_kind="department",
+            department="Operations",
+            created_by_user_id=manager.id,
+        )
+    )
+    outside = workforce_api_db.get(Employee, "G-COVERAGE-B")
+    outside.department = "Support"
+    outside_case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == outside.id)
+    )
+    outside_case.department_snapshot = "Support"
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    evaluation.presence_state = automatic_presence
+    for employee_id, presence, offset in [
+        ("G-SITE", "on_duty", timedelta()),
+        ("G-SITE", "on_duty", timedelta(minutes=1)),
+        ("G-ABSENT", "absent", timedelta()),
+        ("G-COMPLETED", "completed", timedelta()),
+        ("G-ENDED", "on_duty", -timedelta(hours=10)),
+        ("G-FUTURE", "on_duty", timedelta(hours=10)),
+    ]:
+        if workforce_api_db.get(Employee, employee_id) is None:
+            _add_employee(workforce_api_db, employee_id, name=employee_id)
+        extra_case = AttendanceCase(
+            employee_id=employee_id,
+            shift_occurrence_id=case.shift_occurrence_id,
+            employee_status_snapshot="Active",
+            shift_code_snapshot=case.shift_code_snapshot,
+            organization_snapshot_state="captured",
+            department_snapshot="Operations",
+            scheduled_start_at=case.scheduled_start_at + offset,
+            scheduled_end_at=case.scheduled_end_at + offset,
+            operational_date=TODAY,
+        )
+        workforce_api_db.add(extra_case)
+        workforce_api_db.flush()
+        workforce_api_db.add(
+            AttendanceEvaluation(
+                attendance_case_id=extra_case.id,
+                revision=1,
+                presence_state=presence,
+                reason_code="PUNCH_IN_ACTIVE" if presence == "on_duty" else "NO_PUNCH",
+                missing_checkout=False,
+                algorithm_version="v1",
+                input_fingerprint=f"on-site-{extra_case.id}",
+                evaluated_at=NOW,
+            )
+        )
+    workforce_api_db.commit()
+    if corrected_presence:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": corrected_presence,
+                "replacement_first_in_at": None,
+                "replacement_latest_in_at": None,
+                "replacement_final_out_at": None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Verified current presence",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+            actor=manager,
+        )
+        workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, manager) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["aggregate"]["on_site"] == expected
+
+
+@pytest.mark.parametrize("before_start", [False, True])
+def test_snapshot_on_site_does_not_count_fallback_cases_outside_shift(
+    workforce_api_db: Session, before_start: bool
+) -> None:
+    admin = _create_user(workforce_api_db, email="on-site-boundary@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    now = NOW - timedelta(hours=4, microseconds=1) if before_start else NOW + timedelta(hours=4)
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=None,
+        include_aggregate=True,
+        now=now.replace(tzinfo=UTC),
+    ).value
+
+    assert value["aggregate"]["on_site"] == 0

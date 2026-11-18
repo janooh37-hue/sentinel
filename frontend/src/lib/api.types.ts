@@ -7477,6 +7477,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/attendance/punches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Attendance Punches
+         * @description The scoped punch log, paged by descending occurrence time and punch ID.
+         */
+        get: operations["get_attendance_punches_api_v1_workforce_attendance_punches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/employees/{employee_id}/attendance": {
         parameters: {
             query?: never;
@@ -9002,6 +9022,12 @@ export interface components {
             absence_due_at?: string | null;
             /** Grace Minutes */
             grace_minutes?: number | null;
+            /** Final Out At */
+            final_out_at?: string | null;
+            /** Leave Kind */
+            leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
+            /** Leave Label */
+            leave_label?: string | null;
         };
         /** AttendanceEvaluationRead */
         AttendanceEvaluationRead: {
@@ -9092,6 +9118,42 @@ export interface components {
             effective_from: string;
             /** Effective To */
             effective_to?: string | null;
+        };
+        /**
+         * AttendancePunchLogRead
+         * @description One provider punch from a scoped, mapped employee, for the day's punch log.
+         *
+         *     ``direction`` is the provider's own value; this build reports "unknown" for
+         *     nearly every row, so a client must not pair rows into in/out spans.
+         *     ``case_id`` is the attendance case the punch was assigned to, if any.
+         */
+        AttendancePunchLogRead: {
+            /** Punch Id */
+            punch_id: number;
+            /**
+             * Occurred At
+             * Format: date-time
+             */
+            occurred_at: string;
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Device */
+            device?: string | null;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "in" | "out" | "unknown";
+            /** Case Id */
+            case_id?: number | null;
         };
         /**
          * AuditEntryRead
@@ -10823,6 +10885,13 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** CursorPage[AttendancePunchLogRead] */
+        CursorPage_AttendancePunchLogRead_: {
+            /** Items */
+            items: components["schemas"]["AttendancePunchLogRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** CursorPage[CoverageRowRead] */
         CursorPage_CoverageRowRead_: {
             /** Items */
@@ -11780,6 +11849,8 @@ export interface components {
              * Format: date
              */
             operational_date: string;
+            /** Case Id */
+            case_id?: number | null;
             /** Shift Code */
             shift_code?: string | null;
             /** Scheduled Start At */
@@ -11805,6 +11876,10 @@ export interface components {
             grace_minutes?: number | null;
             /** Punches */
             punches?: components["schemas"]["EmployeeAttendancePunchRead"][];
+            /** Leave Kind */
+            leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
+            /** Leave Label */
+            leave_label?: string | null;
         };
         /**
          * EmployeeAttendanceHabitRead
@@ -15435,6 +15510,14 @@ export interface components {
             scheduled_start_at?: string | null;
             /** Scheduled End At */
             scheduled_end_at?: string | null;
+            /** First Punch At */
+            first_punch_at?: string | null;
+            /** Last Punch At */
+            last_punch_at?: string | null;
+            /** Final Out At */
+            final_out_at?: string | null;
+            /** Leave Kind */
+            leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
         };
         /** SendToVaultRequest */
         SendToVaultRequest: {
@@ -37081,6 +37164,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CursorPage_AttendanceDayRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_attendance_punches_api_v1_workforce_attendance_punches_get: {
+        parameters: {
+            query: {
+                operational_date: string;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CursorPage_AttendancePunchLogRead_"];
                 };
             };
             /** @description Validation Error */

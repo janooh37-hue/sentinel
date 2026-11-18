@@ -52,12 +52,19 @@ _REASON_PRIORITY = {
     "LEAVE_NATIONAL_SERVICE": 0,
     "LEAVE_SICK": 1,
     "LEAVE_ANNUAL": 2,
+    "LEAVE_DUTY": 3,
+    "LEAVE_OTHER": 4,
 }
 
-_REASON_BY_LIVE_KIND = {
+REASON_BY_LEAVE_KIND: dict[leave_lifecycle.LeaveKind, str] = {
     "national_service": "LEAVE_NATIONAL_SERVICE",
     "sick": "LEAVE_SICK",
     "annual": "LEAVE_ANNUAL",
+    "duty": "LEAVE_DUTY",
+    "other": "LEAVE_OTHER",
+}
+LEAVE_KIND_BY_REASON: dict[str, leave_lifecycle.LeaveKind] = {
+    reason: kind for kind, reason in REASON_BY_LEAVE_KIND.items()
 }
 
 
@@ -65,15 +72,15 @@ def _excusing_reason(leave: Leave) -> str | None:
     """Return the workforce excuse reason for one lifecycle-live leave row.
 
     This is intentionally not a status-only rule: lifecycle owns which state is
-    live for each leave kind.  Record rows (including Leave Permit, Passport
-    Release, and Duty Resumption) have no configured workforce excuse here.
+    live for each leave kind, and which kinds excuse attendance at all (Leave
+    Permit, Passport Release and Duty Resumption never do).
     """
-    kind = leave_lifecycle.live_kind(
+    kind = leave_lifecycle.excusing_kind(
         leave.leave_type,
         leave.status,
         deleted=leave.deleted_at is not None,
     )
-    return _REASON_BY_LIVE_KIND.get(kind) if kind is not None else None
+    return REASON_BY_LEAVE_KIND[kind] if kind is not None else None
 
 
 def _operational_date(starts_at: datetime, ends_at: datetime) -> date:
@@ -222,6 +229,8 @@ def affected_reevaluation_windows(
 
 
 __all__ = [
+    "LEAVE_KIND_BY_REASON",
+    "REASON_BY_LEAVE_KIND",
     "ExcusingLeaveResolution",
     "LifecycleLiveLeaveSummary",
     "ReevaluationWindow",
