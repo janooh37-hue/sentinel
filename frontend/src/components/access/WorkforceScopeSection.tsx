@@ -158,7 +158,7 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
             <div className="text-foreground">
               <p className="font-semibold">{t('access.permissions.scope.serverScope')}</p>
               <ul aria-label={t('access.permissions.scope.serverScope')} className="mt-1 space-y-1">
-                {scopesQuery.data?.data.scopes.length ? scopesQuery.data.data.scopes.map((entry) => (
+                {scopesQuery.data?.data.scopes?.length ? scopesQuery.data.data.scopes.map((entry) => (
                   <li key={scopeKey(entry)} className="min-w-0 break-words">
                     <bdi dir="auto">{entry.scope_kind === 'organization' ? t('access.permissions.scope.organization') : scopeLabel(entry)}</bdi>
                   </li>
