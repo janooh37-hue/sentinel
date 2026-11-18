@@ -192,27 +192,30 @@ export function inAt(row: PunchedDay): string | null {
 /**
  * The departure to show as "Out".
  *
- * The evaluated (or corrected) `final_out_at` wins. Without it, a second punch
- * is the latest departure seen; a lone punch is an arrival, never an Out.
- * A corrected day never falls back to punches. A missing Out stays null and
- * renders "—", never the scheduled end.
+ * Only the evaluated (or corrected) `final_out_at` establishes a departure.
+ * Raw punches usually have no direction and must not be paired into a span.
+ * A missing Out stays null and renders "—", never the scheduled end.
  */
 export function outAt(row: PunchedDay): string | null {
-  if (row.final_out_at || row.corrected) return row.final_out_at ?? null
-  return row.punch_count >= 2 ? (row.last_punch_at ?? null) : null
+  return row.final_out_at ?? null
 }
 
 /**
- * On site right now: arrived (on time, inside grace or late), no Out yet, and
- * the duty's judgment boundary still ahead. Past dates never qualify because
- * their boundary is behind `now`. Drives the halo and the "On site now" count.
+ * On site right now: the effective arrival has occurred, no Out is known, and
+ * neither the scheduled end nor judgment boundary has passed. Past dates never
+ * qualify. Drives the halo and the "On site now" count.
  */
 export function isOnSiteNow(row: JudgedDay & PunchedDay, input: StateInput): boolean {
   const state = rowState(row, input)
   if (state !== 'verified' && state !== 'grace' && state !== 'late') return false
-  if (inAt(row) === null || outAt(row) !== null) return false
-  const until = parseInstant(row.judgment_due_at) ?? parseInstant(row.scheduled_end_at)
-  return until !== null && until > input.now.getTime()
+  const now = input.now.getTime()
+  const arrivedAt = parseInstant(inAt(row))
+  if (arrivedAt === null || arrivedAt > now || outAt(row) !== null) return false
+  const until = Math.min(
+    parseInstant(row.scheduled_end_at) ?? Infinity,
+    parseInstant(row.judgment_due_at) ?? Infinity,
+  )
+  return Number.isFinite(until) && now < until
 }
 
 export type OnSiteBucket = 'onSite' | 'left' | 'notArrived' | 'leave' | 'nationalService'
@@ -222,12 +225,13 @@ export function onSiteBucket(row: AttendanceRow, input: StateInput): OnSiteBucke
   const state = rowState(row, input)
   if (state === 'national_service') return 'nationalService'
   if (state === 'leave') return 'leave'
+  const noArrival = row.corrected ? inAt(row) === null : row.punch_count === 0
+  if (state === 'absent' || (noArrival && state !== 'verified')) {
+    const start = parseInstant(row.scheduled_start_at)
+    return start !== null && start <= input.now.getTime() ? 'notArrived' : null
+  }
   if (isOnSiteNow(row, input)) return 'onSite'
   if (inAt(row) !== null && outAt(row) !== null) return 'left'
-  if (row.punch_count === 0 && state !== 'verified') {
-    const start = parseInstant(row.scheduled_start_at)
-    if (start !== null && start <= input.now.getTime()) return 'notArrived'
-  }
   return null
 }
 

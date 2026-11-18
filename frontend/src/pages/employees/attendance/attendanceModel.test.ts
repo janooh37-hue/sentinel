@@ -262,9 +262,10 @@ describe('postSummary', () => {
 })
 
 describe('outAt', () => {
-  it('prefers the evaluated departure, then a second punch, never a lone punch', () => {
+  it('shows only the evaluated departure, never a second raw punch or the scheduled end', () => {
     expect(outAt(row({ final_out_at: '2026-08-19T09:10:00' }))).toBe('2026-08-19T09:10:00')
-    expect(outAt(row({ final_out_at: null }))).toBe('2026-08-19T09:06:00')
+    expect(outAt(row({ final_out_at: null }))).toBeNull()
+    expect(outAt(row())).toBeNull()
     expect(outAt(row({ final_out_at: null, punch_count: 1, last_punch_at: '2026-08-19T00:52:00' }))).toBeNull()
   })
 
@@ -293,8 +294,42 @@ describe('isOnSiteNow', () => {
     expect(isOnSiteNow(row({ ...arrived, late_minutes: 47 }), RUNNING)).toBe(true)
   })
 
+  it('keeps two directionless punches on site until the evaluator publishes a departure', () => {
+    const midDuty = row({
+      presence_state: 'on_duty',
+      last_punch_at: '2026-08-19T05:00:00',
+      final_out_at: null,
+    })
+    expect(outAt(midDuty)).toBeNull()
+    expect(isOnSiteNow(midDuty, RUNNING)).toBe(true)
+    expect(onSiteSummary([midDuty], RUNNING)).toMatchObject({ onSite: 1, left: 0 })
+
+    const evaluated = { ...midDuty, presence_state: 'completed' as const, final_out_at: '2026-08-19T05:00:00' }
+    expect(outAt(evaluated)).toBe('2026-08-19T05:00:00')
+    expect(isOnSiteNow(evaluated, RUNNING)).toBe(false)
+    expect(onSiteSummary([evaluated], RUNNING)).toMatchObject({ onSite: 0, left: 1 })
+  })
+
+  it.each([
+    ['2026-08-19T09:00:00Z', '2026-08-19T11:00:00'],
+    ['2026-08-19T10:00:00Z', '2026-08-19T11:00:00'],
+    ['2026-08-19T06:00:00Z', '2026-08-19T05:00:00'],
+  ])('ends the on-site claim at the earlier duty or judgment boundary at %s', (now, judgment_due_at) => {
+    expect(isOnSiteNow(row({ ...arrived, judgment_due_at }), { now: new Date(now) })).toBe(false)
+  })
+
+  it.each([false, true])('does not put a future effective arrival on site (corrected: %s)', (corrected) => {
+    const futureArrival = row({
+      ...arrived,
+      corrected,
+      first_in_at: '2026-08-19T07:00:00',
+    })
+    expect(isOnSiteNow(futureArrival, RUNNING)).toBe(false)
+    expect(onSiteSummary([futureArrival], RUNNING).onSite).toBe(0)
+  })
+
   it('is false once they left, for past days, and for leave or absence', () => {
-    expect(isOnSiteNow(row(), RUNNING)).toBe(false)
+    expect(isOnSiteNow(row({ final_out_at: '2026-08-19T05:00:00' }), RUNNING)).toBe(false)
     expect(isOnSiteNow(row(arrived), SETTLED)).toBe(false)
     expect(isOnSiteNow(row({ ...arrived, on_leave: true }), RUNNING)).toBe(false)
     expect(isOnSiteNow(row({ punch_count: 0, first_punch_at: null, last_punch_at: null }), RUNNING)).toBe(false)
@@ -302,12 +337,45 @@ describe('isOnSiteNow', () => {
 })
 
 describe('onSiteSummary', () => {
+  it('counts a corrected absence as not arrived despite two raw punches', () => {
+    const correctedAbsent = row({
+      corrected: true,
+      presence_state: 'absent',
+      first_in_at: null,
+      final_out_at: null,
+    })
+    expect(onSiteSummary([correctedAbsent], RUNNING)).toEqual({
+      onSite: 0, left: 0, notArrived: 1, leave: 0, nationalService: 0, people: 1,
+    })
+    expect(onSiteSummary([correctedAbsent], BEFORE_START)).toMatchObject({
+      onSite: 0, left: 0, notArrived: 0,
+    })
+  })
+
+  it('counts corrected arrivals and departures even without raw punches', () => {
+    const correctedPresent = row({
+      corrected: true,
+      presence_state: 'on_duty',
+      punch_count: 0,
+      first_punch_at: null,
+      last_punch_at: null,
+      first_in_at: '2026-08-19T01:00:00',
+      final_out_at: null,
+    })
+    expect(onSiteSummary([correctedPresent], RUNNING)).toMatchObject({
+      onSite: 1, left: 0, notArrived: 0,
+    })
+    expect(onSiteSummary([
+      { ...correctedPresent, final_out_at: '2026-08-19T05:00:00' },
+    ], RUNNING)).toMatchObject({ onSite: 0, left: 1, notArrived: 0 })
+  })
+
   it('counts people once, preferring the shift that puts them on site', () => {
     const arrived = { punch_count: 1, last_punch_at: '2026-08-19T00:52:00', final_out_at: null }
     const rows = [
       row({ employee_id: 'A', ...arrived }),
       row({ employee_id: 'A', shift_code: 'night', punch_count: 0, first_punch_at: null, last_punch_at: null }),
-      row({ employee_id: 'B' }),
+      row({ employee_id: 'B', final_out_at: '2026-08-19T05:00:00' }),
       row({ employee_id: 'C', punch_count: 0, first_punch_at: null, last_punch_at: null, presence_state: 'scheduled' }),
       row({ employee_id: 'D', on_leave: true, punch_count: 0, leave_kind: 'annual' }),
       row({ employee_id: 'E', on_leave: true, punch_count: 0, leave_kind: 'national_service' }),

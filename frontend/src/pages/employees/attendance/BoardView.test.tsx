@@ -83,8 +83,18 @@ describe('BoardView', () => {
     expect(screen.getByRole('button', { name: /^(Open employee file|فتح ملف الموظف)/ })).not.toHaveAttribute('title', expect.stringContaining('Unknown Leave'))
   })
 
-  it('shows a completed departure from the second punch without an on-site halo', () => {
+  it('keeps two directionless punches on site without inventing a departure', () => {
     const { container } = renderBoard([row({ punch_count: 2, last_punch_at: '2026-11-18T07:30:00Z' })])
+    expect(screen.getByRole('button', { name: /Open employee file/ })).toHaveAccessibleName(/On site · In 06:58 · Out —/)
+    expect(container.querySelector('[data-on-site="true"]')).toBeInTheDocument()
+  })
+
+  it('shows the evaluated departure without an on-site halo', () => {
+    const { container } = renderBoard([row({
+      punch_count: 2,
+      last_punch_at: '2026-11-18T07:30:00Z',
+      final_out_at: '2026-11-18T07:30:00Z',
+    })])
     expect(screen.getByRole('button', { name: /Open employee file/ })).toHaveAccessibleName(/Left · In 06:58 · Out 11:30/)
     expect(container.querySelector('[data-on-site]')).not.toBeInTheDocument()
   })

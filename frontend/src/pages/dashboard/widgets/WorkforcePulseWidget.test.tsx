@@ -250,10 +250,10 @@ describe('WorkforcePulseWidget', () => {
   })
 
   it.each([
-    [null, '2026-08-24T12:03:00Z', '16:03'],
+    [null, '2026-08-24T12:03:00Z', '—'],
     [null, '2026-08-24T04:06:00', '—'],
     [null, null, '—'],
-  ])('never replaces a missing Out with the scheduled end', async (final_out_at, last_punch_at, expected) => {
+  ])('never replaces a missing Out with a raw punch or the scheduled end', async (final_out_at, last_punch_at, expected) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({ final_out_at, last_punch_at }))
     renderWidget()

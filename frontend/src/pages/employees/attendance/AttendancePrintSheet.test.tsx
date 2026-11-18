@@ -334,11 +334,24 @@ describe('AttendancePrintSheet', () => {
       // The window was the column this replaced; it lives on the shift band now.
       expect(headers).not.toContain('Window')
 
-      // 00:52Z to 09:06Z is 8h 14m on site. Punches carry no direction, so the
-      // total is the span between the first and the last, nothing inferred.
+      // Directionless punches are evidence, not a worked span: only an
+      // evaluated/corrected departure can establish Out and total time.
       const line = screen.getByText('Ahmed Al Mansoori').closest('tr')
       expect(line).not.toBeNull()
       expect(line).toHaveTextContent('04:52')
+      expect(line).not.toHaveTextContent('13:06')
+      expect(line).not.toHaveTextContent('8h 14m')
+      const cells = within(line as HTMLElement).getAllByRole('cell')
+      expect(cells[7]).toHaveTextContent(/^—$/)
+      expect(cells[8]).toHaveTextContent(/^—$/)
+    })
+
+    it('calculates total time only once the evaluator publishes a departure', () => {
+      renderSheet({
+        layout: 'roster',
+        rows: [row({ final_out_at: '2026-08-19T09:06:00' })],
+      })
+      const line = screen.getByText('Ahmed Al Mansoori').closest('tr')
       expect(line).toHaveTextContent('13:06')
       expect(line).toHaveTextContent('8h 14m')
     })

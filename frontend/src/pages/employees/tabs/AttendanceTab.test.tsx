@@ -263,17 +263,31 @@ describe('AttendanceTab', () => {
     expect(cells[18].querySelector('[data-state="leave"]')).toBeInTheDocument()
   })
 
-  it('names each cell and lists recorded In and Out separately from the schedule', async () => {
+  it('does not pair two directionless punches into Out in the calendar or day detail', async () => {
     renderTab()
     const cells = await screen.findAllByTestId('attendance-month-cell')
-    expect(cells[18]).toHaveAccessibleName(/2026-08-19.*Left.*In 04:52.*Out 13:06/)
+    expect(cells[18]).toHaveAccessibleName(/2026-08-19.*In 04:52.*Out —/)
+    expect(cells[18]).not.toHaveAccessibleName(/Left/)
     expect(within(cells[18]).getByText('04:52')).toBeInTheDocument()
-    expect(within(cells[18]).getByText('13:06')).toBeInTheDocument()
+    expect(within(cells[18]).queryByText('13:06')).not.toBeInTheDocument()
     await userEvent.click(cells[18])
     const detail = await screen.findByTestId('attendance-day-timeline')
     expect(within(detail).getByText('In').nextElementSibling).toHaveTextContent('04:52')
-    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('13:06')
+    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('—')
     expect(within(detail).getByText(/Schedule/)).toHaveTextContent('05:00 – 13:00')
+  })
+
+  it('shows the evaluated departure in the calendar and day detail', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [day({ final_out_at: '2026-08-19T09:06:00' })],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(cells[18]).toHaveAccessibleName(/2026-08-19.*Left.*In 04:52.*Out 13:06/)
+    expect(within(cells[18]).getByText('13:06')).toBeInTheDocument()
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('13:06')
   })
 
   it('never substitutes the scheduled end for a missing Out', async () => {
@@ -376,7 +390,7 @@ describe('AttendanceTab', () => {
     await userEvent.click(cells[18])
     const detail = await screen.findByTestId('attendance-day-timeline')
     expect(within(detail).getByText('دخول').nextElementSibling).toHaveTextContent('04:52')
-    expect(within(detail).getByText('خروج').nextElementSibling).toHaveTextContent('13:06')
+    expect(within(detail).getByText('خروج').nextElementSibling).toHaveTextContent('—')
   })
 
   it('shows the device record for a month the roster never covered', async () => {
