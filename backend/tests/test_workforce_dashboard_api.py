@@ -130,8 +130,9 @@ def _add_employee(
     return employee
 
 
-def _seed_coverage_cases(db: Session, admin: Any) -> None:
+def _seed_coverage_cases(db: Session, admin: Any, *, trusted_source: bool = False) -> None:
     """Persist two evaluated children under one department through real ORM rows."""
+    from app.db.models import AppSetting
     from app.db.workforce_models import (
         AttendanceCase,
         AttendanceEvaluation,
@@ -232,6 +233,8 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
                 attendance_case_id=case.id,
                 revision=1,
                 presence_state="on_duty",
+                first_in_at=case.scheduled_start_at,
+                latest_in_at=case.scheduled_start_at,
                 reason_code="PUNCH_IN_ACTIVE",
                 missing_checkout=False,
                 sync_fresh_through=NOW + timedelta(hours=1),
@@ -250,6 +253,8 @@ def _seed_coverage_cases(db: Session, admin: Any) -> None:
             last_import_count=2,
         )
     )
+    if trusted_source:
+        db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(1440)))
     db.commit()
 
 
@@ -814,6 +819,39 @@ def test_stale_source_and_queued_recalculation_suppress_attendance_judgments(
     assert current_shift["verified_coverage_percent"] is None
     assert current_shift["staffing_status"] is None
     assert response.json()["sync_health"]["punches"]["state"] == "stale"
+    assert response.json()["aggregate"]["on_site"] is None
+
+
+def test_queued_recalculation_withholds_on_site_with_healthy_source(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import AppSetting
+    from app.db.workforce_models import AttendanceEvaluationQueue
+
+    admin = _create_user(workforce_api_db, email="queued-on-site@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(30)))
+    workforce_api_db.add(
+        AttendanceEvaluationQueue(
+            employee_id="G-COVERAGE-A",
+            window_start_at=NOW - timedelta(hours=1),
+            window_end_at=NOW + timedelta(hours=1),
+            reason_codes=["LEAVE_CHANGED"],
+            available_at=NOW,
+            attempts=0,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sync_health"]["punches"]["state"] == "healthy"
+    assert body["current_shift"]["pending_or_error_excluded_count"] == 1
+    assert body["current_shift"]["working"] == 1
+    assert body["aggregate"]["on_site"] is None
 
 
 def test_snapshot_reports_bilingual_crews_for_current_and_next_shift(
@@ -1301,7 +1339,7 @@ def test_snapshot_on_site_counts_distinct_scoped_people_with_effective_presence(
 
     manager = _create_user(workforce_api_db, email="on-site-manager@test.ae", role="manager")
     _grant(workforce_api_db, manager, "workforce.dashboard.view")
-    _seed_coverage_cases(workforce_api_db, manager)
+    _seed_coverage_cases(workforce_api_db, manager, trusted_source=True)
     workforce_api_db.add(
         UserWorkforceScope(
             user_id=manager.id,
@@ -1351,6 +1389,7 @@ def test_snapshot_on_site_counts_distinct_scoped_people_with_effective_presence(
                 attendance_case_id=extra_case.id,
                 revision=1,
                 presence_state=presence,
+                first_in_at=extra_case.scheduled_start_at,
                 reason_code="PUNCH_IN_ACTIVE" if presence == "on_duty" else "NO_PUNCH",
                 missing_checkout=False,
                 algorithm_version="v1",
@@ -1366,7 +1405,7 @@ def test_snapshot_on_site_counts_distinct_scoped_people_with_effective_presence(
             case_id=case.id,
             snapshot={
                 "replacement_presence_state": corrected_presence,
-                "replacement_first_in_at": None,
+                "replacement_first_in_at": case.scheduled_start_at,
                 "replacement_latest_in_at": None,
                 "replacement_final_out_at": None,
                 "replacement_late_minutes": None,
@@ -1404,7 +1443,7 @@ def test_snapshot_on_site_uses_effective_checkout(
     from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
 
     admin = _create_user(workforce_api_db, email="on-site-checkout@test.ae", role="admin")
-    _seed_coverage_cases(workforce_api_db, admin)
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
     case = workforce_api_db.scalar(
         select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
     )
@@ -1457,7 +1496,7 @@ def test_snapshot_on_site_does_not_count_fallback_cases_outside_shift(
     workforce_api_db: Session, before_start: bool
 ) -> None:
     admin = _create_user(workforce_api_db, email="on-site-boundary@test.ae", role="admin")
-    _seed_coverage_cases(workforce_api_db, admin)
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
     now = NOW - timedelta(hours=4, microseconds=1) if before_start else NOW + timedelta(hours=4)
 
     value = workforce_dashboard_service.get_workforce_snapshot(
@@ -1490,7 +1529,7 @@ def test_snapshot_on_site_includes_running_previous_date_cases(
     from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
 
     admin = _create_user(workforce_api_db, email="on-site-overnight@test.ae", role="admin")
-    _seed_coverage_cases(workforce_api_db, admin)
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
     midnight = datetime.combine(TODAY, time(), tzinfo=ZoneInfo("Asia/Dubai"))
     now = midnight + timedelta(hours=2)
     starts_at = (midnight - timedelta(hours=2)).astimezone(UTC).replace(tzinfo=None)
@@ -1529,6 +1568,7 @@ def test_snapshot_on_site_includes_running_previous_date_cases(
                 attendance_case_id=overlapping.id,
                 revision=1,
                 presence_state="on_duty",
+                first_in_at=overlapping.scheduled_start_at,
                 reason_code="PUNCH_IN_ACTIVE",
                 missing_checkout=False,
                 algorithm_version="v1",
@@ -1603,6 +1643,8 @@ def test_snapshot_self_and_current_shift_prefer_running_overnight_case(
             evaluation.latest_in_at = starts_at
         else:
             evaluation.presence_state = "scheduled"
+            evaluation.first_in_at = None
+            evaluation.latest_in_at = None
     workforce_api_db.add(AppSetting(key="workforce.stale_after_minutes", value=json.dumps(60)))
     for sync in workforce_api_db.scalars(select(AttendanceSyncState)):
         sync.fresh_through = naive_now
@@ -1653,3 +1695,59 @@ def test_snapshot_self_and_current_shift_prefer_running_overnight_case(
     assert value["current_shift"]["ends_at"] == selected.scheduled_end_at
     assert value["current_shift"]["scheduled"] == 1
     assert value["current_shift"]["working"] == (1 if running else 0)
+
+
+@pytest.mark.parametrize("corrected", [False, True])
+@pytest.mark.parametrize(
+    "arrival_offset", [None, 1, -30, 0], ids=["cleared", "future", "arrived", "now"]
+)
+def test_snapshot_on_site_requires_effective_arrival(
+    workforce_api_db: Session, corrected: bool, arrival_offset: int | None
+) -> None:
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="on-site-arrival@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    assert case is not None
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    arrival_at = NOW + timedelta(minutes=arrival_offset) if arrival_offset is not None else None
+    evaluation.first_in_at = case.scheduled_start_at if corrected else arrival_at
+    workforce_api_db.commit()
+    if corrected:
+        attendance_correction_service.correct(
+            workforce_api_db,
+            scope=organization_scope(),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "on_duty",
+                "replacement_first_in_at": arrival_at,
+                "replacement_latest_in_at": arrival_at,
+                "replacement_final_out_at": None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Verified arrival time",
+            },
+            if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+            actor=admin,
+        )
+        workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=case.employee_id,
+        include_aggregate=True,
+        now=NOW.replace(tzinfo=UTC),
+    ).value
+
+    assert value["self"]["first_in_at"] == arrival_at
+    assert value["aggregate"]["on_site"] == (
+        2 if arrival_offset is not None and arrival_offset <= 0 else 1
+    )

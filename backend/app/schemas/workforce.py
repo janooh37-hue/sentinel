@@ -312,7 +312,7 @@ class WorkforceSnapshotRead(ORMBase):
     mapping_completeness: dict[str, int]
     schedule_completeness: dict[str, int]
     self: SelfShiftRead | None = None
-    aggregate: dict[str, int] | None = None
+    aggregate: dict[str, int | None] | None = None
 
 
 class CoverageRowRead(BaseModel):

@@ -830,22 +830,32 @@ def get_workforce_snapshot(
     }
     # Current cases include overnight staff; fallback cases must not claim "on site now".
     on_site: set[str] = set()
-    for case in cases:
-        if not case.scheduled_start_at <= naive_now < case.scheduled_end_at:
-            continue
+    on_site_cases = [
+        case for case in cases if case.scheduled_start_at <= naive_now < case.scheduled_end_at
+    ]
+    on_site_available = _attendance_is_trustworthy(sync_health) and not _queued_case_ids(
+        db, on_site_cases
+    )
+    for case in on_site_cases if on_site_available else ():
         evaluation = latest.get(case.id)
         effective = attendance_correction_service.overlay(
             {
                 "presence_state": evaluation.presence_state if evaluation is not None else None,
+                "first_in_at": evaluation.first_in_at if evaluation is not None else None,
                 "final_out_at": evaluation.final_out_at if evaluation is not None else None,
             },
             adjustments.get(case.id),
         )
-        if effective["presence_state"] == "on_duty" and effective["final_out_at"] is None:
+        if (
+            effective["presence_state"] == "on_duty"
+            and effective["first_in_at"] is not None
+            and effective["first_in_at"] <= naive_now
+            and effective["final_out_at"] is None
+        ):
             on_site.add(case.employee_id)
     value["aggregate"] = {
         "active_employees": len(active_scoped),
-        "on_site": len(on_site),
+        "on_site": len(on_site) if on_site_available else None,
     }
     return DashboardProjection(value)
 

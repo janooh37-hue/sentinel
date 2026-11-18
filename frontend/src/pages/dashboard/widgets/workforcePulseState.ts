@@ -19,7 +19,7 @@ export function selfAttendance(snapshot: WorkforceSnapshot) {
     : 0
   const judged = {
     ...self,
-    on_leave: self?.presence_state === 'excused_leave' || leaveKind !== null,
+    on_leave: self?.presence_state === 'excused_leave',
     leave_kind: leaveKind,
     punch_count: punchCount,
   }
@@ -59,7 +59,7 @@ export function derivePulseState(access: WorkforceAccess, snapshot: WorkforceSna
   }
   if (missing.length > 0) return { kind: 'setup', missing }
   if (snapshot.sync_health?.punches?.state === 'stale') return { kind: 'stale' }
-  if (snapshot.current_shift.working == null && snapshot.current_shift.scheduled > 0) {
+  if (snapshot.aggregate?.on_site === null || (snapshot.current_shift.working == null && snapshot.current_shift.scheduled > 0)) {
     return { kind: 'withheld', snapshot }
   }
   return snapshot.aggregate ? { kind: 'aggregate', snapshot } : { kind: 'self', snapshot }

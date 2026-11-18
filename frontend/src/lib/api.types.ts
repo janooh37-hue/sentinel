@@ -19768,7 +19768,7 @@ export interface components {
             self?: components["schemas"]["SelfShiftRead"] | null;
             /** Aggregate */
             aggregate?: {
-                [key: string]: number;
+                [key: string]: number | null;
             } | null;
         };
     };

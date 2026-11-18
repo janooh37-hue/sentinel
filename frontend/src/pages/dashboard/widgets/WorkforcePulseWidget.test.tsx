@@ -148,6 +148,7 @@ describe('WorkforcePulseWidget', () => {
     ],
     ['stale', AGGREGATE_ACCESS, snapshot({ sync_health: { punches: { state: 'stale' } } }), /Attendance source is stale/],
     ['withheld', AGGREGATE_ACCESS, snapshot({ current_shift: { scheduled: 8, excused: 0, evaluated_count: 0, pending_or_error_excluded_count: 8, working: null } }), /Pending verification/],
+    ['on-site withheld', AGGREGATE_ACCESS, snapshot({ aggregate: { on_site: null } }), /Pending verification/],
   ])('renders %s truthfully', async (_name, access, payload, expected) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(access)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(payload)
@@ -234,6 +235,31 @@ describe('WorkforcePulseWidget', () => {
     expect(screen.queryByText(new RegExp(i18n.t('attendance.state.left')))).not.toBeInTheDocument()
     expect(screen.getByText(new RegExp(i18n.t('attendance.state.corrected')))).toBeInTheDocument()
     expect(container.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['en', 'on_duty', 'verified'],
+    ['en', 'absent', 'absent'],
+    ['ar', 'on_duty', 'verified'],
+    ['ar', 'absent', 'absent'],
+  ] as const)('uses effective %s %s presence despite residual leave metadata', async (language, presence_state, state) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      presence_state,
+      reason_code: 'LEAVE_NATIONAL_SERVICE',
+      leave_kind: 'national_service',
+      first_punch_at: null,
+      last_punch_at: null,
+      first_in_at: null,
+      final_out_at: null,
+      corrected: true,
+    }))
+    await i18n.changeLanguage(language)
+
+    renderWidget()
+
+    expect(await screen.findByText(`${i18n.t(`attendance.state.${state}`)} · ${i18n.t('attendance.state.corrected')}`)).toBeInTheDocument()
+    expect(screen.queryByText(`${i18n.t('attendance.state.national_service')} · ${i18n.t('attendance.state.corrected')}`)).not.toBeInTheDocument()
   })
 
   it.each([

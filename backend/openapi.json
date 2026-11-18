@@ -73677,7 +73677,14 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "object"
               },
