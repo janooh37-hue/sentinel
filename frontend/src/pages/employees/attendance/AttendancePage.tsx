@@ -19,15 +19,19 @@ import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 
 import { AttentionQueue } from './AttentionQueue'
-import { AttendanceCorrectionDrawer } from './AttendanceCorrectionDrawer'
+import { AttendanceCorrectionProvider } from './AttendanceCorrectionEntry'
+import { useAttendanceCorrection } from './attendanceCorrectionContext'
+import { AttendanceLegend } from './AttendanceLegend'
 import type { PrintLayout } from './AttendancePrintSheet'
 import { AttendancePrintSheet } from './AttendancePrintSheet'
 import type { AttendanceView } from './AttendanceToolbar'
 import { AttendanceToolbar } from './AttendanceToolbar'
 import type { DayStripEntry } from './AttendanceToolbar'
 import { BoardView } from './BoardView'
+import { OnSiteNowSummary } from './OnSiteNowSummary'
 import { RegisterView } from './RegisterView'
 import { TimelineView } from './TimelineView'
 import type { AttendanceRow } from './attendanceModel'
@@ -47,6 +51,14 @@ function isView(value: string | null): value is AttendanceView {
 }
 
 export function AttendancePage(): React.JSX.Element {
+  return (
+    <AttendanceCorrectionProvider>
+      <AttendancePageBody />
+    </AttendanceCorrectionProvider>
+  )
+}
+
+function AttendancePageBody(): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
@@ -61,10 +73,10 @@ export function AttendancePage(): React.JSX.Element {
   // is switched BEFORE the dialog opens, so React has committed the right
   // layout by the time the browser paints the preview.
   const [printLayout, setPrintLayout] = useState<PrintLayout>('sheet')
-  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
+  const { viewEvidence, overlayOpen } = useAttendanceCorrection()
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
-  const canReview = has('workforce.people.view') && has('workforce.attendance.review')
+  const canReview = canViewAttendanceRoster(has)
   const setParam = useCallback(
     (key: string, value: string | null) => {
       setParams(
@@ -85,7 +97,7 @@ export function AttendancePage(): React.JSX.Element {
   const integrationQuery = useQuery({
     queryKey: ['workforce-integration-status'] as const,
     queryFn: () => api.getWorkforceIntegrationStatus(),
-    enabled: hasIntegrationView,
+    enabled: canReview && hasIntegrationView,
     staleTime: 60_000,
     retry: false,
   })
@@ -93,6 +105,7 @@ export function AttendancePage(): React.JSX.Element {
   const dayQuery = useQuery({
     queryKey: ['attendance-day', operationalDate] as const,
     queryFn: () => api.listAttendanceDay({ operational_date: operationalDate, limit: 500 }),
+    enabled: canReview,
     staleTime: 30_000,
   })
 
@@ -170,8 +183,9 @@ export function AttendancePage(): React.JSX.Element {
   // ← / → change the day, 1–4 pick a shift, `/` focuses the search field.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
+      if (!canReview || overlayOpen || document.querySelector('[role="dialog"]:not([hidden])')) return
       const target = event.target as HTMLElement | null
-      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
+      if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)) return
       if (event.key === 'ArrowLeft') setParam('date', shiftIsoDate(operationalDate, -1))
       else if (event.key === 'ArrowRight') setParam('date', shiftIsoDate(operationalDate, 1))
       else if (['1', '2', '3', '4'].includes(event.key)) {
@@ -184,7 +198,7 @@ export function AttendancePage(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [operationalDate, setParam, shiftCode])
+  }, [canReview, operationalDate, overlayOpen, setParam, shiftCode])
 
   const body = (): React.JSX.Element => {
     if (dayQuery.isPending) {
@@ -212,20 +226,23 @@ export function AttendancePage(): React.JSX.Element {
       )
     }
     if (view === 'board') {
-      return <BoardView rows={rows} now={now} onOpenEmployee={openEmployee} />
+      return <BoardView rows={rows} now={now} operationalDate={operationalDate} onOpenEmployee={openEmployee} />
     }
     if (view === 'timeline') {
-      return <TimelineView rows={rows} now={now} onOpenEmployee={openEmployee} />
+      return <TimelineView rows={rows} now={now} operationalDate={operationalDate} onOpenEmployee={openEmployee} />
     }
     return (
       <RegisterView
         rows={rows}
         now={now}
+        operationalDate={operationalDate}
         freshThrough={integrationQuery.data?.streams?.punches?.fresh_through ?? null}
         onOpenEmployee={openEmployee}
       />
     )
   }
+
+  if (!canReview) return null
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -277,6 +294,11 @@ export function AttendancePage(): React.JSX.Element {
           onPrint={requestPrint}
         />
 
+        {dayQuery.isSuccess && (
+          <OnSiteNowSummary rows={rows} now={now} operationalDate={operationalDate} />
+        )}
+        <AttendanceLegend />
+
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">{body()}</div>
           <div className="mt-3 lg:mt-3">
@@ -289,8 +311,9 @@ export function AttendancePage(): React.JSX.Element {
               rows={allRows}
               exceptionRows={exceptionsQuery.isSuccess ? exceptionsQuery.data.items : undefined}
               now={now}
+              operationalDate={operationalDate}
               onOpenEmployee={openEmployee}
-              onReviewCase={exceptionsQuery.isSuccess ? setSelectedCaseId : undefined}
+              onReviewCase={exceptionsQuery.isSuccess ? viewEvidence : undefined}
             />
           </div>
         </div>
@@ -308,7 +331,6 @@ export function AttendancePage(): React.JSX.Element {
         shiftCode={shiftCode}
         search={search}
       />
-      <AttendanceCorrectionDrawer caseId={selectedCaseId} onClose={() => setSelectedCaseId(null)} />
     </div>
   )
 }

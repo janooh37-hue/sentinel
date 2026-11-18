@@ -7,6 +7,7 @@
 
 import type { EmployeeAttendanceDay } from '@/lib/api'
 import {
+  isExcused,
   minutesPastGrace,
   parseInstant,
   rowState,
@@ -31,13 +32,14 @@ const WORST_FIRST: readonly PaperState[] = [
   'verified',
   'pending',
   'leave',
+  'national_service',
   'rest',
 ]
 
 export const EXCEPTION_STATES: readonly PaperState[] = ['late', 'absent', 'unpaired']
 
 /** Every glyph the paper can print, in legend order (`withheld` only for readers without leave access). */
-export const LEGEND_STATES: readonly PaperState[] = ['verified', 'grace', 'late', 'absent', 'unpaired', 'leave', 'pending', 'rest']
+export const LEGEND_STATES: readonly PaperState[] = ['verified', 'grace', 'late', 'absent', 'unpaired', 'leave', 'national_service', 'pending', 'rest']
 
 export interface PaperCase {
   date: string
@@ -93,7 +95,7 @@ function paperCase(day: EmployeeAttendanceDay, now: Date, canViewLeaveFacts: boo
   const state = rowState(day, { now })
   // Same privacy rule as the tab: without leave access, leave and absence
   // verdicts are not this reader's to see. The day stays a day, marked withheld.
-  const withheld = !canViewLeaveFacts && (state === 'leave' || state === 'absent')
+  const withheld = !canViewLeaveFacts && (isExcused(state) || state === 'absent')
   const punches = (day.punches ?? [])
     .map((punch) => ({ iso: punch.occurred_at, at: parseInstant(punch.occurred_at) }))
     .filter((punch): punch is { iso: string; at: number } => punch.at !== null)
@@ -155,9 +157,9 @@ export function attendanceStats(days: readonly PaperDay[]): AttendanceStats {
   }
   for (const day of days) {
     if (day.state === 'rest') stats.restDays += 1
-    if (day.state === 'leave') stats.leaveDays += 1
+    if (day.state === 'leave' || day.state === 'national_service') stats.leaveDays += 1
     for (const c of day.cases) {
-      if (c.state === 'leave') continue
+      if (c.state === 'leave' || c.state === 'national_service') continue
       if (c.state === 'withheld') {
         stats.withheld += 1
         continue

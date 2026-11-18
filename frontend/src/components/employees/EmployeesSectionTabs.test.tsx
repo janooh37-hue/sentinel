@@ -5,8 +5,8 @@
  *   1. Directory and Attendance link to their routes and the active tab is
  *      marked with aria-current="page".
  *   2. The attention badge appears only when there is something to decide.
- *   3. Attendance is hidden entirely without workforce.people.view, so an
- *      operator never sees a tab that would 403.
+ *   3. Attendance requires both roster capabilities, so an operator never
+ *      sees a tab that would 403.
  *   4. Time Sheet is the last tab and needs `timesheet.view`.
  *   5. Every tab carries ONE language — the Arabic build renders Arabic labels
  *      with no English companion beside them.
@@ -76,14 +76,18 @@ describe('EmployeesSectionTabs', () => {
     expect(screen.queryByTestId('attendance-attention-badge')).not.toBeInTheDocument()
   })
 
-  it('hides Attendance without workforce.people.view', () => {
-    hasCapability.mockImplementation((cap) => cap !== 'workforce.people.view')
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'hides Attendance and its attention badge without %s',
+    (denied) => {
+      hasCapability.mockImplementation((cap) => cap !== denied)
 
-    renderTabs({ attentionCount: 5 })
+      renderTabs({ attentionCount: 5 })
 
-    expect(linkTo('/employees')).toBeDefined()
-    expect(linkTo('/employees/attendance')).toBeUndefined()
-  })
+      expect(linkTo('/employees')).toBeDefined()
+      expect(linkTo('/employees/attendance')).toBeUndefined()
+      expect(screen.queryByTestId('attendance-attention-badge')).not.toBeInTheDocument()
+    },
+  )
 
   it('links ORG-tree and marks it active on its own route', () => {
     renderTabs({}, '/employees/org-tree')

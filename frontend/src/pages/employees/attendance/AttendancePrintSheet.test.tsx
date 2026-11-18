@@ -17,7 +17,7 @@
  *   7. Every state reads as words, not colour alone — including the arrival
  *      inside the grace, which the screen leaves to a coloured bead.
  */
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { SessionUser } from '@/lib/api'
@@ -270,50 +270,48 @@ describe('AttendancePrintSheet', () => {
     expect(screen.getByText('Sheet 1 / 1')).toBeInTheDocument()
   })
 
-  it('words every state in the time cell, including an arrival inside the grace', () => {
+  it('prints each verdict in words beside explicit In and Out columns', () => {
     renderSheet()
 
-    const posts = screen.getAllByTestId('attendance-print-post')
-    const text = posts.map((post) => post.textContent).join(' ')
-    // 00:52Z = 04:52 local, two minutes before the 05:00 start.
+    const text = screen.getAllByTestId('attendance-print-post').map((post) => post.textContent).join(' ')
     expect(text).toContain('04:52')
-    // Inside the grace: a bare time would be indistinguishable from on-time.
-    expect(text).toContain('05:22 (grace)')
-    // Past the grace, counted from the grace and not from the start.
-    expect(text).toContain('05:47 +17m')
-    expect(text).toContain('no punch')
-    // A hole in the record: one punch, match window closed.
-    expect(text).toContain('04:52 only')
-    // Not yet judged — the sheet says when it is due, not that anyone is absent.
-    expect(text).toContain('due 21:00')
+    expect(text).toContain('On time')
+    expect(text).toContain('Grace')
+    expect(text).toContain('Late +17')
+    expect(text).toContain('Absent')
+    expect(text).toContain('No exit')
+    expect(text).toContain('Due')
+    for (const person of screen.getAllByTestId('attendance-print-person')) {
+      expect(within(person).getByText('In')).toBeInTheDocument()
+      expect(within(person).getByText('Out')).toBeInTheDocument()
+    }
   })
 
-  it('prints in and out only on the per-shift sheet, where there is room', () => {
-    const { unmount } = renderSheet({ layout: 'shift' })
-    const shiftText = screen
-      .getAllByTestId('attendance-print-post')
-      .map((post) => post.textContent)
-      .join(' ')
-    expect(shiftText).toContain('04:52 · 13:06')
-    // With both punches on the line, repeating the arrival in the last cell is
-    // noise; the verdict is the part in/out cannot tell you. Short labels: the
-    // full "Late past grace" is a third of the column, and the name is what a
-    // supervisor reads a duty sheet by.
-    expect(shiftText).toContain('On time')
-    expect(shiftText).toContain('Grace')
-    expect(shiftText).toContain('Late +17')
-    expect(shiftText).not.toContain('05:22 (grace)')
-    unmount()
-
-    renderSheet()
-    const dayText = screen
-      .getAllByTestId('attendance-print-post')
-      .map((post) => post.textContent)
-      .join(' ')
-    expect(dayText).not.toContain('04:52 · 13:06')
-    // The day sheet has no in/out column, so there the clock IS the verdict.
-    expect(dayText).toContain('05:22 (grace)')
-  })
+  it.each(['sheet', 'roster', 'shift'] as const)(
+    'prints National Service, leave subtype and the effective Out in the %s layout',
+    (layout) => {
+      renderSheet({
+        layout,
+        rows: [
+          row({ employee_id: 'G9101', name_en: 'Hamad Saif', on_leave: true, presence_state: 'excused_leave', leave_kind: 'national_service', punch_count: 0, first_punch_at: null, last_punch_at: null }),
+          row({ employee_id: 'G9102', name_en: 'Ali Obaid', on_leave: true, presence_state: 'excused_leave', leave_kind: 'other', leave_label: 'Hajj Leave', punch_count: 0, first_punch_at: null, last_punch_at: null }),
+          row({ employee_id: 'G9103', name_en: 'Khalid Hamad', final_out_at: '2026-08-19T08:30:00Z' }),
+          row({ employee_id: 'G9104', name_en: 'Salem Saif', punch_count: 1, last_punch_at: '2026-08-19T00:52:00' }),
+        ],
+      })
+      const person = (name: string): HTMLElement =>
+        screen.getByText(name).closest(layout === 'roster' ? 'tr' : '[data-testid="attendance-print-person"]') as HTMLElement
+      expect(person('Hamad Saif')).toHaveTextContent('National Service')
+      expect(person('Hamad Saif').querySelector('.text-smart')).not.toBeNull()
+      expect(person('Ali Obaid')).toHaveTextContent('On leave · Hajj Leave')
+      expect(person('Khalid Hamad')).toHaveTextContent('12:30')
+      expect(person('Khalid Hamad')).not.toHaveTextContent('13:06')
+      expect(person('Salem Saif')).toHaveTextContent('—')
+      expect(person('Salem Saif')).not.toHaveTextContent('13:00')
+      // One label on the row and one on the print-safe legend.
+      expect(screen.getAllByText('National Service')).toHaveLength(2)
+    },
+  )
 
   describe('roster layout', () => {
     it('carries total time worked instead of the scheduled window column', () => {

@@ -62,6 +62,7 @@ function row(overrides: Record<string, unknown> = {}) {
     scheduled_start_at: MORNING_START,
     scheduled_end_at: MORNING_END,
     first_punch_at: '2026-08-19T00:52:00',
+    punch_count: 2,
     last_punch_at: '2026-08-19T09:06:00',
     case_id: 42,
     late_minutes: 0,
@@ -253,6 +254,49 @@ describe('AttendancePage', () => {
     expect(new Date(secondDate).getTime()).toBeLessThan(new Date(firstDate).getTime())
   })
 
+  it('suspends all page shortcuts while the correction evidence overlay is open', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /Review Ahmed Ali/i }))
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledWith(42))
+
+    await user.keyboard('{ArrowLeft}{ArrowRight}1/')
+
+    expect(listAttendanceDay).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('searchbox', { hidden: true })).not.toHaveFocus()
+    await user.click(screen.getByRole('button', { name: /close/i }))
+    await user.keyboard('{ArrowLeft}')
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledTimes(2))
+  })
+
+  it('suspends shortcuts under another open dialog', async () => {
+    const user = userEvent.setup()
+    render(
+      <div role="dialog" aria-label="Other workflow">
+        Other workflow
+      </div>,
+    )
+    renderPage()
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledTimes(1))
+
+    await user.keyboard('{ArrowLeft}{ArrowRight}2/')
+
+    expect(listAttendanceDay).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('searchbox')).not.toHaveFocus()
+  })
+
+  it('summarizes only the shift and search results on screen', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const summary = await screen.findByRole('region', { name: 'On site now' })
+    expect(summary).toHaveTextContent('4 people')
+
+    await user.click(screen.getByRole('button', { name: /^Morning/ }))
+    expect(summary).toHaveTextContent('3 people')
+    await user.type(screen.getByRole('searchbox'), 'Ahmed')
+    expect(summary).toHaveTextContent('1 person')
+  })
+
   it('deep-links a name to that employee attendance tab', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -264,8 +308,8 @@ describe('AttendancePage', () => {
     expect(await screen.findByText('employee file')).toBeInTheDocument()
   })
 
-  it('shows the attention queue ordered worst first', async () => {
-    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
+  it('shows the derived attention queue ordered worst first', async () => {
+    listAttendanceExceptions.mockRejectedValue(new Error('network unavailable'))
     renderPage()
 
     const queue = await screen.findByTestId('attendance-attention-queue')
@@ -302,14 +346,19 @@ describe('AttendancePage', () => {
     expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
   })
 
-  it('does not request review exceptions for non-reviewers', async () => {
-    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
-    renderPage()
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'does not render the roster or request day data without %s',
+    async (denied) => {
+      hasCapability.mockImplementation((cap) => cap !== denied)
+      renderPage()
 
-    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledOnce())
-    expect(listAttendanceExceptions).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
-  })
+      expect(screen.queryByTestId('attendance-register-unit')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('attendance-attention-badge')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /Attendance/i })).not.toBeInTheDocument()
+      expect(listAttendanceDay).not.toHaveBeenCalled()
+      expect(listAttendanceExceptions).not.toHaveBeenCalled()
+    },
+  )
 
   it('renders the empty state for a day with no rows', async () => {
     listAttendanceDay.mockResolvedValue({ items: [], next_cursor: null })
