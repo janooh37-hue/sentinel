@@ -15,6 +15,8 @@ VehicleExpiryStatus = Literal["valid", "due", "expired"]
 MaintenanceDueState = Literal["overdue", "due", "scheduled"]
 MaintenanceType = Literal["service", "repair", "tires", "other"]
 AccidentStatus = Literal["open", "closed"]
+AccidentClaimStatus = Literal["not_submitted", "submitted", "under_repair", "settled"]
+AccidentCostPayer = Literal["insurer", "company", "driver"]
 
 _TIME_PATTERN = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
 MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
@@ -382,22 +384,71 @@ class LicenseRenewalRead(ORMBase):
     scan_url: str | None = None
 
 
-class VehicleAccidentCreate(BaseModel):
+def _blank_to_none(value: str | None) -> str | None:
+    return (value or "").strip() or None
+
+
+class VehicleAccidentInsurance(BaseModel):
+    """The optional insurance claim on a report. Every field may stay empty;
+    a blank text means "not recorded" and is stored as NULL."""
+
+    claim_no: str | None = Field(default=None, max_length=64)
+    claim_status: AccidentClaimStatus | None = None
+    insurer: str | None = Field(default=None, max_length=128)
+    repair_garage: str | None = Field(default=None, max_length=128)
+    cost_payer: AccidentCostPayer | None = None
+
+    @field_validator("claim_no", "insurer", "repair_garage")
+    @classmethod
+    def _blank_is_unknown(cls, value: str | None) -> str | None:
+        return _blank_to_none(value)
+
+
+class VehicleAccidentCreate(VehicleAccidentInsurance):
+    """A report written in the operator's language: each of the location and
+    the description needs one language, either one. The official letter asks
+    for the Arabic wording later if it is missing."""
+
     vehicle_id: int
     employee_id: str | None = None
     date: date_t
     time: str = Field(pattern=_TIME_PATTERN)
-    location_ar: str = Field(min_length=1)
+    location_ar: str | None = None
     location_en: str | None = None
-    description_ar: str = Field(min_length=1)
+    description_ar: str | None = None
     description_en: str | None = None
     police_ref: str | None = None
-    damage_cost: int = Field(default=0, ge=0)
     photo_file_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("location_ar", "location_en", "description_ar", "description_en", "police_ref")
+    @classmethod
+    def _blank_text_is_absent(cls, value: str | None) -> str | None:
+        return _blank_to_none(value)
+
+    @model_validator(mode="after")
+    def _one_language_each(self) -> VehicleAccidentCreate:
+        if self.location_ar is None and self.location_en is None:
+            raise ValueError("location_ar or location_en is required")
+        if self.description_ar is None and self.description_en is None:
+            raise ValueError("description_ar or description_en is required")
+        return self
 
 
 class VehicleAccidentStatusUpdate(BaseModel):
     status: AccidentStatus
+
+
+class AccidentLetterRequest(BaseModel):
+    """Arabic wording supplied on the letter step, for a report written in
+    English. Omitted fields keep what the report already holds."""
+
+    location_ar: str | None = None
+    description_ar: str | None = None
+
+    @field_validator("location_ar", "description_ar")
+    @classmethod
+    def _blank_text_is_absent(cls, value: str | None) -> str | None:
+        return _blank_to_none(value)
 
 
 class VehicleAccidentRead(ORMBase):
@@ -408,12 +459,16 @@ class VehicleAccidentRead(ORMBase):
     employee_name_en: str | None = None
     date: date_t
     time: str | None
-    location_ar: str
+    location_ar: str | None
     location_en: str | None
-    description_ar: str
+    description_ar: str | None
     description_en: str | None
     police_ref: str | None
-    damage_cost: int
+    claim_no: str | None = None
+    claim_status: AccidentClaimStatus | None = None
+    insurer: str | None = None
+    repair_garage: str | None = None
+    cost_payer: AccidentCostPayer | None = None
     status: AccidentStatus
     photo_file_ids: list[int]
     photos: list[VehicleFileRead] = Field(default_factory=list)

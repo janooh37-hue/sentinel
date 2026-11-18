@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicle Services: Counter and paper · GSSG Manager</title>
+  <link rel="icon" href="assets/gssg-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="core.css">
+  <style>
+    html { font-size: 17px; background: var(--bg); }
+    .wrap { inline-size: min(60rem, 100%); margin-inline: auto; padding: 2.5rem 1.5rem 4rem; }
+    .brand { display: flex; align-items: center; gap: 0.7rem; color: var(--primary); font-weight: 700; }
+    .brand img { inline-size: 2.2rem; block-size: 2.2rem; }
+    h1 { margin-block: 1.6rem 0.5rem; font-size: 2.3rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.15; }
+    .lede { max-inline-size: 62ch; color: var(--muted); }
+    .open { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-block-start: 1.5rem; }
+    .open .btn { justify-content: space-between; min-inline-size: 12rem; }
+    h2 { margin-block: 3rem 0.8rem; padding-block-end: 0.5rem; border-block-end: 2px solid var(--primary); font-size: 1.15rem; font-weight: 700; }
+    .pages { display: grid; gap: 0; }
+    .pages > div { display: grid; grid-template-columns: 11rem minmax(0, 1fr) auto; align-items: baseline; gap: 0.3rem 1.4rem; padding-block: 0.8rem; border-block-end: 1px solid var(--border); font-size: 0.9rem; }
+    .pages dt { font-weight: 700; }
+    .pages dd { color: var(--muted); }
+    .pages a { color: var(--primary); font-size: 0.82rem; font-weight: 600; white-space: nowrap; }
+    .rules { display: grid; gap: 0.7rem; max-inline-size: 70ch; counter-reset: rule; }
+    .rules li { display: grid; grid-template-columns: 1.8rem minmax(0, 1fr); font-size: 0.9rem; }
+    .rules li::before { counter-increment: rule; content: counter(rule); color: var(--primary); font: 600 0.9rem var(--mono); }
+    .rules b { font-weight: 600; }
+    .foot { margin-block-start: 2.6rem; color: var(--muted); font-size: 0.8rem; }
+    @media (max-width: 720px) { .pages > div { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 1.7rem; } }
+  </style>
+</head>
+<body>
+<main class="wrap">
+  <div class="brand"><img src="assets/gssg-logo.png" alt=""><span>GSSG Manager · Vehicles</span></div>
+  <h1>Counter and paper, request first</h1>
+  <p class="lede">The chosen direction, laid out again so a new request is the first thing on every page. The navy band says where you are, the white counter across its lower edge starts the request, and the register of what is already on record follows below it.</p>
+  <div class="open"><a class="btn primary lg" href="app.html?lang=ar">العربية <span aria-hidden="true">→</span></a><a class="btn secondary lg" href="app.html?lang=en">English <span aria-hidden="true">→</span></a></div>
+
+  <h2>Where the new request sits</h2>
+  <dl class="pages">
+    <div><dt>Vehicle Services hub</dt><dd>Each service tile carries its own request button: add fine, renew, new report, add maintenance.</dd><a href="app.html?lang=ar&screen=hub">Open</a></div>
+    <div><dt>Accident reports</dt><dd>The counter picks the vehicle and starts the report. The dated entries sit under it, with a smaller date.</dd><a href="app.html?lang=ar&screen=accidents">Open</a></div>
+    <div><dt>Maintenance</dt><dd>The counter starts a maintenance record on the chosen vehicle. Fleet totals move beside the tabs.</dd><a href="app.html?lang=ar&screen=maintenance">Open</a></div>
+    <div><dt>Fines</dt><dd>The counter picks the vehicle and opens the fine form beside the fines already on that vehicle. Fetch from EVG sits next to it.</dd><a href="app.html?lang=ar&screen=fines">Open</a></div>
+    <div><dt>Licence renewal</dt><dd>A page of its own: licences by how soon they end, with the most urgent vehicle offered first at the counter.</dd><a href="app.html?lang=ar&screen=renewals">Open</a></div>
+    <div><dt>Vehicle file</dt><dd>One row holds every request for that vehicle. Renew is filled only while the licence needs it.</dd><a href="app.html?lang=ar&screen=vehicle">Open</a></div>
+  </dl>
+
+  <h2>Rules carried over</h2>
+  <ol class="rules">
+    <li><span><b>One language per form.</b> An Arabic session asks in Arabic, an English session asks in English, and nothing is required in the other language.</span></li>
+    <li><span><b>The Arabic letter asks once.</b> If a report was written in English, the official-letter step asks for the Arabic wording. Open accident 16 \ 82541 and press «Official letter» to see it.</span></li>
+    <li><span><b>No damage cost to type.</b> The report states that insurance covers the damage and that the technician estimates the cost.</span></li>
+    <li><span><b>Insurance details are optional</b> and can be added at filing or later. A report can be closed without them.</span></li>
+    <li><span><b>Numbers and money.</b> Latin digits in both languages, whole dirhams, and the dirham mark.</span></li>
+  </ol>
+
+  <p class="foot">All vehicles, people, plates, claims and amounts are fabricated. Labels come from the product's own Arabic and English copy. Steps this work does not change (edit vehicle, fleet import, request maintenance, fetch fines from EVG, fines report) show a short notice instead of opening. Directions A and B are in the branch history at commit b98a0a1d.</p>
+</main>
+</body>
+</html>

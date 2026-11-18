@@ -1,0 +1,197 @@
+/*
+ * Vehicles UX mockups: shared foundation.
+ * Tokens are the light-theme values of frontend/src/index.css (see DESIGN.md 1.1),
+ * and the atoms mirror the real components they stand in for:
+ *   .btn -> ui/button, .inp -> ui/input, .plate -> PlateChip, .badge -> VehicleStatusBadge,
+ *   .aed -> FineAmount (official dirham mark), .chip -> TabChip / SiteChip.
+ * Each direction (a.css, b.css, c.css) only adds layout on top of this file.
+ */
+:root {
+  --bg: #f5f4f1; --surface: #ffffff; --raised: #fafaf6; --tinted: #f0eee8;
+  --primary: #0d2845; --primary-hover: #1d3a5e; --primary-soft: #e8edf3; --on-primary: #ffffff;
+  --accent: #c8102e; --accent-soft: #fbe5e8; --destructive-text: #b91c1c;
+  --success: #047857; --success-soft: #d6f0e4; --warning: #92400e; --warning-soft: #fbedd8;
+  --info: #1d4ed8; --info-soft: #e0e8f8;
+  --text: #1c1f24; --muted: #5a6068; --faint: #8b9098;
+  --border: #e6e4dd; --border-strong: #d4d1c8; --hairline: #efece5;
+  --paper: #fffdf8;
+  --r-sm: 8px; --r-md: 12px; --r-lg: 16px;
+  --sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --arabic: "Noto Sans Arabic", "Inter", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --bar: 52px;
+}
+* { box-sizing: border-box; }
+html { font-size: 19px; background: #e9e7e1; }
+html[data-device="mobile"] { font-size: 16px; }
+body { margin: 0; color: var(--text); font: 1rem/1.5 var(--sans); -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+h1, h2, h3, h4, p, dl, dd, ul, ol { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+img, svg { display: block; }
+[hidden] { display: none !important; }
+.sr-only { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.ltr { direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+:focus-visible { outline: 2px solid color-mix(in oklab, var(--primary) 60%, transparent); outline-offset: 2px; }
+
+/* ── Review bar (mockup chrome, not part of the product) ─────────────────── */
+.mockbar { position: fixed; inset-block-start: 0; inset-inline: 0; z-index: 100; display: flex; align-items: center; gap: 10px; block-size: var(--bar); padding-inline: 12px; background: #16181c; color: #e9e7e1; font: 500 12px/1.2 var(--sans); direction: ltr; overflow-x: auto; }
+.mockbar a { color: #b9cbe0; text-decoration: none; white-space: nowrap; }
+.mockbar a:hover { text-decoration: underline; }
+.mockbar .grow { flex: 1; }
+.seg { display: inline-flex; flex-shrink: 0; padding: 2px; border-radius: 8px; background: #2a2d33; }
+.seg button { padding: 6px 10px; border: 0; border-radius: 6px; background: transparent; color: #b4b8bf; font-weight: 600; white-space: nowrap; }
+.seg button[aria-pressed="true"] { background: #f5f4f1; color: #16181c; }
+.mockbar select { padding: 6px 8px; border: 1px solid #3a3d44; border-radius: 8px; background: #2a2d33; color: #e9e7e1; font-weight: 600; }
+
+/* ── Device frame ────────────────────────────────────────────────────────── */
+.stage { display: grid; place-items: start center; min-block-size: 100vh; padding-block-start: var(--bar); }
+.frame { position: relative; display: flex; flex-direction: column; inline-size: 100%; block-size: calc(100vh - var(--bar)); overflow: hidden; background: var(--bg); container: frame / inline-size; }
+.frame[dir="rtl"] { font-family: var(--arabic); }
+html[data-device="mobile"] .frame { inline-size: 390px; block-size: min(820px, calc(100vh - var(--bar) - 28px)); margin-block-start: 14px; border: 1px solid #cfccc4; border-radius: 26px; box-shadow: 0 26px 60px rgba(13, 40, 69, 0.22); }
+.scroll { flex: 1; min-block-size: 0; overflow-y: auto; }
+
+/* Simplified stand-in for the real TopNav. */
+.topnav { display: flex; flex-shrink: 0; align-items: center; gap: 0.9rem; padding: 0.45rem 1.25rem; border-block-end: 1px solid var(--border); background: var(--surface); }
+.topnav img { inline-size: 1.7rem; block-size: 1.7rem; object-fit: contain; }
+.topnav strong { color: var(--primary); font-size: 0.86rem; letter-spacing: -0.01em; }
+.topnav nav { display: flex; gap: 0.15rem; margin-inline-start: 0.6rem; }
+.topnav nav span { padding: 0.3rem 0.65rem; border-radius: var(--r-sm); color: var(--muted); font-size: 0.76rem; font-weight: 500; }
+.topnav nav span.on { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+@container frame (max-width: 720px) { .topnav nav { display: none; } .topnav { padding-inline: 0.8rem; } }
+
+/* ── Atoms ───────────────────────────────────────────────────────────────── */
+.btn { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 0.4rem; min-block-size: 2rem; padding: 0.3rem 0.75rem; border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; color: var(--text); font-size: 0.74rem; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background-color 150ms, border-color 150ms; }
+.btn svg { inline-size: 0.95em; block-size: 0.95em; }
+.btn.primary { background: var(--primary); color: var(--on-primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.secondary { border-color: var(--border); background: var(--surface); }
+.btn.secondary:hover { border-color: var(--border-strong); background: var(--tinted); }
+.btn.ghost { color: var(--muted); }
+.btn.ghost:hover { background: var(--tinted); color: var(--text); }
+.btn.lg { min-block-size: 2.5rem; padding: 0.5rem 1.1rem; font-size: 0.84rem; }
+.btn.icon { inline-size: 2rem; padding: 0; }
+.link { display: inline-flex; align-items: center; gap: 0.3rem; border: 0; background: none; padding: 0; color: var(--primary); font-size: 0.76rem; font-weight: 600; text-decoration: none; }
+.link:hover { text-decoration: underline; }
+.link svg { inline-size: 0.9em; block-size: 0.9em; }
+[dir="rtl"] .flip { transform: scaleX(-1); }
+
+.plate { display: inline-flex; align-items: center; justify-content: center; min-inline-size: 5.4em; padding: 0.25em 0.55em; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--raised); color: var(--primary); font: 600 0.73rem var(--mono); font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+.plate.sm { font-size: 0.66rem; }
+.plate.lg { font-size: 0.95rem; }
+.plate.xl { font-size: 1.5rem; padding: 0.2em 0.6em; border-radius: var(--r-md); }
+
+.badge { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.18em 0.6em; border: 0; border-radius: 99px; font-size: 0.66rem; font-weight: 600; white-space: nowrap; }
+.badge svg { inline-size: 0.95em; block-size: 0.95em; flex-shrink: 0; }
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.warning { background: var(--warning-soft); color: var(--warning); }
+.badge.danger { background: var(--accent-soft); color: var(--destructive-text); }
+.badge.info { background: var(--info-soft); color: var(--info); }
+.badge.neutral { background: var(--tinted); color: var(--muted); }
+button.badge:hover { filter: brightness(0.96); }
+
+.aed { display: inline-flex; align-items: center; gap: 0.22em; font-family: var(--mono); font-weight: 600; font-variant-numeric: tabular-nums; direction: ltr; unicode-bidi: isolate; white-space: nowrap; }
+.aed i { inline-size: 0.82em; block-size: 0.82em; flex-shrink: 0; background: currentColor; -webkit-mask: url(assets/dirham-symbol.png) center / contain no-repeat; mask: url(assets/dirham-symbol.png) center / contain no-repeat; }
+
+.chip { display: inline-flex; flex-shrink: 0; align-items: center; gap: 0.4em; padding: 0.3em 0.85em; border: 1px solid var(--border); border-radius: 99px; background: var(--surface); color: var(--muted); font-size: 0.74rem; font-weight: 600; white-space: nowrap; }
+.chip:hover { border-color: var(--border-strong); color: var(--text); }
+.chip[aria-pressed="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.chip .n { font: 500 0.9em var(--mono); opacity: 0.75; }
+.chip.soft[aria-pressed="true"] { background: var(--primary-soft); color: var(--primary); }
+
+.art { inline-size: 2.6rem; block-size: 2.6rem; object-fit: contain; }
+.thumb { display: grid; place-items: center; inline-size: 2.85rem; block-size: 2rem; flex-shrink: 0; border: 1px dashed var(--border-strong); border-radius: var(--r-sm); background: var(--raised); color: var(--faint); }
+.thumb svg { inline-size: 0.9rem; block-size: 0.9rem; }
+.muted { color: var(--muted); }
+.faint { color: var(--faint); }
+
+/* Tables (the in-panel table shape the fleet ledger uses). */
+.tbl-wrap { inline-size: 100%; overflow-x: auto; }
+table.tbl { inline-size: 100%; border-collapse: collapse; font-size: 0.76rem; }
+.tbl th { padding: 0.5rem 0.65rem; border-block-end: 1px solid var(--border); color: var(--muted); font-size: 0.66rem; font-weight: 600; text-align: start; white-space: nowrap; }
+.tbl td { padding: 0.5rem 0.65rem; border-block-end: 1px solid var(--hairline); vertical-align: middle; white-space: nowrap; }
+.tbl td[dir="auto"] { white-space: normal; }
+.tbl tbody tr:last-child td { border-block-end: 0; }
+.tbl tbody tr:hover { background: var(--raised); }
+.tbl .end { text-align: end; }
+.tbl .acts { display: flex; justify-content: flex-end; gap: 0.35rem; }
+.two-line strong { display: block; font-weight: 600; }
+.two-line small { display: block; color: var(--muted); font-size: 0.66rem; }
+
+/* ── Forms ───────────────────────────────────────────────────────────────── */
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.grid2 > .full { grid-column: 1 / -1; }
+.fld { display: flex; min-inline-size: 0; flex-direction: column; gap: 0.3rem; }
+.fld > label, .fld > .lbl { display: flex; align-items: baseline; gap: 0.35em; font-size: 0.72rem; font-weight: 600; }
+.fld .req { color: var(--accent); }
+.fld .opt { color: var(--faint); font-size: 0.92em; font-weight: 500; }
+.fld .hint { color: var(--muted); font-size: 0.66rem; }
+.inp { inline-size: 100%; block-size: 2.15rem; padding: 0 0.6rem; border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); font-size: 0.8rem; }
+textarea.inp { block-size: auto; min-block-size: 4.6rem; padding-block: 0.4rem; resize: vertical; line-height: 1.55; }
+.inp:focus { outline: 2px solid color-mix(in oklab, var(--primary) 55%, transparent); outline-offset: 1px; border-color: var(--primary); }
+.inp.mono { font-family: var(--mono); }
+.drop { display: flex; align-items: center; gap: 0.7rem; padding: 0.8rem 0.9rem; border: 1px dashed var(--border-strong); border-radius: var(--r-md); background: var(--raised); color: var(--muted); font-size: 0.74rem; }
+.drop svg { inline-size: 1.1rem; block-size: 1.1rem; flex-shrink: 0; color: var(--primary); }
+.drop strong { display: block; color: var(--text); font-size: 0.78rem; }
+
+/* The damage statement that replaces the old required «Damage cost» input. */
+.cover { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.7rem 0.8rem; border-radius: var(--r-md); background: var(--primary-soft); color: var(--primary); }
+.cover svg { inline-size: 1.15rem; block-size: 1.15rem; flex-shrink: 0; margin-block-start: 0.1rem; }
+.cover b { display: block; font-size: 0.72rem; font-weight: 600; }
+.cover span { display: block; font-size: 0.8rem; font-weight: 500; }
+.ins-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: 0.55rem 1rem; }
+.ins-facts dt { color: var(--muted); font-size: 0.64rem; }
+.ins-facts dd { font-size: 0.76rem; font-weight: 500; overflow-wrap: anywhere; }
+/* A short dated list beside a form or inside a sheet: fines on a vehicle, past licence periods. */
+.mini-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.2rem 0.9rem; padding-block: 0.45rem; border-block-end: 1px solid var(--hairline); font-size: 0.76rem; }
+.mini-list li:last-child { border-block-end: 0; }
+.alert { padding: 0.55rem 0.75rem; border: 1px solid color-mix(in oklab, var(--accent) 35%, transparent); border-radius: var(--r-sm); background: var(--accent-soft); color: var(--destructive-text); font-size: 0.74rem; }
+@container frame (max-width: 560px) { .grid2 { grid-template-columns: 1fr; } }
+
+/* ── Official paper (stand-in for PaperSheet / the GSSG-VA letter) ───────── */
+.paper { padding: 1.4rem 1.5rem; border: 1px solid #dcd8cd; background: var(--paper); box-shadow: 0 4px 16px rgba(13, 40, 69, 0.08); color: #15171a; font-family: var(--arabic); font-size: 0.72rem; line-height: 1.7; }
+.paper-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block-end: 0.7rem; border-block-end: 2px solid var(--primary); }
+.paper-head img { inline-size: 2.6rem; block-size: 2.6rem; object-fit: contain; }
+.paper-head strong { display: block; color: var(--primary); font-size: 0.8rem; }
+.paper-head small { font-size: 0.64rem; }
+.paper h4 { margin-block: 1rem 0.8rem; color: var(--primary); font-size: 0.95rem; text-align: center; }
+.paper dl { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #55595f; }
+.paper dl > div { display: flex; gap: 0.5rem; padding: 0.3rem 0.55rem; border-block-end: 1px solid #d9d5ca; }
+.paper dl > div:nth-child(odd) { border-inline-end: 1px solid #d9d5ca; }
+.paper dl > div.wide { grid-column: 1 / -1; border-inline-end: 0; }
+.paper dt { flex-shrink: 0; color: #4b5057; }
+.paper dt::after { content: ":"; }
+.paper dd { font-weight: 600; overflow-wrap: anywhere; }
+.paper .body { min-block-size: 4.5rem; margin-block-start: 0.7rem; padding: 0.6rem 0.7rem; border: 1px solid #55595f; white-space: pre-line; }
+.paper .pending { color: #8a6a1c; font-weight: 500; }
+@container frame (max-width: 560px) { .paper dl { grid-template-columns: 1fr; } .paper dl > div:nth-child(odd) { border-inline-end: 0; } }
+
+/* ── Toast ───────────────────────────────────────────────────────────────── */
+.toast { position: absolute; inset-block-end: 1rem; inset-inline-end: 1rem; z-index: 60; display: flex; align-items: center; gap: 0.5rem; max-inline-size: calc(100% - 2rem); padding: 0.6rem 0.85rem; border-radius: var(--r-sm); background: var(--primary); color: var(--on-primary); font-size: 0.76rem; font-weight: 500; opacity: 0; transform: translateY(8px); pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease); }
+.toast.show { opacity: 1; transform: none; }
+.toast svg { inline-size: 1rem; block-size: 1rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+/* ── Shared form extras ──────────────────────────────────────────────────── */
+.inp[aria-invalid="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent-soft) 45%, var(--surface)); }
+/* Money runs left to right in both languages: the dirham mark, then the amount. */
+.inp-aed { position: relative; }
+.inp-aed i { position: absolute; inset-block: 0; inset-inline-start: 0.65rem; inline-size: 0.8rem; margin-block: auto; block-size: 0.8rem; background: var(--muted); -webkit-mask: url(assets/dirham-symbol.png) center / contain no-repeat; mask: url(assets/dirham-symbol.png) center / contain no-repeat; pointer-events: none; }
+.inp-aed .inp { padding-inline-start: 1.9rem; }
+.site-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.site-list li { display: flex; align-items: center; gap: 0.6rem; }
+.site-list .inp { flex: 1; }
+/* Phone: a table row reads as one stacked record, the way the real pages swap rows for cards. */
+@container frame (max-width: 720px) {
+  .tbl .opt { display: none; }
+  .tbl thead { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); }
+  .tbl, .tbl tbody { display: block; }
+  .tbl tbody tr { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.8rem; padding: 0.65rem 0.75rem; border-block-end: 1px solid var(--hairline); }
+  .tbl tbody tr:last-child { border-block-end: 0; }
+  .tbl td, .tbl tbody th { padding: 0; border: 0; white-space: normal; }
+  .tbl td:last-child:has(.acts) { flex-basis: 100%; }
+  .tbl .acts { justify-content: flex-start; }
+}

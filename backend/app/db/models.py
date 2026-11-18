@@ -1001,12 +1001,22 @@ class VehicleAccident(Base):
     employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     time: Mapped[str | None] = mapped_column(String(5), nullable=True)
-    location_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    # A report is written in the operator's language; the Arabic halves are
+    # what the official letter prints, asked for when the letter is issued.
+    location_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
     location_en: Mapped[str | None] = mapped_column(Text, nullable=True)
-    description_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    description_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
     description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     police_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Kept for reports filed before migration 0120; insurance covers the
+    # damage and the technician estimates it, so nothing writes it any more.
     damage_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    # Optional insurance claim, recorded at filing or later.
+    claim_no: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    claim_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    insurer: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    repair_garage: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    cost_payer: Mapped[str | None] = mapped_column(String(16), nullable=True)
     status: Mapped[str] = mapped_column(
         String(8), nullable=False, default="open", server_default="open"
     )
@@ -1020,7 +1030,18 @@ class VehicleAccident(Base):
     vehicle: Mapped[Vehicle] = relationship(back_populates="accidents")
     employee: Mapped[Employee | None] = relationship()
 
-    __table_args__ = (Index("ix_vehicle_accidents_vehicle", "vehicle_id"),)
+    __table_args__ = (
+        Index("ix_vehicle_accidents_vehicle", "vehicle_id"),
+        CheckConstraint(
+            "claim_status IS NULL OR claim_status IN "
+            "('not_submitted', 'submitted', 'under_repair', 'settled')",
+            name="ck_vehicle_accidents_claim_status",
+        ),
+        CheckConstraint(
+            "cost_payer IS NULL OR cost_payer IN ('insurer', 'company', 'driver')",
+            name="ck_vehicle_accidents_cost_payer",
+        ),
+    )
 
 
 class VehicleMaintenance(Base):

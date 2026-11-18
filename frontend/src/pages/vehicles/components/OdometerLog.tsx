@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/input'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, type OdometerMonthRead, type OdometerRowRead, type OdometerUpsert } from '@/lib/api'
 import { normalizeDigits } from '@/lib/utils'
-import { formatNumber, localized } from '@/lib/language'
-import { EMPTY_VALUE, formatAed, invalidateVehicleQueries, vehicleErrorMessage } from '../vehicleUtils'
+import { localized } from '@/lib/language'
+import { EMPTY_VALUE, formatCount, invalidateVehicleQueries, vehicleErrorMessage } from '../vehicleUtils'
+import { AedAmount } from './FineAmount'
 import { PlateChip } from './PlateChip'
 
 export function OdometerLog({ data, canEdit, isMobile }: {
@@ -18,7 +19,7 @@ export function OdometerLog({ data, canEdit, isMobile }: {
   canEdit: boolean
   isMobile: boolean
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const searchId = useId()
   const [query, setQuery] = useState('')
   const needle = searchKey(query)
@@ -28,16 +29,6 @@ export function OdometerLog({ data, canEdit, isMobile }: {
   const headings = ['plate', 'openingKm', 'closingKm', 'kmDriven', 'maintenanceCount', 'cost']
   return (
     <>
-      <dl className="mb-4 flex flex-wrap gap-x-8 gap-y-3 rounded-xl border border-border bg-surface px-4 py-3">
-        <div>
-          <dt className="text-xs text-muted-foreground">{t('vehicles.fleetKmDriven')}</dt>
-          <dd className="mt-1 font-mono font-semibold"><bdi>{formatNumber(data.total_km_driven, i18n.language)} {t('vehicles.km')}</bdi></dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">{t('vehicles.totalMaintenanceCost')}</dt>
-          <dd className="mt-1 font-mono font-semibold"><bdi>{formatAed(data.total_maintenance_cost, i18n.language)}</bdi></dd>
-        </div>
-      </dl>
       {data.rows.length > 0 && (
         <div className="relative mb-4 max-w-md">
           <Search className="pointer-events-none absolute inset-y-0 start-2.5 my-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
@@ -120,7 +111,7 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
     const value = kind === 'opening' ? opening : closing
     if (!editable) {
       const number = kind === 'opening' ? row.opening_km : row.closing_km
-      return <bdi>{number == null ? EMPTY_VALUE : formatNumber(number, i18n.language)}</bdi>
+      return <bdi>{number == null ? EMPTY_VALUE : formatCount(number)}</bdi>
     }
     return <Input
       type="number"
@@ -158,10 +149,10 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
     reading('opening'),
     reading('closing'),
     <bdi key="distance">
-      {row.km_driven == null ? EMPTY_VALUE : formatNumber(row.km_driven, i18n.language)}
+      {row.km_driven == null ? EMPTY_VALUE : formatCount(row.km_driven)}
     </bdi>,
-    <bdi key="count">{formatNumber(row.maintenance_count, i18n.language)}</bdi>,
-    <bdi key="cost">{formatAed(row.maintenance_cost, i18n.language)}</bdi>,
+    <bdi key="count">{formatCount(row.maintenance_count)}</bdi>,
+    <AedAmount key="cost" value={row.maintenance_cost} size="sm" />,
   ]
   if (mobile) return (
     <article className="rounded-xl border border-border bg-surface p-3">

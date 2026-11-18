@@ -1,0 +1,174 @@
+/*
+ * «Counter and paper» layout. Reading order on every page: navy band (where you
+ * are), the counter across its lower edge (start a new request), then the
+ * register. Spacing comes from one scale; related things sit a step or two
+ * apart, sections three steps or more.
+ */
+:root { --s-1: 0.25rem; --s-2: 0.5rem; --s-3: 0.75rem; --s-4: 1rem; --s-5: 1.5rem; --s-6: 2rem; --s-7: 3rem; --lift: 0 10px 26px rgba(13, 40, 69, 0.14); }
+.v-wrap { inline-size: min(78rem, 100%); margin-inline: auto; padding-inline: var(--s-5); }
+
+/* ── Band ────────────────────────────────────────────────────────────────── */
+.v-band { flex-shrink: 0; padding-block: var(--s-4) calc(var(--s-7) + var(--s-5)); background: var(--primary); color: var(--on-primary); }
+.v-band.big { padding-block-start: var(--s-6); }
+.v-band.flat { padding-block-end: var(--s-5); }
+.v-band :focus-visible { outline-color: var(--on-primary); }
+.v-back { display: inline-flex; align-items: center; gap: var(--s-1); margin-block-end: var(--s-1); padding: 0; border: 0; background: none; color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.76rem; font-weight: 600; }
+.v-back:hover { color: var(--on-primary); text-decoration: underline; }
+.v-back svg { inline-size: 0.9em; block-size: 0.9em; }
+.v-band-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3) var(--s-5); }
+.v-eyebrow { color: color-mix(in oklab, var(--on-primary) 70%, transparent); font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+.v-band h1 { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); font-size: 1.6rem; font-weight: 800; letter-spacing: -0.025em; line-height: 1.2; }
+.v-band.big h1 { font-size: 2.4rem; line-height: 1.1; }
+[dir="rtl"] .v-band h1, [dir="rtl"] .v-eyebrow { letter-spacing: 0; }
+[dir="rtl"] .v-band.big h1 { line-height: 1.35; }
+.v-band-desc { max-inline-size: 65ch; margin-block-start: var(--s-1); color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.82rem; }
+.v-band-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.v-band .plate { border-color: transparent; background: var(--surface); }
+.btn.v-ghost { border-color: color-mix(in oklab, var(--on-primary) 35%, transparent); color: var(--on-primary); }
+.btn.v-ghost:hover { background: color-mix(in oklab, var(--on-primary) 12%, transparent); }
+.v-fleet { display: flex; align-items: baseline; gap: var(--s-2); }
+.v-fleet strong { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+.v-fleet span { color: color-mix(in oklab, var(--on-primary) 78%, transparent); font-size: 0.76rem; }
+
+/* ── Counter: the new request, first on the page ─────────────────────────── */
+.v-body { padding-block-end: calc(var(--s-7) + var(--s-5)); }
+.v-counter { margin-block: calc(-1 * var(--s-7)) var(--s-6); }
+/* The one large action of a page. Nothing else on the page is this size. */
+.btn.v-cta { min-block-size: 2.75rem; padding-inline: var(--s-5); font-size: 0.9rem; }
+.v-start, .v-requests { padding: var(--s-5); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--lift); }
+.v-start { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s-4) var(--s-5); }
+.v-start > .art { inline-size: 3.25rem; block-size: 3.25rem; }
+.v-start h2, .v-requests h2 { color: var(--primary); font-size: 1.3rem; font-weight: 700; letter-spacing: -0.015em; line-height: 1.25; }
+[dir="rtl"] :is(.v-start, .v-requests) h2 { letter-spacing: 0; }
+.v-start-text p { margin-block-start: var(--s-1); color: var(--muted); font-size: 0.8rem; }
+.v-go { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: flex-end; gap: var(--s-3); }
+.v-go .fld { inline-size: 17rem; }
+.v-go .inp { block-size: 2.75rem; font-size: 0.86rem; }
+
+.v-doors { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+/* `1fr auto`: a title that wraps never pushes its request button out of line with its neighbours. */
+.v-door { display: grid; grid-template-rows: 1fr auto; gap: var(--s-3); padding: var(--s-4); border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--surface); box-shadow: var(--lift); }
+.v-door-main { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); padding: 0; border: 0; border-radius: var(--r-sm); background: none; text-align: start; }
+.v-door-main .art { inline-size: 2.75rem; block-size: 2.75rem; }
+.v-door-text strong { display: block; color: var(--primary); font-size: 1.05rem; font-weight: 700; letter-spacing: -0.01em; }
+.v-door-main:hover strong { text-decoration: underline; }
+.v-door-text small { display: flex; align-items: center; gap: var(--s-2); margin-block-start: var(--s-1); color: var(--muted); font-size: 0.74rem; font-weight: 500; }
+.v-door-text b { min-inline-size: 1.5rem; padding: 0.05rem 0.4rem; border-radius: 99px; background: var(--tinted); color: var(--muted); font-size: 0.74rem; text-align: center; }
+.v-door-text b.hot { background: var(--primary-soft); color: var(--primary); }
+.v-door-go { inline-size: 1rem; block-size: 1rem; color: var(--faint); }
+
+.v-requests { display: grid; gap: var(--s-4); }
+.v-req-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(11.5rem, 1fr)); gap: var(--s-3); }
+.v-req { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s-3); min-block-size: 3.25rem; padding-block: var(--s-2); padding-inline: var(--s-3) var(--s-4); border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--primary); font-size: 0.88rem; font-weight: 700; text-align: start; transition: background-color 150ms, border-color 150ms; }
+.v-req .art { inline-size: 2.1rem; block-size: 2.1rem; padding: 0.15rem; border-radius: 6px; background: var(--surface); }
+.v-req svg { inline-size: 1rem; block-size: 1rem; }
+.v-req:hover { border-color: var(--primary); background: var(--primary-soft); }
+.v-req.lead { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+.v-req.lead:hover { background: var(--primary-hover); }
+
+/* ── Register ────────────────────────────────────────────────────────────── */
+.v-admin { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-4); font-size: 0.76rem; }
+.v-admin > span { color: var(--muted); font-weight: 600; }
+.v-sec-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-3) var(--s-5); margin-block: var(--s-7) var(--s-3); }
+.v-sec-head h2 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; }
+[dir="rtl"] .v-sec-head h2 { letter-spacing: 0; }
+.v-sec-head p { color: var(--muted); font-size: 0.78rem; }
+.v-tools { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.v-search { position: relative; inline-size: 17rem; max-inline-size: 100%; }
+.v-search svg { position: absolute; inset-block: 0; inset-inline-start: 0.6rem; inline-size: 0.85rem; block-size: 0.85rem; margin-block: auto; color: var(--muted); }
+.v-search .inp { padding-inline-start: 1.9rem; }
+/* No rule under the tabs: the register below opens with its own navy rule. */
+.v-tabs { display: flex; max-inline-size: 100%; gap: var(--s-5); margin-block-end: var(--s-3); overflow: auto hidden; scrollbar-width: none; }
+.v-tabs button { display: inline-flex; flex-shrink: 0; align-items: center; gap: var(--s-2); padding: var(--s-2) 0; border: 0; border-block-end: 2px solid transparent; background: none; color: var(--muted); font-size: 0.84rem; font-weight: 600; white-space: nowrap; }
+.v-tabs button span { color: var(--faint); font-size: 0.85em; }
+.v-tabs button[aria-pressed="true"] { border-block-end-color: var(--primary); color: var(--primary); }
+.v-tabrow { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--s-2) var(--s-5); }
+.v-tabrow .v-tabs { flex: 1 1 18rem; }
+.v-stats { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-5); margin-block-end: var(--s-3); }
+.v-stats > div { display: flex; align-items: baseline; gap: var(--s-2); }
+.v-stats dt { color: var(--muted); font-size: 0.72rem; }
+.v-stats dd { color: var(--primary); font-size: 0.95rem; font-weight: 700; }
+
+/* Sheets: square-shouldered, ruled in navy like the letterhead. */
+.v-sheet { margin-block-end: var(--s-4); border: 1px solid var(--border); border-block-start: 2px solid var(--primary); border-radius: 0 0 var(--r-sm) var(--r-sm); background: var(--surface); overflow: hidden; }
+.v-sheet-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-4); padding: var(--s-3) var(--s-3) var(--s-2); }
+.v-sheet-head h3 { font-size: 1rem; font-weight: 700; }
+.v-sheet-head span { color: var(--muted); font-size: 0.72rem; }
+.v-period { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); }
+.v-pad { padding: 0 var(--s-3) var(--s-2); }
+.v-empty { padding: var(--s-6) var(--s-4); color: var(--muted); font-size: 0.8rem; text-align: center; }
+.v-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--s-4) var(--s-5); margin-block-end: var(--s-6); }
+.v-facts dt { color: var(--muted); font-size: 0.68rem; }
+.v-facts dd { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1); font-size: 0.84rem; font-weight: 600; }
+
+/* Ledger entries: the date indexes the entry without outweighing the counter above it. */
+.v-ledger { border-block-start: 2px solid var(--primary); }
+.v-entry { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: var(--s-5); padding-block: var(--s-5); border-block-end: 1px solid var(--border); }
+.v-entry-date { display: grid; align-content: start; justify-items: start; color: var(--muted); font-size: 0.7rem; }
+.v-entry-date b { color: var(--text); font-size: 1.5rem; font-weight: 600; line-height: 1.1; }
+.v-entry-date span { font-weight: 600; }
+.v-entry-top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-2); }
+.v-entry-top > div { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: 0.76rem; }
+.v-entry h3 { font-size: 0.92rem; font-weight: 700; }
+.v-entry-desc { inline-size: fit-content; max-inline-size: min(72ch, 100%); margin-block: var(--s-2); font-size: 0.95rem; line-height: 1.65; }
+.v-entry-meta { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-5); color: var(--muted); font-size: 0.74rem; }
+.v-entry-meta b { color: var(--text); font-weight: 600; }
+.v-entry-ins { display: grid; gap: var(--s-3); margin-block: var(--s-3); padding: var(--s-3) var(--s-4); border-radius: var(--r-sm); background: var(--tinted); }
+.v-entry-ins .cover { padding: 0; background: none; }
+.v-entry-acts { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+
+/* ── Compose page ────────────────────────────────────────────────────────── */
+.v-compose { position: absolute; inset-block: calc(2.6rem + 1px) 0; inset-inline: 0; z-index: 30; display: flex; flex-direction: column; background: var(--bg); animation: v-in 260ms var(--ease); }
+@keyframes v-in { from { opacity: 0; translate: 0 10px; } }
+.v-compose-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: start; gap: var(--s-6); padding-block: var(--s-5) var(--s-7); }
+.v-compose-grid.solo { grid-template-columns: minmax(0, 46rem); }
+.v-form { display: flex; min-inline-size: 0; flex-direction: column; gap: var(--s-6); }
+.v-fsec h3 { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); margin-block-end: var(--s-4); padding-block-end: var(--s-2); border-block-end: 1px solid var(--border); color: var(--primary); font-size: 1.1rem; font-weight: 700; }
+.v-fsec h3 span { color: var(--faint); font-size: 0.8rem; font-weight: 500; }
+.v-fsec h3 small { flex-basis: 100%; color: var(--muted); font-size: 0.74rem; font-weight: 500; }
+.v-side { position: sticky; inset-block-start: var(--s-5); }
+.v-side-label { margin-block-end: var(--s-2); color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+.v-side .paper { padding: var(--s-6); font-size: 0.78rem; }
+.v-note { padding: var(--s-4); border: 1px solid var(--border); border-block-start: 2px solid var(--primary); background: var(--surface); font-size: 0.78rem; }
+.v-note h4 { margin-block-end: var(--s-2); color: var(--primary); font-size: 0.9rem; }
+.v-compose-foot { flex-shrink: 0; padding-block: var(--s-3); border-block-start: 1px solid var(--border); background: var(--surface); }
+.v-compose-foot .v-wrap { display: flex; justify-content: flex-end; gap: var(--s-2); }
+.v-compose-foot .primary { min-inline-size: 11rem; }
+
+@container frame (max-width: 1100px) {
+  .v-doors { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .v-start { grid-template-columns: auto minmax(0, 1fr); }
+  .v-go { grid-column: 1 / -1; justify-content: stretch; }
+  .v-go .fld { flex: 1 1 14rem; }
+  .v-compose-grid { grid-template-columns: minmax(0, 1fr); }
+  .v-side { position: static; }
+}
+@container frame (max-width: 720px) {
+  .v-wrap { padding-inline: var(--s-3); }
+  .v-band { padding-block-end: calc(var(--s-7) + var(--s-3)); }
+  .v-band h1 { font-size: 1.3rem; }
+  .v-band.big h1 { font-size: 1.7rem; }
+  .v-band-desc, .v-fleet, .v-start-text p { display: none; }
+  .v-counter { margin-block-end: var(--s-5); }
+  .v-start, .v-requests { padding: var(--s-4); }
+  .v-start > .art { inline-size: 2.4rem; block-size: 2.4rem; }
+  .v-start h2, .v-requests h2 { font-size: 1.1rem; }
+  .v-go .fld, .v-go .v-cta { flex: 1 1 100%; }
+  .v-doors { gap: var(--s-2); }
+  .v-door { padding: var(--s-3); }
+  .v-door-main { grid-template-columns: auto minmax(0, 1fr); }
+  .v-door-main .art { inline-size: 2rem; block-size: 2rem; }
+  .v-door-text strong { font-size: 0.86rem; }
+  .v-door-go { display: none; }
+  .v-door .v-cta { padding-inline: var(--s-2); font-size: 0.78rem; }
+  .v-req-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+  .v-req { font-size: 0.78rem; }
+  .v-req > svg { display: none; }
+  .v-req:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .v-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3) var(--s-4); }
+  .v-search { inline-size: 100%; }
+  .v-entry { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+  .v-entry-date { grid-auto-flow: column; align-items: baseline; justify-content: start; gap: var(--s-2); }
+  .v-compose-foot .btn { flex: 1; }
+  .v-side .paper { padding: var(--s-4); }
+}

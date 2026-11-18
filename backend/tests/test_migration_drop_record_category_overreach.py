@@ -192,8 +192,8 @@ def test_legacy_deny_keeps_the_stray_record_hidden_without_hiding_permit_letters
     assert repaired == {k: v for k, v in merged.items() if k != overreach}
     # The ORM maps the current schema (later ``users`` columns included). Later
     # revisions leave overrides alone (0119 adds a table, 0120 a nullable users
-    # column, 0121 rewrites only departed employees' duty locations), so the
-    # overrides above are unchanged at head.
+    # column, 0121 rewrites only departed employees' duty locations, 0122 only
+    # vehicle_accidents), so the overrides above are unchanged at head.
     command.upgrade(config, "head")
     with engine.connect() as connection:
         assert _overrides(connection, user_id) == repaired

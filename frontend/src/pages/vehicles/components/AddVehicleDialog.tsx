@@ -31,15 +31,14 @@ import {
   vehicleFormSchema,
 } from '../vehicleForm'
 import {
-  DialogBody,
-  DialogFooter,
-  DialogShell,
+  FieldGrid,
   FormAlert,
   UploadSlot,
 } from '@/components/forms/DialogShell'
 import { VehicleFormFields } from './VehicleFormFields'
 import { VehicleLicenceScanControl } from './VehicleLicenceScanControl'
 import { VehiclePhotoPicker } from './VehiclePhotoPicker'
+import { RequestBody, RequestFooter, RequestShell } from './RequestShell'
 
 interface Props {
   open: boolean
@@ -63,12 +62,11 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
   const sites = sitesQuery.data
 
   return (
-    <DialogShell
+    <RequestShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.addVehicleTitle')}
       description={t('vehicles.addVehicleDesc')}
-      size="xl"
       busy={busy}
     >
       {sites ? (
@@ -79,13 +77,13 @@ export function AddVehicleDialog({ open, onOpenChange, onSaved }: Props): React.
           onBusyChange={setBusy}
         />
       ) : (
-        <DialogBody>
+        <RequestBody>
           <Skeleton className="h-9 w-full" />
           <Skeleton className="h-9 w-2/3" />
           <Skeleton className="h-9 w-1/2" />
-        </DialogBody>
+        </RequestBody>
       )}
-    </DialogShell>
+    </RequestShell>
   )
 }
 
@@ -187,17 +185,17 @@ function AddVehicleForm({
         mutation.mutate(values)
       })}
     >
-      <DialogBody>
+      <RequestBody>
         <FormAlert id={alertId} message={alert} />
         <VehicleFormFields
           form={form}
           sites={sites}
           mode="create"
+          request
           fieldIdPrefix={fieldId}
           alertId={alertId}
-        />
-
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          licenceAttachments={
+        <FieldGrid>
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-3">
             <span className="text-xs font-semibold text-foreground">
               {t('vehicles.mainPhoto')}
@@ -262,22 +260,16 @@ function AddVehicleForm({
               disabled={mutation.isPending}
             />
           </div>
-        </div>
-      </DialogBody>
+        </FieldGrid>
+          }
+        />
+      </RequestBody>
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={mutation.isPending}
-          onClick={() => onOpenChange(false)}
-        >
-          {t('vehicles.cancel')}
-        </Button>
-        <Button type="submit" disabled={mutation.isPending}>
+      <RequestFooter busy={mutation.isPending}>
+        <Button type="submit" size="lg" className="sm:min-w-[11rem]" disabled={mutation.isPending}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </DialogFooter>
+      </RequestFooter>
     </form>
       <VehiclePhotoPicker
         open={photoPickerOpen}

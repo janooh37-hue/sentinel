@@ -1,21 +1,18 @@
 /**
  * Vehicle file — `/vehicles/:id`.
  *
- * The whole record of one vehicle on one page: a photo + facts overview, then
- * five registers behind a chip bar — Fines, Renewals, Accidents, Maintenance,
- * Photos. The active register lives in the URL (`?tab=accidents`), so the
- * accidents register can link straight at it and a reload keeps its place.
+ * The navy band identifies the vehicle, the request counter starts its work,
+ * and the photo and facts precede six counted registers. The active register
+ * lives in the URL (`?tab=accidents`), so links and reloads keep their place.
  *
  * The vehicle response holds the registers, while maintenance requests and the
  * contractor setting use their shared queries. The operating-site name comes
  * from the cached sites list.
  *
  * Ownership of writes: every dialog (Renew, Fine, Accident, Maintenance) and
- * `AccidentCard` own their own mutation, toast and invalidation — this page
- * only decides which one is open. Its own mutations are the three the dialogs
- * do not cover: delete a fine, delete a maintenance row, and add/remove a
- * gallery photo. All of them go through `invalidateVehicleQueries`, so the hub
- * summary, the ledger and the fleet-wide registers refresh with this file.
+ * the accident ledger own their own mutation, toast and invalidation — this
+ * page only decides which request is open. Record, payment and file actions
+ * invalidate the hub, fleet and affected registers with the vehicle file.
  *
  * Capability gating: `vehicles.view` is enforced by the route. Renew, Add fine,
  * Generate letter, New report, Add maintenance and the photo upload need
@@ -27,13 +24,12 @@ import { useCallback, useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Car,
-  ChevronLeft,
-  ChevronRight,
   FileText,
   History,
   Image as ImageIcon,
   Loader2,
   Pencil,
+  Plus,
   RotateCcw,
   Star,
   Trash2,
@@ -48,13 +44,13 @@ import { toast } from '@/lib/toast'
 import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { Button } from '@/components/ui/button'
-import { buttonVariants } from '@/components/ui/button-variants'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DocumentViewerDialog } from '@/components/ui/document-viewer-dialog'
 import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { FileUploadZone } from '@/components/ui/file-upload-zone'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ServiceArtwork } from '@/components/ui/service-artwork'
 import {
   TableBody,
   TableCell,
@@ -77,7 +73,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
-import { formatNumber, isArabic, localized } from '@/lib/language'
+import { localized } from '@/lib/language'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { VehicleRecordLink } from './components/VehicleRecordLink'
 
@@ -88,25 +84,25 @@ import {
   VEHICLE_QUERY_KEYS,
   employeeLabel,
   fileLabel,
-  formatAed,
+  formatCount,
   formatDateTime,
-  formatFilsAed,
   formatIsoDate,
   invalidateVehicleQueries,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import type { Translate } from './vehicleUtils'
-import { AccidentCard } from './components/AccidentCard'
+import { AccidentLedger } from './components/AccidentCard'
 import { AccidentDialog } from './components/AccidentDialog'
 import { FineActions, type FineActionCallbacks } from './components/FineActions'
-import { FineAmount } from './components/FineAmount'
+import { AedAmount, FineAmount } from './components/FineAmount'
 import { FineDialog } from './components/FineDialog'
 import { FinePaymentDialog, type FinePaymentMode } from './components/FinePaymentDialog'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
 import { MaintenanceRequestDialog } from './components/MaintenanceRequestDialog'
 import { PlateChip } from './components/PlateChip'
-import { TabChip } from './components/TabChip'
+import { RegisterTabs, ServicePage } from './components/ServiceLayout'
+import { BAND_BUTTON, SERVICE_LIFT } from './components/serviceStyles'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
@@ -148,7 +144,6 @@ export function VehicleDetailPage(): React.JSX.Element {
 
   const { t, i18n } = useTranslation()
   const lang = i18n.language
-  const isAr = isArabic(lang)
   const queryClient = useQueryClient()
   const { has, isLoading: capabilityLoading } = useCapabilities()
   const canEdit = has('vehicles.edit')
@@ -189,7 +184,7 @@ export function VehicleDetailPage(): React.JSX.Element {
   const summaryQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.summary,
     queryFn: () => api.vehiclesSummary(),
-    enabled: vehicleId != null && (tab === 'maintenance' || action === 'maintenance-request'),
+    enabled: vehicleId != null && canEdit,
   })
   const maintenanceRequest = requestsQuery.data?.find(
     (request) => String(request.id) === linkedRequestId && request.status === 'open',
@@ -445,114 +440,42 @@ export function VehicleDetailPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <header className="shrink-0 px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <Link
-          to="/vehicles"
-          className="inline-flex items-center gap-1.5 text-[0.8em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none"
-        >
-          {isAr ? (
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          )}
-          {t('vehicles.backHub')}
-        </Link>
-
-        <div className="mt-1.5 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-2 text-xl font-bold tracking-tight text-foreground md:text-[1.55em]">
-              {t('vehicles.vehicleDetail')}
-              {plate && (
-                <>
-                  <span aria-hidden className="text-faint">
-                    ·
-                  </span>
-                  <PlateChip plate={plate} size="lg" />
-                </>
-              )}
-              {archived && (
-                <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.6em] font-semibold uppercase tracking-wide text-muted-foreground">
-                  {t('vehicles.archivedStatus')}
-                </span>
-              )}
-            </h1>
-            <p className="mt-1 hidden text-[0.84em] text-muted-foreground md:block">
-              {archived ? t('vehicles.archivedNotice') : t('vehicles.detailDesc')}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {vehicle && canMutate && (
-              <>
-                <Link
-                  to={`/vehicles/edit/${vehicle.id}`}
-                  className={buttonVariants({ variant: 'secondary', size: 'sm' })}
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden />
-                  {t('vehicles.editVehicle')}
-                </Link>
-                <Button
-                  type="button"
-                  size="sm"
-                  // Primary only while the license actually needs attention —
-                  // on a valid license Renew is a background action.
-                  variant={vehicle.expiry_status === 'valid' ? 'secondary' : 'default'}
-                  onClick={() => actionOverlay.open('renew')}
-                >
-                  {t('vehicles.renew')}
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="secondary"
-                  onClick={() => actionOverlay.open('fine')}
-                >
-                  {t('vehicles.addFine')}
-                </Button>
-                {fines.length > 0 ? (
-                  <Link
-                    to={`/vehicles/${vehicle.id}/fines-letter`}
-                    className={buttonVariants({ size: 'sm' })}
-                  >
-                    <FileText className="h-3.5 w-3.5" aria-hidden />
-                    {t('vehicles.generateDocument')}
-                  </Link>
-                ) : (
-                  // A letter with no fines is not a document the API accepts;
-                  // the action stays visible so its absence is explained.
-                  <Button type="button" size="sm" disabled title={t('vehicles.noFines')}>
-                    <FileText className="h-3.5 w-3.5" aria-hidden />
-                    {t('vehicles.generateDocument')}
-                  </Button>
-                )}
-              </>
-            )}
-            {vehicle && canDelete && !archived && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => setArchiveConfirmOpen(true)}
-              >
-                {t('vehicles.archiveVehicle')}
-              </Button>
-            )}
-            {vehicle && canDelete && archived && (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                onClick={() => setRestoreConfirmOpen(true)}
-              >
-                {t('vehicles.restoreVehicle')}
-              </Button>
-            )}
+      <ServicePage
+        band={{
+          back: { to: '/vehicles', label: t('vehicles.backHub') },
+          title: vehicle ? <><PlateChip plate={plate ?? ''} size="lg" /><span dir="auto">{localized(vehicle.type_ar, vehicle.type_en, lang)}</span>{archived && <span className="rounded-full border border-primary-foreground/40 px-2 py-1 text-xs">{t('vehicles.archivedStatus')}</span>}</> : t('vehicles.vehicleDetail'),
+          description: archived ? t('vehicles.archivedNotice') : vehicle ? <span dir="auto">{localized(vehicle.class_ar, vehicle.class_en, lang)} · {siteLabel}</span> : t('vehicles.detailDesc'),
+          actions: <>
+            {vehicle && canMutate && <>
+              <Link to={`/vehicles/edit/${vehicle.id}`} className={BAND_BUTTON}><Pencil className="h-3.5 w-3.5" aria-hidden />{t('vehicles.editVehicle')}</Link>
+              {fines.length > 0 ? <Link to={`/vehicles/${vehicle.id}/fines-letter`} className={BAND_BUTTON}><FileText className="h-3.5 w-3.5" aria-hidden />{t('vehicles.generateDocument')}</Link> : <button type="button" disabled title={t('vehicles.noFines')} className={BAND_BUTTON}><FileText className="h-3.5 w-3.5" aria-hidden />{t('vehicles.generateDocument')}</button>}
+            </>}
+            {vehicle && canDelete && <button type="button" className={BAND_BUTTON} onClick={() => archived ? setRestoreConfirmOpen(true) : setArchiveConfirmOpen(true)}>{t(archived ? 'vehicles.restoreVehicle' : 'vehicles.archiveVehicle')}</button>}
             <RefreshButton />
-          </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
+          </>,
+        }}
+        counter={vehicle && canMutate ? (
+          <section aria-labelledby="vehicle-requests-title" className={cn('rounded-md border border-border bg-surface p-4 md:p-6', SERVICE_LIFT)}>
+            <h2 id="vehicle-requests-title" className="mb-4 text-[1.1rem] font-bold text-primary-text md:text-[1.3rem]">{t('vehicles.newForVehicle')}</h2>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(11.5rem,1fr))] sm:gap-3">
+              {([
+                { action: 'accident', art: 'vehicle-accident', label: 'vehicles.newReport' },
+                { action: 'maintenance', art: 'vehicle-maintenance', label: 'vehicles.addMaintenance' },
+                ...(summaryQuery.data?.maintenance_contractor_id ? [{ action: 'maintenance-request', art: 'vehicle-maintenance', label: 'vehicles.requestMaintenance' } as const] : []),
+                { action: 'fine', art: 'vehicle-fines', label: 'vehicles.addFine' },
+                { action: 'renew', art: 'vehicle-licence-renewal', label: 'vehicles.renew' },
+              ] as const).map((request) => (
+                <button key={request.action} type="button" onClick={() => actionOverlay.open(request.action)} className={cn(
+                  'grid min-h-[3.25rem] grid-cols-[auto_minmax(0,1fr)] items-center gap-2 rounded-md border px-3 py-2 text-start text-[0.78rem] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-3 sm:text-sm [&:last-child:nth-child(odd)]:col-span-full sm:[&:last-child:nth-child(odd)]:col-span-1',
+                  request.action === 'renew' && vehicle.expiry_status !== 'valid' ? 'border-primary bg-primary text-primary-foreground hover:bg-primary-hover' : 'border-border-strong bg-surface text-primary-text hover:border-primary hover:bg-primary-soft',
+                )}>
+                  <ServiceArtwork artwork={request.art} className="h-8 w-8 rounded-md bg-surface p-0.5" /><span>{t(request.label)}</span><Plus className="hidden h-4 w-4 sm:block" aria-hidden />
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+      >
         {notFound ? (
           <NotFoundPage />
         ) : vehicleQuery.isError ? (
@@ -581,27 +504,18 @@ export function VehicleDetailPage(): React.JSX.Element {
           <>
             <OverviewPanel
               vehicle={vehicle}
-              plate={plate ?? ''}
               siteLabel={siteLabel}
               canEdit={canMutate}
               onEditPhoto={() => actionOverlay.open('photos')}
             />
 
-            <div
-              className="mt-4 flex flex-wrap gap-1.5"
-              role="group"
-              aria-label={t('vehicles.vehicleDetail')}
-            >
-              {TABS.map((candidate) => (
-                <TabChip
-                  key={candidate}
-                  active={tab === candidate}
-                  count={counts[candidate]}
-                  label={t(TAB_LABELS[candidate])}
-                  onClick={() => selectTab(candidate)}
-                />
-              ))}
-            </div>
+            <RegisterTabs<VehicleTab>
+              className="mt-6"
+              label={t('vehicles.vehicleDetail')}
+              value={tab}
+              onChange={selectTab}
+              items={TABS.map((key) => ({ key, label: t(TAB_LABELS[key]), count: formatCount(counts[key]) }))}
+            />
 
             <div className="mt-3">
               {tab === 'fines' && (
@@ -637,7 +551,6 @@ export function VehicleDetailPage(): React.JSX.Element {
                   renewals={renewals}
                   canEdit={canMutate}
                   replacingLicense={replaceLicenseFile.isPending}
-                  onRenew={() => actionOverlay.open('renew')}
                   onReplaceLicense={(file) =>
                     replaceLicenseFile.mutate({ vehicleId: vehicle.id, file })
                   }
@@ -646,9 +559,7 @@ export function VehicleDetailPage(): React.JSX.Element {
               {tab === 'accidents' && (
                 <AccidentsPanel
                   accidents={accidents}
-                  canEdit={canMutate}
                   readOnly={archived}
-                  onAdd={() => actionOverlay.open('accident')}
                 />
               )}
               {tab === 'maintenance' && (
@@ -663,16 +574,13 @@ export function VehicleDetailPage(): React.JSX.Element {
                     settingsLoading={summaryQuery.isPending}
                     settingsError={summaryQuery.isError}
                     onRetrySettings={() => void summaryQuery.refetch()}
-                    onRequest={() => actionOverlay.open('maintenance-request')}
                     onComplete={(request) => actionOverlay.open('maintenance', { request: String(request.id) })}
                   />
                   <MaintenancePanel
                     records={maintenance}
-                    canEdit={canMutate}
                     canDelete={canDeleteMutate}
                     isMobile={isMobile}
                     busy={deleteMaintenance.isPending}
-                    onAdd={() => actionOverlay.open('maintenance')}
                     onDelete={setRecordToDelete}
                   />
                 </div>
@@ -706,7 +614,7 @@ export function VehicleDetailPage(): React.JSX.Element {
             </div>
           </>
         )}
-      </div>
+      </ServicePage>
 
       {/* URL-backed non-destructive forms; destructive confirmations stay local. */}
       {vehicle && canMutate && (
@@ -764,7 +672,7 @@ export function VehicleDetailPage(): React.JSX.Element {
         </>
       )}
 
-      {paymentTarget && (
+      {canMutate && paymentTarget && (
         <FinePaymentDialog
           open
           key={`fine-payment-${paymentTarget.fine.id}-${paymentTarget.mode}`}
@@ -905,7 +813,7 @@ function Panel({
   className?: string
 }): React.JSX.Element {
   return (
-    <section className={cn('overflow-hidden rounded-xl border border-border bg-surface', className)}>
+    <section className={cn('overflow-hidden rounded-b-md border border-t-2 border-border border-t-primary bg-surface', className)}>
       {children}
     </section>
   )
@@ -1059,13 +967,11 @@ function MissingFileTile({
 
 function OverviewPanel({
   vehicle,
-  plate,
   siteLabel,
   canEdit,
   onEditPhoto,
 }: {
   vehicle: VehicleRead
-  plate: string
   siteLabel: string
   canEdit: boolean
   onEditPhoto: () => void
@@ -1105,16 +1011,7 @@ function OverviewPanel({
         )}
       </div>
 
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-hairline p-3.5 sm:grid-cols-3 md:border-s md:border-t-0">
-        <InfoItem label={t('vehicles.plate')}>
-          <Mono>{plate}</Mono>
-        </InfoItem>
-        <InfoItem label={t('vehicles.type')}>
-          <span dir="auto">{localized(vehicle.type_ar, vehicle.type_en, lang)}</span>
-        </InfoItem>
-        <InfoItem label={t('vehicles.class')}>
-          <span dir="auto">{localized(vehicle.class_ar, vehicle.class_en, lang)}</span>
-        </InfoItem>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 border-t border-hairline p-4 sm:grid-cols-3 md:border-s md:border-t-0 md:p-6">
         <InfoItem label={t('vehicles.trafficCode')}>
           <Mono>{vehicle.traffic_code}</Mono>
         </InfoItem>
@@ -1144,6 +1041,9 @@ function OverviewPanel({
         </InfoItem>
         <InfoItem label={t('vehicles.site')}>
           <span dir="auto">{siteLabel}</span>
+        </InfoItem>
+        <InfoItem label={t('vehicles.odometer')}>
+          <Mono>{vehicle.current_odometer_km == null ? EMPTY_VALUE : formatCount(vehicle.current_odometer_km)}</Mono>{' '}{t('vehicles.km')}
         </InfoItem>
         <InfoItem label={t('vehicles.contractNote')} className="col-span-2 sm:col-span-1">
           <span dir="auto">
@@ -1210,12 +1110,9 @@ function FinesPanel({
       <PanelHeader
         title={t('vehicles.tabFines')}
         subtitle={
-          <bdi>
-            {`${formatNumber(fines.length, lang)} ${t('vehicles.fineCount')} · ${formatFilsAed(
-              vehicle.fines_amount_fils,
-              lang,
-            )} · ${formatNumber(vehicle.black_points, lang)} ${t('vehicles.points')}`}
-          </bdi>
+          <span className="flex flex-wrap items-center gap-1">
+            <bdi>{formatCount(fines.length)}</bdi> {t('vehicles.fineCount')} · <FineAmount fils={vehicle.fines_amount_fils} size="sm" /> · <bdi>{formatCount(vehicle.black_points)}</bdi> {t('vehicles.points')}
+          </span>
         }
         actions={
           archivedCount > 0 && (
@@ -1265,7 +1162,7 @@ function FinesPanel({
               {visible.map((fine, index) => (
                 <TableRow key={fine.id}>
                   <TableCell className="w-[54px] font-mono text-[0.72rem] tabular-nums text-muted-foreground">
-                    {formatNumber(index + 1, lang)}
+                    <bdi>{formatCount(index + 1)}</bdi>
                   </TableCell>
                   <TableCell>
                     <span className="flex flex-col">
@@ -1292,7 +1189,7 @@ function FinesPanel({
                     <FineAmount fils={fine.amount_fils} />
                   </TableCell>
                   <TableCell className="font-mono text-[0.74rem] tabular-nums">
-                    {formatNumber(fine.black_points, lang)}
+                    <bdi>{formatCount(fine.black_points)}</bdi>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1">
@@ -1348,7 +1245,7 @@ function FineCard({
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 className="text-[0.82rem] font-semibold text-foreground" dir="auto">
-            {`${formatNumber(index + 1, lang)}. ${employeeLabel(fine, lang, t('vehicles.unassigned'))}`}
+            <><bdi>{formatCount(index + 1)}</bdi>. {employeeLabel(fine, lang, t('vehicles.unassigned'))}</>
           </h3>
           <p className="mt-0.5 text-[0.68rem] text-muted-foreground">
             <Mono>{fine.employee_id || EMPTY_VALUE}</Mono>
@@ -1384,7 +1281,7 @@ function FineCard({
           <FineAmount fils={fine.amount_fils} />
         </InfoItem>
         <InfoItem label={t('vehicles.blackPoints')}>
-          <Mono>{formatNumber(fine.black_points, lang)}</Mono>
+          <Mono>{formatCount(fine.black_points)}</Mono>
         </InfoItem>
       </dl>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -1409,19 +1306,15 @@ function RenewalsPanel({
   renewals,
   canEdit,
   replacingLicense,
-  onRenew,
   onReplaceLicense,
 }: {
   vehicle: VehicleRead
   renewals: readonly Renewal[]
   canEdit: boolean
   replacingLicense: boolean
-  /** The page's single renew dialog — the panel holds no state of its own. */
-  onRenew: () => void
   onReplaceLicense: (file: File) => void
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const lang = i18n.language
+  const { t } = useTranslation()
   const previousLicenseFiles = (vehicle.license_files ?? []).filter(
     (file) => file.id !== vehicle.license_file_id,
   )
@@ -1434,21 +1327,7 @@ function RenewalsPanel({
           subtitle={
             <Mono>{`${formatIsoDate(vehicle.license_start)} — ${formatIsoDate(vehicle.license_expiry)}`}</Mono>
           }
-          actions={
-            <>
-              <VehicleStatusBadge family="expiry" status={vehicle.expiry_status} />
-              {canEdit && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant={vehicle.expiry_status === 'valid' ? 'secondary' : 'default'}
-                  onClick={onRenew}
-                >
-                  {t('vehicles.renew')}
-                </Button>
-              )}
-            </>
-          }
+          actions={<VehicleStatusBadge family="expiry" status={vehicle.expiry_status} />}
         />
         <div className="grid gap-3.5 p-3.5 sm:grid-cols-[210px_1fr]">
           <div className="flex min-w-0 flex-col gap-2">
@@ -1513,7 +1392,7 @@ function RenewalsPanel({
         <PanelHeader
           title={t('vehicles.renewalHistory')}
           subtitle={
-            <bdi>{`${formatNumber(renewals.length, lang)} ${t('vehicles.records')}`}</bdi>
+            <bdi>{`${formatCount(renewals.length)} ${t('vehicles.records')}`}</bdi>
           }
         />
         {renewals.length === 0 ? (
@@ -1539,7 +1418,7 @@ function RenewalsPanel({
                     {renewal.cost != null && (
                       <>
                         {` · ${t('vehicles.cost')}: `}
-                        <bdi>{formatAed(renewal.cost, lang)}</bdi>
+                        <AedAmount value={renewal.cost} size="sm" />
                       </>
                     )}
                   </p>
@@ -1560,41 +1439,24 @@ function RenewalsPanel({
 
 function AccidentsPanel({
   accidents,
-  canEdit,
   readOnly = false,
-  onAdd,
 }: {
   accidents: NonNullable<VehicleRead['accidents']>
-  canEdit: boolean
   readOnly?: boolean
-  onAdd: () => void
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   return (
     <Panel>
       <PanelHeader
         title={t('vehicles.tabAccidents')}
         subtitle={
-          <bdi>{`${formatNumber(accidents.length, i18n.language)} ${t('vehicles.records')}`}</bdi>
-        }
-        actions={
-          canEdit && (
-            <Button type="button" size="sm" onClick={onAdd}>
-              {t('vehicles.newReport')}
-            </Button>
-          )
+          <bdi>{`${formatCount(accidents.length)} ${t('vehicles.records')}`}</bdi>
         }
       />
       {accidents.length === 0 ? (
         <EmptyState icon={FileText} message={t('vehicles.noAccidents')} />
       ) : (
-        <div className="flex flex-col gap-2.5 p-2.5">
-          {accidents.map((accident) => (
-            // Inside the vehicle's own file the plate chip and the «Open» link
-            // would only point back at this page.
-            <AccidentCard key={accident.id} accident={accident} readOnly={readOnly} />
-          ))}
-        </div>
+        <AccidentLedger accidents={accidents} readOnly={readOnly} />
       )}
     </Panel>
   )
@@ -1604,7 +1466,7 @@ function AccidentsPanel({
 
 function MaintenanceRequestsPanel({
   requests, loading, error, onRetry, canEdit, contractorSet, settingsLoading,
-  settingsError, onRetrySettings, onRequest, onComplete,
+  settingsError, onRetrySettings, onComplete,
 }: {
   requests: readonly VehicleMaintenanceRequestRead[]
   loading: boolean
@@ -1615,7 +1477,6 @@ function MaintenanceRequestsPanel({
   settingsLoading: boolean
   settingsError: boolean
   onRetrySettings: () => void
-  onRequest: () => void
   onComplete: (request: VehicleMaintenanceRequestRead) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
@@ -1624,11 +1485,6 @@ function MaintenanceRequestsPanel({
     <Panel>
       <PanelHeader
         title={t('vehicles.openMaintenanceRequests')}
-        actions={canEdit && (
-          <Button type="button" size="sm" disabled={!contractorSet || settingsLoading || settingsError} aria-describedby={!contractorSet && !settingsLoading && !settingsError ? hintId : undefined} onClick={onRequest}>
-            {t('vehicles.requestMaintenance')}
-          </Button>
-        )}
       />
       {canEdit && !contractorSet && !settingsLoading && !settingsError && (
         <p id={hintId} className="px-3.5 py-2 text-xs text-muted-foreground">
@@ -1668,19 +1524,15 @@ function MaintenanceRequestsPanel({
 
 function MaintenancePanel({
   records,
-  canEdit,
   canDelete,
   isMobile,
   busy,
-  onAdd,
   onDelete,
 }: {
   records: readonly VehicleMaintenanceRead[]
-  canEdit: boolean
   canDelete: boolean
   isMobile: boolean
   busy: boolean
-  onAdd: () => void
   onDelete: (record: VehicleMaintenanceRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -1690,14 +1542,7 @@ function MaintenancePanel({
     <Panel>
       <PanelHeader
         title={t('vehicles.tabMaintenance')}
-        subtitle={<bdi>{`${formatNumber(records.length, lang)} ${t('vehicles.records')}`}</bdi>}
-        actions={
-          canEdit && (
-            <Button type="button" size="sm" onClick={onAdd}>
-              {t('vehicles.addMaintenance')}
-            </Button>
-          )
-        }
+        subtitle={<bdi>{`${formatCount(records.length)} ${t('vehicles.records')}`}</bdi>}
       />
       {records.length === 0 ? (
         <EmptyState icon={Wrench} message={t('vehicles.noMaintenance')} />
@@ -1741,11 +1586,11 @@ function MaintenancePanel({
                     {record.odometer_km == null ? (
                       EMPTY_VALUE
                     ) : (
-                      <bdi>{`${formatNumber(record.odometer_km, lang)} ${t('vehicles.km')}`}</bdi>
+                      <bdi>{`${formatCount(record.odometer_km)} ${t('vehicles.km')}`}</bdi>
                     )}
                   </TableCell>
                   <TableCell className="text-[0.76rem] font-medium">
-                    <bdi>{formatAed(record.cost, lang)}</bdi>
+                    <AedAmount value={record.cost} />
                   </TableCell>
                   <TableCell className="text-[0.76rem]" dir="auto">
                     {localized(record.vendor_ar, record.vendor_en, lang) || EMPTY_VALUE}
@@ -1839,11 +1684,11 @@ function MaintenanceCard({
           {record.odometer_km == null ? (
             EMPTY_VALUE
           ) : (
-            <bdi>{`${formatNumber(record.odometer_km, lang)} ${t('vehicles.km')}`}</bdi>
+            <bdi>{`${formatCount(record.odometer_km)} ${t('vehicles.km')}`}</bdi>
           )}
         </InfoItem>
         <InfoItem label={t('vehicles.cost')}>
-          <bdi>{formatAed(record.cost, lang)}</bdi>
+          <AedAmount value={record.cost} />
         </InfoItem>
         <InfoItem label={t('vehicles.garage')}>
           <span dir="auto">{localized(record.vendor_ar, record.vendor_en, lang) || EMPTY_VALUE}</span>
@@ -1949,13 +1794,13 @@ function PhotosPanel({
   onSetMain: (photo: VehicleFileRead) => void
   onDelete: (photo: VehicleFileRead) => void
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
 
   return (
     <Panel>
       <PanelHeader
         title={t('vehicles.gallery')}
-        subtitle={<bdi>{formatNumber(count, i18n.language)}</bdi>}
+        subtitle={<bdi>{formatCount(count)}</bdi>}
       />
       <div className="grid grid-cols-2 gap-2.5 p-2.5 sm:grid-cols-3 lg:grid-cols-4">
         {vehicle.photo_url && (
@@ -2243,7 +2088,7 @@ function CertificatesPanel({
     <Panel>
       <PanelHeader
         title={t('vehicles.tabCertificates')}
-        subtitle={<bdi>{formatNumber(certificates.length, lang)}</bdi>}
+        subtitle={<bdi>{formatCount(certificates.length)}</bdi>}
       />
       <div className="flex flex-col gap-3 p-2.5">
         {certificates.length === 0 && pending.length === 0 && !canEdit && (

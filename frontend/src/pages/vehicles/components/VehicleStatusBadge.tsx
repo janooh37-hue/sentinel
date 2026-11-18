@@ -27,10 +27,12 @@ import { cn } from '@/lib/utils'
 
 import {
   accidentTone,
+  claimTone,
   dueTone,
   expiryTone,
   paymentTone,
   type AccidentStatus,
+  type ClaimStatus,
   type DueState,
   type ExpiryStatus,
   type PaymentStatus,
@@ -42,6 +44,7 @@ type Family =
   | { family: 'due'; status: DueState }
   | { family: 'accident'; status: AccidentStatus }
   | { family: 'payment'; status: PaymentStatus }
+  | { family: 'claim'; status: ClaimStatus }
 
 type Props = Family & {
   className?: string
@@ -72,6 +75,10 @@ const ICONS = {
   paid: CheckCircle2,
   unpaid: Clock,
   unknown: CircleDot,
+  not_submitted: CircleDot,
+  submitted: Clock,
+  under_repair: Clock,
+  settled: CheckCircle2,
 } as const
 
 export function VehicleStatusBadge(props: Props): React.JSX.Element {
@@ -85,7 +92,9 @@ export function VehicleStatusBadge(props: Props): React.JSX.Element {
         ? dueTone(props.status)
         : props.family === 'accident'
           ? accidentTone(props.status)
-          : paymentTone(props.status)
+          : props.family === 'claim'
+            ? claimTone(props.status)
+            : paymentTone(props.status)
 
   // `valid | expired | overdue | scheduled` are their own locale keys; the
   // accident and payment pairs are named differently — a maintenance date
@@ -97,9 +106,11 @@ export function VehicleStatusBadge(props: Props): React.JSX.Element {
       ? t(props.status === 'open' ? 'vehicles.openStatus' : 'vehicles.closedStatus')
       : props.family === 'payment'
         ? t(`vehicles.fines.status.${props.status}`)
-        : props.family === 'due' && props.status === 'due'
-          ? t('vehicles.dueSoon')
-          : t(`vehicles.${props.status}`)
+        : props.family === 'claim'
+          ? t(`vehicles.insurance.claimStatuses.${props.status}`)
+          : props.family === 'due' && props.status === 'due'
+            ? t('vehicles.dueSoon')
+            : t(`vehicles.${props.status}`)
 
 
   const Icon = ICONS[props.status]

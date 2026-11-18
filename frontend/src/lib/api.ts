@@ -328,6 +328,8 @@ export type VehicleFineBatchResult = components['schemas']['VehicleFineBatchResu
 export type LicenseRenewCreate = components['schemas']['LicenseRenewCreate']
 export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate']
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
+export type VehicleAccidentInsurance = components['schemas']['VehicleAccidentInsurance']
+export type AccidentLetterRequest = components['schemas']['AccidentLetterRequest']
 export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
 export type VehicleMaintenanceRequestCreate = components['schemas']['VehicleMaintenanceRequestCreate']
@@ -1165,6 +1167,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   NOT_LINE_MANAGER_STAGE: 'errors.fleet.notLineManagerStage',
   NOT_A_VEHICLE_LETTER: 'errors.fleet.notAVehicleLetter',
   LETTER_SOURCE_CHANGED: 'errors.fleet.letterSourceChanged',
+  ACCIDENT_ARABIC_REQUIRED: 'vehicles.arabicRequired',
   SCOPED_ROLE_CHAIN_AUTHOR_ONLY: 'errors.fleet.chainAuthorOnly',
   SCOPED_ROLE_FOLDERS_FORBIDDEN: 'errors.fleet.foldersForbidden',
   ACCIDENT_LETTER_NOT_VISIBLE: 'errors.fleet.accidentLetterNotVisible',
@@ -1881,12 +1884,29 @@ export const api = {
       `/vehicles/${vehicleId}/accidents/${accidentId}`,
       { status },
     ),
+  setAccidentInsurance: (
+    vehicleId: number,
+    accidentId: number,
+    body: VehicleAccidentInsurance,
+  ) =>
+    request<VehicleAccidentRead>(
+      'PUT',
+      `/vehicles/${vehicleId}/accidents/${accidentId}/insurance`,
+      body,
+    ),
   deleteVehicleAccident: (vehicleId: number, accidentId: number) =>
     request<void>('DELETE', `/vehicles/${vehicleId}/accidents/${accidentId}`),
-  generateAccidentLetter: (vehicleId: number, accidentId: number) =>
+  /** `arabic` carries the Arabic wording a report written in English lacks;
+   *  the server stores it on the report and files the letter. */
+  generateAccidentLetter: (
+    vehicleId: number,
+    accidentId: number,
+    arabic: AccidentLetterRequest = {},
+  ) =>
     request<LetterResult>(
       'POST',
       `/vehicles/${vehicleId}/accidents/${accidentId}/letter`,
+      arabic,
     ),
   getVehicleOdometer: (month: string) =>
     request<OdometerMonthRead>('GET', `/vehicles/odometer${qs({ month })}`),

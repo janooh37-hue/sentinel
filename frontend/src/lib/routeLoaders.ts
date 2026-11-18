@@ -75,6 +75,10 @@ export const loadVehicleMaintenancePage = () =>
   import('@/pages/vehicles/VehicleMaintenancePage').then((m) => ({
     default: m.VehicleMaintenancePage,
   }))
+export const loadVehicleRenewalsPage = () =>
+  import('@/pages/vehicles/VehicleRenewalsPage').then((m) => ({
+    default: m.VehicleRenewalsPage,
+  }))
 export const loadLedgerPage = () =>
   import('@/pages/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage }))
 export const loadSettingsPage = () =>

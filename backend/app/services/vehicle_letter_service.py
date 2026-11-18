@@ -31,6 +31,7 @@ from app.db.models import (
 )
 from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
+    AccidentLetterRequest,
     LetterResult,
     VehicleMaintenanceRequestCreate,
     VehicleMaintenanceRequestResult,
@@ -164,8 +165,15 @@ def generate_accident_letter(
     accident_id: int,
     *,
     user: User,
+    arabic: AccidentLetterRequest | None = None,
 ) -> LetterResult:
-    """Generate, file, and link an official accident letter."""
+    """Generate, file, and link an official accident letter.
+
+    The letter is Arabic. A report written in English brings its Arabic
+    location and description here (``arabic``); they are stored on the report
+    before the letter is filed, and a letter is refused while either is still
+    missing.
+    """
     vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
     accident = next(
         (row for row in vehicle.accidents if row.id == accident_id),
@@ -183,7 +191,12 @@ def generate_accident_letter(
     if accident.letter_book_id is not None:
         return _existing_accident_letter(db, accident.letter_book_id, user)
 
-    fields = _accident_fields(vehicle, accident, today=date.today())
+    if arabic is not None:
+        if arabic.location_ar is not None:
+            accident.location_ar = arabic.location_ar
+        if arabic.description_ar is not None:
+            accident.description_ar = arabic.description_ar
+    fields = _accident_fields(db, vehicle, accident, today=date.today())
     generated = document_service.generate_document(
         db,
         employee_id=None,
@@ -282,24 +295,44 @@ def _fines_fields(
     )
 
 
-def _accident_fields(vehicle: Vehicle, accident: VehicleAccident, *, today: date) -> dict[str, Any]:
+def _accident_fields(
+    db: Session, vehicle: Vehicle, accident: VehicleAccident, *, today: date
+) -> dict[str, Any]:
+    """The letter's fields; the Arabic letter is refused while the report lacks
+    its Arabic location or description (a report may be filed in English only).
+    """
+    location_ar, description_ar = accident.location_ar, accident.description_ar
+    if not location_ar or not description_ar:
+        accident_id = accident.id
+        missing = [
+            name
+            for name, value in (("location_ar", location_ar), ("description_ar", description_ar))
+            if not value
+        ]
+        # Nothing a refused letter brought (its Arabic wording) is stored.
+        db.rollback()
+        raise ValidationFailedError(
+            "ACCIDENT_ARABIC_REQUIRED",
+            "The official letter needs the Arabic location and description.",
+            accident_id=accident_id,
+            missing=missing,
+        )
     employee = accident.employee
     employee_label = None
     if employee is not None:
         employee_label = employee.name_ar or employee.name_en
     return accident_letter_fields(
         plate_label=vehicle_service.plate_label(vehicle),
-        vehicle_type_ar=vehicle.type_ar,
+        vehicle_type_ar=vehicle.type_ar or vehicle.type_en,
         vin=vehicle.vin,
-        site_ar=vehicle.site.name_ar,
+        site_ar=vehicle.site.name_ar or vehicle.site.name_en,
         date=accident.date,
         time=accident.time,
         employee_label=employee_label,
-        location_ar=accident.location_ar,
+        location_ar=location_ar,
         police_ref=accident.police_ref,
-        damage_cost=accident.damage_cost,
         status=accident.status,
-        description_ar=accident.description_ar,
+        description_ar=description_ar,
         today=today,
     )
 
@@ -395,7 +428,7 @@ def rebuild_vehicle_letter(db: Session, book_id: int, *, version_id: int, user: 
         if accident is None:
             raise NotFoundError("ACCIDENT_NOT_FOUND", "This letter's accident no longer exists.")
         vehicle = vehicle_service.require_active_vehicle(db, accident.vehicle_id)
-        fields = _accident_fields(vehicle, accident, today=date.today())
+        fields = _accident_fields(db, vehicle, accident, today=date.today())
     else:
         source = source or _generation_audit_source(db, book)
         report = vehicle_service.odometer_month(

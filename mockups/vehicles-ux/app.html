@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-device="desktop">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vehicles UX mockups · GSSG Manager</title>
+  <link rel="icon" href="assets/gssg-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700;800&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="core.css">
+  <link rel="stylesheet" href="views.css">
+</head>
+<body>
+<!-- Review bar: mockup chrome only. Everything inside .frame is the proposed product UI. -->
+<div class="mockbar">
+  <a href="index.html">Vehicles UX</a>
+  <span>Counter and paper · request first</span>
+  <select id="screen-pick" aria-label="Screen">
+    <option value="hub">Vehicle Services hub</option>
+    <option value="accidents">Accident reports</option>
+    <option value="maintenance">Maintenance</option>
+    <option value="vehicle">Vehicle file</option>
+    <option value="fines">Fines</option>
+    <option value="renewals">Licence renewal</option>
+  </select>
+  <span class="grow"></span>
+  <div class="seg" role="group" aria-label="Language">
+    <button type="button" data-act="lang" data-v="ar">العربية</button>
+    <button type="button" data-act="lang" data-v="en">English</button>
+  </div>
+  <div class="seg" role="group" aria-label="Device">
+    <button type="button" data-act="device" data-v="desktop">Desktop</button>
+    <button type="button" data-act="device" data-v="mobile">Phone</button>
+  </div>
+</div>
+<div class="stage">
+  <div class="frame" id="frame">
+    <div id="app" style="display:flex;min-block-size:0;flex:1;flex-direction:column"></div>
+    <div id="ov"></div>
+    <div class="toast" id="toast" role="status" aria-live="polite"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg><span></span></div>
+  </div>
+</div>
+<script src="locale.js"></script>
+<script src="core.js"></script>
+<script src="views.js"></script>
+<script>render()</script>
+</body>
+</html>

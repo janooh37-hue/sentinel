@@ -27,6 +27,7 @@ import { localized } from '@/lib/language'
 import { CUSTOM_CLASS, NEW_SITE, type VehicleFormInput, type VehicleFormValues } from '../vehicleForm'
 import { VEHICLE_CLASSES, licenseWindowEnd } from '../vehicleUtils'
 import { Field, FieldGrid } from '@/components/forms/DialogShell'
+import { RequestSection } from './RequestShell'
 
 export interface VehicleFormFieldsProps {
   form: UseFormReturn<VehicleFormInput, unknown, VehicleFormValues>
@@ -38,17 +39,25 @@ export interface VehicleFormFieldsProps {
   vehicle?: VehicleRead | null
   /** Import review assigns sites once per workbook section, outside each row. */
   showSiteField?: boolean
+  /** Single-language, numbered sections for the Add Vehicle request only. */
+  request?: boolean
+  licenceAttachments?: React.ReactNode
   fieldIdPrefix: string
   alertId: string
 }
 
 function Section({
   title,
+  index,
+  request = false,
   children,
 }: {
   title: string
+  index?: number
+  request?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  if (request) return <RequestSection index={index} title={title}><FieldGrid>{children}</FieldGrid></RequestSection>
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-foreground">{title}</h3>
@@ -63,6 +72,8 @@ export function VehicleFormFields({
   mode,
   vehicle,
   showSiteField = true,
+  request = false,
+  licenceAttachments,
   fieldIdPrefix: fieldId,
   alertId,
 }: VehicleFormFieldsProps): React.JSX.Element {
@@ -74,6 +85,7 @@ export function VehicleFormFields({
     register,
     control,
     setValue,
+    getValues,
     watch,
     formState: { errors },
   } = form
@@ -86,6 +98,29 @@ export function VehicleFormFields({
   const newSiteMode = mode === 'create' && siteChoice === NEW_SITE
   const classChoice = watch('vehicle_class')
   const customClassMode = classChoice === CUSTOM_CLASS
+  const arabic = i18n.language.startsWith('ar')
+  const languageField = (ar: keyof VehicleFormValues, en: keyof VehicleFormValues): keyof VehicleFormValues => arabic ? ar : en
+  /**
+   * One input in the session language for a name stored in both halves. Typing
+   * fills the other half too while it is empty or still the same text, so a
+   * name typed once shows in both languages; an other-language value that came
+   * from elsewhere (an accepted licence scan) is kept as it is.
+   */
+  const paired = (ar: 'type_ar' | 'new_site_ar' | 'custom_class_ar', en: 'type_en' | 'new_site_en' | 'custom_class_en') => {
+    const [own, other] = arabic ? [ar, en] : [en, ar]
+    const binding = register(own)
+    return {
+      ...binding,
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
+        const previous = getValues(own)
+        void binding.onChange(event)
+        const counterpart = getValues(other)
+        if (!counterpart || counterpart === previous) {
+          setValue(other, event.target.value, { shouldDirty: true, shouldValidate: true })
+        }
+      },
+    }
+  }
 
   const flag = (
     field: keyof VehicleFormValues,
@@ -95,9 +130,32 @@ export function VehicleFormFields({
   const startField = register('license_start')
   const expiryField = register('license_expiry')
 
+  const specificationFields = (
+    <>
+      <Field id={`${fieldId}-make`} label={t('vehicles.make')}>
+        <Input id={`${fieldId}-make`} dir="auto" {...register('make')} />
+      </Field>
+      <Field id={`${fieldId}-model`} label={t('vehicles.model')}>
+        <Input id={`${fieldId}-model`} dir="auto" {...register('model')} />
+      </Field>
+      <Field id={`${fieldId}-model-year`} label={t('vehicles.modelYear')}>
+        <Input id={`${fieldId}-model-year`} dir="ltr" inputMode="numeric" className="font-mono" {...register('model_year')} {...flag('model_year')} />
+      </Field>
+      <Field id={`${fieldId}-colour`} label={t('vehicles.colour')}>
+        <Input id={`${fieldId}-colour`} dir="auto" {...register('colour')} />
+      </Field>
+      <Field id={`${fieldId}-inmate`} label={t('vehicles.inmateCapacity')}>
+        <Input id={`${fieldId}-inmate`} dir="ltr" inputMode="numeric" className="font-mono" {...register('inmate_capacity')} {...flag('inmate_capacity')} />
+      </Field>
+      <Field id={`${fieldId}-passenger`} label={t('vehicles.passengerCapacity')}>
+        <Input id={`${fieldId}-passenger`} dir="ltr" inputMode="numeric" className="font-mono" {...register('passenger_capacity')} {...flag('passenger_capacity')} />
+      </Field>
+    </>
+  )
+
   return (
     <div className="space-y-6">
-      <Section title={t('vehicles.sections.identity')}>
+      <Section title={t('vehicles.sections.identity')} request={request} index={1}>
         <Field id={`${fieldId}-plate`} label={t('vehicles.plate')} required>
           <Input
             id={`${fieldId}-plate`}
@@ -124,12 +182,20 @@ export function VehicleFormFields({
         <Field id={`${fieldId}-vin`} label={t('vehicles.vin')} full>
           <Input id={`${fieldId}-vin`} dir="ltr" autoComplete="off" className="font-mono" {...register('vin')} />
         </Field>
-        <Field id={`${fieldId}-type-ar`} label={t('vehicles.typeAr')} required>
-          <Input id={`${fieldId}-type-ar`} dir="rtl" {...register('type_ar')} {...flag('type_ar')} />
-        </Field>
-        <Field id={`${fieldId}-type-en`} label={t('vehicles.typeEn')} required>
-          <Input id={`${fieldId}-type-en`} dir="ltr" {...register('type_en')} {...flag('type_en')} />
-        </Field>
+        {request ? (
+          <Field id={`${fieldId}-type`} label={t('vehicles.type')} required>
+            <Input id={`${fieldId}-type`} dir="auto" {...paired('type_ar', 'type_en')} {...flag('type_ar')} />
+          </Field>
+        ) : (
+          <>
+            <Field id={`${fieldId}-type-ar`} label={t('vehicles.typeAr')} required>
+              <Input id={`${fieldId}-type-ar`} dir="rtl" {...register('type_ar')} {...flag('type_ar')} />
+            </Field>
+            <Field id={`${fieldId}-type-en`} label={t('vehicles.typeEn')} required>
+              <Input id={`${fieldId}-type-en`} dir="ltr" {...register('type_en')} {...flag('type_en')} />
+            </Field>
+          </>
+        )}
         <Field id={`${fieldId}-class`} label={t('vehicles.class')}>
           <Controller
             control={control}
@@ -152,7 +218,11 @@ export function VehicleFormFields({
           />
         </Field>
         {customClassMode && (
-          <>
+          request ? (
+            <Field id={`${fieldId}-custom-class`} label={t('vehicles.class')} required>
+              <Input id={`${fieldId}-custom-class`} dir="auto" {...paired('custom_class_ar', 'custom_class_en')} {...flag('custom_class_ar')} />
+            </Field>
+          ) : <>
             <Field id={`${fieldId}-class-ar`} label={t('vehicles.customClassAr')} required>
               <Input
                 id={`${fieldId}-class-ar`}
@@ -212,86 +282,37 @@ export function VehicleFormFields({
               )}
             </Field>
             {newSiteMode && (
-              <>
-                <Field
-                  id={`${fieldId}-site-ar`}
-                  label={t('vehicles.siteNameAr')}
-                  required
-                >
-                  <Input
-                    id={`${fieldId}-site-ar`}
-                    dir="rtl"
-                    {...register('new_site_ar')}
-                    {...flag('new_site_ar')}
-                  />
+              request ? (
+                <Field id={`${fieldId}-new-site`} label={t('vehicles.siteName')} required>
+                  <Input id={`${fieldId}-new-site`} dir="auto" {...paired('new_site_ar', 'new_site_en')} {...flag('new_site_ar')} />
                 </Field>
-                <Field
-                  id={`${fieldId}-site-en`}
-                  label={t('vehicles.siteNameEn')}
-                  required
-                >
-                  <Input
-                    id={`${fieldId}-site-en`}
-                    dir="ltr"
-                    {...register('new_site_en')}
-                    {...flag('new_site_en')}
-                  />
-                </Field>
-              </>
+              ) : (
+                <>
+                  <Field id={`${fieldId}-site-ar`} label={t('vehicles.siteNameAr')} required>
+                    <Input id={`${fieldId}-site-ar`} dir="rtl" {...register('new_site_ar')} {...flag('new_site_ar')} />
+                  </Field>
+                  <Field id={`${fieldId}-site-en`} label={t('vehicles.siteNameEn')} required>
+                    <Input id={`${fieldId}-site-en`} dir="ltr" {...register('new_site_en')} {...flag('new_site_en')} />
+                  </Field>
+                </>
+              )
             )}
           </>
         ) : null}
+        {request && specificationFields}
       </Section>
 
-      <Section title={t('vehicles.sections.specs')}>
-        <Field id={`${fieldId}-make`} label={t('vehicles.make')}>
-          <Input id={`${fieldId}-make`} dir="ltr" {...register('make')} />
-        </Field>
-        <Field id={`${fieldId}-model`} label={t('vehicles.model')}>
-          <Input id={`${fieldId}-model`} dir="ltr" {...register('model')} />
-        </Field>
-        <Field id={`${fieldId}-model-year`} label={t('vehicles.modelYear')}>
-          <Input
-            id={`${fieldId}-model-year`}
-            dir="ltr"
-            inputMode="numeric"
-            className="font-mono"
-            {...register('model_year')}
-            {...flag('model_year')}
-          />
-        </Field>
-        <Field id={`${fieldId}-colour`} label={t('vehicles.colour')}>
-          <Input id={`${fieldId}-colour`} dir="ltr" {...register('colour')} />
-        </Field>
-        <Field id={`${fieldId}-inmate`} label={t('vehicles.inmateCapacity')}>
-          <Input
-            id={`${fieldId}-inmate`}
-            dir="ltr"
-            inputMode="numeric"
-            className="font-mono"
-            {...register('inmate_capacity')}
-            {...flag('inmate_capacity')}
-          />
-        </Field>
-        <Field id={`${fieldId}-passenger`} label={t('vehicles.passengerCapacity')}>
-          <Input
-            id={`${fieldId}-passenger`}
-            dir="ltr"
-            inputMode="numeric"
-            className="font-mono"
-            {...register('passenger_capacity')}
-            {...flag('passenger_capacity')}
-          />
-        </Field>
+      {!request && <Section title={t('vehicles.sections.specs')}>
+        {specificationFields}
         <Field id={`${fieldId}-accessories-ar`} label={`${t('vehicles.accessories')} · AR`}>
           <Textarea id={`${fieldId}-accessories-ar`} dir="rtl" rows={2} {...register('accessories_ar')} />
         </Field>
         <Field id={`${fieldId}-accessories-en`} label={`${t('vehicles.accessories')} · EN`}>
           <Textarea id={`${fieldId}-accessories-en`} dir="ltr" rows={2} {...register('accessories_en')} />
         </Field>
-      </Section>
+      </Section>}
 
-      <Section title={t('vehicles.sections.licence')}>
+      <Section title={t(request ? 'vehicles.request.licenceInsurance' : 'vehicles.sections.licence')} request={request} index={2}>
         <Field id={`${fieldId}-start`} label={t('vehicles.licenseStart')} required>
           <Input
             id={`${fieldId}-start`}
@@ -336,9 +357,23 @@ export function VehicleFormFields({
             {...register('insurance_expiry')}
           />
         </Field>
+        {licenceAttachments && <div className="col-span-full">{licenceAttachments}</div>}
       </Section>
 
-      <Section title={t('vehicles.sections.notes')}>
+      <Section title={t(request ? 'vehicles.request.notes' : 'vehicles.sections.notes')} request={request} index={3}>
+        {request ? (
+          <>
+            <Field id={`${fieldId}-accessories`} label={t('vehicles.accessories')} full>
+              <Textarea id={`${fieldId}-accessories`} dir="auto" rows={2} {...register(languageField('accessories_ar', 'accessories_en'))} />
+            </Field>
+            <Field id={`${fieldId}-contract-note`} label={t('vehicles.contractNote')} full>
+              <Textarea id={`${fieldId}-contract-note`} dir="auto" rows={2} {...register(languageField('contract_note_ar', 'contract_note_en'))} />
+            </Field>
+            <Field id={`${fieldId}-notes`} label={t('vehicles.generalNotes')} full>
+              <Textarea id={`${fieldId}-notes`} dir="auto" rows={2} {...register(languageField('notes_ar', 'notes_en'))} />
+            </Field>
+          </>
+        ) : <>
         <Field id={`${fieldId}-contract-note-ar`} label={`${t('vehicles.contractNote')} · AR`}>
           <Textarea
             id={`${fieldId}-contract-note-ar`}
@@ -363,6 +398,7 @@ export function VehicleFormFields({
         <Field id={`${fieldId}-notes-en`} label={`${t('vehicles.generalNotes')} · EN`}>
           <Textarea id={`${fieldId}-notes-en`} dir="ltr" rows={2} {...register('notes_en')} />
         </Field>
+        </>}
       </Section>
     </div>
   )
