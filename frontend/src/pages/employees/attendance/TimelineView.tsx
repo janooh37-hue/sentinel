@@ -170,8 +170,13 @@ function TimelineRow({
   const onSite = isOnSiteNow(row, input)
   const departure = outAt(row)
   const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
-  const label = attendanceStatusLabel(t, state, { onSite, hasOut: departure !== null, leaveLabel: row.leave_label, corrected: row.corrected })
-  const status = onSite && state !== 'verified' ? `${label} · ${t('attendance.state.onSite')}` : label
+  const label = attendanceStatusLabel(t, state, { onSite, hasOut: departure !== null, leaveLabel: row.leave_label })
+  // The correction marker reads last, after "On site", as on every other surface.
+  const status = [
+    label,
+    onSite && state !== 'verified' ? t('attendance.state.onSite') : null,
+    row.corrected ? t('attendance.state.corrected') : null,
+  ].filter(Boolean).join(' · ')
   const first = parseInstant(inAt(row))
   const last = parseInstant(departure) ?? (onSite ? input.now.getTime() : first)
   const scheduledStart = parseInstant(row.scheduled_start_at)
