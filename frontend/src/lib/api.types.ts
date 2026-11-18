@@ -11203,7 +11203,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits" | "store_expiring" | "store_low_stock";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits" | "store_expiring" | "store_low_stock" | "punch_log";
             /**
              * Visible
              * @default true

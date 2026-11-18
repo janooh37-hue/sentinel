@@ -46300,7 +46300,8 @@
               "inbox",
               "permits",
               "store_expiring",
-              "store_low_stock"
+              "store_low_stock",
+              "punch_log"
             ],
             "title": "Id"
           },
