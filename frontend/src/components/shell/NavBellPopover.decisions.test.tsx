@@ -8,14 +8,18 @@ import { api, type DecisionNotice } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { NavBellPopover } from './NavBellPopover'
 
-const auth = vi.hoisted(() => ({ role: 'staff' }))
+const auth = vi.hoisted(() => ({ role: 'staff', scoped_role: null as 'inmate_reporter' | 'fleet_reporter' | null }))
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ status: 'authed', user: { id: 7, role: auth.role } }),
+  useAuth: () => ({ status: 'authed', user: { id: 7, role: auth.role, scoped_role: auth.scoped_role } }),
 }))
 vi.mock('@/lib/api', () => ({
   api: {
     getDecisionNotices: vi.fn(),
     getLedgerUnreadRecent: vi.fn(),
+    getApprovalSummary: vi.fn(),
+    getNotificationCounts: vi.fn(),
+    getInmateRegisterAwaitingClose: vi.fn(),
+    getInboxSummary: vi.fn(),
     markBookSeen: vi.fn().mockResolvedValue(undefined),
     markDecisionsSeen: vi.fn().mockResolvedValue(undefined),
     markAllLedgerRead: vi.fn().mockResolvedValue(undefined),
@@ -68,6 +72,7 @@ function renderBell(phone = false) {
 beforeEach(async () => {
   vi.clearAllMocks()
   auth.role = 'staff'
+  auth.scoped_role = null
   await i18n.changeLanguage('en')
   vi.mocked(api.getLedgerUnreadRecent).mockResolvedValue({ items: [], total_unread: 0 })
   vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [notice()], total: 1 })
@@ -152,9 +157,43 @@ it('marks emails and decisions read and refreshes their unread queries', async (
   expect(screen.queryByRole('button', { name: 'Mark all read' })).not.toBeInTheDocument()
 })
 
-it('hides the entire panel and makes no decision request for inmate reporters', () => {
+it('hides the entire panel and makes no decision request for an inmate reporter', () => {
   auth.role = 'inmate_reporter'
+  auth.scoped_role = 'inmate_reporter'
   renderBell()
   expect(screen.queryByRole('button')).not.toBeInTheDocument()
   expect(api.getDecisionNotices).not.toHaveBeenCalled()
+})
+
+it.each([false, true])('shows only decisions for fleet and marks the opened one seen (phone=%s)', async (phone) => {
+  auth.scoped_role = 'fleet_reporter'
+  renderBell(phone)
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
+  await userEvent.click(screen.getByRole('button', { name: /Approved · GS-0048/ }))
+  expect(screen.getByTestId('location')).toHaveTextContent('/books/48?version_id=5')
+  await waitFor(() => expect(api.markBookSeen).toHaveBeenCalledWith(48))
+  expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
+  expect(api.getApprovalSummary).not.toHaveBeenCalled()
+  expect(api.getNotificationCounts).not.toHaveBeenCalled()
+  expect(api.getInmateRegisterAwaitingClose).not.toHaveBeenCalled()
+  expect(api.getInboxSummary).not.toHaveBeenCalled()
+})
+
+it('acknowledges fleet decisions without calling the ledger acknowledgement route', async () => {
+  auth.scoped_role = 'fleet_reporter'
+  renderBell()
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
+  vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [], total: 0 })
+  await userEvent.click(screen.getByRole('button', { name: 'Mark all read' }))
+  await waitFor(() => expect(api.markDecisionsSeen).toHaveBeenCalledOnce())
+  expect(api.markAllLedgerRead).not.toHaveBeenCalled()
+  expect(await screen.findByText('No unread notifications')).toBeVisible()
+})
+
+it('links additional fleet decisions to own records, not the closed approvals page', async () => {
+  auth.scoped_role = 'fleet_reporter'
+  vi.mocked(api.getDecisionNotices).mockResolvedValue({ items: [notice()], total: 2 })
+  renderBell()
+  await userEvent.click(await screen.findByRole('button', { name: 'Notifications, 2 unread' }))
+  expect(screen.getByRole('link', { name: '+1 more decision' })).toHaveAttribute('href', '/books?mine=1')
 })

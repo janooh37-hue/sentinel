@@ -14,6 +14,7 @@ POST  /auth/users/{id}/approve
 POST  /auth/users/{id}/reset-password
 PATCH /auth/users/{id}/role
 PATCH /auth/users/{id}/link
+PATCH /auth/users/{id}/line-manager
 POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
 
@@ -54,6 +55,7 @@ from app.schemas.auth import (
     RejectRequest,
     ResetPasswordRequest,
     SessionUser,
+    SetLineManagerRequest,
     SetPermissionBulkRequest,
     SetPermissionRequest,
     SetRoleRequest,
@@ -370,6 +372,20 @@ def set_user_link(
     """Administrator-reviewed assignment or clearing of an account's employee identity."""
     user = auth_service.set_user_employee_link(
         db, user_id, employee_id=body.employee_id, actor=_actor(admin)
+    )
+    return auth_service.admin_read(db, user)
+
+
+@router.patch("/users/{user_id}/line-manager", response_model=AdminUserRead)
+def set_line_manager(
+    user_id: int,
+    body: SetLineManagerRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AdminUserRead:
+    """Set or clear the approving account a fleet reporter's papers route to."""
+    user = auth_service.set_line_manager(
+        db, user_id, body.line_manager_user_id, actor=_actor(admin)
     )
     return auth_service.admin_read(db, user)
 

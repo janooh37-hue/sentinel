@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Final, Literal, get_args
 
 from pydantic import BaseModel
 
 from app.schemas._base import ORMBase
 
-DutyLocationEventType = Literal["initial_placement", "transfer"]
+# Duty events shown in employee timelines; baseline and manual_change are not.
+DutyLocationEventType = Literal[
+    "initial_placement", "transfer", "service_end", "transfer_out", "reinstatement"
+]
+DUTY_LOCATION_EVENT_TYPES: Final[tuple[str, ...]] = get_args(DutyLocationEventType)
 EmployeeActivityKind = Literal[
     "document", "leave", "violation", "ledger", "duty_location", "status", "id_change"
 ]

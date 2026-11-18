@@ -22,7 +22,17 @@ import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
 
 import { api, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
-import { UNASSIGNED, groupByUnit, postsForUnit, unitTallies } from '@/lib/dutyUnits'
+import {
+  ENDED_SERVICE,
+  TRANSFERRED,
+  UNASSIGNED,
+  departedGroup,
+  departedTallies,
+  groupRoster,
+  isDepartedKey,
+  postsForUnit,
+  unitTallies,
+} from '@/lib/dutyUnits'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UnitRail, type UnitRailItem } from './UnitRail'
 import { RosterTable } from './RosterTable'
@@ -46,7 +56,13 @@ export function DutyLocationsPage(): React.JSX.Element {
     [employeesQuery.data],
   )
 
-  const grouped = useMemo(() => groupByUnit(employees), [employees])
+  const grouped = useMemo(() => groupRoster(employees), [employees])
+  // Only working staff are posted, counted in the tallies or offered as
+  // destination suggestions; departed staff are listed apart.
+  const workingEmployees = useMemo(
+    () => employees.filter((e) => departedGroup(e.status) === null),
+    [employees],
+  )
 
   // Selection (employee ids) — a transfer basket that spans units.
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -57,7 +73,13 @@ export function DutyLocationsPage(): React.JSX.Element {
   const [completedTransfer, setCompletedTransfer] = useState<DutyTransferResult | null>(null)
 
   const railItems = useMemo<UnitRailItem[]>(
-    () => unitTallies(grouped, t('dutyLocations.unassigned')),
+    () => [
+      ...unitTallies(grouped.units, t('dutyLocations.unassigned')),
+      ...departedTallies(grouped.departed, {
+        [ENDED_SERVICE]: t('dutyLocations.endedService'),
+        [TRANSFERRED]: t('dutyLocations.transferred'),
+      }),
+    ],
     [grouped, t],
   )
 
@@ -73,14 +95,21 @@ export function DutyLocationsPage(): React.JSX.Element {
     return firstPopulated ?? railItems[0]?.key ?? null
   }, [activeKey, railItems])
 
-  const totalEmployees = employees.length
-  const unassignedCount = grouped.get(UNASSIGNED)
-    ? [...grouped.get(UNASSIGNED)!.values()].reduce((a, l) => a + l.length, 0)
+  const totalEmployees = workingEmployees.length
+  const unassigned = grouped.units.get(UNASSIGNED)
+  const unassignedCount = unassigned
+    ? [...unassigned.values()].reduce((a, l) => a + l.length, 0)
     : 0
   const totalAssigned = totalEmployees - unassignedCount
 
-  // Active unit roster, post-grouped + search-filtered.
-  const activePosts = resolvedActiveKey ? grouped.get(resolvedActiveKey) : undefined
+  // Active unit roster, post-grouped (status-grouped for a departed group) +
+  // search-filtered.
+  const activeIsDeparted = isDepartedKey(resolvedActiveKey)
+  const activePosts = !resolvedActiveKey
+    ? undefined
+    : isDepartedKey(resolvedActiveKey)
+      ? grouped.departed.get(resolvedActiveKey)
+      : grouped.units.get(resolvedActiveKey)
   const filteredByPost = useMemo(() => {
     const out = new Map<string, EmployeeLookupItem[]>()
     if (!activePosts) return out
@@ -100,15 +129,14 @@ export function DutyLocationsPage(): React.JSX.Element {
   }, [activePosts, search])
 
   // The selected employees, resolved to full records (for the transfer dialog).
+  // Someone who departed since being ticked drops out: they cannot be posted.
   const selectedEmployees = useMemo(
-    () => employees.filter((e) => selected.has(e.id)),
-    [employees, selected],
+    () => workingEmployees.filter((e) => selected.has(e.id)),
+    [workingEmployees, selected],
   )
 
   const activeLabel =
-    resolvedActiveKey === UNASSIGNED
-      ? t('dutyLocations.unassigned')
-      : (resolvedActiveKey ?? '')
+    railItems.find((r) => r.key === resolvedActiveKey)?.label ?? resolvedActiveKey ?? ''
   const activeUnitCount = railItems.find((r) => r.key === resolvedActiveKey)?.count ?? 0
   const activePostCount = activePosts ? activePosts.size : 0
 
@@ -177,11 +205,25 @@ export function DutyLocationsPage(): React.JSX.Element {
                       {activeLabel}
                     </div>
                     <div className="text-[0.78em] text-muted-foreground">
-                      {t('dutyLocations.roster.summary', {
-                        employees: activeUnitCount,
-                        posts: activePostCount,
-                      })}
+                      {activeIsDeparted
+                        ? t('dutyLocations.roster.departedSummary', {
+                            count: activeUnitCount,
+                          })
+                        : t('dutyLocations.roster.summary', {
+                            employees: activeUnitCount,
+                            posts: activePostCount,
+                          })}
                     </div>
+                    {resolvedActiveKey === ENDED_SERVICE && (
+                      <p className="mt-0.5 text-[0.78em] text-faint">
+                        {t('dutyLocations.roster.endedServiceNote')}
+                      </p>
+                    )}
+                    {resolvedActiveKey === TRANSFERRED && (
+                      <p className="mt-0.5 text-[0.78em] text-faint">
+                        {t('dutyLocations.roster.transferredNote')}
+                      </p>
+                    )}
                   </div>
                   <label className="relative ms-auto flex w-full items-center sm:w-[220px]">
                     <Search
@@ -206,19 +248,21 @@ export function DutyLocationsPage(): React.JSX.Element {
                     selected={selected}
                     onToggle={toggle}
                     onAssign={setAssignTarget}
+                    departed={activeIsDeparted}
                   />
                 </div>
 
-                {/* Supervisor designation editor — only for real units, not Unassigned */}
-                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && (
+                {/* Supervisor designation editor — only for real units, not
+                    Unassigned or the departed groups */}
+                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && !activeIsDeparted && (
                   <SupervisorDesignations
                     unit={resolvedActiveKey}
-                    posts={postsForUnit(employees, resolvedActiveKey)}
+                    posts={postsForUnit(workingEmployees, resolvedActiveKey)}
                   />
                 )}
 
-                {/* Leave digest preview + send — only for real units, not Unassigned */}
-                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && (
+                {/* Leave digest preview + send — only for real units */}
+                {resolvedActiveKey && resolvedActiveKey !== UNASSIGNED && !activeIsDeparted && (
                   <LeaveDigestPanel unit={resolvedActiveKey} />
                 )}
               </section>
@@ -245,7 +289,7 @@ export function DutyLocationsPage(): React.JSX.Element {
         <AssignPopover
           open={assignTarget !== null}
           employee={assignTarget}
-          allEmployees={employees}
+          allEmployees={workingEmployees}
           onOpenChange={(open) => {
             if (!open) setAssignTarget(null)
           }}
@@ -257,7 +301,7 @@ export function DutyLocationsPage(): React.JSX.Element {
         <TransferDialog
           open={transferOpen}
           employees={selectedEmployees}
-          allEmployees={employees}
+          allEmployees={workingEmployees}
           onOpenChange={setTransferOpen}
           onTransferred={(result) => {
             setSelected(new Set())

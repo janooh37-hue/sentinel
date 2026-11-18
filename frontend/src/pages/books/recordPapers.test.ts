@@ -13,8 +13,8 @@ import {
   type Paper,
 } from './recordPapers'
 
-const STAFF = { inmateReporter: false }
-const INMATE = { inmateReporter: true }
+const STAFF = { isScopedRole: false }
+const INMATE = { isScopedRole: true }
 
 const signedBook = {
   id: 1,

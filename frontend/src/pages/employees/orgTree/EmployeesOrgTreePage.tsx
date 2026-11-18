@@ -27,7 +27,7 @@ import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTab
 import { useAttendanceAttention } from '@/components/employees/useAttendanceAttention'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api, type EmployeeListItem } from '@/lib/api'
-import { UNASSIGNED, groupByUnit, unitTallies } from '@/lib/dutyUnits'
+import { UNASSIGNED, departedGroup, groupByUnit, unitTallies } from '@/lib/dutyUnits'
 import { UnitRail } from '@/pages/dutyLocations/UnitRail'
 import { OrgTreeView } from './OrgTreeView'
 
@@ -45,7 +45,13 @@ export function EmployeesOrgTreePage(): React.JSX.Element {
     () => employeesQuery.data?.items ?? [],
     [employeesQuery.data],
   )
-  const grouped = useMemo(() => groupByUnit(employees), [employees])
+  // Resigned, Terminated and Transferred staff are out of the unit structure,
+  // so neither the rail nor the totals count them.
+  const workingEmployees = useMemo(
+    () => employees.filter((e) => departedGroup(e.status) === null),
+    [employees],
+  )
+  const grouped = useMemo(() => groupByUnit(workingEmployees), [workingEmployees])
 
   const railItems = useMemo(
     () => unitTallies(grouped, t('dutyLocations.unassigned')).filter((r) => r.key !== UNASSIGNED),
@@ -66,7 +72,7 @@ export function EmployeesOrgTreePage(): React.JSX.Element {
     setParams(next, { replace: true })
   }
 
-  const totalEmployees = employees.length
+  const totalEmployees = workingEmployees.length
   const totalAssigned = railItems.reduce((total, item) => total + item.count, 0)
 
   return (

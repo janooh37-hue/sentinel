@@ -22,7 +22,7 @@ from app.api.errors import ValidationFailedError
 from app.config import Settings
 from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
 from app.core.qr import barcode_payload
-from app.core.vehicle_letters import odometer_form_fields
+from app.core.vehicle_letters import ACCIDENT_DAMAGE_COVER_AR, odometer_form_fields
 from app.db.models import (
     Book,
     BookCategory,
@@ -36,7 +36,7 @@ from app.db.models import (
     VehicleOdometerReading,
     VehicleSite,
 )
-from app.schemas.vehicle import OdometerRowRead
+from app.schemas.vehicle import AccidentLetterRequest, OdometerRowRead
 from app.services import document_service, vehicle_letter_service
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
@@ -324,13 +324,59 @@ def test_accident_letter_renders_docx_files_va_book_and_links_accident(
         gen_env.employees[0].name_ar,
         gen_env.accident.location_ar,
         gen_env.accident.police_ref,
-        "2600 درهم",
+        ACCIDENT_DAMAGE_COVER_AR,
         "مفتوح",
         gen_env.accident.description_ar,
     )
     for value in expected:
         assert value is not None
         assert value in text
+    # No cost figure anywhere: the insurance sentence replaces it.
+    assert "2600" not in text
+    assert "درهم" not in text
+
+
+def test_english_report_letter_asks_for_arabic_then_stores_it(
+    gen_env: _GenerationEnv,
+) -> None:
+    accident = gen_env.accident
+    accident.location_ar = None
+    accident.description_ar = None
+    gen_env.db.commit()
+
+    with pytest.raises(ValidationFailedError) as refused:
+        vehicle_letter_service.generate_accident_letter(
+            gen_env.db,
+            gen_env.vehicle.id,
+            accident.id,
+            user=gen_env.user,
+            arabic=AccidentLetterRequest(location_ar="البوابة الشرقية"),
+        )
+    assert refused.value.code == "ACCIDENT_ARABIC_REQUIRED"
+    gen_env.db.refresh(accident)
+    # A refused letter stores nothing.
+    assert accident.location_ar is None
+    assert accident.letter_book_id is None
+
+    result = vehicle_letter_service.generate_accident_letter(
+        gen_env.db,
+        gen_env.vehicle.id,
+        accident.id,
+        user=gen_env.user,
+        arabic=AccidentLetterRequest(
+            location_ar=" البوابة الشرقية ",
+            description_ar="اصطدام بالحاجز",
+        ),
+    )
+    gen_env.db.refresh(accident)
+    assert accident.location_ar == "البوابة الشرقية"
+    assert accident.description_ar == "اصطدام بالحاجز"
+    assert accident.location_en == "East site gate"
+    assert accident.letter_book_id == result.book_id
+    _, path = _rendered_docx(gen_env, result.document_id)
+    text = _all_docx_text(path)
+    assert "البوابة الشرقية" in text
+    assert "اصطدام بالحاجز" in text
 
 
 def test_generating_accident_letter_twice_reuses_linked_va_book(

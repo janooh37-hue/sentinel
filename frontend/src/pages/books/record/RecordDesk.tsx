@@ -8,6 +8,7 @@ import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Maximize2 } from 'lucide-react'
 import { RecordDecisionActions } from '../RecordDecisionActions'
+import { DecisionReasonForm } from '../DecisionReasonForm'
 import { BookAnnotationLayer, MarkTools, MarksStepper } from '@/components/books/BookAnnotationLayer'
 import type { AnnotationKind } from '@/components/books/annotation-utils'
 import { DocumentState } from '@/components/books/DocumentState'
@@ -27,77 +28,6 @@ import { useRecordChrome } from './RecordChrome'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
-interface DecisionReasonFormProps {
-  act: 'return' | 'reject'
-  reason: string
-  reasonValid: boolean
-  busy: boolean
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  onReasonChange: (reason: string) => void
-  onCancel: (act: 'return' | 'reject') => void
-  onConfirm: (act: 'return' | 'reject') => void
-}
-
-export function DecisionReasonForm({
-  act,
-  reason,
-  reasonValid,
-  busy,
-  inputRef,
-  onReasonChange,
-  onCancel,
-  onConfirm,
-}: DecisionReasonFormProps): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <>
-      <label
-        htmlFor="rec-reason"
-        className="mb-1.5 block text-[0.78em] font-semibold text-foreground"
-      >
-        {act === 'return'
-          ? t('books.approval.return')
-          : t('books.approval.reject')}{' '}
-        · {t('books.approval.reasonLabel')}
-      </label>
-      <textarea
-        ref={inputRef}
-        id="rec-reason"
-        rows={2}
-        value={reason}
-        onChange={(e) => onReasonChange(e.target.value)}
-        placeholder={t('books.approval.reasonPlaceholder')}
-        dir="auto"
-        className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.88em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-      />
-      <div className="mt-2 flex items-center justify-end gap-2.5">
-        {!reasonValid && (
-          <span className="me-auto text-[0.74em] text-muted-foreground">
-            {t('books.approval.reasonOrMark')}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onCancel(act)}
-          className="rounded-lg border border-hairline px-3 py-1.5 text-[0.8em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t('books.approval.cancelDecision')}
-        </button>
-        <button
-          type="button"
-          disabled={!reasonValid || busy}
-          onClick={() => onConfirm(act)}
-          className={cn(
-            'rounded-lg border border-transparent px-4 py-1.5 text-[0.8em] font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-            act === 'return' ? 'bg-warning hover:bg-warning/90' : 'bg-accent hover:bg-accent/90',
-          )}
-        >
-          {act === 'return' ? t('books.approval.return') : t('books.approval.reject')}
-        </button>
-      </div>
-    </>
-  )
-}
 
 /** A4 at 96 dpi: the pixel width zoom 100% stands for. */
 const PAPER_ACTUAL_PX = 794
@@ -124,7 +54,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const chrome = useRecordChrome()
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
-  const { isInmateReporter, canRevise } = caps
+  const { isScopedRole, canRevise } = caps
   const { isMobile, isAr, isPending, action, decision, busy, current, liveVersion, pdfUrl, userId, armed, annotatable, annMode, annotations, markBusy, decisionReasonFormProps, review } = view
   const { setArmedFor, handleRevise, requestSignConfirm, openMobileDecision, createMark, deleteMark, onPdfReady, mobileInlineSignRef, decisionPanelRef, panelReturnButtonRef, panelRejectButtonRef } = actions
   const dir = isAr ? 'rtl' : 'ltr'
@@ -142,8 +72,8 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
         ? [{ kind: 'generated', url: pdfUrl, downloadUrl: pdfUrl, filename: `${book.ref_number}.pdf`, isPdf: true }]
         : []
     }
-    return papersOf(book, { inmateReporter: isInmateReporter })
-  }, [book, viewingLive, pdfUrl, isInmateReporter])
+    return papersOf(book, { isScopedRole })
+  }, [book, viewingLive, pdfUrl, isScopedRole])
   const labels = useMemo(() => paperLabels(t, papers), [t, papers])
 
   // `?paper=` selects by key on THIS record only (never carried by J/K); a key
@@ -336,7 +266,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
     )
   } else if (isPending) {
     paperBody = <DocumentState kind="loading" />
-  } else if (!isInmateReporter && book?.imported_doc) {
+  } else if (!isScopedRole && book?.imported_doc) {
     // Imported record whose vault file isn't a PDF (e.g. .docx) — no
     // inline preview, so offer the original for download.
     paperBody = (
@@ -475,6 +405,8 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
               busy={busy}
               pending={view.pendingAct}
               review={review != null}
+              canForwardToBranch={book?.can_forward_to_branch === true}
+              onForward={() => actions.openOverlay('forward-to-branch')}
               onSign={() => requestSignConfirm(mobileInlineSignRef)}
               onReturn={() => openMobileDecision('return')}
               onReject={() => openMobileDecision('reject')}

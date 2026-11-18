@@ -31,6 +31,7 @@ from app.core.employee_completeness import missing_fields as _missing_fields
 from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
+from app.schemas.employee_activity import DUTY_LOCATION_EVENT_TYPES
 from app.schemas.employee_completeness import CompletenessRead
 from app.services import document_service, ledger_service, perm_service, photo_service
 from app.services.employee_service import former_ids_by_employee
@@ -232,7 +233,7 @@ def get_employee_detail(
         db.scalars(
             select(models.DutyAssignmentEvent)
             .where(models.DutyAssignmentEvent.employee_id == emp.id)
-            .where(models.DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer")))
+            .where(models.DutyAssignmentEvent.event_type.in_(DUTY_LOCATION_EVENT_TYPES))
             .order_by(models.DutyAssignmentEvent.effective_at.desc())
             .limit(ACTIVITY_LIMIT)
         )

@@ -53,6 +53,7 @@ from app.schemas.vehicle import (
     OdometerRowRead,
     OdometerUpsert,
     VehicleAccidentCreate,
+    VehicleAccidentInsurance,
     VehicleAccidentRead,
     VehicleCertificateUpdate,
     VehicleCreate,
@@ -1357,7 +1358,11 @@ def create_accident(
         description_ar=payload.description_ar,
         description_en=payload.description_en,
         police_ref=payload.police_ref,
-        damage_cost=payload.damage_cost,
+        claim_no=payload.claim_no,
+        claim_status=payload.claim_status,
+        insurer=payload.insurer,
+        repair_garage=payload.repair_garage,
+        cost_payer=payload.cost_payer,
         status="open",
         photo_file_ids=list(payload.photo_file_ids),
     )
@@ -1422,6 +1427,35 @@ def set_accident_status(
         vehicle_id,
         actor,
         {"accident_id": accident_id, "status": status},
+    )
+    return _get_accident(db, vehicle_id, accident_id)
+
+
+def set_accident_insurance(
+    db: Session,
+    vehicle_id: int,
+    accident_id: int,
+    payload: VehicleAccidentInsurance,
+    *,
+    actor: str | None = None,
+) -> VehicleAccident:
+    """Replace the report's insurance details. Every field is optional, so an
+    empty payload clears them; the report's status is not touched."""
+    require_active_vehicle(db, vehicle_id)
+    row = _get_accident(db, vehicle_id, accident_id)
+    row.claim_no = payload.claim_no
+    row.claim_status = payload.claim_status
+    row.insurer = payload.insurer
+    row.repair_garage = payload.repair_garage
+    row.cost_payer = payload.cost_payer
+    row.updated_at = utcnow()
+    db.commit()
+    _audit(
+        db,
+        "accident.insurance",
+        vehicle_id,
+        actor,
+        {"accident_id": accident_id, **payload.model_dump()},
     )
     return _get_accident(db, vehicle_id, accident_id)
 

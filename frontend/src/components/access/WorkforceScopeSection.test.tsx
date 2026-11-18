@@ -32,11 +32,12 @@ const target: AdminUserRead = {
   created_at: null,
   is_default_manager: false,
   password_change_required: false,
+  line_manager_user_id: null,
 }
 
 const roster: EmployeeLookupItem[] = [
-  { id: 'G100', name_en: 'Omar Ali', name_ar: null, department: 'Operations', duty_unit: 'First unit', duty_post: 'Main gate' },
-  { id: 'G200', name_en: 'Saeed Ahmed', name_ar: null, department: 'Administration', duty_unit: 'Second unit', duty_post: 'Reception' },
+  { id: 'G100', name_en: 'Omar Ali', name_ar: null, department: 'Operations', duty_unit: 'First unit', duty_post: 'Main gate', status: 'Active' },
+  { id: 'G200', name_en: 'Saeed Ahmed', name_ar: null, department: 'Administration', duty_unit: 'Second unit', duty_post: 'Reception', status: 'Active' },
 ]
 
 function mockScopes(initialScopes: WorkforceScopeWrite[] = [], locations = roster) {

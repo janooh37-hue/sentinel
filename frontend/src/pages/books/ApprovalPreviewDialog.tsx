@@ -10,9 +10,11 @@ import type { ApprovalLogItem } from '@/lib/api'
 import { approvalRecordUrl } from '@/lib/approvals'
 import type { ApprovalContext } from '@/lib/approvals'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { cn } from '@/lib/utils'
 
 import { approvalItemPapers, defaultPaperKey, paperKey, type PaperKey } from './recordPapers'
+import { ApprovalPreviewActions } from './ApprovalPreviewActions'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -61,16 +63,16 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuth()
-  const inmateReporter = user?.role === 'inmate_reporter'
+  const isScopedRole = scopedRoleOf(user) !== null
   // Rebuilt only when the record, its pinned version or its state changes — not
   // on every refetch of the log (a fresh `item` object each poll would reset the viewer).
   const bookId = item?.book_id
   const versionId = item?.version_id
   const status = item?.status
   const papers = useMemo(
-    () => (item ? approvalItemPapers(item, { inmateReporter }) : []),
+    () => (item ? approvalItemPapers(item, { isScopedRole }) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `item` is read through its identity fields above
-    [bookId, versionId, status, inmateReporter],
+    [bookId, versionId, status, isScopedRole],
   )
   // Open on the signed copy once approved; an explicit pick is kept by key.
   const [pickedKey, setPickedKey] = useState<PaperKey | null>(null)
@@ -155,6 +157,9 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                   )}
                 </div>
               </div>
+              {context.tab === 'received' && context.kind === 'sign' && status === 'pending' && (
+                <ApprovalPreviewActions key={`${item.book_id}:${item.version_id}`} item={item} onClose={onClose} />
+              )}
 
               <footer className="flex items-center justify-end gap-2.5 border-t border-hairline px-5 py-4">
                 <Dialog.Close asChild>

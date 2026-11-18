@@ -18,7 +18,11 @@ from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 from app.schemas.employee import EmployeeRead
-from app.schemas.employee_activity import StatusEventKind, StatusEventSource
+from app.schemas.employee_activity import (
+    DutyLocationEventType,
+    StatusEventKind,
+    StatusEventSource,
+)
 from app.schemas.employee_completeness import CompletenessRead
 from app.schemas.linked_document import LinkedDocumentRead
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
@@ -83,7 +87,7 @@ class ActivityItemRead(ORMBase):
     kind: Literal["document", "leave", "violation", "ledger", "absence", "duty_location", "status"]
     summary: str
     ref_id: int
-    event_type: Literal["initial_placement", "transfer"] | None = None
+    event_type: DutyLocationEventType | None = None
     from_department: str | None = None
     from_unit: str | None = None
     from_post: str | None = None

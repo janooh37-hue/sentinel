@@ -3,10 +3,16 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, notifyManager, type QueryKey } from '@tanstack/react-query'
 
 import type { NotificationCounts } from '@/lib/api'
+import { subscribeToPush } from '@/lib/push'
 
 const getCounts = vi.fn<() => Promise<NotificationCounts>>()
 vi.mock('@/lib/api', () => ({ api: { getNotificationCounts: () => getCounts() } }))
 vi.mock('@/lib/push', () => ({ subscribeToPush: vi.fn() }))
+vi.mock('@/lib/authContext', async () => {
+  // Vitest hoists this factory before React's static import can initialize.
+  const { createContext } = await import('react')
+  return { AuthContext: createContext({ user: { id: 7 } }) }
+})
 
 import { useNotificationStream } from '../useNotificationStream'
 
@@ -41,7 +47,7 @@ class FakeEventSource {
   }
 }
 
-function mount(): { qc: QueryClient; invalidated: QueryKey[] } {
+function mount(enabled = true, pushEnabled = enabled): { qc: QueryClient; invalidated: QueryKey[] } {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const invalidated: QueryKey[] = []
   const real = qc.invalidateQueries.bind(qc)
@@ -49,7 +55,7 @@ function mount(): { qc: QueryClient; invalidated: QueryKey[] } {
     invalidated.push(filters?.queryKey ?? [])
     return real(filters)
   })
-  renderHook(() => useNotificationStream(true), {
+  renderHook(() => useNotificationStream(enabled, { pushEnabled }), {
     wrapper: ({ children }) => <QueryClientProvider client={qc}>{children}</QueryClientProvider>,
   })
   return { qc, invalidated }
@@ -61,6 +67,8 @@ describe('useNotificationStream', () => {
     // Render each cache write inside the emitting act(), not on a later tick.
     notifyManager.setScheduler((cb) => cb())
     getCounts.mockReset()
+    vi.mocked(subscribeToPush).mockReset().mockResolvedValue(null)
+    FakeEventSource.last = null
   })
   afterEach(() => vi.unstubAllGlobals())
 
@@ -115,5 +123,27 @@ describe('useNotificationStream', () => {
         ['books', 'awaiting'],
       ]),
     )
+  })
+
+  it('subscribes fleet push without opening counts or the stream', async () => {
+    vi.stubGlobal('Notification', { permission: 'granted', requestPermission: vi.fn() })
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('navigator', { serviceWorker: {} })
+    mount(false, true)
+    await waitFor(() => expect(subscribeToPush).toHaveBeenCalledExactlyOnceWith(7))
+    expect(getCounts).not.toHaveBeenCalled()
+    expect(FakeEventSource.last).toBeNull()
+  })
+
+  it('keeps push, permission prompts, counts, and the stream off for inmates', () => {
+    const requestPermission = vi.fn()
+    vi.stubGlobal('Notification', { permission: 'default', requestPermission })
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('navigator', { serviceWorker: {} })
+    mount(false, false)
+    expect(requestPermission).not.toHaveBeenCalled()
+    expect(subscribeToPush).not.toHaveBeenCalled()
+    expect(getCounts).not.toHaveBeenCalled()
+    expect(FakeEventSource.last).toBeNull()
   })
 })

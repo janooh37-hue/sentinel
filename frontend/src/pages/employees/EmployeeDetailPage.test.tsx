@@ -179,7 +179,7 @@ function renderPage(initialEntry = '/employees/G100', previous: string[] = [], l
           id: 1, email: 'self@example.com', employee_id: linkedEmployeeId, name_en: 'Omar Ali',
           name_ar: null, position: null, department: null, photo_url: null, role: 'operator',
           status: 'active', is_admin: false, is_manager: false, has_signature: false,
-          idle_lock_seconds: 300, lock_layout: 'default',
+          idle_lock_seconds: 300, lock_layout: 'default', scoped_role: null,
         } : null,
         status: linkedEmployeeId ? 'authed' : 'anon',
         login: vi.fn(), logout: vi.fn(), refetch: vi.fn(), setUser: vi.fn(),

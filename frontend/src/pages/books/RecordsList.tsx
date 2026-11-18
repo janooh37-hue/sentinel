@@ -68,7 +68,7 @@ export function RecordsList({
   nav,
   scrollerRef,
   empty,
-  isInmateReporter,
+  isScopedRole,
   rowMenu,
   onRowMenuOpen,
 }: {
@@ -85,7 +85,7 @@ export function RecordsList({
   /** Shown instead of the rows when there are none (the page knows why). */
   empty?: React.ReactNode
   /** Inmate reporters see fewer papers per record; the count must match the pane. */
-  isInmateReporter: boolean
+  isScopedRole: boolean
   /** Items for a row's ⋯ / context menu; omit to hide the menu. */
   rowMenu?: (book: BookRead) => RowMenuItem[]
   /** Called as a row's menu opens (before its items render). */
@@ -139,7 +139,7 @@ export function RecordsList({
             const label = serviceLabel(row.service_id)
             const who = subjectEmployeePart(row.subject, classified)
             const snippet = (row as BookReadWithSnippet).search_snippet
-            const paperCount = paperCountOf(row, { inmateReporter: isInmateReporter })
+            const paperCount = paperCountOf(row, { isScopedRole })
             const isChecked = selected?.has(row.id) ?? false
             const selectable = onToggleSelect != null
             const isSelected = row.id === selectedId

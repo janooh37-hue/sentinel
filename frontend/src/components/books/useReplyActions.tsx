@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { CopyPlus, Reply } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import type { BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { DeriveRecordDialog } from './DeriveRecordDialog'
@@ -24,7 +25,7 @@ export function useReplyActions(book: BookRead | null | undefined, openOverlay?:
     ? has(`books.category.${book.classification_code}`)
     : RECORD_CATEGORY_CODES.some((code) => has(`books.category.${code}`))
   const canCreateGeneralBook = has('books.service.General Book') && canCreateInCategory
-  if (!book || !user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view') || !canCreateGeneralBook) return { actions: [], dialog: null }
+  if (!book || !user || scopedRoleOf(user) !== null || book.access_scope !== 'full' || !has('books.create') || !has('books.view') || !canCreateGeneralBook) return { actions: [], dialog: null }
   return {
     actions: [
       { key: 'reply', label: t('books.thread.reply'), icon: <Reply className="h-4 w-4 rtl:-scale-x-100" aria-hidden />, onSelect: () => openOverlay ? openOverlay('reply') : setSelection({ bookId: book.id, kind: 'reply' }) },

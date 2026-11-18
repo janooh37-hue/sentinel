@@ -4,12 +4,18 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), mobile: false }))
 
 vi.mock('@/lib/api', () => ({
   api: {
     listTemplates: vi.fn(),
     getSettings: vi.fn(),
+    getTemplateFields: vi.fn(),
+    generateDocument: vi.fn(),
+    listBookClassifications: vi.fn(),
+    createWordBook: vi.fn(),
+    getBook: vi.fn(),
+    getBookVersionFields: vi.fn(),
   },
   ApiError: class ApiError extends Error {},
   apiErrorMessage: (error: unknown) => String(error),
@@ -21,11 +27,36 @@ vi.mock('@/lib/useCapabilities', () => ({
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
 }))
-vi.mock('@/lib/applicationFormSchema', () => ({ buildZodSchema: () => z.object({}) }))
-vi.mock('@/components/application/TemplateForm', () => ({ TemplateForm: () => null }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => capabilityState.mobile }))
+vi.mock('@/lib/applicationFormSchema', () => ({ buildZodSchema: () => z.object({}).passthrough() }))
+vi.mock('@/components/application/TemplateForm', () => ({
+  TemplateForm: ({ isClassificationAllowed, schema, onClassificationChange, form }: {
+    isClassificationAllowed?: (code: string) => boolean
+    schema: { fields: { id: string }[] }
+    onClassificationChange: (code: string) => void
+    form: UseFormReturn
+  }) => (
+    <FormProvider {...form}>
+      {['7/1', '11/1', '1/1'].filter((code) => !isClassificationAllowed || isClassificationAllowed(code)).map((code) => <span key={code}>{code}</span>)}
+      <button type="button" onClick={() => onClassificationChange('7/1')}>Choose classification</button>
+      <TestFormValues />
+      {schema.fields.map((field) => <span key={field.id}>{field.id}</span>)}
+    </FormProvider>
+  ),
+}))
 vi.mock('@/components/application/AttachmentsBlock', () => ({ AttachmentsBlock: () => null }))
 vi.mock('./EmployeeHeader', () => ({ EmployeeHeader: () => null }))
-vi.mock('./JobStatus', () => ({ JobStatus: () => null }))
+// A generated job finishes at once: the Preview tab then offers Save.
+vi.mock('./JobStatus', async () => {
+  // The mock factory is hoisted before static imports, so React must load inside it.
+  const { useEffect } = await import('react')
+  return {
+    JobStatus: ({ jobId, onDone }: { jobId: string; onDone: (job: unknown) => void }) => {
+      useEffect(() => onDone({ job_id: jobId, status: 'done', book_id: null, documents: [] }), [jobId, onDone])
+      return null
+    },
+  }
+})
 vi.mock('@/lib/formDrafts', () => ({
   clearAllDrafts: vi.fn(),
   clearDraft: vi.fn(),
@@ -39,8 +70,22 @@ vi.mock('./notifyToggle', () => ({ shouldShowNotifyToggle: () => false }))
 vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => null }))
 
 import { api } from '@/lib/api'
+import { FormProvider, useFormContext, type UseFormReturn } from 'react-hook-form'
 import { ApplicationPage } from './ApplicationPage'
+import type { SessionUser } from '@/lib/api'
+import { AuthContext, type AuthContextValue } from '@/lib/authContext'
 
+
+function TestFormValues() {
+  const { setValue } = useFormContext()
+  return <button type="button" onClick={() => {
+    setValue('subject', 'Fleet letter')
+    setValue('recipient_id', 42)
+    setValue('cc', ['Operations'])
+    setValue('hand_sign_manager', true)
+    setValue('hand_sign_employee', true)
+  }}>Choose recipient</button>
+}
 const templates = {
   items: [
     {
@@ -68,15 +113,22 @@ const templates = {
   ],
 }
 
-function renderPage(entry = '/services') {
+function renderPage(entry = '/services', scopedRole: 'inmate_reporter' | 'fleet_reporter' | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const user = { id: 7, employee_id: 'G7', role: scopedRole ?? 'operator', scoped_role: scopedRole } as SessionUser
+  const auth: AuthContextValue = {
+    user, status: 'authed', login: async () => user, logout: async () => undefined,
+    refetch: async () => undefined, setUser: () => undefined,
+  }
   return render(
     <QueryClientProvider client={client}>
+      <AuthContext.Provider value={auth}>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route path="/services/:slug?" element={<ApplicationPage />} />
         </Routes>
       </MemoryRouter>
+      </AuthContext.Provider>
     </QueryClientProvider>,
   )
 }
@@ -85,8 +137,22 @@ describe('ApplicationPage service permissions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     capabilityState.allowed = new Set()
+    capabilityState.mobile = false
     vi.mocked(api.listTemplates).mockResolvedValue(templates)
     vi.mocked(api.getSettings).mockResolvedValue({} as never)
+    vi.mocked(api.listBookClassifications).mockResolvedValue({ items: [] })
+    vi.mocked(api.getTemplateFields).mockResolvedValue({
+      meta: templates.items[0], needs_manager: true, needs_submitter: false,
+      fields: [
+        { id: 'subject', type: 'text', label_en: 'Subject', label_ar: 'الموضوع', required: true },
+        { id: 'body', type: 'arabic_rich_full', label_en: 'Body', label_ar: 'نص الكتاب', required: true },
+        { id: 'manager_id', type: 'manager_picker', label_en: 'Manager', label_ar: 'المدير', required: false },
+        { id: 'recipient_id', type: 'recipient_picker', label_en: 'Recipient', label_ar: 'المستلم', required: false },
+        { id: 'cc', type: 'recipient_multi_picker', label_en: 'CC', label_ar: 'نسخة إلى', required: false },
+        { id: 'hand_sign_manager', type: 'hand_sign_checkbox', label_en: 'Manager signature', label_ar: 'توقيع المدير', required: false, default: 'true' },
+        { id: 'hand_sign_employee', type: 'hand_sign_checkbox', label_en: 'Employee signature', label_ar: 'توقيع الموظف', required: false, default: 'true' },
+      ],
+    } as never)
   })
 
   it('shows service templates when all creation capabilities are granted', async () => {
@@ -175,5 +241,68 @@ describe('ApplicationPage service permissions', () => {
     expect(await screen.findByText('Leave & Attendance')).toBeVisible()
     expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
+  })
+
+  it.each([false, true])('shows the fleet reporter only the Report tile (mobile=%s)', (mobile) => {
+    capabilityState.mobile = mobile
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.service.Vehicle Fines'])
+    renderPage('/services', 'fleet_reporter')
+    const tiles = screen.getAllByRole('button')
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]).toHaveTextContent('Report')
+    expect(tiles[0]).toHaveProperty('disabled', mobile)
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+  })
+
+  it.each([false, true])('keeps the inmate violations and Report tiles unchanged (mobile=%s)', (mobile) => {
+    capabilityState.mobile = mobile
+    renderPage('/services', 'inmate_reporter')
+    const tiles = screen.getAllByRole('button')
+    expect(tiles).toHaveLength(2)
+    expect(tiles[0]).toHaveTextContent('Inmate Conduct Violations')
+    expect(tiles[1]).toHaveTextContent('Report')
+    expect(tiles[1]).toHaveProperty('disabled', mobile)
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+  })
+
+  it('does not open a new General Book for a fleet reporter', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.service.Report', 'books.category.11/1'])
+    renderPage('/services/general_book', 'fleet_reporter')
+    expect(await screen.findByRole('button', { name: /Report/ })).toBeVisible()
+    expect(screen.queryByText('subject')).not.toBeInTheDocument()
+    expect(api.getTemplateFields).not.toHaveBeenCalled()
+  })
+
+  it('revises a fleet reporter\'s General Book without manager controls, keeping its recipient', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view', 'books.service.General Book', 'books.category.11/1'])
+    vi.mocked(api.getBook).mockResolvedValue({
+      id: 5, ref_number: '1/11/1/GSSG/5', classification_code: '11/1', approval_state: 'returned',
+      versions: [{ id: 9, version_no: 1, template_id: 'General Book' }],
+    } as never)
+    vi.mocked(api.getBookVersionFields).mockResolvedValue({ fields: { subject: 'Maintenance', recipient_id: 42 } } as never)
+    vi.mocked(api.generateDocument)
+      .mockResolvedValueOnce({ job_id: 'preview' } as never)
+      // Keep the save pending: this test asserts the outgoing request, not the saved record.
+      .mockImplementationOnce(() => new Promise(() => {}))
+    renderPage('/services/general_book?revise=5', 'fleet_reporter')
+    expect(await screen.findByText('recipient_id')).toBeVisible()
+    for (const picker of ['manager_id', 'hand_sign_manager']) expect(screen.queryByText(picker)).not.toBeInTheDocument()
+
+    // The real form has no body-mode toggle: the revision previews, then saves.
+    const previewButton = screen.getAllByRole('button', { name: /Preview/i })
+      .find((button) => button.getAttribute('type') === 'submit')
+    expect(previewButton).toBeDefined()
+    fireEvent.click(previewButton!)
+    await vi.waitFor(() => expect(api.generateDocument).toHaveBeenCalledTimes(1))
+    const preview = vi.mocked(api.generateDocument).mock.calls[0][0]
+    expect(preview).toMatchObject({ commit: false, revise_of_book_id: 5, classification_code: '11/1' })
+    expect(preview.embed_signature).not.toHaveProperty('manager')
+    expect(preview.fields).toMatchObject({ recipient_id: 42 })
+
+    fireEvent.click(await screen.findByRole('button', { name: /Save to Records/i }))
+    await vi.waitFor(() => expect(api.generateDocument).toHaveBeenCalledTimes(2))
+    const save = vi.mocked(api.generateDocument).mock.calls[1][0]
+    expect(save).toMatchObject({ commit: true, revise_of_book_id: 5, classification_code: '11/1' })
+    expect(api.createWordBook).not.toHaveBeenCalled()
   })
 })

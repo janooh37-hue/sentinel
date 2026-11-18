@@ -16,7 +16,7 @@ function book(over: Partial<DeletableBook> = {}): DeletableBook {
   }
 }
 
-const ok = { has: allow, isInmateReporter: false }
+const ok = { has: allow, isScopedRole: false }
 
 describe('deleteBlockReason', () => {
   it.each([
@@ -50,15 +50,15 @@ describe('deleteBlockReason', () => {
   })
 
   it('without books.delete → noCapability, whatever the state', () => {
-    expect(deleteBlockReason(book(), { has: deny, isInmateReporter: false })).toBe('noCapability')
+    expect(deleteBlockReason(book(), { has: deny, isScopedRole: false })).toBe('noCapability')
     expect(
-      deleteBlockReason(book({ approval_state: 'approved' }), { has: deny, isInmateReporter: false }),
+      deleteBlockReason(book({ approval_state: 'approved' }), { has: deny, isScopedRole: false }),
     ).toBe('noCapability')
   })
 
   it('assigned_revision access or an inmate reporter → restricted', () => {
     expect(deleteBlockReason(book({ access_scope: 'assigned_revision' }), ok)).toBe('restricted')
-    expect(deleteBlockReason(book(), { has: allow, isInmateReporter: true })).toBe('restricted')
+    expect(deleteBlockReason(book(), { has: allow, isScopedRole: true })).toBe('restricted')
   })
 
   it('a read-only recipient cannot delete even with books.delete', () => {
@@ -71,8 +71,8 @@ describe('deleteBlockReason', () => {
       approval_state: 'approved',
       edit_session: { user_id: 1, state: 'active', created_at: '' } as DeletableBook['edit_session'],
     })
-    expect(deleteBlockReason(worst, { has: deny, isInmateReporter: true })).toBe('noCapability')
-    expect(deleteBlockReason(worst, { has: allow, isInmateReporter: true })).toBe('restricted')
+    expect(deleteBlockReason(worst, { has: deny, isScopedRole: true })).toBe('noCapability')
+    expect(deleteBlockReason(worst, { has: allow, isScopedRole: true })).toBe('restricted')
     expect(deleteBlockReason({ ...worst, access_scope: 'full' }, ok)).toBe('inFlight')
     expect(deleteBlockReason({ ...worst, access_scope: 'full', approval_state: 'none' }, ok)).toBe(
       'wordSession',

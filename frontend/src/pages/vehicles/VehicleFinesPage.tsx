@@ -41,14 +41,13 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, FileText, Plus, Search } from 'lucide-react'
+import { FileText, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { Button } from '@/components/ui/button'
-import { buttonVariants } from '@/components/ui/button-variants'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
@@ -61,13 +60,14 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useReducedMotion } from '@/lib/useFakeProgress'
 import { cn } from '@/lib/utils'
-import { formatNumber, isArabic, localized } from '@/lib/language'
+import { localized } from '@/lib/language'
 
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
   employeeLabel,
   formatDateTime,
+  formatCount,
   invalidateVehicleQueries,
   vehicleErrorMessage,
 } from './vehicleUtils'
@@ -78,6 +78,9 @@ import { FinePaymentDialog, type FinePaymentMode } from './components/FinePaymen
 import { PlateChip } from './components/PlateChip'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
+import { RegisterBar, RegisterSheet, RegisterStats, RegisterTabs, ServiceCounter, ServicePage } from './components/ServiceLayout'
+import { BAND_BUTTON } from './components/serviceStyles'
+import { EvgFetchDialog } from './components/EvgFetchDialog'
 
 /** Stable empty list, so a pending or failed fetch does not re-run the
  *  overview/filter memos against a fresh `[]` on every render. */
@@ -106,7 +109,6 @@ const selectClass =
 export function VehicleFinesPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
-  const isAr = isArabic(lang)
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
   const canEdit = has('vehicles.edit')
@@ -145,6 +147,14 @@ export function VehicleFinesPage(): React.JSX.Element {
   }, [setSearchParams])
 
   const [addOpen, setAddOpen] = useState(false)
+  const [initialVehicleId, setInitialVehicleId] = useState<number | null>(null)
+  const [evgOpen, setEvgOpen] = useState(false)
+  const fleetQuery = useQuery({
+    queryKey: [...VEHICLE_QUERY_KEYS.list, {}],
+    queryFn: () => api.listVehicles({}),
+    enabled: canEdit,
+    staleTime: 60_000,
+  })
   const [editTarget, setEditTarget] = useState<VehicleFineRead | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<VehicleFineRead | null>(null)
   const [paymentTarget, setPaymentTarget] = useState<{ fine: VehicleFineRead; mode: FinePaymentMode } | null>(
@@ -358,84 +368,34 @@ export function VehicleFinesPage(): React.JSX.Element {
   const noMatches = finesQuery.isSuccess && !fleetEmpty && !archiveEmpty && filtered.length === 0
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      <header className="shrink-0 px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <Link
-          to="/vehicles"
-          className="inline-flex items-center gap-1.5 text-[0.8em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none"
-        >
-          {isAr ? (
-            <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          )}
-          {t('vehicles.backHub')}
-        </Link>
-
-        <div className="mt-1.5 flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold tracking-tight text-foreground md:text-[1.55em]">
-              {t('vehicles.finesLedgerTitle')}
-            </h1>
-            <p className="mt-1 hidden text-[0.84em] text-muted-foreground md:block">
-              {t('vehicles.finesLedgerDesc')}
-            </p>
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Link
-              to={reportHref}
-              className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }))}
-            >
-              <FileText className="h-3.5 w-3.5" aria-hidden />
-              {t('vehicles.finesReport')}
-            </Link>
-            <RefreshButton />
-            {canEdit && (
-              <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="h-3.5 w-3.5" aria-hidden />
-                {t('vehicles.addFine')}
-              </Button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
-        {/* Overview: always the whole fleet, never affected by the toolbar. */}
-        <div className="mb-4 grid grid-cols-2 gap-2.5 md:grid-cols-4">
-          <OverviewBox
-            label={t('vehicles.fines.overviewUnpaid')}
-            count={overview.unpaidCount}
-            amountFils={overview.unpaidFils}
-            known={finesQuery.isSuccess}
-            lang={lang}
-            tone="warning"
-          />
-          <OverviewBox
-            label={t('vehicles.fines.overviewPaid')}
-            count={overview.paidCount}
-            amountFils={overview.paidFils}
-            known={finesQuery.isSuccess}
-            lang={lang}
-            tone="success"
-          />
-          <OverviewBox
-            label={t('vehicles.fines.overviewTotal')}
-            count={overview.total}
-            known={finesQuery.isSuccess}
-            lang={lang}
-            tone="neutral"
-          />
-          <OverviewBox
-            label={t('vehicles.fines.overviewUnknown')}
-            count={overview.unknownCount}
-            amountFils={overview.unknownFils}
-            known={finesQuery.isSuccess}
-            lang={lang}
-            tone="neutral"
-          />
-        </div>
+    <ServicePage
+      band={{
+        back: { to: '/vehicles', label: t('vehicles.backHub') },
+        title: t('vehicles.finesLedgerTitle'),
+        description: t('vehicles.finesLedgerDesc'),
+        actions: <Link to={reportHref} className={BAND_BUTTON}><FileText className="h-3.5 w-3.5" aria-hidden />{t('vehicles.finesReport')}</Link>,
+      }}
+      counter={canEdit ? (
+        <ServiceCounter artwork="vehicle-fines" title={t('vehicles.start.fine')}
+          description={t('vehicles.addFineDesc')} actionLabel={t('vehicles.addFine')} vehicles={fleetQuery.data}
+          onRetry={fleetQuery.isError ? () => void fleetQuery.refetch() : undefined}
+          onStart={(vehicleId) => { setInitialVehicleId(vehicleId); setAddOpen(true) }}
+          extra={<Button type="button" variant="secondary" size="lg" onClick={() => setEvgOpen(true)}>{t('vehicles.importFines')}</Button>} />
+      ) : null}
+    >
+        <RegisterBar>
+          <RegisterTabs label={t('vehicles.fines.statusColumn')} value={statusFilter}
+            onChange={(value) => setFilter('status', value === 'all' ? null : value)}
+            items={STATUS_FILTERS.map((key) => ({
+              key, label: key === 'all' ? t('vehicles.fines.statusAll') : t(`vehicles.fines.status.${key}`),
+              count: finesQuery.isSuccess ? formatCount(key === 'all' ? overview.total : key === 'unpaid' ? overview.unpaidCount : key === 'paid' ? overview.paidCount : overview.unknownCount) : undefined,
+            }))} />
+          <RegisterStats items={[
+            { label: t('vehicles.fines.overviewUnpaid'), value: finesQuery.isSuccess ? <FineAmount fils={overview.unpaidFils} /> : EMPTY_VALUE },
+            { label: t('vehicles.fines.overviewPaid'), value: finesQuery.isSuccess ? <FineAmount fils={overview.paidFils} /> : EMPTY_VALUE },
+            { label: t('vehicles.fines.overviewUnknown'), value: finesQuery.isSuccess ? <FineAmount fils={overview.unknownFils} /> : EMPTY_VALUE },
+          ]} />
+        </RegisterBar>
         <p className="mb-3 -mt-2 text-[0.72rem] text-muted-foreground">
           {t('vehicles.fines.overviewIncludesArchived')}
         </p>
@@ -452,7 +412,7 @@ export function VehicleFinesPage(): React.JSX.Element {
         ) : (
           <>
             {/* ── Toolbar ── */}
-            <div className="mb-3 rounded-xl border border-border bg-surface p-2.5">
+            <div className="mb-3 border border-border bg-surface p-3">
               <div className="flex flex-wrap items-center gap-2">
                 <div
                   role="group"
@@ -479,18 +439,7 @@ export function VehicleFinesPage(): React.JSX.Element {
                   ))}
                 </div>
 
-                <select
-                  className={selectClass}
-                  aria-label={t('vehicles.fines.statusColumn')}
-                  value={statusFilter}
-                  onChange={(event) => setFilter('status', event.target.value === 'all' ? null : event.target.value)}
-                >
-                  {STATUS_FILTERS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === 'all' ? t('vehicles.fines.statusAll') : t(`vehicles.fines.status.${option}`)}
-                    </option>
-                  ))}
-                </select>
+                <RefreshButton />
 
                 <div className="relative min-w-[13rem] flex-1">
                   <Search
@@ -576,7 +525,7 @@ export function VehicleFinesPage(): React.JSX.Element {
                 <p className="text-[0.78rem] text-muted-foreground">
                   {t('vehicles.fines.archivePaidResultsHint', {
                     count: archivablePaid.length,
-                    formattedCount: isolateBidi(formatNumber(archivablePaid.length, lang)),
+                    formattedCount: isolateBidi(formatCount(archivablePaid.length)),
                   })}
                 </p>
                 <Button
@@ -588,12 +537,13 @@ export function VehicleFinesPage(): React.JSX.Element {
                 >
                   {t('vehicles.fines.archivePaidResults', {
                     count: archivablePaid.length,
-                    formattedCount: isolateBidi(formatNumber(archivablePaid.length, lang)),
+                    formattedCount: isolateBidi(formatCount(archivablePaid.length)),
                   })}
                 </Button>
               </div>
             )}
 
+            <RegisterSheet>
             {finesQuery.isLoading ? (
               <div className="overflow-hidden rounded-xl border border-border bg-surface">
                 {Array.from({ length: 5 }).map((_, index) => (
@@ -606,8 +556,6 @@ export function VehicleFinesPage(): React.JSX.Element {
                   icon={FileText}
                   message={t('vehicles.fines.noFinesAtAll')}
                   description={canEdit ? t('vehicles.fines.noFinesAtAllDesc') : undefined}
-                  actionLabel={canEdit ? t('vehicles.addFine') : undefined}
-                  onAction={canEdit ? () => setAddOpen(true) : undefined}
                 />
               </div>
             ) : archiveEmpty ? (
@@ -625,10 +573,10 @@ export function VehicleFinesPage(): React.JSX.Element {
                 />
               </div>
             ) : (
-              <section className="overflow-hidden rounded-xl border border-border bg-surface">
+              <section>
                 <header className="flex flex-wrap items-center justify-between gap-2 border-b border-hairline px-3 py-2.5">
                   <p aria-live="polite" className="text-[0.72rem] text-muted-foreground">
-                    <bdi>{`${formatNumber(filtered.length, lang)} ${t('vehicles.records')}`}</bdi>
+                    <bdi>{`${formatCount(filtered.length)} ${t('vehicles.records')}`}</bdi>
                   </p>
                 </header>
 
@@ -685,13 +633,14 @@ export function VehicleFinesPage(): React.JSX.Element {
                 )}
               </section>
             )}
+            </RegisterSheet>
           </>
         )}
-      </div>
 
       {canEdit && (
         <>
-          <FineDialog open={addOpen} onOpenChange={setAddOpen} vehicle={null} onSaved={highlightCreated} />
+          <FineDialog open={addOpen} onOpenChange={setAddOpen} vehicle={null} initialVehicleId={initialVehicleId} onSaved={highlightCreated} />
+          <EvgFetchDialog open={evgOpen} onOpenChange={setEvgOpen} />
           {editTarget && (
             <FineDialog
               open
@@ -753,7 +702,7 @@ export function VehicleFinesPage(): React.JSX.Element {
             onOpenChange={setBatchArchiveOpen}
             title={t('vehicles.fines.archivePaidResultsConfirmTitle', {
               count: archivablePaid.length,
-              formattedCount: isolateBidi(formatNumber(archivablePaid.length, lang)),
+              formattedCount: isolateBidi(formatCount(archivablePaid.length)),
             })}
             description={t('vehicles.fines.archivePaidResultsConfirmDesc')}
             confirmLabel={t('vehicles.fines.archive')}
@@ -764,54 +713,10 @@ export function VehicleFinesPage(): React.JSX.Element {
           />
         </>
       )}
-    </div>
+    </ServicePage>
   )
 }
 
-// ── Overview box ─────────────────────────────────────────────────────────────
-
-function OverviewBox({
-  label,
-  count,
-  amountFils,
-  known,
-  lang,
-  tone,
-}: {
-  label: string
-  count: number
-  amountFils?: number
-  known: boolean
-  lang: string
-  tone: 'warning' | 'success' | 'neutral'
-}): React.JSX.Element {
-  return (
-    <div
-      className={cn(
-        'rounded-xl border p-3',
-        tone === 'warning' && 'border-warning/40 bg-warning-soft',
-        tone === 'success' && 'border-success/40 bg-success-soft',
-        tone === 'neutral' && 'border-border bg-surface',
-      )}
-    >
-      <p className="text-[0.68rem] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p className="mt-1 flex flex-wrap items-baseline gap-x-2">
-        {amountFils != null ? (
-          <FineAmount fils={known ? amountFils : 0} size="lg" className={!known ? 'opacity-0' : undefined} />
-        ) : (
-          <strong className="font-mono text-lg font-semibold tabular-nums text-foreground">
-            <bdi>{known ? formatNumber(count, lang) : EMPTY_VALUE}</bdi>
-          </strong>
-        )}
-        {amountFils != null && (
-          <span className="text-[0.74rem] text-muted-foreground">
-            <bdi>{known ? formatNumber(count, lang) : EMPTY_VALUE}</bdi>
-          </span>
-        )}
-      </p>
-    </div>
-  )
-}
 
 // ── Rows and cards ────────────────────────────────────────────────────────────
 
@@ -888,7 +793,7 @@ function FineLedgerRow({
         <FineAmount fils={fine.amount_fils} />
       </TableCell>
       <TableCell className="font-mono text-[0.74rem] tabular-nums">
-        {formatNumber(fine.black_points, lang)}
+        <bdi dir="ltr">{formatCount(fine.black_points)}</bdi>
       </TableCell>
       <TableCell>
         <div className="flex flex-col items-start gap-1">
@@ -993,7 +898,7 @@ function FineLedgerCard({
           <FineAmount fils={fine.amount_fils} />
         </InfoItem>
         <InfoItem label={t('vehicles.blackPoints')}>
-          <Mono>{formatNumber(fine.black_points, lang)}</Mono>
+          <Mono>{formatCount(fine.black_points)}</Mono>
         </InfoItem>
       </dl>
       <div className="mt-2 flex flex-wrap items-center gap-2">

@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api, type CapabilityRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 
-const ROLES = new Set(['operator', 'manager', 'admin', 'inmate_reporter'])
+const ROLES = new Set(['operator', 'manager', 'admin', 'inmate_reporter', 'fleet_reporter'])
 const EMPTY_CATALOG: readonly CapabilityRead[] = []
 
 function invalidCatalog(): never {
@@ -89,17 +90,12 @@ export interface CapabilityCatalog {
 
 export function useCapabilityCatalog(): CapabilityCatalog {
   const { status: authStatus, user } = useAuth()
-  // inmate_reporter's route allowlist blocks GET /auth/capabilities (admin-
-  // only full catalog) outright — this role never reaches a denied-capability
-  // branch that needs it (RequireCapability/CapabilityGate only read `catalog`
-  // when `has(cap)` is false, which never happens for this fixed-ceiling
-  // role's own routes). Skip the call rather than firing a request the
-  // backend would 403.
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  // Scoped roles cannot fetch the full catalog or widen their fixed ceilings.
+  const scoped = scopedRoleOf(user) !== null
   const query = useQuery({
     queryKey: capabilityCatalogKey(user?.id ?? 0),
     queryFn: async () => validateCatalog(await api.listCapabilities()),
-    enabled: authStatus === 'authed' && user != null && !isInmateReporter,
+    enabled: authStatus === 'authed' && user != null && !scoped,
     staleTime: 5 * 60_000,
   })
   const entries = query.data ?? EMPTY_CATALOG

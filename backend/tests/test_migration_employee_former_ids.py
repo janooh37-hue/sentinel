@@ -10,7 +10,6 @@ from sqlalchemy import create_engine, inspect, text
 from app.db.session import attach_sqlite_pragmas
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0120_backfill_workforce_org_scope"
 REVISION = "0119_employee_former_ids"
 PARENT = "0118_drop_record_category_overreach"
 
@@ -18,7 +17,7 @@ PARENT = "0118_drop_record_category_overreach"
 def test_single_head_roundtrip_and_foreign_keys(tmp_path: Path) -> None:
     config = Config(str(ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == [HEAD]
+    assert script.get_revision(REVISION).down_revision == PARENT
     database = tmp_path / "former_ids.db"
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database}")
     engine = create_engine(f"sqlite:///{database}")

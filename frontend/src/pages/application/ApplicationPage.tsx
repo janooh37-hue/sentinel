@@ -48,6 +48,8 @@ import { ApprovedViolationUpload } from './ApprovedViolationUpload'
 import { InmateViolationGroupPicker } from './InmateViolationGroupPicker'
 import { StatisticsTab } from './statistics/StatisticsTab'
 import { InmateReporterApplication } from './InmateReporterApplication'
+import { FleetReporterApplication } from './FleetReporterApplication'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { api, apiErrorMessage } from '@/lib/api'
@@ -182,15 +184,19 @@ function formWidthClass(fields: readonly TemplateField[] | undefined): string {
 
 export function ApplicationPage(): React.JSX.Element {
   const auth = useContext(AuthContext)
-  return auth?.user?.role === 'inmate_reporter'
-    ? <InmateReporterApplication user={auth.user} />
-    : <StandardApplicationPage />
+  const role = scopedRoleOf(auth?.user)
+  if (role === 'inmate_reporter' && auth?.user) return <InmateReporterApplication user={auth.user} />
+  if (role === 'fleet_reporter' && auth?.user) {
+    return <FleetReporterApplication user={auth.user} generalBookForm={<StandardApplicationPage />} />
+  }
+  return <StandardApplicationPage />
 }
 
 function StandardApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const scoped = scopedRoleOf(useContext(AuthContext)?.user) !== null
 
   // Per-template email-basket counts → the marker on each gallery tile.
   const { baskets } = useEmailBasket()
@@ -255,13 +261,17 @@ function StandardApplicationPage(): React.JSX.Element {
   const [groupId, setGroupId] = useSearchParam('group', { push: true })
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
-  const [classificationCode, setClassificationCode] = useState<string | null>(null)
+  const [pickedClassificationCode, setClassificationCode] = useState<string | null>(null)
   // Record level (عام/شخصي/سري/موجه) picked at creation; a revision keeps the
   // book's level, so revise mode neither shows nor sends it.
   const [confidentiality, setConfidentiality] = useState<Confidentiality>('general')
   // General Book plain-path body-mode toggle (M5-1: editor hidden, word-only).
   // 'word' = body written in Word; kept typed so revert is one char change.
-  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
+  const [chosenBodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
+  // A scoped author holds no Word create: its General Book revision regenerates
+  // the paper from its fields as a new version of the same book.
+  const scopedRevise = scoped && reviseBookId !== null
+  const bodyMode = scopedRevise ? 'editor' : chosenBodyMode
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
   // Per-book notify switch: the operator's choice (null = untouched) over the
@@ -325,7 +335,7 @@ function StandardApplicationPage(): React.JSX.Element {
   const employeeQuery = useQuery({
     queryKey: ['employee-lookup', selectedEmployee],
     queryFn: () => api.getEmployeeLookup(selectedEmployee as string),
-    enabled: !!selectedEmployee,
+    enabled: !scoped && !!selectedEmployee,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -334,6 +344,7 @@ function StandardApplicationPage(): React.JSX.Element {
   const settingsQuery = useQuery({
     queryKey: ['settings'],
     queryFn: api.getSettings,
+    enabled: !scoped,
     staleTime: 5 * 60 * 1000,
   })
 
@@ -345,6 +356,14 @@ function StandardApplicationPage(): React.JSX.Element {
     staleTime: Infinity,
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
+  if (schema && scoped) {
+    schema.fields = schema.fields.filter((field) =>
+      field.type !== 'manager_picker' &&
+      field.id !== 'hand_sign_manager' &&
+      (selectedTemplate !== 'Report' || !['recipient_picker', 'recipient_multi_picker'].includes(field.type)),
+    )
+    schema.needs_manager = false
+  }
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
   const messageTemplates = useMessageTemplates()
   const draftVariants = useDraftVariants()
@@ -458,6 +477,9 @@ function StandardApplicationPage(): React.JSX.Element {
     queryFn: () => api.getBook(reviseBookId!),
     enabled: reviseBookId !== null,
   })
+  // A scoped revision keeps its book's classification; there is no picker step.
+  const classificationCode =
+    pickedClassificationCode ?? (scopedRevise ? reviseBookQuery.data?.classification_code ?? null : null)
   // Two-stage to avoid a race: the snapshot is fetched here; the schema-gated
   // effect below applies `form.reset` only once the fields are actually
   // registered. Resetting the instant the fetch resolves silently drops values
@@ -510,7 +532,7 @@ function StandardApplicationPage(): React.JSX.Element {
     },
   })
 
-  // Create the book + DAV session, then show the Word session page.
+  // Scoped authors finish inline; the full Word page requires books.edit.
   const wordSessionMutation = useMutation({
     mutationFn: (body: WordBookCreate) => api.createWordBook(body),
     onSuccess: (res) => {
@@ -564,6 +586,7 @@ function StandardApplicationPage(): React.JSX.Element {
     for (const field of schema?.fields ?? []) {
       if (field.type === 'hand_sign_checkbox') {
         const entity = field.id.replace(/^hand_sign_/, '')
+        if (scoped && entity === 'manager') continue
         embedSignature[entity] =
           field.default === 'true' ? values[field.id] !== false : Boolean(values[field.id])
       }
@@ -596,8 +619,8 @@ function StandardApplicationPage(): React.JSX.Element {
       employee_id: isAdminCategory ? null : selectedEmployee,
       template_id: selectedTemplate,
       fields: templateFields,
-      manager_id: managerId ?? undefined,
-      submitter_id: submitterId ?? undefined,
+      manager_id: scoped ? undefined : managerId ?? undefined,
+      submitter_id: scoped ? undefined : submitterId ?? undefined,
       embed_signature:
         Object.keys(embedSignature).length > 0 ? embedSignature : undefined,
       commit,
@@ -607,8 +630,9 @@ function StandardApplicationPage(): React.JSX.Element {
       notify_employee: showNotifyEmployee ? notifyEmployeeField(notifyChoice, notifyDefault) : undefined,
       attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
-      // the existing book's ref (the backend requires commit=True for it).
-      revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
+      // the existing book's ref (the backend requires commit=True for it). A
+      // scoped author's preview carries it too: it authorizes that preview.
+      revise_of_book_id: commit || scopedRevise ? reviseBookId ?? undefined : undefined,
       // Revise mode keeps the book's level server-side; state stays 'general' there.
       confidentiality,
       // General Book: the classification drives the classified-register ref.
@@ -655,7 +679,7 @@ function StandardApplicationPage(): React.JSX.Element {
           recipient_id: recipientField ? ((values[recipientField.id] as number | null | undefined) ?? null) : null,
           subject,
           cc: Array.isArray(values[ccField?.id ?? '']) ? (values[ccField!.id] as string[]) : [],
-          manager_id: managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
+          manager_id: scoped ? null : managerField ? ((values[managerField.id] as number | null | undefined) ?? null) : null,
           template_name: templateName ?? undefined,
           table_rows,
           sign: true,
@@ -675,7 +699,7 @@ function StandardApplicationPage(): React.JSX.Element {
         const attachmentSpecs = toGenerateSpecs(filterStateToSlots(attachmentsState, visibleSlots))
         wordSessionMutation.mutate({
           subject: String(values.subject ?? '').trim(),
-          recipient_id: (values.recipient_id as number | null | undefined) ?? null,
+          recipient_id: scoped ? null : (values.recipient_id as number | null | undefined) ?? null,
           signer_employee_id: String(values.signer_id ?? ''),
           sign: values.sign !== false,
           date: (values.report_date as string | undefined) ?? null,
@@ -1574,6 +1598,7 @@ function StandardApplicationPage(): React.JSX.Element {
                         onExtractionConsumed={() => setPendingInjection(undefined)}
                         classificationCode={classificationCode}
                         onClassificationChange={setClassificationCode}
+                        isClassificationAllowed={scoped ? (code) => has(`books.category.${code}`) : undefined}
                         bodyMode={bodyMode}
                         onBodyModeChange={(mode) => {
                           setBodyMode(mode)
@@ -1599,7 +1624,7 @@ function StandardApplicationPage(): React.JSX.Element {
                           // Word mode — single action: create the book and open it in Word.
                           // Word-brand blue (#185abd) is reserved for open-in-Word actions.
                           <>
-                            <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />
+                            {!scoped && <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />}
                             <p className="text-[0.78em] text-muted-foreground">
                               {t('books.word.bodyInWord')}
                             </p>
@@ -1626,7 +1651,7 @@ function StandardApplicationPage(): React.JSX.Element {
                         ) : isReportForm ? (
                           // Report form: author body in Word — same Word handoff as General Book.
                           <>
-                            <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />
+                            {!scoped && <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />}
                             <p className="text-[0.78em] text-muted-foreground">
                               {t('books.word.bodyInWord')}
                             </p>
@@ -1713,7 +1738,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       }
                       onNotifyChange={setNotifyChoice}
                       onSave={() => void handleSave()}
-                      confidentiality={reviseBookId == null ? confidentiality : undefined}
+                      confidentiality={!scoped && reviseBookId == null ? confidentiality : undefined}
                       onConfidentialityChange={setConfidentiality}
                     />
                   )}

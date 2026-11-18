@@ -169,6 +169,14 @@ describe('LockOverlay', () => {
     delete globalWindow.visualViewport
   })
 
+  it('keeps fleet lock-screen queries inside the scoped route ceiling', () => {
+    mockUser.scoped_role = 'fleet_reporter'
+    renderOverlay()
+    expect(screen.getByLabelText('Password')).toBeVisible()
+    expect(api.getMyDocumentActivity).not.toHaveBeenCalled()
+    expect(api.getWorkforceSnapshot).not.toHaveBeenCalled()
+  })
+
   it('applies the account lock layout and shows no switcher', () => {
     mockUser.lock_layout = 'console'
     renderOverlay()

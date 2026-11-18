@@ -147,6 +147,8 @@ function AccountSection(): React.JSX.Element {
         return t('settings.account.roleManager')
       case 'inmate_reporter':
         return t('access.roleName.inmate_reporter')
+      case 'fleet_reporter':
+        return t('access.roleName.fleet_reporter')
       default:
         return t('settings.account.roleOperator')
     }

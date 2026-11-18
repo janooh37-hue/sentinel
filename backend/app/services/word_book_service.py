@@ -34,7 +34,7 @@ from app.core.classifications import (
 )
 from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import aztec_corner_for
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.scoped_roles import is_scoped_role, scoped_role
 from app.db.models import (
     Book,
     BookCategory,
@@ -601,6 +601,7 @@ def create_report_word_book(
     confidentiality: BookConfidentiality = "general",
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     record_access_user: User | None = None,
+    recipient_name: str | None = None,
 ) -> WordSessionInfo:
     """Create a no-ref Report on the report paper with an empty, Word-editable body.
 
@@ -632,7 +633,7 @@ def create_report_word_book(
         subject=subject,
         confidentiality=confidentiality,
         classification_code=None,
-        approval_state="none" if user.role == INMATE_REPORTER_ROLE else "approved",
+        approval_state="none" if is_scoped_role(user) else "approved",
         submitted_by_user_id=user.id,
         created_by_user_id=user.id,
         created_at=now,
@@ -657,7 +658,9 @@ def create_report_word_book(
         "subject": subject,
         "body": GENERAL_BOOK_BODY_SENTINEL,
         "body_html": "",  # empty → {{ body }} anchor clears; body written in Word
-        "recipient_name": _resolve_recipient(db, recipient_id),
+        "recipient_name": (
+            recipient_name if recipient_name is not None else _resolve_recipient(db, recipient_id)
+        ),
         "cc": "",
         "submitter_g": user.employee_id or "",  # footer = signed-in account
     }
@@ -769,16 +772,17 @@ def finish_word_session(
     if session.last_put_at is None:
         raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
     is_report = book.ref_number.startswith("REPORT-")
-    if user.role == INMATE_REPORTER_ROLE and is_report:
+    scoped = scoped_role(user.role)
+    if scoped is not None and is_report:
         if user.employee_id is None:
             raise AppError(
-                "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+                f"{scoped.error_prefix}_EMPLOYEE_REQUIRED",
                 "Your account has no linked employee record yet.",
                 http_status=409,
             )
         if session.signer_employee_id != user.employee_id or not session.sign_on_finish:
             raise AppError(
-                "INMATE_REPORTER_IDENTITY_MISMATCH",
+                f"{scoped.error_prefix}_IDENTITY_MISMATCH",
                 "The Report signer must be the employee linked to your account.",
                 http_status=403,
             )
@@ -917,7 +921,7 @@ def finish_word_session(
             _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
             if (
                 sig is None
-                and user.role == INMATE_REPORTER_ROLE
+                and is_scoped_role(user)
                 and session.signer_employee_id == user.employee_id
             ):
                 raise AppError(
@@ -969,7 +973,7 @@ def finish_word_session(
         }
     if is_report:
         # A revision is a fresh, unsent paper; any review belongs to the old one.
-        book.approval_state = "none" if user.role == INMATE_REPORTER_ROLE else "approved"
+        book.approval_state = "none" if is_scoped_role(user) else "approved"
 
     # A Word revision of an approved record must become resubmittable.
     if max_version_no > 0 and not signed and not is_report:

@@ -11,12 +11,20 @@ vi.mock('react-i18next', () => {
         'employees.activity.dutyLocation.transfer': 'Transferred',
         'employees.activity.dutyLocation.unassigned': 'Unassigned',
         'employees.activity.dutyLocation.historyBegins': 'History begins at',
+        'employees.activity.dutyLocation.service_end': 'Service ended',
+        'employees.activity.dutyLocation.transfer_out': 'Transferred out',
+        'employees.activity.dutyLocation.reinstatement': 'Reinstated',
+        'employees.activity.dutyLocation.toEndedService': 'Ended service',
+        'employees.activity.dutyLocation.toTransferred': 'Transferred',
+        'employees.activity.dutyLocation.returnedTo': 'Returned to',
       },
       ar: {
         'employees.activity.dutyLocation.initial_placement': 'التعيين الأولي',
         'employees.activity.dutyLocation.transfer': 'تم النقل',
         'employees.activity.dutyLocation.unassigned': 'غير محدد',
         'employees.activity.dutyLocation.historyBegins': 'يبدأ السجل من',
+        'employees.activity.dutyLocation.service_end': 'انتهاء الخدمة',
+        'employees.activity.dutyLocation.toEndedService': 'منتهي الخدمة',
       },
   }
   return {
@@ -73,6 +81,49 @@ describe('DutyLocationActivity', () => {
     expect(movement).not.toHaveAttribute('dir')
     expect(movement.querySelectorAll('bdi')).toHaveLength(2)
     expect(movement.textContent?.indexOf('Administration')).toBeLessThan(movement.textContent?.indexOf('Operations') ?? -1)
+    expect(movement.querySelector('svg')).toHaveClass('rtl:rotate-180')
+  })
+
+  it('shows a service end as a move from the post to Ended service', () => {
+    render(<DutyLocationActivity item={{ event_type: 'service_end', from_unit: 'Security', from_post: 'North Gate' }} />)
+
+    expect(screen.getByText('Service ended')).toBeInTheDocument()
+    const movement = screen.getByTestId('duty-location-movement')
+    expect(movement).toHaveTextContent('Security / North Gate')
+    expect(movement).toHaveTextContent('Ended service')
+    expect(movement.textContent?.indexOf('Security')).toBeLessThan(movement.textContent?.indexOf('Ended service') ?? -1)
+    expect(movement).not.toHaveTextContent('Unassigned')
+  })
+
+  it('shows a transfer out leaving for the Transferred group, from Unassigned when there was no post', () => {
+    render(<DutyLocationActivity item={{ event_type: 'transfer_out' }} />)
+
+    expect(screen.getByText('Transferred out')).toBeInTheDocument()
+    const movement = screen.getByTestId('duty-location-movement')
+    expect(movement).toHaveTextContent('Unassigned')
+    expect(movement).toHaveTextContent('Transferred')
+    expect(movement).not.toHaveTextContent('History begins at')
+  })
+
+  it('reads a reinstatement as a return to the restored post', () => {
+    render(<DutyLocationActivity item={{ event_type: 'reinstatement', to_unit: 'Security', to_post: 'North Gate' }} />)
+
+    expect(screen.getByText('Reinstated')).toBeInTheDocument()
+    const movement = screen.getByTestId('duty-location-movement')
+    expect(movement.firstElementChild).toHaveTextContent('Returned to')
+    expect(movement.querySelector('bdi')).toHaveTextContent('Security / North Gate')
+    expect(screen.queryByText('History begins at')).not.toBeInTheDocument()
+  })
+
+  it('mirrors the service-end arrow in Arabic and isolates the origin', () => {
+    language.value = 'ar'
+    document.documentElement.dir = 'rtl'
+    render(<DutyLocationActivity item={{ event_type: 'service_end', from_unit: 'السرية الأولى' }} />)
+
+    expect(screen.getByText('انتهاء الخدمة')).toBeInTheDocument()
+    const movement = screen.getByTestId('duty-location-movement')
+    expect(movement.querySelector('bdi')).toHaveTextContent('السرية الأولى')
+    expect(movement).toHaveTextContent('منتهي الخدمة')
     expect(movement.querySelector('svg')).toHaveClass('rtl:rotate-180')
   })
 })

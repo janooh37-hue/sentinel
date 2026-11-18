@@ -219,6 +219,7 @@ def test_service_employee_lookup_does_not_grant_profile_access(
         "position_ar",
         "duty_unit",
         "duty_post",
+        "status",
     }
     assert body["items"][0]["id"] == "G100"
 
