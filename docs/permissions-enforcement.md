@@ -403,6 +403,9 @@ The scope picker uses `GET /api/v1/employees/lookup`, whose alternatives include
 `users.manage`; scope administrators need not also hold employee-profile access.
 
 Migration `0120_backfill_workforce_org_scope` backfilled organization scope for
-existing non-admin holders of both `workforce.people.view` and
-`workforce.attendance.review` who had no explicit scope rows. Existing narrower
-scope assignments remain unchanged; the fixed-scope inmate reporter is excluded.
+active or locked non-admin holders of both `workforce.people.view` and
+`workforce.attendance.review` who had no explicit scope rows. Pending, disabled,
+and rejected accounts receive no backfill. Only permanent per-user capability
+grants count; a temporary grant never creates standing organization scope, even
+before it expires. Existing narrower scope assignments remain unchanged; the
+fixed-scope inmate reporter is excluded.

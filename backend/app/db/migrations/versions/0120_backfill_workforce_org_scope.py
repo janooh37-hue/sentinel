@@ -4,11 +4,14 @@ Revision ID: 0120_backfill_workforce_org_scope
 Revises: 0119_employee_former_ids
 
 Capabilities authorize actions, but attendance also requires employee scope.
-Give non-admin holders of both workforce.people.view and
+Give active or locked non-admin holders of both workforce.people.view and
 workforce.attendance.review an organization row only if they have no scope rows.
+Pending, disabled, and rejected accounts receive no standing organization grant.
 The inmate_reporter hard ceiling excludes both capabilities, even if stale role
 rows or overrides purport to grant them. Role rows grant directly (there is no
 enabled flag); user denies and expired grants remove role-granted capabilities.
+Only permanent per-user grants (expires_at IS NULL) count: temporary access must
+not create a permanent scope row, even while its grant is unexpired.
 Neither required capability belongs to the implicit dynamic capability families
 or to the fallback operator/manager presets, so those add no grants here.
 
@@ -21,7 +24,7 @@ also be removed by downgrade.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -44,6 +47,7 @@ def upgrade() -> None:
             SELECT u.id, 'organization', u.id, :backfill_at
             FROM users AS u
             WHERE u.role NOT IN ('admin', 'inmate_reporter')
+              AND u.status IN ('active', 'locked')
               AND NOT EXISTS (
                   SELECT 1 FROM user_workforce_scopes AS s WHERE s.user_id = u.id
               )
@@ -57,7 +61,7 @@ def upgrade() -> None:
                           SELECT 1 FROM user_permissions AS p
                           WHERE p.user_id = u.id AND p.capability = required.capability
                             AND p.effect = 'grant'
-                            AND (p.expires_at IS NULL OR p.expires_at > :now)
+                            AND p.expires_at IS NULL
                       )
                       OR (
                           EXISTS (
@@ -72,11 +76,8 @@ def upgrade() -> None:
                   )
               )
             """
-        ).bindparams(
-            sa.bindparam("backfill_at", type_=sa.DateTime()),
-            sa.bindparam("now", type_=sa.DateTime()),
-        ),
-        {"backfill_at": BACKFILL_AT, "now": datetime.now(UTC).replace(tzinfo=None)},
+        ).bindparams(sa.bindparam("backfill_at", type_=sa.DateTime())),
+        {"backfill_at": BACKFILL_AT},
     )
 
 

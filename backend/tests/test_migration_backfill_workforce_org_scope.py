@@ -22,13 +22,13 @@ def _config(database: Path) -> Config:
     return config
 
 
-def _user(connection: Connection, name: str, role: str) -> int:
+def _user(connection: Connection, name: str, role: str, *, status: str = "active") -> int:
     return connection.execute(
         text(
             "INSERT INTO users (email, password_hash, role, status) "
-            "VALUES (:email, 'x', :role, 'active') RETURNING id"
+            "VALUES (:email, 'x', :role, :status) RETURNING id"
         ),
-        {"email": f"{name}@test.ae", "role": role},
+        {"email": f"{name}@test.ae", "role": role, "status": status},
     ).scalar_one()
 
 
@@ -104,6 +104,12 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                 "denied": "manager",
                 "active": "operator",
                 "permanent": "operator",
+                "temporary_extra": "operator",
+                "temporary_role": "manager",
+                "locked": "manager",
+                "pending": "manager",
+                "disabled": "manager",
+                "rejected": "manager",
                 "expired_role": "manager",
                 "expired_extra": "operator",
                 "admin": "admin",
@@ -113,9 +119,19 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                 "resaved": "manager",
                 "reporter": "inmate_reporter",
             }
-            users = {name: _user(connection, name, role) for name, role in roles.items()}
+            statuses = {"locked", "pending", "disabled", "rejected"}
+            users = {
+                name: _user(connection, name, role, status=name if name in statuses else "active")
+                for name, role in roles.items()
+            }
             _override(connection, users["denied"], REVIEW, "deny")
-            _override(connection, users["active"], REVIEW, expires_at=now + timedelta(days=1))
+            _override(connection, users["active"], REVIEW)
+            _override(
+                connection, users["temporary_extra"], REVIEW, expires_at=now + timedelta(days=1)
+            )
+            _override(
+                connection, users["temporary_role"], REVIEW, expires_at=now + timedelta(days=1)
+            )
             _override(connection, users["permanent"], REVIEW)
             _override(connection, users["expired_role"], REVIEW, expires_at=now - timedelta(days=1))
             _override(
@@ -145,7 +161,7 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
             ).all()
             added = {row.user_id: row for row in rows if row.id not in preserved_ids}
             assert set(added) == {
-                users[name] for name in ("role_both", "active", "permanent", "resaved")
+                users[name] for name in ("role_both", "active", "permanent", "resaved", "locked")
             }
             for row in added.values():
                 assert row.scope_kind == "organization"
@@ -192,6 +208,7 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                     "department",
                     "existing_org",
                     "self_created_org",
+                    "locked",
                 )
             }
     finally:
