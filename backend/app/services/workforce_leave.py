@@ -258,21 +258,22 @@ def enqueue_unreflected_leave_excusals(
 
     if until < since:
         return 0
+    # Keep SQL candidates broad: lifecycle classification (including legacy and
+    # bilingual labels) stays in Python, without turning employee ids into binds.
+    leave_query = select(Leave).where(
+        Leave.deleted_at.is_(None),
+        Leave.start_date <= until,
+        Leave.end_date >= since,
+    )
     excusing: dict[str, list[Leave]] = defaultdict(list)
-    for leave in db.scalars(
-        select(Leave).where(
-            Leave.deleted_at.is_(None),
-            Leave.start_date <= until,
-            Leave.end_date >= since,
-        )
-    ):
+    for leave in db.scalars(leave_query):
         if _excusing_reason(leave) is not None:
             excusing[leave.employee_id].append(leave)
     if not excusing:
         return 0
 
     case_query = select(AttendanceCase).where(
-        AttendanceCase.employee_id.in_(list(excusing)),
+        AttendanceCase.employee_id.in_(leave_query.with_only_columns(Leave.employee_id)),
         AttendanceCase.operational_date >= since,
         AttendanceCase.operational_date <= until,
     )
@@ -294,27 +295,32 @@ def enqueue_unreflected_leave_excusals(
             AttendanceEvaluation.attendance_case_id,
             func.max(AttendanceEvaluation.revision).label("revision"),
         )
-        .where(AttendanceEvaluation.attendance_case_id.in_([case.id for case in cases]))
+        .where(
+            AttendanceEvaluation.attendance_case_id.in_(
+                case_query.with_only_columns(AttendanceCase.id).order_by(None)
+            )
+        )
         .group_by(AttendanceEvaluation.attendance_case_id)
         .subquery()
     )
-    latest_by_case = dict(
-        db.execute(
-            select(AttendanceEvaluation.attendance_case_id, AttendanceEvaluation.id).join(
-                latest_revision,
-                (AttendanceEvaluation.attendance_case_id == latest_revision.c.attendance_case_id)
-                & (AttendanceEvaluation.revision == latest_revision.c.revision),
-            )
-        )
-        .tuples()
-        .all()
+    latest_evaluations = select(
+        AttendanceEvaluation.attendance_case_id, AttendanceEvaluation.id
+    ).join(
+        latest_revision,
+        (AttendanceEvaluation.attendance_case_id == latest_revision.c.attendance_case_id)
+        & (AttendanceEvaluation.revision == latest_revision.c.revision),
     )
+    latest_by_case = dict(db.execute(latest_evaluations).tuples().all())
     cited: dict[int, set[int]] = defaultdict(set)
     for evaluation_id, leave_id in db.execute(
         select(
             AttendanceEvaluationLeaveSource.evaluation_id,
             AttendanceEvaluationLeaveSource.leave_id,
-        ).where(AttendanceEvaluationLeaveSource.evaluation_id.in_(list(latest_by_case.values())))
+        ).where(
+            AttendanceEvaluationLeaveSource.evaluation_id.in_(
+                latest_evaluations.with_only_columns(AttendanceEvaluation.id)
+            )
+        )
     ).tuples():
         cited[evaluation_id].add(leave_id)
 
@@ -325,7 +331,7 @@ def enqueue_unreflected_leave_excusals(
             continue
         covering = {
             leave.id
-            for leave in excusing[case.employee_id]
+            for leave in excusing.get(case.employee_id, ())
             if leave.start_date <= case.operational_date <= leave.end_date
         }
         if not covering or covering <= cited[latest_id]:

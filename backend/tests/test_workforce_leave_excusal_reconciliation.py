@@ -4,17 +4,21 @@ Rollout guard for the widened excusal rule: a Duty Leave or other newly excusing
 kind approved before the rule shipped never enqueued re-evaluation, so its days
 still read absent.  Reconciliation finds exactly those cases, inside the bounded
 look-back, and is a no-op once the evaluator has caught up.
+
+Reconciliation must also handle retained histories and employee populations larger
+than SQLite's bind-variable limit; tests lower that limit on the real connection.
 """
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
 
-from app.db.models import Leave, User
-from app.db.workforce_models import AttendanceEvaluation, AttendanceEvaluationQueue
+from app.db.models import Employee, Leave, User
+from app.db.workforce_models import AttendanceCase, AttendanceEvaluation, AttendanceEvaluationQueue
 from app.schemas.workforce import WorkforceConfiguration
 from app.services import attendance_queue_service, scheduler_service, settings_service
 from app.services.attendance_evaluation_service import evaluate_case
@@ -98,6 +102,113 @@ def test_draining_the_requeued_work_excuses_the_day_and_a_rerun_is_a_no_op(db_se
         == 0
     )
     assert _queue(db_session) == []
+
+
+@pytest.mark.parametrize("many_employees", [False, True], ids=["many-days", "many-employees"])
+def test_reconciliation_enqueues_all_days_above_sqlite_variable_limit(db_session, many_employees):
+    first = _seed_case(db_session)
+    baseline = evaluate_case(db_session, first.id, evaluated_at=UTC_NOW)
+    since = CASE_DATE - timedelta(days=64)
+    cases = [first]
+    for index in range(1, 65):
+        employee_id = f"G-BINDS-{index}" if many_employees else first.employee_id
+        day = CASE_DATE if many_employees else CASE_DATE - timedelta(days=index)
+        if many_employees:
+            db_session.add(
+                Employee(id=employee_id, name_en="Reconciliation Tester", status="Active")
+            )
+            db_session.flush()
+        start = datetime.combine(day, first.scheduled_start_at.time())
+        case = AttendanceCase(
+            employee_id=employee_id,
+            shift_occurrence_id=first.shift_occurrence_id,
+            employee_status_snapshot="Active",
+            shift_code_snapshot=first.shift_code_snapshot,
+            scheduled_start_at=start,
+            scheduled_end_at=start + timedelta(hours=8),
+            operational_date=day,
+            organization_snapshot_state="captured",
+        )
+        db_session.add(case)
+        db_session.flush()
+        db_session.add(
+            AttendanceEvaluation(
+                attendance_case_id=case.id,
+                revision=1,
+                presence_state=baseline.presence_state,
+                reason_code=baseline.reason_code,
+                algorithm_version=baseline.algorithm_version,
+                input_fingerprint=f"pre-excusal-{case.id}",
+                evaluated_at=UTC_NOW,
+            )
+        )
+        cases.append(case)
+    for employee_id in {case.employee_id for case in cases}:
+        db_session.add(
+            Leave(
+                employee_id=employee_id,
+                leave_type="Duty Leave",
+                status="Approved",
+                start_date=since,
+                end_date=CASE_DATE,
+                days=65,
+            )
+        )
+    db_session.flush()
+
+    connection = db_session.connection().connection.driver_connection
+    previous_limit = connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, 64)
+    try:
+        queued = enqueue_unreflected_leave_excusals(
+            db_session,
+            since=since,
+            until=CASE_DATE,
+            now=UTC_NOW,
+            evaluation_start_at=datetime(2026, 1, 1, tzinfo=UTC),
+        )
+    finally:
+        connection.setlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER, previous_limit)
+
+    assert queued == 65
+    rows = _queue(db_session)
+    assert len(rows) == 65
+    assert {(row.employee_id, row.window_start_at, row.window_end_at) for row in rows} == {
+        (
+            case.employee_id,
+            datetime.combine(case.operational_date, datetime.min.time()) - timedelta(hours=4),
+            datetime.combine(case.operational_date, datetime.min.time()) + timedelta(hours=20),
+        )
+        for case in cases
+    }
+    assert all(row.reason_codes == ["LEAVE_APPROVED"] for row in rows)
+
+
+def test_non_excusing_employee_stays_unqueued_alongside_an_excusing_employee(db_session):
+    case, _ = _stale_case(db_session)
+    db_session.add(Employee(id="G-NON-EXCUSING", name_en="Non-excusing Leave", status="Active"))
+    db_session.flush()
+    other = AttendanceCase(
+        employee_id="G-NON-EXCUSING",
+        shift_occurrence_id=case.shift_occurrence_id,
+        employee_status_snapshot="Active",
+        shift_code_snapshot=case.shift_code_snapshot,
+        scheduled_start_at=case.scheduled_start_at,
+        scheduled_end_at=case.scheduled_end_at,
+        operational_date=CASE_DATE,
+        organization_snapshot_state="captured",
+    )
+    db_session.add(other)
+    db_session.flush()
+    evaluate_case(db_session, other.id, evaluated_at=UTC_NOW)
+    _leave(db_session, other, "Leave Permit")
+
+    assert (
+        enqueue_unreflected_leave_excusals(
+            db_session, since=date(2026, 8, 1), until=CASE_DATE, now=UTC_NOW
+        )
+        == 1
+    )
+    assert [row.employee_id for row in _queue(db_session)] == [case.employee_id]
 
 
 @pytest.mark.parametrize(
