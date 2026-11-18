@@ -349,7 +349,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 onOpenTab={handleTabChange}
               />
             )}
-            {tab === 'attendance' && id && <AttendanceTab employeeId={id} isSelf={isSelf} />}
+            {tab === 'attendance' && id && <AttendanceTab employeeId={id} employeeName={name} isSelf={isSelf} />}
             {tab === 'uniform' && <UniformTab employeeId={data.employee.id} />}
             {tab === 'messages' && (
               <MessagesTab
