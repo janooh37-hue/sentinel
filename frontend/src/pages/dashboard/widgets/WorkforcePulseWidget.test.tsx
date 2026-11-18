@@ -86,11 +86,11 @@ function selfSnapshot(): WorkforceSnapshot {
       employee_id: 'G100',
       presence_state: 'on_duty',
       reason_code: 'PUNCH_IN_ACTIVE',
-      scheduled_start_at: '2026-08-24T08:00:00',
-      scheduled_end_at: '2026-08-24T16:00:00',
-      first_punch_at: '2026-08-24T04:06:00Z',
-      last_punch_at: '2026-08-24T12:03:00Z',
-      final_out_at: '2026-08-24T12:01:00Z',
+      scheduled_start_at: '2026-08-24T04:00:00',
+      scheduled_end_at: '2026-08-24T12:00:00',
+      first_punch_at: '2026-08-24T04:06:00',
+      last_punch_at: '2026-08-24T12:03:00',
+      final_out_at: '2026-08-24T12:01:00',
     },
     aggregate: undefined,
   })
@@ -172,15 +172,38 @@ describe('WorkforcePulseWidget', () => {
     expect(screen.queryByText('16:03')).not.toBeInTheDocument()
   })
 
-  it.each(['en', 'ar'])('uses zero-padded 24-hour punches in %s', async (language) => {
+  it.each(['en', 'ar'])('uses zero-padded 24-hour punches and schedule with explicit offsets in %s', async (language) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
       first_punch_at: '2026-08-24T03:02:00Z',
+      scheduled_start_at: '2026-08-24T04:00:00+00:00',
+      scheduled_end_at: '2026-08-24T16:00:00+04:00',
+      final_out_at: '2026-08-24T16:01:00+04:00',
     }))
     await i18n.changeLanguage(language)
     renderWidget()
     expect(await screen.findByText('07:02')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('08:00 – 16:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it.each(['en', 'ar'])('renders naive UTC punches and schedule in site time in %s', async (language) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      scheduled_start_at: '2026-11-18T03:00:00',
+      scheduled_end_at: '2026-11-18T11:00:00',
+      first_punch_at: '2026-11-18T03:10:00',
+      last_punch_at: '2026-11-18T12:03:00',
+      final_out_at: '2026-11-18T12:01:00',
+    }))
+    await i18n.changeLanguage(language)
+
+    renderWidget()
+
+    expect(await screen.findByText('07:10')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('07:00 – 15:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.queryByText('16:03')).not.toBeInTheDocument()
   })
 
   it.each([
@@ -198,7 +221,7 @@ describe('WorkforcePulseWidget', () => {
 
   it.each([
     [null, '2026-08-24T12:03:00Z', '16:03'],
-    [null, '2026-08-24T04:06:00Z', '—'],
+    [null, '2026-08-24T04:06:00', '—'],
     [null, null, '—'],
   ])('never replaces a missing Out with the scheduled end', async (final_out_at, last_punch_at, expected) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)

@@ -14,13 +14,14 @@ import type { WidgetProps } from './types'
 
 function formatShiftTime(value: string | null | undefined, locale: string, timezone: string): string {
   if (!value) return '—'
+  // Both schedule and punch instants arrive as UTC when the offset is omitted.
   const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
   return new Intl.DateTimeFormat(locale, {
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
     numberingSystem: 'latn',
-    timeZone: hasOffset ? timezone : 'UTC',
+    timeZone: timezone,
   }).format(new Date(hasOffset ? value : `${value}Z`))
 }
 
