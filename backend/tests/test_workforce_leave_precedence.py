@@ -302,10 +302,9 @@ def test_relevant_leave_lifecycle_changes_identify_the_full_reevaluation_window(
 
     windows = affected_reevaluation_windows(before=before, after=changed)
 
-    assert [
-        (window.employee_id, window.start_date, window.end_date)
-        for window in windows
-    ] == [(employee.id, date(2026, 8, 18), date(2026, 8, 20))]
+    assert [(window.employee_id, window.start_date, window.end_date) for window in windows] == [
+        (employee.id, date(2026, 8, 18), date(2026, 8, 20))
+    ]
 
 
 def test_leave_amendment_reevaluates_the_union_of_old_and_new_operational_dates(
@@ -336,10 +335,9 @@ def test_leave_amendment_reevaluates_the_union_of_old_and_new_operational_dates(
 
     windows = affected_reevaluation_windows(before=before, after=changed)
 
-    assert [
-        (window.employee_id, window.start_date, window.end_date)
-        for window in windows
-    ] == [(employee.id, date(2026, 8, 17), date(2026, 8, 22))]
+    assert [(window.employee_id, window.start_date, window.end_date) for window in windows] == [
+        (employee.id, date(2026, 8, 17), date(2026, 8, 22))
+    ]
 
 
 @pytest.mark.parametrize(
