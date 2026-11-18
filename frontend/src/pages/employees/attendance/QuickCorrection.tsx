@@ -28,7 +28,7 @@ import {
   validateQuickCorrection,
   type QuickCorrectionAction,
   type QuickCorrectionDraft,
-} from './quickCorrection'
+} from './quickCorrectionForm'
 
 interface Props {
   target: CorrectionTarget | null

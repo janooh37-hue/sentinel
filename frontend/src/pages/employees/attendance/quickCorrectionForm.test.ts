@@ -10,7 +10,7 @@ import {
   validateQuickCorrection,
   type QuickCorrectionDraft,
   type QuickCorrectionReasonLabels,
-} from './quickCorrection'
+} from './quickCorrectionForm'
 
 const attendanceCase: AttendanceCase = {
   id: 42,
