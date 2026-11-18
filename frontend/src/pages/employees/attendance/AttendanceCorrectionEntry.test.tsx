@@ -3,10 +3,10 @@
  * point that must not exist for a user who cannot correct.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
-import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { createMemoryRouter, Link, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import type * as ApiModule from '@/lib/api'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -54,24 +54,25 @@ function RouteLocation(): React.JSX.Element {
   return <output data-testid="correction-route">{location.pathname}{location.search}</output>
 }
 
-function renderEntry(): void {
-  render(
-    <QueryClientProvider client={new QueryClient()}>
-      <MemoryRouter initialEntries={['/employees/attendance']}>
-        <header><Link to="/employees">Employee directory</Link></header>
-        <RouteLocation />
-        <Routes>
-          <Route path="/employees/attendance" element={
-            <AttendanceCorrectionProvider>
-              <CorrectAttendanceButton target={TARGET} />
-              <CorrectAttendanceButton target={SECOND_TARGET} />
-            </AttendanceCorrectionProvider>
-          } />
-          <Route path="/employees" element={<div>Employee directory destination</div>} />
-        </Routes>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
+function renderEntry(initialEntries = ['/employees/attendance']) {
+  const router = createMemoryRouter([{
+    path: '*',
+    element: <>
+      <header><Link to="/employees">Employee directory</Link></header>
+      <RouteLocation />
+      <Routes>
+        <Route path="/employees/attendance" element={
+          <AttendanceCorrectionProvider>
+            <CorrectAttendanceButton target={TARGET} />
+            <CorrectAttendanceButton target={SECOND_TARGET} />
+          </AttendanceCorrectionProvider>
+        } />
+        <Route path="/employees" element={<div>Employee directory destination</div>} />
+      </Routes>
+    </>,
+  }], { initialEntries })
+  render(<QueryClientProvider client={new QueryClient()}><RouterProvider router={router} /></QueryClientProvider>)
+  return { router }
 }
 
 beforeEach(async () => {
@@ -172,6 +173,26 @@ describe('CorrectAttendanceButton', () => {
     expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees/attendance')
     expect(screen.getByLabelText('Reason details')).toHaveValue('Confirmed against gate register')
     await user.click(navigation)
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByText('Employee directory destination')).toBeInTheDocument()
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('guards history Back until Discard and keeps the route and draft when editing continues', async () => {
+    hasCapability.mockReturnValue(true)
+    const user = userEvent.setup()
+    const { router } = renderEntry(['/employees', '/employees/attendance'])
+    await user.click(screen.getByRole('button', { name: /Correct attendance: Ahmed Ali/ }))
+    await screen.findByLabelText('In time (24h)')
+    await user.type(screen.getByLabelText('Reason details'), 'Confirmed against gate register')
+    await act(async () => { await router.navigate(-1) })
+    const confirmation = await screen.findByRole('alertdialog')
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees/attendance')
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees/attendance')
+    expect(screen.getByLabelText('Reason details')).toHaveValue('Confirmed against gate register')
+    await act(async () => { await router.navigate(-1) })
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
     expect(await screen.findByText('Employee directory destination')).toBeInTheDocument()
     expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees')

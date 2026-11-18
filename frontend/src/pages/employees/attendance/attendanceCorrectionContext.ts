@@ -24,8 +24,6 @@ export interface AttendanceCorrectionContextValue {
   openCorrection: ((target: CorrectionTarget, trigger: HTMLElement | null) => void) | null
   /** The full evidence drawer; reviewers without the correct capability read it too. */
   viewEvidence: (caseId: number) => void
-  /** Defer navigation that leaves the active correction until its draft may be discarded. */
-  requestNavigation: CorrectionDismissalGuard
   /** True while Quick correction or the evidence drawer is open: page shortcuts pause. */
   overlayOpen: boolean
 }
@@ -35,7 +33,6 @@ export const AttendanceCorrectionContext = createContext<AttendanceCorrectionCon
 const NO_PROVIDER: AttendanceCorrectionContextValue = {
   openCorrection: null,
   viewEvidence: () => undefined,
-  requestNavigation: (proceed) => proceed(),
   overlayOpen: false,
 }
 

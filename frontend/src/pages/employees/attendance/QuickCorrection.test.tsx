@@ -5,7 +5,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import type * as ApiModule from '@/lib/api'
 import i18n from 'i18next'
 import { useState } from 'react'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ar from '@/locales/ar.json'
@@ -77,7 +77,8 @@ function renderCorrection(target: CorrectionTarget | null = TARGET, anchorBounds
       onClose={() => { onClose(); setCurrent(null) }}
       onViewEvidence={(caseId) => { onViewEvidence(caseId); setCurrent(null) }} />
   }
-  render(<QueryClientProvider client={client}><MemoryRouter><Controlled /></MemoryRouter></QueryClientProvider>)
+  const router = createMemoryRouter([{ path: '*', element: <Controlled /> }])
+  render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
   return { client, onClose, onViewEvidence, anchor }
 }
 
@@ -138,6 +139,47 @@ describe('QuickCorrection', () => {
     renderCorrection()
     expect(await screen.findByLabelText(/Out time \(24h\)/)).toHaveValue('')
     expect(screen.getByRole('region', { name: 'Current evidence' })).toHaveTextContent('—')
+  })
+
+  it.each([
+    { language: 'en', surface: 'desktop', changeDates: 'Change dates' },
+    { language: 'ar', surface: 'mobile', changeDates: 'تغيير التواريخ' },
+  ] as const)('saves an after-midnight Out for a same-day evening shift in $language on $surface', async ({ language, surface, changeDates }) => {
+    if (surface === 'mobile') {
+      vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        matches: query === '(max-width: 640px)', media: query, onchange: null,
+        addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: () => false,
+      }))
+    }
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(language)
+    getAttendanceCase.mockResolvedValue({
+      data: {
+        ...CASE,
+        scheduled_start_at: '2026-11-17T12:00:00Z',
+        scheduled_end_at: '2026-11-17T19:00:00Z',
+        effective: { presence_state: 'on_duty', first_in_at: '2026-11-17T12:00:00Z', final_out_at: null },
+      },
+      etag: 'case-v1',
+    })
+    const user = userEvent.setup()
+    renderCorrection()
+    await screen.findByLabelText(i18n.t('attendance.quickCorrection.inTime'))
+    await user.type(screen.getByLabelText(new RegExp(i18n.t('attendance.quickCorrection.outTime').replace(/[()]/g, '\\$&'))), '00:10')
+    await enterReason(user)
+    expect(screen.getByRole('button', { name: i18n.t('attendance.quickCorrection.save') })).toBeDisabled()
+    const disclosure = screen.getByRole('button', { name: changeDates })
+    expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+    await user.click(disclosure)
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByLabelText(i18n.t('attendance.quickCorrection.inDate'))).toHaveValue('2026-11-17')
+    await user.selectOptions(screen.getByLabelText(i18n.t('attendance.quickCorrection.outDate')), '2026-11-18')
+    await user.click(screen.getByRole('button', { name: i18n.t('attendance.quickCorrection.save') }))
+    await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', expect.objectContaining({
+      replacement_presence_state: 'completed',
+      replacement_first_in_at: '2026-11-17T12:00:00.000Z',
+      replacement_final_out_at: '2026-11-17T20:10:00.000Z',
+    })))
   })
 
   it.each(['desktop', 'mobile'] as const)('requires date choices for a new post-shift overnight arrival on %s', async (surface) => {

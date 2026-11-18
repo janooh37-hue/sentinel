@@ -14,7 +14,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { createMemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listAttendanceDay, listAttendanceExceptions, getAttendanceCase, hasCapability } = vi.hoisted(() => ({
@@ -108,15 +108,19 @@ function RouteLocation(): React.JSX.Element {
 
 function renderPage(initialEntry = '/employees/attendance') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter([{
+    path: '*',
+    element: <>
+      <RouteLocation />
+      <Routes>
+        <Route path="/employees/attendance" element={<AttendancePage />} />
+        <Route path="/employees/:id" element={<div>employee file</div>} />
+      </Routes>
+    </>,
+  }], { initialEntries: [initialEntry] })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <RouteLocation />
-        <Routes>
-          <Route path="/employees/attendance" element={<AttendancePage />} />
-          <Route path="/employees/:id" element={<div>employee file</div>} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
 }

@@ -7170,6 +7170,7 @@
       "inDate": "In date",
       "outDate": "Out date",
       "chooseDate": "Choose a date",
+      "changeDates": "Change dates",
       "optional": "optional",
       "timeHint": "Asia/Dubai · HH:MM (24h). Out is optional and must follow In.",
       "overnightHint": "Overnight shift: choose the date for each new In or Out time.",

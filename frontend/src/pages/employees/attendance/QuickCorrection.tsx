@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useBlocker } from 'react-router-dom'
 
 import {
   AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogTitle,
@@ -19,6 +19,7 @@ import { ATTENDANCE_CORRECT_CAP } from '@/lib/workforceAttendance'
 
 import type { CorrectionDismissalGuard, CorrectionTarget } from './attendanceCorrectionContext'
 import { invalidateAttendanceQueries, toLocalInput, utcDate } from './attendanceCorrectionForm'
+import { shiftIsoDate } from './attendanceModel'
 import {
   QUICK_CORRECTION_LEAVE_KINDS,
   QUICK_CORRECTION_REASONS,
@@ -77,8 +78,6 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const direction = i18n.dir(i18n.language)
-  const location = useLocation()
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [panel, setPanel] = useState<HTMLDivElement | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -88,7 +87,8 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
   const [isMobile, setIsMobile] = useState(() => window.matchMedia(MOBILE_QUERY).matches)
   const [position, setPosition] = useState<CSSProperties>({ insetInlineEnd: 24, insetBlockStart: 16, inlineSize: 412 })
   const [draftOverride, setDraftOverride] = useState<DraftState | null>(null)
-  const [dismissal, setDismissal] = useState<{ proceed: () => void } | null>(null)
+  const [datesExpanded, setDatesExpanded] = useState(false)
+  const [dismissal, setDismissal] = useState<{ proceed: () => void; cancel?: () => void } | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [conflictWarning, setConflictWarning] = useState(false)
   const caseQuery = useQuery({
@@ -117,6 +117,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
     || draftState.draft.details !== draftState.initial.details
     || draftState.draft.auditNote !== draftState.initial.auditNote
   )
+  const blocker = useBlocker(dirty)
 
   useEffect(() => {
     const media = window.matchMedia(MOBILE_QUERY)
@@ -191,11 +192,11 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
     if (draftState !== null) setDraftOverride({ ...draftState, draft: next })
     setActionError(null)
   }
-  const requestDismissal = useCallback<CorrectionDismissalGuard>((proceed) => {
+  const requestDismissal = useCallback((proceed: () => void, cancel?: () => void) => {
     if (mutation.isPending) return
     if (dirty) {
       dismissOrigin.current = document.activeElement instanceof HTMLElement ? document.activeElement : closeRef.current
-      setDismissal({ proceed })
+      setDismissal({ proceed, cancel })
     } else proceed()
   }, [dirty, mutation.isPending])
   useLayoutEffect(() => {
@@ -206,35 +207,22 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
     return () => onDismissalGuardChange?.(null)
   }, [onDismissalGuardChange, requestDismissal])
   useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    requestDismissal(() => {
+      movingToAnotherPanel.current = true
+      onClose()
+      blocker.proceed()
+    }, blocker.reset)
+  }, [blocker, onClose, requestDismissal])
+  useEffect(() => {
     if (!dirty) return
     const warnBeforeUnload = (event: BeforeUnloadEvent): void => {
       event.preventDefault()
       event.returnValue = ''
     }
-    const protectNavigation = (event: MouseEvent): void => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-      if (!(event.target instanceof Element)) return
-      const link = event.target.closest('a[href]')
-      if (!(link instanceof HTMLAnchorElement) || panel?.contains(link) || link.hasAttribute('download')
-        || (link.target !== '' && link.target.toLowerCase() !== '_self')) return
-      const href = new URL(link.href, window.location.href)
-      if (href.origin !== window.location.origin
-        || (href.pathname === location.pathname && href.search === location.search)) return
-      event.preventDefault()
-      event.stopPropagation()
-      requestDismissal(() => {
-        movingToAnotherPanel.current = true
-        onClose()
-        void navigate(`${href.pathname}${href.search}${href.hash}`)
-      })
-    }
     window.addEventListener('beforeunload', warnBeforeUnload)
-    document.addEventListener('click', protectNavigation, true)
-    return () => {
-      window.removeEventListener('beforeunload', warnBeforeUnload)
-      document.removeEventListener('click', protectNavigation, true)
-    }
-  }, [dirty, location.pathname, location.search, navigate, onClose, panel, requestDismissal])
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [dirty])
   const viewEvidence = (): void => requestDismissal(() => {
     movingToAnotherPanel.current = true
     onViewEvidence(target.caseId)
@@ -259,8 +247,11 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
   const startDate = attendanceCase ? toLocalInput(attendanceCase.scheduled_start_at).slice(0, 10) : ''
   const endDate = attendanceCase ? toLocalInput(attendanceCase.scheduled_end_at).slice(0, 10) : ''
   const overnight = startDate !== endDate
-  const dateChoices = [...new Set([startDate, endDate, draft?.inDate ?? '', draft?.outDate ?? ''])]
-    .filter((date) => date !== '')
+  const showDates = overnight || datesExpanded
+  const dateChoices = attendanceCase
+    ? [...new Set([startDate, endDate, shiftIsoDate(startDate, 1), draft?.inDate ?? '', draft?.outDate ?? ''])]
+      .filter((date) => date !== '')
+    : []
 
   return (
     <Dialog.Root open modal={isMobile} onOpenChange={(open) => { if (!open) requestDismissal(onClose) }}>
@@ -382,7 +373,12 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                         {t('attendance.quickCorrection.clear')}
                       </button>}
                       {draft.action === 'present' && <>
-                        <div className={cn('grid gap-3', !isMobile && 'grid-cols-2')}>
+                        {!overnight && <button type="button" aria-expanded={datesExpanded} aria-controls="quick-correction-times"
+                          onClick={() => setDatesExpanded((expanded) => !expanded)}
+                          className={cn(BUTTON, 'text-primary-text underline underline-offset-4 hover:bg-surface-tinted')}>
+                          {t('attendance.quickCorrection.changeDates')}
+                        </button>}
+                        <div id="quick-correction-times" className={cn('grid gap-3', !isMobile && 'grid-cols-2')}>
                           <div className="grid content-start gap-2">
                             <label htmlFor="quick-correction-in" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.inTime')}
@@ -391,7 +387,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                                 aria-describedby="quick-correction-time-hint" className={cn(CONTROL, 'isolate-bidi tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, inTime: event.target.value })} />
                             </label>
-                            {overnight && <label htmlFor="quick-correction-in-date" className="grid gap-1.5 text-sm font-medium">
+                            {showDates && <label htmlFor="quick-correction-in-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.inDate')}
                               <select id="quick-correction-in-date" required
                                 value={draft.inDateConfirmed ? draft.inDate : ''}
@@ -410,7 +406,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
                                 aria-describedby="quick-correction-time-hint" className={cn(CONTROL, 'isolate-bidi tabular-nums')}
                                 onChange={(event) => setDraft({ ...draft, outTime: event.target.value })} />
                             </label>
-                            {overnight && <label htmlFor="quick-correction-out-date" className="grid gap-1.5 text-sm font-medium">
+                            {showDates && <label htmlFor="quick-correction-out-date" className="grid gap-1.5 text-sm font-medium">
                               {t('attendance.quickCorrection.outDate')}
                               <select id="quick-correction-out-date" required={draft.outTime !== ''}
                                 value={draft.outDateConfirmed ? draft.outDate : ''}
@@ -483,14 +479,14 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
             <button type="button" disabled={mutation.isPending} onClick={viewEvidence}
               className={cn(BUTTON, 'mt-3 text-primary-text underline underline-offset-4 hover:bg-surface-tinted')}>{t('attendance.quickCorrection.viewEvidence')}</button>
           </div>
-          <AlertDialog open={dismissal !== null} onOpenChange={(open) => { if (!open) setDismissal(null) }}>
+          <AlertDialog open={dismissal !== null} onOpenChange={(open) => { if (!open) { dismissal?.cancel?.(); setDismissal(null) } }}>
             <AlertDialogContent dir={direction} role="alertdialog" className="max-w-[calc(100%-2rem)] sm:max-w-sm"
               onOpenAutoFocus={(event) => { event.preventDefault(); keepEditingRef.current?.focus() }}
               onCloseAutoFocus={(event) => { event.preventDefault(); dismissOrigin.current?.focus() }}>
               <AlertDialogTitle>{t('attendance.quickCorrection.discardTitle')}</AlertDialogTitle>
               <AlertDialogDescription className="mt-2">{t('attendance.quickCorrection.discardDescription')}</AlertDialogDescription>
               <div className="mt-5 flex flex-wrap justify-end gap-2">
-                <button ref={keepEditingRef} type="button" onClick={() => setDismissal(null)} className={cn(BUTTON, 'border border-border hover:bg-surface-tinted')}>{t('attendance.quickCorrection.keepEditing')}</button>
+                <button ref={keepEditingRef} type="button" onClick={() => { dismissal?.cancel?.(); setDismissal(null) }} className={cn(BUTTON, 'border border-border hover:bg-surface-tinted')}>{t('attendance.quickCorrection.keepEditing')}</button>
                 <button type="button" onClick={() => { dismissal?.proceed(); setDismissal(null) }}
                   className={cn(BUTTON, 'bg-primary text-primary-foreground hover:bg-primary-hover')}>{t('attendance.quickCorrection.discard')}</button>
               </div>

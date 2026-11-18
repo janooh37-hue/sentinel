@@ -1,15 +1,26 @@
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), isLoading: false }))
+const capabilityState = vi.hoisted(() => ({
+  allowed: new Set<string>(),
+  isLoading: false,
+  revision: 0,
+  listeners: new Set<() => void>(),
+}))
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({
-    capabilities: capabilityState.allowed,
-    isLoading: capabilityState.isLoading,
-    has: (capability: string) => capabilityState.allowed.has(capability),
-  }),
+  useCapabilities: () => {
+    React.useSyncExternalStore((listener) => {
+      capabilityState.listeners.add(listener)
+      return () => capabilityState.listeners.delete(listener)
+    }, () => capabilityState.revision)
+    return {
+      capabilities: capabilityState.allowed,
+      isLoading: capabilityState.isLoading,
+      has: (capability: string) => capabilityState.allowed.has(capability),
+    }
+  },
 }))
 vi.mock('@/lib/api', () => ({
   api: {
@@ -335,12 +346,15 @@ describe('App Assets landing route', () => {
   it('waits for capabilities before choosing the Uniform-only destination', async () => {
     capabilityState.isLoading = true
     window.history.pushState({}, '', '/holdings')
-    const view = render(<App />)
+    render(<App />)
 
     expect(window.location.pathname).toBe('/holdings')
-    capabilityState.allowed = new Set(['uniform.view'])
-    capabilityState.isLoading = false
-    view.rerender(<App />)
+    act(() => {
+      capabilityState.allowed = new Set(['uniform.view'])
+      capabilityState.isLoading = false
+      capabilityState.revision += 1
+      capabilityState.listeners.forEach((listener) => listener())
+    })
 
     expect(await screen.findByText('uniform-page')).toBeVisible()
     expect(window.location.pathname).toBe('/holdings/uniform')
