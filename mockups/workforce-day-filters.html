@@ -1,0 +1,1081 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Workforce attendance · Global Security Services Group</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Semantic values are copied verbatim from frontend/src/index.css, in both themes. */
+:root {
+  --bg: #f5f4f1;
+  --surface: #ffffff;
+  --shelf: #c9c3b4;
+  --surface-raised: #fafaf6;
+  --surface-tinted: #f0eee8;
+  --primary: #0d2845;
+  --primary-hover: #1d3a5e;
+  --primary-soft: #e8edf3;
+  --primary-on-soft: #0d2845;
+  --primary-text: #0d2845;
+  --on-primary: #ffffff;
+  --accent: #c8102e;
+  --accent-hover: #a30d24;
+  --accent-soft: #fbe5e8;
+  --smart: #6b4fb0;
+  --smart-soft: #f1eef8;
+  --success: #047857;
+  --success-soft: #d6f0e4;
+  --warning: #92400e;
+  --warning-foreground: #ffffff;
+  --warning-soft: #fbedd8;
+  --caution: #ca8a04;
+  --caution-soft: #fef3c7;
+  --info: #1d4ed8;
+  --info-soft: #e0e8f8;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --destructive-text: #b91c1c;
+  --text: #1c1f24;
+  --text-muted: #5a6068;
+  --text-faint: #8b9098;
+  --border: #e6e4dd;
+  --border-strong: #d4d1c8;
+  --hairline: #efece5;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 99px;
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Consolas, "Noto Sans Arabic", monospace;
+  --font-arabic: "Noto Sans Arabic", "Inter", system-ui, sans-serif;
+  --motion-base: 200ms;
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --bg: #0a0e18;
+  --surface: #131826;
+  --shelf: #4a5370;
+  --surface-raised: #1a2034;
+  --surface-tinted: #1f263b;
+  --primary: #5778cf;
+  --primary-hover: #7491db;
+  --primary-soft: #1c2849;
+  --primary-on-soft: #7491db;
+  --primary-text: #8aa4e8;
+  --on-primary: #0a0e18;
+  --accent: #ef4858;
+  --accent-hover: #f56b78;
+  --accent-soft: #3a1820;
+  --smart: #a99af0;
+  --smart-soft: #221d3a;
+  --success: #34d399;
+  --success-soft: #142d23;
+  --warning: #fbbf24;
+  --warning-foreground: #1c1f24;
+  --warning-soft: #3a2a10;
+  --caution: #facc15;
+  --caution-soft: #3b2f11;
+  --info: #60a5fa;
+  --info-soft: #1c2940;
+  --destructive: #f87171;
+  --destructive-foreground: #1c1f24;
+  --destructive-text: #fca5a5;
+  --text: #e6e9f2;
+  --text-muted: #8a93a7;
+  --text-faint: #5f6678;
+  --border: #2a3148;
+  --border-strong: #3a4360;
+  --hairline: #1f263b;
+  color-scheme: dark;
+}
+:root { --focus-ring: var(--primary); }
+* { box-sizing: border-box; scrollbar-color: var(--border-strong) var(--surface); scrollbar-width: thin; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 var(--font-sans); font-feature-settings: "ss01", "cv11"; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+:lang(ar) { font-family: var(--font-arabic); }
+h1,h2,h3,p,dl,dd { margin: 0; }
+h1 { font-size: 24px; font-weight: 700; letter-spacing: -.01em; line-height: 1.5; }
+:lang(ar) h1 { letter-spacing: 0; }
+h2 { font-size: 16px; font-weight: 600; }
+h3 { font-size: 14px; font-weight: 600; }
+button,input,select { font: inherit; color: inherit; }
+button { cursor: pointer; text-align: start; border: 0; background: none; }
+a { color: var(--primary-text); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+::selection { background: var(--primary-soft); color: var(--primary-text); }
+input { caret-color: var(--primary-text); }
+[hidden] { display: none !important; }
+.mono,.time,.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; unicode-bidi: isolate; }
+.mono bdi { font-family: inherit; }
+.time { direction: ltr; display: inline-block; white-space: nowrap; }
+.missing-time { font-family: var(--font-sans); font-weight: 400; }
+.muted { color: var(--text-muted); }
+.small { font-size: 12px; }
+.sr-only { position: absolute; inline-size: 1px; block-size: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.icon { display: inline-block; inline-size: 16px; block-size: 16px; flex: none; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+[dir="rtl"] .directional { transform: scaleX(-1); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-block-size: 36px; padding-block: 6px; padding-inline: 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.btn:hover { background: var(--surface-tinted); }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.icon-btn { display: inline-grid; place-items: center; inline-size: 36px; block-size: 36px; border-radius: var(--radius-sm); flex: none; color: var(--text-muted); }
+.icon-btn:hover { background: var(--surface-tinted); color: var(--text); }
+.segment { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-md); background: var(--surface-tinted); }
+.segment button { min-block-size: 32px; padding-block: 5px; padding-inline: 12px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; white-space: nowrap; color: var(--text-muted); }
+.segment button[aria-pressed="true"] { color: var(--primary-text); background: var(--surface); font-weight: 600; }
+.segment button:hover { color: var(--text); }
+.demo-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-block: 9px; padding-inline: 28px; border-block-end: 1px solid var(--border); background: var(--surface-raised); font-size: 12px; }
+.demo-name { display: flex; align-items: center; gap: 8px; margin-inline-end: auto; font-weight: 600; }
+.demo-name .sample { color: var(--text-muted); font-weight: 400; }
+.demo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.demo-bar .segment button { font-size: 12px; min-block-size: 30px; padding-inline: 9px; }
+.check-label { display: inline-flex; align-items: center; gap: 8px; min-block-size: 36px; cursor: pointer; }
+input[type="checkbox"] { accent-color: var(--primary); inline-size: 16px; block-size: 16px; margin: 0; flex: none; }
+.preview { margin-inline: auto; inline-size: 100%; }
+body.mobile-mode .preview { inline-size: 390px; max-inline-size: 100%; border-inline: 1px solid var(--border); }
+.app-shell { container: app / inline-size; }
+.app-nav { background: var(--surface); border-block-end: 1px solid var(--border); }
+.app-nav-inner { display: flex; align-items: center; gap: 28px; max-inline-size: 1400px; padding-block: 13px; padding-inline: 32px; margin-inline: auto; }
+.brand { display: flex; align-items: center; gap: 11px; flex: none; }
+.brand-mark { inline-size: 35px; block-size: 35px; color: var(--primary-text); }
+.brand-copy { font-weight: 700; font-size: 18px; line-height: 1.2; color: var(--primary-text); }
+.brand-copy small { display: block; margin-block-start: 3px; font-size: 11px; color: var(--text-muted); font-weight: 400; }
+.app-links { display: flex; gap: 5px; }
+.app-links span { padding-block: 8px; padding-inline: 13px; font-size: 14px; border-radius: var(--radius-sm); color: var(--text-muted); }
+.app-links [aria-current="page"] { background: var(--primary-soft); color: var(--primary-text); font-weight: 600; }
+.nav-meta { margin-inline-start: auto; display: flex; align-items: center; gap: 16px; font-size: 12px; color: var(--text-muted); }
+.avatar { display: inline-grid; place-items: center; inline-size: 34px; block-size: 34px; border-radius: 50%; background: var(--primary-soft); color: var(--primary-text); font-size: 12px; font-weight: 600; flex: none; }
+.screen-strip { background: var(--surface); border-block-end: 1px solid var(--border); }
+.screen-inner { display: flex; gap: 22px; max-inline-size: 1400px; padding-inline: 32px; margin-inline: auto; }
+.screen-inner span { position: relative; min-block-size: 42px; padding-block: 10px; color: var(--primary-text); font-size: 13px; font-weight: 600; }
+.screen-inner span::after { content: ""; position: absolute; inset-block-end: 0; inset-inline: 0; block-size: 2px; background: var(--primary); }
+.address-strip { border-block-end: 1px solid var(--border); background: var(--surface-raised); padding-block: 5px; padding-inline: max(32px,calc((100% - 1336px)/2)); font-size: 10px; color: var(--text-muted); overflow-wrap: anywhere; }
+.address-strip code { font-family: var(--font-mono); direction: ltr; unicode-bidi: isolate; }
+.page { max-inline-size: 1400px; margin-inline: auto; padding-block: 22px 40px; padding-inline: 32px; }
+.page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-block-end: 18px; }
+.page-heading p { color: var(--text-muted); font-size: 13px; margin-block-start: 3px; }
+.scope-context { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-block-end: 16px; }
+.date-label { display: flex; gap: 8px; align-items: center; font-size: 13px; font-weight: 600; margin-inline-end: 4px; }
+.toolbar .views { margin-inline-start: auto; }
+.search { display: flex; align-items: center; gap: 7px; min-inline-size: 150px; max-inline-size: 230px; flex: 1; border: 1px solid var(--border-strong); border-radius: var(--radius-md); min-block-size: 38px; padding-inline: 10px; background: var(--surface); color: var(--text-muted); }
+.search input { inline-size: 100%; min-inline-size: 0; border: 0; background: transparent; font-size: 12px; padding-block: 8px; }
+input::placeholder { color: var(--text-muted); opacity: 1; }
+.company { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.company select { min-block-size: 38px; max-inline-size: 182px; padding-block: 6px; padding-inline: 9px; border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--radius-md); color: var(--text); font-size: 12px; }
+.shift-chips { gap: 1px; }
+.shift-chips button { padding-inline: 10px; }
+.shift-chips .shift-count { margin-inline-start: 5px; font-size: 10px; }
+/* 1336px inner canvas = 992px register + 24px gutter + 320px queue. Both grids share these tracks. */
+.summary,.main-grid { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 24px; }
+.summary { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-block-end: 18px; gap: 24px; }
+.summary-main { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,2fr); gap: 22px; min-inline-size: 0; padding: 20px; }
+.summary-identity { align-self: center; }
+.summary-identity h2 { font-size: 15px; margin-block-end: 7px; }
+.summary-meta { display: flex; flex-wrap: wrap; gap: 3px 14px; color: var(--text-muted); font-size: 12px; }
+.residual-wrap { position: relative; min-inline-size: 0; margin-block-start: 12px; }
+.residual { display: inline-flex; gap: 7px; align-items: center; padding: 0; font-size: 11px; color: var(--text-muted); }
+.residual i { display: inline-block; inline-size: 9px; block-size: 9px; flex: none; border: 1px solid var(--text-faint); border-radius: 50%; }
+.residual-tooltip { position: absolute; inset-block-end: calc(100% + 8px); inset-inline-start: 0; z-index: 10; inline-size: 240px; padding-block: 8px; padding-inline: 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font-size: 12px; box-shadow: 0 6px 18px -8px rgb(0 0 0 / .25); visibility: hidden; opacity: 0; }
+.residual-wrap:hover .residual-tooltip,.residual-wrap:focus-within .residual-tooltip { visibility: visible; opacity: 1; }
+.residual-mobile-hint { display: none; color: var(--text-muted); font-size: 11px; }
+.summary-visual { min-inline-size: 0; padding-block-start: 7px; }
+.summary-bar { display: flex; gap: 2px; block-size: 15px; align-items: stretch; }
+.bar-segment { display: flex; flex-basis: 0; min-inline-size: 8px; position: relative; border-radius: 2px; background: var(--bucket-tone); transition: opacity 150ms; }
+[data-bucket="onSite"] { --bucket-tone: var(--success); }
+[data-bucket="left"] { --bucket-tone: var(--primary); }
+[data-bucket="notArrived"] { --bucket-tone: var(--accent); }
+[data-bucket="leave"] { --bucket-tone: var(--info); }
+[data-bucket="nationalService"] { --bucket-tone: var(--smart); }
+.bar-segment[data-bucket="onSite"] { box-shadow: 0 0 0 2px var(--success-soft); }
+.bar-segment[data-bucket="left"] { background: var(--primary-soft); border: 1px solid var(--primary); }
+.bar-segment[data-bucket="notArrived"] { background: var(--surface); overflow: hidden; }
+.absent-part { background: var(--accent); }
+.awaited-part { display: block; block-size: 100%; min-inline-size: 0; }
+.awaited-part svg { display: block; inline-size: 100%; block-size: 100%; }
+.bar-segment.dimmed { opacity: .22; }
+.leaders { display: block; inline-size: 100%; block-size: 36px; overflow: visible; pointer-events: none; }
+.leaders path { fill: none; stroke: var(--border-strong); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.leaders path.dimmed { opacity: .35; }
+.leaders path.pressed { stroke: var(--primary); stroke-width: 1.25; opacity: 1; }
+.tier-caption { color: var(--text); font-size: 12px; font-weight: 600; margin-block-end: 12px; }
+.bucket-keys { display: grid; grid-template-columns: repeat(var(--key-count),minmax(0,1fr)); gap: 4px; }
+.bucket-key { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding-block: 6px; padding-inline: 7px; border: 1px solid transparent; border-radius: var(--radius-sm); min-inline-size: 0; }
+.bucket-key:hover { background: var(--surface-raised); }
+.bucket-key[aria-pressed="true"] { border-color: var(--primary); background: var(--surface-raised); }
+.bucket-key[aria-disabled="true"] { color: var(--text-muted); opacity: .55; cursor: default; }
+.key-value { display: flex; align-items: center; gap: 9px; font-size: 22px; font-weight: 500; line-height: 1.15; }
+.key-label { font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+.key-split { font-size: 11px; line-height: 1.7; color: var(--text-muted); white-space: nowrap; }
+.swatch { display: inline-block; inline-size: 8px; block-size: 8px; flex: none; border-radius: 2px; background: var(--bucket-tone); }
+.swatch[data-bucket="onSite"] { box-shadow: 0 0 0 2px var(--success-soft); }
+.swatch[data-bucket="left"] { background: var(--primary-soft); border: 1px solid var(--primary); }
+.summary-decision { display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 9px; padding: 20px; border-inline-start: 1px solid var(--hairline); }
+.decision-anchor { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 600; text-decoration: none; }
+.decision-anchor.has-decisions { color: var(--accent); }
+.decision-anchor:hover { text-decoration: underline; }
+.summary-decision p { font-size: 11px; line-height: 1.8; color: var(--text-muted); max-inline-size: 27ch; }
+.main-grid { align-items: start; }
+.main-results { min-inline-size: 0; }
+.filter-panel { margin-block-end: 16px; }
+.filter-heading { display: flex; align-items: center; justify-content: space-between; margin-block-end: 8px; }
+.filter-heading h2 { font-size: 12px; font-weight: 600; }
+.state-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.filter-chip { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: var(--radius-sm); min-block-size: 33px; padding-block: 5px; padding-inline: 9px; font-size: 11px; background: var(--surface); }
+.filter-chip:hover { border-color: var(--border-strong); background: var(--surface-raised); }
+.filter-chip[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-text); }
+.filter-chip[aria-disabled="true"] { color: var(--text-muted); border-style: dashed; opacity: .55; cursor: default; }
+.chip-count { font-size: 11px; margin-inline-start: 1px; }
+.corrected-group { display: inline-flex; flex-basis: 100%; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-block-start: 2px; }
+.notch-glyph { inline-size: 9px; block-size: 9px; display: inline-block; border: 1px solid var(--border-strong); border-radius: 50%; position: relative; }
+.notch-glyph::after { content: ""; position: absolute; inline-size: 5px; block-size: 5px; background: var(--primary); border: 1px solid var(--surface); border-radius: 1px; inset-block-start: -3px; inset-inline-end: -3px; }
+.filter-hint { margin: 0; color: var(--text-muted); font-size: 11px; }
+.active-filters { display: none; }
+.active-token { display: inline-flex; align-items: center; gap: 7px; padding-block: 5px; padding-inline: 9px; border: 1px solid var(--primary); border-radius: var(--radius-sm); background: var(--primary-soft); color: var(--primary-text); min-block-size: 44px; font-size: 11px; }
+.active-token .icon { inline-size: 13px; block-size: 13px; }
+.mobile-filter-button { display: none; }
+.result-line { min-block-size: 30px; display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-block-end: 8px; color: var(--text-muted); font-size: 12px; }
+.clear-filters { color: var(--primary-text); text-decoration: underline; text-underline-offset: 3px; font-size: 12px; min-block-size: 30px; padding-inline: 3px; }
+.dot { --tone: var(--success); --wash: var(--success-soft); display: inline-block; flex: none; inline-size: 9px; block-size: 9px; border-radius: 50%; background: var(--tone); position: relative; }
+.dot.live { box-shadow: 0 0 0 2px var(--wash); }
+.dot.corrected::after { content: ""; position: absolute; inline-size: 5px; block-size: 5px; box-sizing: content-box; background: var(--primary); border: 1.5px solid var(--surface); border-radius: 1px; inset-block-start: -3px; inset-inline-end: -3px; }
+[data-state="grace"] { --tone: var(--caution); --wash: var(--caution-soft); }
+[data-state="late"] { --tone: var(--warning); --wash: var(--warning-soft); }
+[data-state="unpaired"] { --tone: var(--destructive); --wash: var(--accent-soft); }
+[data-state="absent"] { --tone: var(--accent); --wash: var(--accent-soft); }
+[data-state="pending"] { --tone: var(--text-faint); --wash: var(--surface-raised); }
+[data-state="leave"] { --tone: var(--info); --wash: var(--info-soft); }
+[data-state="national_service"] { --tone: var(--smart); --wash: var(--smart-soft); }
+.dot[data-state="pending"] { background: transparent; border: 1.5px solid var(--text-faint); }
+.register-stack { display: grid; gap: 15px; }
+.unit { border: 1px solid var(--hairline); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.unit-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding-block: 12px; padding-inline: 17px; border-block-end: 2px solid var(--primary); }
+.unit-header p { font-size: 11px; color: var(--text-muted); margin-block-start: 2px; }
+.unit-meta { margin-inline-start: auto; display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--text-muted); }
+.unit-meta b { color: var(--text); font-size: 13px; margin-inline-start: 4px; font-weight: 500; }
+.posts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); }
+.post { padding-block: 10px 5px; padding-inline: 17px; border-inline-end: 1px solid var(--hairline); min-inline-size: 0; }
+.post:last-child { border-inline-end: 0; }
+.post-heading { display: flex; align-items: center; gap: 10px; padding-block-end: 7px; border-block-end: 1px solid var(--border); }
+.post-heading h3 { font-size: 12px; }
+.post-heading > span { margin-inline-start: auto; font-size: 10px; color: var(--text-muted); }
+.row-head,.person-row { display: grid; grid-template-columns: 10px minmax(0,1fr) 53px 64px; align-items: center; gap: 8px; }
+.row-head { padding-block: 7px 2px; font-size: 10px; color: var(--text-muted); }
+.row-head .end { text-align: end; }
+.person-row { inline-size: 100%; padding-block: 10px; padding-inline: 0; border-block-end: 1px solid var(--hairline); min-block-size: 66px; }
+.person-row:last-child { border-block-end: 0; }
+.person-name { display: block; color: var(--text); font-size: 12px; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.person-detail { display: flex; flex-wrap: wrap; gap: 0 5px; align-items: center; font-size: 10px; color: var(--text-muted); margin-block-start: 2px; line-height: 1.8; }
+.person-detail .mono { font-size: 10px; }
+.state-text[data-state="leave"] { color: var(--info); }
+.state-text[data-state="national_service"] { color: var(--smart); }
+.state-text[data-state="late"] { color: var(--warning); }
+.state-text[data-state="absent"] { color: var(--accent); }
+.state-text[data-state="unpaired"] { color: var(--destructive-text); }
+.row-time { text-align: end; font-size: 11px; }
+.row-time small { display: block; color: var(--warning); font-size: 10px; line-height: 1.7; }
+.on-site-marker { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 10px; font-weight: 500; color: var(--success); white-space: nowrap; }
+.corrected-text { color: var(--primary-text); }
+.unit-footer { display: flex; align-items: center; gap: 8px; padding-block: 7px; padding-inline: 17px; border-block-start: 1px solid var(--hairline); color: var(--text-muted); font-size: 10px; }
+.empty { padding-block: 60px; padding-inline: 24px; text-align: center; color: var(--text-muted); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.empty h2 { font-size: 16px; color: var(--text); margin-block-end: 12px; }
+.empty .icon { inline-size: 24px; block-size: 24px; margin-block-end: 13px; }
+.page-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-block-start: 18px; font-size: 11px; color: var(--text-muted); }
+.attention { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: 18px 19px; min-inline-size: 0; }
+.attention h2 { font-size: 14px; }
+.attention-intro { margin-block: 5px 14px; color: var(--text-muted); font-size: 11px; line-height: 1.8; }
+.attention-breakdown { display: flex; flex-wrap: wrap; gap: 5px 12px; font-size: 11px; margin-block-end: 15px; color: var(--text-muted); }
+.attention-row { display: flex; align-items: flex-start; gap: 10px; padding-block: 11px; border-block-start: 1px solid var(--hairline); }
+.attention-row .dot { margin-block-start: 6px; }
+.attention-row > div { min-inline-size: 0; }
+.attention-row .person-name { font-size: 12px; }
+.attention-row p { font-size: 10px; color: var(--text-muted); margin-block-start: 3px; }
+.attention-note { border-block-start: 1px solid var(--hairline); margin-block-start: 12px; padding-block-start: 12px; color: var(--text-muted); font-size: 10px; line-height: 1.8; }
+.attention-more { inline-size: 100%; justify-content: space-between; font-size: 11px; margin-block-start: 9px; }
+.board-unit { margin-block-end: 18px; }
+.board-unit > h2 { margin-block-end: 9px; }
+.board-posts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+.board-post { padding: 16px; border: 1px solid var(--hairline); background: var(--surface); border-radius: var(--radius-lg); min-inline-size: 0; }
+.board-post header { display: flex; justify-content: space-between; align-items: center; margin-block-end: 10px; gap: 8px; }
+.board-post h3 { font-size: 12px; }
+.tiles { display: grid; gap: 8px; }
+.tile { min-inline-size: 0; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); }
+.tile-identity { display: flex; align-items: center; gap: 9px; }
+.tile .person-detail { margin-inline-start: 18px; }
+.tile-times { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px; padding-block-start: 8px; font-size: 11px; color: var(--text-muted); }
+.timeline { background: var(--surface); border: 1px solid var(--hairline); border-radius: var(--radius-lg); overflow: auto; }
+.timeline-inner { min-inline-size: 730px; padding-block: 12px; padding-inline: 17px; }
+.timeline-axis,.timeline-row { display: grid; grid-template-columns: 180px minmax(0,1fr) 150px; gap: 12px; }
+.timeline-axis { font-size: 10px; color: var(--text-muted); padding-block: 4px 12px; }
+.axis-times { position: relative; min-block-size: 18px; }
+.axis-label { position: absolute; inline-size: 44px; text-align: center; }
+.axis-label:first-child { text-align: start; }
+.axis-label:last-child { text-align: end; }
+.timeline-group { font-size: 12px; font-weight: 600; padding-block: 12px 7px; border-block-end: 1px solid var(--border); }
+.timeline-row { align-items: center; min-block-size: 54px; border-block-end: 1px solid var(--hairline); padding-block: 7px; }
+.timeline-person { display: flex; align-items: center; gap: 9px; }
+.day-track { position: relative; block-size: 28px; background: var(--surface-raised); border-radius: 4px; }
+.track-schedule { position: absolute; inset-block: 8px; border-radius: 3px; background: var(--primary-soft); }
+.track-grace { position: absolute; inset-block: 8px; background: var(--caution-soft); }
+.track-segment { position: absolute; inset-block: 10px; background: var(--tone,var(--success)); min-inline-size: 3px; border-radius: 3px; }
+.track-punch { position: absolute; inset-block-start: 9px; inline-size: 3px; block-size: 10px; background: var(--text); }
+.now-line { position: absolute; inset-block: -4px; inline-size: 1px; background: var(--primary); }
+.track-note { display: block; padding-inline: 8px; font-size: 10px; line-height: 28px; color: var(--text-muted); position: relative; }
+.timeline-result { text-align: end; font-size: 10px; }
+.timeline-result .person-detail { justify-content: flex-end; }
+.print-sheet { display: none; background: var(--surface); border: 1px solid var(--border); padding: 24px 28px; margin-block-end: 20px; }
+.print-sheet.preview-print { display: block; }
+.print-masthead { display: flex; justify-content: space-between; align-items: start; gap: 20px; border-block-end: 2px solid var(--primary); padding-block-end: 14px; }
+.print-masthead h2 { font-size: 18px; margin-block-start: 5px; }
+.print-masthead p { font-size: 11px; color: var(--text-muted); }
+.print-declaration { font-size: 12px; margin-block-start: 13px; line-height: 1.9; }
+.filter-sheet { position: fixed; inset-block-start: auto; inset-block-end: 0; inset-inline: 0; inline-size: min(100%,390px); max-inline-size: none; max-block-size: calc(100dvh - 28px); margin-block: 0; margin-inline: auto; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-block-end: 0; border-start-start-radius: 20px; border-start-end-radius: 20px; padding: 0; box-shadow: 0 -10px 40px -10px rgb(0 0 0 / .24); overscroll-behavior: contain; }
+.filter-sheet::backdrop { background: rgb(0 0 0 / .32); }
+.filter-sheet[open] { animation: sheet-in var(--motion-base) var(--ease-out-expo); }
+.drag-handle { display: block; inline-size: 36px; block-size: 4px; background: var(--border-strong); border-radius: var(--radius-pill); margin-block: 10px 0; margin-inline: auto; }
+.sheet-header { display: flex; justify-content: space-between; align-items: center; padding-block: 12px; padding-inline: 20px; border-block-end: 1px solid var(--hairline); }
+.sheet-header h2 { font-size: 16px; }
+.sheet-body { padding: 16px 20px; }
+.sheet-body .state-chips { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+.sheet-body .filter-chip { min-block-size: 44px; padding-inline: 10px; font-size: 11px; }
+.sheet-body .chip-count { margin-inline-start: auto; }
+.sheet-body .corrected-group { display: grid; grid-column: 1 / -1; gap: 10px; border-block-start: 1px solid var(--border); margin-block-start: 4px; padding-block-start: 12px; }
+.sheet-body .corrected-chip { grid-column: 1 / -1; }
+.sheet-body .filter-hint { font-size: 10px; }
+.sheet-footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; border-block-start: 1px solid var(--border); padding-block: 13px max(16px,env(safe-area-inset-bottom)); padding-inline: 20px; }
+.sheet-footer .btn,.sheet-header .icon-btn,.sheet-footer .clear-filters { min-block-size: 44px; }
+.sheet-header .icon-btn { inline-size: 44px; }
+@keyframes sheet-in { from { translate: 0 18px; } to { translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { *,*::before,*::after { animation: none !important; transition: none !important; } }
+@container app (max-width: 1100px) {
+  .toolbar .search { order: 2; max-inline-size: none; }
+  .toolbar .views { order: 2; }
+  .summary,.main-grid { grid-template-columns: minmax(0,1fr) 280px; gap: 16px; }
+  .summary-main { grid-template-columns: 1fr; gap: 16px; }
+  .summary-meta { gap: 3px 15px; }
+  .summary-identity { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 5px 15px; }
+  .summary-identity h2 { margin-block-end: 0; }
+  .residual-wrap { margin-block-start: 0; }
+  .posts { grid-template-columns: 1fr; }
+  .post { border-inline-end: 0; }
+  .post + .post { border-block-start: 1px solid var(--hairline); }
+}
+@container app (max-width: 800px) {
+  .app-nav-inner { padding-inline: 18px; gap: 15px; }
+  .brand-copy small,.nav-snapshot { display: none; }
+  .screen-inner { padding-inline: 18px; }
+  .page { padding-inline: 18px; }
+  .summary,.main-grid { grid-template-columns: minmax(0,1fr); }
+  .summary-decision { padding-block: 12px; border-inline-start: 0; border-block-start: 1px solid var(--hairline); flex-direction: row; justify-content: space-between; align-items: center; }
+  .summary-decision p { max-inline-size: none; }
+  .attention { margin-block-start: 18px; }
+  .board-posts { grid-template-columns: 1fr; }
+}
+@container app (max-width: 500px) {
+  .app-nav-inner { padding-block: 10px; padding-inline: 16px; }
+  .app-links,.nav-snapshot { display: none; }
+  .brand-copy { font-size: 17px; }
+  .brand-mark { inline-size: 30px; block-size: 30px; }
+  .nav-meta { gap: 10px; font-size: 10px; }
+  .nav-meta .avatar { inline-size: 30px; block-size: 30px; }
+  .screen-inner { padding-inline: 16px; }
+  .screen-inner span { min-block-size: 40px; font-size: 12px; }
+  .address-strip { padding-inline: 16px; font-size: 9px; }
+  .page { padding-block: 17px 28px; padding-inline: 16px; }
+  .page-heading { margin-block-end: 14px; align-items: start; }
+  .page-heading .scope-context { display: none; }
+  .page-heading p { font-size: 11px; line-height: 1.8; }
+  h1 { font-size: 22px; }
+  .toolbar { gap: 8px; margin-block-end: 14px; }
+  .date-label { flex: 1; font-size: 11px; order: 0; }
+  .toolbar .views { order: 0; margin-inline-start: 0; }
+  .toolbar .views button { padding-inline: 7px; font-size: 10px; }
+  .toolbar .shift-chips { order: 1; inline-size: 100%; }
+  .toolbar .shift-chips button { flex: 1; text-align: center; font-size: 11px; padding-inline: 5px; }
+  .toolbar .company { order: 2; inline-size: 100%; }
+  .toolbar .company > span { display: none; }
+  .toolbar .company select { min-block-size: 44px; inline-size: 100%; max-inline-size: none; font-size: 12px; }
+  .toolbar .search { order: 3; flex-basis: 100%; max-inline-size: none; min-block-size: 44px; }
+  .toolbar .segment button { min-block-size: 44px; }
+  .summary { gap: 0; margin-block-end: 14px; }
+  .summary-main { display: block; padding: 16px 14px; }
+  .summary-identity { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 3px 8px; }
+  .summary-identity h2 { font-size: 14px; grid-column: 1 / -1; margin-block-end: 4px; }
+  .summary-meta { font-size: 11px; gap: 4px 12px; }
+  .residual-wrap { grid-column: 1 / -1; margin-block-start: 0; }
+  .residual { font-size: 11px; min-block-size: 44px; }
+  .residual-tooltip { display: none; }
+  .residual-mobile-hint { display: block; margin-block-start: -4px; }
+  .summary-visual { padding-block-start: 20px; }
+  .summary-bar { block-size: 14px; }
+  .leaders { display: none; }
+  .bucket-keys { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-block-start: 10px; }
+  .bucket-key { min-block-size: 58px; padding-block: 7px; padding-inline: 7px; gap: 4px; }
+  .tier-caption { margin-block: 14px 10px; }
+  .key-value { font-size: 21px; }
+  .key-label { font-size: 11px; }
+  .key-split { font-size: 11px; }
+  .summary-decision { padding-block: 12px; padding-inline: 14px; }
+  .decision-anchor { font-size: 12px; min-block-size: 44px; }
+  .summary-decision p { font-size: 10px; max-inline-size: 16ch; }
+  .desktop-filters { display: none; }
+  .mobile-filter-button { display: inline-flex; }
+  .active-filters { display: flex; flex-wrap: wrap; gap: 7px; margin-block-start: 10px; }
+  .active-filters:empty { display: none; }
+  .filter-heading { margin-block-end: 0; }
+  .filter-heading h2 { font-size: 12px; }
+  .filter-panel { margin-block-end: 7px; }
+  .result-line { font-size: 11px; margin-block-end: 10px; }
+  .clear-filters { font-size: 11px; min-block-size: 44px; }
+  .unit-header { padding-block: 11px; padding-inline: 12px; gap: 8px; }
+  .unit-header h2 { font-size: 14px; }
+  .unit-meta { gap: 9px; }
+  .unit-meta .assigned-stat { display: none; }
+  .unit-meta b { font-size: 12px; }
+  .post { padding-inline: 12px; }
+  .person-row,.row-head { grid-template-columns: 9px minmax(0,1fr) 46px 55px; gap: 7px; }
+  .person-row { min-block-size: 74px; }
+  .person-name { font-size: 12px; line-height: 1.8; }
+  .person-detail { font-size: 10px; }
+  .row-time { font-size: 10px; }
+  .row-time small { font-size: 10px; }
+  .on-site-marker { font-size: 10px; }
+  .unit-footer { padding-inline: 12px; }
+  .btn { min-block-size: 44px; }
+  .print-sheet { padding: 16px; }
+  .print-masthead { flex-direction: column; gap: 8px; }
+}
+@media (max-width: 640px) {
+  .demo-bar { padding-block: 7px; padding-inline: 10px; gap: 3px; }
+  .demo-name { display: none; }
+  .demo-controls { gap: 6px; inline-size: 100%; justify-content: space-between; }
+  .demo-bar .segment button { min-block-size: 44px; min-inline-size: 44px; padding-inline: 7px; font-size: 10px; }
+  .demo-bar .btn { min-block-size: 44px; padding-inline: 8px; font-size: 10px; }
+  .demo-bar .check-label { min-block-size: 44px; font-size: 10px; }
+}
+:lang(ar) .key-split,:lang(ar) .residual,:lang(ar) .residual-mobile-hint,:lang(ar) .filter-hint,:lang(ar) .person-detail,:lang(ar) .person-detail .mono { font-size: 12px; }
+@media print {
+  body { background: white; color: #1c1f24; }
+  #demo-controls,.app-nav,.screen-strip,.address-strip,.page-heading,.toolbar,.summary,.filter-panel,.result-line,.attention,.page-footer,.filter-sheet { display: none !important; }
+  .preview,body.mobile-mode .preview { inline-size: 100%; border: 0; }
+  .page { max-inline-size: none; padding: 0; }
+  .print-sheet { display: block !important; border: 0; padding-inline: 0; }
+  .main-grid { display: block; }
+  .unit { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div id="demo-controls"></div>
+<div id="preview" class="preview"><div class="app-shell" id="app"></div></div>
+<div id="result-announcement" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
+<dialog id="filter-sheet" class="filter-sheet" aria-labelledby="sheet-title"></dialog>
+<script>
+'use strict';
+// Operate mode: the approved brief supplies direction; the incumbent supplies the visual system.
+const TODAY = '2026-11-18';
+const PAST = '2026-11-17';
+const NOW = '13:52';
+const NOW_INSTANT = new Date(`${TODAY}T${NOW}:00+04:00`);
+const GRACE = 30;
+const D = {
+  en: {
+    title: 'Workforce attendance · Global Security Services Group', mockup: 'Day filters', sample: 'Sample data',
+    language: 'Language', light: 'Light', dark: 'Dark', theme: 'Theme',
+    viewport: 'Viewport', desktop: 'Desktop', mobile: 'Mobile 390', today: 'Today', past: 'Past day',
+    printHeader: 'Show print header', brand: 'GSSG', brandFull: 'Global Security Services Group',
+    dashboard: 'Dashboard', employees: 'Employees', users: 'Users', frozen: 'Frozen', attendance: 'Attendance',
+    subtitle: 'Duty register by company and post', scoped: 'Whole organization', search: 'Name, G-number, or post…',
+    register: 'Register', board: 'Board', timeline: 'Timeline', company: 'Company', allCompanies: 'All companies',
+    allShifts: 'All shifts', shift: 'Shift {count}', shifts: 'Shifts',
+    morning: 'Morning', early: 'Early', afternoon: 'Afternoon', evening: 'Evening',
+    onSiteNow: 'On site now', daySummary: 'Day summary', asOf: 'As of {time}', peopleCount: '{count} {count#person|people}',
+    onSite: 'On site', left: 'Left', notArrived: 'Not arrived', leave: 'On leave', nationalService: 'National Service',
+    split: 'Absent {absent} · Awaited {awaited}', residual: 'Not placed yet · {count}',
+    residualHint: 'Shift not started, or no Out recorded', needsDecision: 'Needs a decision · {count}',
+    decisionHint: 'Not narrowed by filters', rowStatus: 'Row status', who: 'People',
+    filter: 'Filter ({count})', filterPlain: 'Filter', filterHint: 'Halo = on site now · notch = corrected',
+    removeFilter: 'Remove {label}', clearSearch: 'Clear search', whoDeclaration: 'Who: {who}', stateDeclaration: 'Row status: {states}',
+    verified: 'On time', grace: 'Inside grace', late: 'Late past grace', unpaired: 'Single punch', absent: 'Absent',
+    pending: 'Not due yet', national_service: 'National Service', corrected: 'Corrected',
+    result: '{people} {people#person|people} · {rows} {rows#row|rows} shown', clearFilters: 'Clear filters', noResults: 'No rows match these filters',
+    assigned: 'Assigned: {count}', here: 'On site: {count}', review: 'Need review: {count}', posts: '{count} {count#post|posts}', in: 'In', out: 'Out',
+    employee: 'Employee', missing: 'Not recorded', pastGrace: '{minutes} min', gracePolicy: '{minutes} min grace',
+    source: 'BioTime punches through {time} · corrections overlay the day', seenOf: '{here} on site / {total} assigned',
+    attention: 'Needs a decision', attentionIntro: 'All companies · all shifts · unresolved attendance',
+    attentionNote: 'This queue is not narrowed by company, shift, search or row filters.',
+    allDecisions: 'Show all {count} decisions', fewerDecisions: 'Show fewer decisions',
+    rowsCount: '{count} rows', department: 'Security Operations',
+    printTitle: 'Daily Duty Register', filtered: 'Filtered: {filters}', companyDeclaration: 'Company: {company}',
+    rowDeclaration: '{shown} of {total} rows', printAsOf: 'as of {time}', allRows: 'All rows', searchDeclaration: 'search "{query}"',
+    viewResults: 'Show results', close: 'Close filters', actor: 'Hessa Al Mansoori', actorInitials: 'HM',
+    dayNames: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'],
+    dayNamesShort: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], date: '{weekday}, {day} November {year}',
+    leaveSubtype: 'On leave · {subtype}', listSeparator: ', ',
+    leaves: { annual: 'Annual', sick: 'Sick', duty: 'Duty Leave (official mission)', compassionate: 'Compassionate', emergency: 'Emergency', hajj: 'Hajj' }
+  },
+  ar: {
+    title: 'حضور القوى العاملة · المجموعة العالمية للخدمات الأمنية', mockup: 'مرشحات اليوم', sample: 'بيانات توضيحية',
+    language: 'اللغة', light: 'فاتح', dark: 'داكن', theme: 'المظهر',
+    viewport: 'العرض', desktop: 'حاسوب', mobile: 'هاتف 390', today: 'اليوم', past: 'يوم سابق',
+    printHeader: 'إظهار ترويسة الطباعة', brand: 'GSSG', brandFull: 'المجموعة العالمية للخدمات الأمنية',
+    dashboard: 'لوحة التحكم', employees: 'الموظفون', users: 'المستخدمون', frozen: 'وقت ثابت', attendance: 'الحضور',
+    subtitle: 'سجل الحضور حسب السرية والموقع', scoped: 'المؤسسة كاملة', search: 'الاسم أو الرقم أو الموقع…',
+    register: 'السجل', board: 'اللوحة', timeline: 'الخط الزمني', company: 'السرية', allCompanies: 'جميع السرايا',
+    allShifts: 'كل الورديات', shift: 'الوردية {count}', shifts: 'الورديات',
+    morning: 'الصباحية', early: 'المبكرة', afternoon: 'الظهيرة', evening: 'المسائية',
+    onSiteNow: 'الموجودون في الموقع الآن', daySummary: 'ملخص اليوم', asOf: 'حتى {time}', peopleCount: 'الموظفون: {count}',
+    onSite: 'في الموقع', left: 'غادروا', notArrived: 'لم يصلوا', leave: 'في إجازة', nationalService: 'الخدمة الوطنية',
+    split: 'غائب {absent} · مُنتظَر {awaited}', residual: 'لم يُصنَّفوا بعد · {count}',
+    residualHint: 'لم تبدأ الوردية، أو لم يُسجَّل الخروج', needsDecision: 'يحتاج قراراً · {count}',
+    decisionHint: 'لا تتأثر بالمرشحات', rowStatus: 'حالة الصف', who: 'الموظفون',
+    filter: 'المرشحات ({count})', filterPlain: 'المرشحات', filterHint: 'الهالة = في الموقع الآن · العلامة = مُصحَّح',
+    removeFilter: 'إزالة {label}', clearSearch: 'مسح البحث', whoDeclaration: 'الموظفون: {who}', stateDeclaration: 'حالة الصف: {states}',
+    verified: 'في الوقت', grace: 'داخل مدة السماح', late: 'تأخر بعد السماح', unpaired: 'بصمة واحدة', absent: 'غائب',
+    pending: 'لم يحن موعده', national_service: 'الخدمة الوطنية', corrected: 'مُصحَّح',
+    result: 'الموظفون: {people} · الصفوف المعروضة: {rows}', clearFilters: 'مسح المرشحات', noResults: 'لا توجد صفوف تطابق هذه المرشحات',
+    assigned: 'المكلَّفون: {count}', here: 'في الموقع: {count}', review: 'للمراجعة: {count}', posts: 'المواقع: {count}', in: 'دخول', out: 'خروج',
+    employee: 'الموظف', missing: 'غير مسجّل', pastGrace: '{minutes} د', gracePolicy: 'سماح {minutes} دقيقة',
+    source: 'بصمات BioTime حتى {time} · التصحيحات تُطبَّق على نتيجة اليوم', seenOf: 'في الموقع {here} من {total}',
+    attention: 'يحتاج قراراً', attentionIntro: 'جميع السرايا · كل الورديات · حالات حضور لم تُحسم',
+    attentionNote: 'لا تتأثر هذه القائمة بالسرية أو الوردية أو البحث أو مرشحات الصفوف المختارة.',
+    allDecisions: 'عرض كل القرارات: {count}', fewerDecisions: 'عرض قرارات أقل',
+    rowsCount: 'الصفوف: {count}', department: 'العمليات الأمنية',
+    printTitle: 'سجل الحضور اليومي', filtered: 'مُرشَّح: {filters}', companyDeclaration: 'السرية: {company}',
+    rowDeclaration: 'الصفوف: {shown} من {total}', printAsOf: 'حتى {time}', allRows: 'كل الصفوف', searchDeclaration: 'بحث «{query}»',
+    viewResults: 'عرض النتائج', close: 'إغلاق المرشحات', actor: 'حصة المنصوري', actorInitials: 'ح م',
+    dayNames: ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'],
+    dayNamesShort: ['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'], date: '{weekday}، {day} نوفمبر {year}',
+    leaveSubtype: 'في {subtype}', listSeparator: '، ',
+    leaves: { annual: 'إجازة سنوية', sick: 'إجازة مرضية', duty: 'إجازة مهمة رسمية', compassionate: 'إجازة تعزية', emergency: 'إجازة طارئة', hajj: 'إجازة حج' }
+  }
+};
+const UNITS = [
+  { id: 'first', en: 'First Company', ar: 'السرية الأولى' },
+  { id: 'second', en: 'Second Company', ar: 'السرية الثانية' },
+  { id: 'third', en: 'Third Company', ar: 'السرية الثالثة' },
+  { id: 'fourth', en: 'Fourth Company', ar: 'السرية الرابعة' },
+  { id: 'hq', en: 'HQ Office', ar: 'المكتب الرئيسي' },
+  { id: 'unassigned', en: 'Unassigned', ar: 'غير محدد' }
+];
+const POST_NAMES = [
+  [{ en: 'Main Gate', ar: 'البوابة الرئيسية' }, { en: 'Inspection', ar: 'التفتيش' }],
+  [{ en: 'Control Room', ar: 'غرفة التحكم' }, { en: 'Workshop Gate', ar: 'بوابة الورشة' }],
+  [{ en: 'East Gate', ar: 'البوابة الشرقية' }, { en: 'Patrol', ar: 'الدورية' }],
+  [{ en: 'West Gate', ar: 'البوابة الغربية' }, { en: 'Reception', ar: 'الاستقبال' }],
+  [{ en: 'Administration', ar: 'الإدارة' }, { en: 'Operations Desk', ar: 'مكتب العمليات' }],
+  [{ en: 'Relief post', ar: 'موقع الاحتياط' }, { en: 'Relief post', ar: 'موقع الاحتياط' }]
+];
+const POSTS = UNITS.flatMap((unit,ui)=>POST_NAMES[ui].map((p,pi)=>({...p,unit:ui,id:ui*2+pi})));
+const SHIFTS = [
+  { id: '1', label: 'morning', start: '07:00', end: '15:00' },
+  { id: '2', label: 'early', start: '03:00', end: '07:00' },
+  { id: '3', label: 'afternoon', start: '13:00', end: '21:00' },
+  { id: '4', label: 'evening', start: '15:00', end: '23:00' }
+];
+const ROW_STATE_ORDER = ['absent','unpaired','late','grace','verified','leave','national_service','pending'];
+const CHIP_ORDER = ['verified','grace','late','unpaired','absent','pending','leave','national_service'];
+const BUCKETS = ['onSite','left','notArrived','leave','nationalService'];
+// Copied unchanged from attendanceModel.ts: one person, one bucket; on site wins a double shift.
+const BUCKET_RANK = ['onSite','left','nationalService','leave','notArrived'];
+const state = {
+  lang:'en', theme:'light', mobile:false, date:TODAY, view:'register', query:'', shift:'', company:'',
+  who:'', states:new Set(), corrected:false, sheet:false, printHeader:false, attentionExpanded:false,
+  whoFocus:'onSite', chipFocus:'verified'
+};
+const esc = s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const t = (key,params={})=>{
+  const value=key.split('.').reduce((o,k)=>o?.[k],D[state.lang]);
+  if(typeof value!=='string')return value;
+  // `{name#one|other}` picks the EN plural form from the numeric value of params[name] (which may be wrapped in <bdi>).
+  const plural=value.replace(/\{(\w+)#([^|}]*)\|([^}]*)\}/g,(_,name,one,other)=>Number(String(params[name]).replace(/<[^>]*>/g,''))===1?one:other);
+  return plural.replace(/\{(\w+)\}/g,(_,name)=>params[name]??`{${name}}`);
+};
+const local = x=>x[state.lang];
+const num = x=>`<bdi class="num" dir="ltr">${esc(x)}</bdi>`;
+const missingTime = ()=>`<span class="missing-time muted" aria-label="${t('missing')}">—</span>`;
+const time = x=>x?`<bdi class="time" dir="ltr">${esc(x)}</bdi>`:missingTime();
+const timeRange = (start,end)=>time(`${start}–${end}`);
+const mins = x=>{const [h,m]=x.split(':').map(Number);return h*60+m;};
+const clock = m=>`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+const instant = (date,value)=>`${date}T${value}:00+04:00`;
+const siteTime = value=>value?new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Dubai',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value)):'';
+const isMobile = ()=>state.mobile||matchMedia('(max-width:640px)').matches;
+const input = {now:NOW_INSTANT};
+
+// Direct JS ports of the production model. UI filters never redefine these verdicts.
+function parseInstant(iso) {
+  if(!iso)return null;
+  const at=Date.parse(iso.endsWith('Z')||/[+-]\d\d:\d\d$/.test(iso)?iso:`${iso}Z`);
+  return Number.isNaN(at)?null:at;
+}
+function graceFor(row,fallback) {return row.grace_minutes??fallback??30;}
+function minutesPastGrace(row,input) {return Math.max(0,(row.late_minutes??0)-graceFor(row,input?.graceMinutes));}
+function isUnpaired(row,{now}) {const due=parseInstant(row.judgment_due_at);return row.punch_count===1&&due!==null&&due<=now.getTime();}
+function rowState(row,input) {
+  if(row.on_leave||row.presence_state==='excused_leave')return row.leave_kind==='national_service'?'national_service':'leave';
+  if(row.presence_state==='absent')return 'absent';
+  if(row.punch_count===0) {
+    if(row.presence_state==='completed'||row.presence_state==='on_duty')return 'verified';
+    const absenceDue=parseInstant(row.absence_due_at);
+    const reached=absenceDue!==null&&absenceDue<=input.now.getTime();
+    return reached?'absent':'pending';
+  }
+  if(minutesPastGrace(row,input)>0)return 'late';
+  if(isUnpaired(row,input))return 'unpaired';
+  return (row.late_minutes??0)>0?'grace':'verified';
+}
+function inAt(row) {if(row.corrected)return row.first_in_at??null;return row.first_in_at??row.first_punch_at??null;}
+function outAt(row) {return row.final_out_at??null;}
+function isOnSiteNow(row,input) {
+  const state=rowState(row,input);
+  if(state!=='verified'&&state!=='grace'&&state!=='late')return false;
+  const now=input.now.getTime(),arrivedAt=parseInstant(inAt(row));
+  if(arrivedAt===null||arrivedAt>now||outAt(row)!==null)return false;
+  const until=Math.min(parseInstant(row.scheduled_end_at)??Infinity,parseInstant(row.judgment_due_at)??Infinity);
+  return Number.isFinite(until)&&now<until;
+}
+function onSiteBucket(row,input) {
+  const state=rowState(row,input);
+  if(state==='national_service')return 'nationalService';
+  if(state==='leave')return 'leave';
+  const noArrival=row.corrected?inAt(row)===null:row.punch_count===0;
+  if(state==='absent'||(noArrival&&state!=='verified')) {
+    const start=parseInstant(row.scheduled_start_at);
+    return start!==null&&start<=input.now.getTime()?'notArrived':null;
+  }
+  if(isOnSiteNow(row,input))return 'onSite';
+  if(inAt(row)!==null&&outAt(row)!==null)return 'left';
+  return null;
+}
+function onSiteSummary(rows,input) {
+  const best=new Map();
+  for(const row of rows) {
+    const bucket=onSiteBucket(row,input),previous=best.get(row.employee_id);
+    if(previous===undefined||(bucket!==null&&(previous===null||BUCKET_RANK.indexOf(bucket)<BUCKET_RANK.indexOf(previous))))best.set(row.employee_id,bucket);
+  }
+  const summary={onSite:0,left:0,notArrived:0,leave:0,nationalService:0,people:best.size};
+  for(const bucket of best.values())if(bucket!==null)summary[bucket]+=1;
+  return summary;
+}
+const needsDecision = s=>s==='absent'||s==='unpaired'||s==='late';
+const onSite = p=>isOnSiteNow(p,input);
+const uniquePeople = rows=>new Set(rows.map(r=>r.employee_id)).size;
+function personBuckets(rows) {
+  const best=new Map();
+  for(const row of rows) {
+    const next=onSiteBucket(row,input),previous=best.get(row.employee_id);
+    if(previous===undefined||(next!==null&&(previous===null||BUCKET_RANK.indexOf(next)<BUCKET_RANK.indexOf(previous))))best.set(row.employee_id,next);
+  }
+  return best;
+}
+
+// A deterministic seeded roster, not precomputed UI totals. Five people have a second duty row.
+function makeRows(date) {
+  let seed=20261118;
+  const random=()=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed/4294967296;};
+  const given=[
+    ['Ahmed','أحمد'],['Omar','عمر'],['Khalid','خالد'],['Salem','سالم'],['Faisal','فيصل'],
+    ['Maryam','مريم'],['Nasser','ناصر'],['Fatima','فاطمة'],['Aisha','عائشة'],['Saif','سيف'],
+    ['Hamad','حمد'],['Rashid','راشد'],['Yousef','يوسف'],['Obaid','عبيد'],['Hessa','حصة'],
+    ['Ali','علي'],['Saeed','سعيد'],['Abdullah','عبدالله'],['Mansoor','منصور'],['Maha','مها']
+  ];
+  const families=[
+    ['Al Mazrouei','المزروعي'],['Al Ameri','العامري'],['Al Nuaimi','النعيمي'],['Al Ali','العلي'],
+    ['Al Kaabi','الكعبي'],['Al Marri','المري'],['Al Dhaheri','الظاهري'],['Al Shamsi','الشامسي'],
+    ['Al Hosani','الحوسني'],['Al Mansoori','المنصوري'],['Al Balushi','البلوشي'],['Al Zaabi','الزعابي']
+  ];
+  const correctedPeople=new Set([2,18,65,79,114,119,136]);
+  const unassigned=new Set([21,58,91,122,136]);
+  const rows=[];
+  function makePerson(i) {
+    const a=given[i%given.length],b=given[(i*7+3)%given.length],family=families[Math.floor(i/given.length)%families.length];
+    const unit=unassigned.has(i)?5:i%5;
+    return {employee_id:`employee-${i+1}`,id:`G-${1042+i*13}`,en:`${a[0]} ${b[0]} ${family[0]}`,ar:`${a[1]} ${b[1]} ${family[1]}`,unit,post:unit*2+(Math.floor(i/5)%2),date};
+  }
+  function add(p,shiftId,kind,corrected=false,suffix='',earlyOut=null) {
+    const shift=SHIFTS.find(s=>s.id===shiftId),start=mins(shift.start);
+    const offset=kind==='late'?37+Math.floor(random()*15):kind==='grace'?5+Math.floor(random()*19):0;
+    const arrival=['verified','grace','late','unpaired'].includes(kind)?clock(start+offset):null;
+    const completed=['verified','grace','late'].includes(kind)&&(date===PAST||shiftId==='2'||earlyOut!==null);
+    const departure=completed?(earlyOut??clock(mins(shift.end)-Math.floor(random()*8))):null;
+    const leave=kind==='leave'||kind==='national_service';
+    rows.push({
+      ...p,row_id:`${p.employee_id}-${shiftId}${suffix}`,shift_id:shiftId,start:shift.start,end:shift.end,
+      scheduled_start_at:instant(date,shift.start),scheduled_end_at:instant(date,shift.end),
+      judgment_due_at:instant(date,clock(mins(shift.end)+GRACE)),absence_due_at:instant(date,clock(start+GRACE*2)),
+      grace_minutes:GRACE,on_leave:leave,leave_kind:kind==='national_service'?'national_service':kind==='leave'?['annual','sick','duty','compassionate','emergency','hajj'][Number(p.employee_id.split('-')[1])%6]:null,
+      presence_state:leave?'excused_leave':kind==='absent'?'absent':kind==='pending'?'pending':completed?'completed':'on_duty',
+      punch_count:arrival?(departure?2:1):0,first_punch_at:arrival?instant(date,arrival):null,first_in_at:arrival?instant(date,arrival):null,
+      final_out_at:departure?instant(date,departure):null,late_minutes:arrival?Math.max(0,offset):0,corrected
+    });
+  }
+  for(let i=0;i<137;i++) {
+    const p=makePerson(i);
+    if(i<62) {
+      const kind=i%10===2||i%10===8?'late':i%10===1||i%10===7?'grace':'verified';
+      add(p,i>=50?'3':'1',kind,correctedPeople.has(i));
+    } else if(i<114) {
+      add(p,'2',i%9===0?'late':i%7===0?'grace':'verified',correctedPeople.has(i));
+    } else if(i<123) {
+      add(p,i>=120?'3':'1',i>=120?'pending':'absent',correctedPeople.has(i));
+    } else if(i<133) {
+      add(p,String(i%4+1),'leave');
+    } else if(i<136) {
+      add(p,String(i%4+1),'national_service');
+    } else {
+      add(p,'2','unpaired',true);
+    }
+    if([0,1,2,65,114].includes(i))add(p,i===65?'1':'2',i<2?'unpaired':i===114?'absent':'verified',false,'-double',i===65?'12:55':null);
+  }
+  return rows;
+}
+const DATA = {[TODAY]:makeRows(TODAY),[PAST]:makeRows(PAST)};
+const dayRows = ()=>DATA[state.date];
+function attentionRows() {
+  return dayRows().filter(p=>needsDecision(rowState(p,input))).sort((a,b)=>{
+    const rank=ROW_STATE_ORDER.indexOf(rowState(a,input))-ROW_STATE_ORDER.indexOf(rowState(b,input));
+    return rank||(b.late_minutes??0)-(a.late_minutes??0)||a.id.localeCompare(b.id);
+  });
+}
+const bucketKeys = ()=>BUCKETS.filter(b=>state.date===TODAY||b!=='onSite');
+function changeDate(date) {
+  state.date=date===PAST?PAST:TODAY;
+  if(!bucketKeys().includes(state.who))state.who='';
+}
+function scopeRows(ignoreShift=false) {
+  const q=state.query.trim().toLocaleLowerCase();
+  return dayRows().filter(p=>(ignoreShift||!state.shift||p.shift_id===state.shift)&&(!state.company||UNITS[p.unit].id===state.company)&&(!q||[p.en,p.ar,p.id,POSTS[p.post].en,POSTS[p.post].ar].some(s=>s.toLocaleLowerCase().includes(q))));
+}
+function whoRows(rows) {
+  if(!state.who)return rows;
+  const best=personBuckets(rows);
+  return rows.filter(p=>best.get(p.employee_id)===state.who);
+}
+const rowMatches = p=>(!state.states.size||state.states.has(rowState(p,input)))&&(!state.corrected||p.corrected);
+const filteredRows = ()=>whoRows(scopeRows()).filter(rowMatches);
+const ordered = rows=>[...rows].sort((a,b)=>ROW_STATE_ORDER.indexOf(rowState(a,input))-ROW_STATE_ORDER.indexOf(rowState(b,input))||a.id.localeCompare(b.id));
+const hasFilters = ()=>!!(state.who||state.states.size||state.corrected);
+const tierCount = ()=>state.states.size+Number(state.corrected);
+function chipCounts() {
+  const rows=whoRows(scopeRows()),counts=Object.fromEntries(CHIP_ORDER.map(s=>[s,0]));
+  for(const row of rows)counts[rowState(row,input)]++;
+  counts.corrected=rows.filter(p=>p.corrected).length;
+  return counts;
+}
+function splitNotArrived(rows) {
+  const best=personBuckets(rows),absent=new Set(),awaited=new Set();
+  for(const row of rows)if(best.get(row.employee_id)==='notArrived') {
+    if(rowState(row,input)==='absent')absent.add(row.employee_id);
+    else if(rowState(row,input)==='pending')awaited.add(row.employee_id);
+  }
+  for(const id of absent)awaited.delete(id);
+  return {absent:absent.size,awaited:awaited.size};
+}
+function filterParams() {
+  const params=new URLSearchParams();
+  if(state.who)params.set('who',state.who);
+  if(state.states.size)params.set('state',CHIP_ORDER.filter(s=>state.states.has(s)).join(','));
+  if(state.corrected)params.set('corrected','1');
+  if(state.company)params.set('company',state.company);
+  if(state.shift)params.set('shift',state.shift);
+  if(state.query.trim())params.set('q',state.query.trim());
+  if(state.date!==TODAY)params.set('date',state.date);
+  if(state.view!=='register')params.set('view',state.view);
+  return params.toString().replace(/%2C/gi,',');
+}
+function syncURL() {
+  const query=filterParams();
+  try{history.replaceState(null,'',`${location.pathname}${query?'?'+query:''}${location.hash}`);}catch{}
+  return `/employees/attendance${query?'?'+query:''}`;
+}
+function dateLabel() {
+  const date=new Date(`${state.date}T12:00:00+04:00`),names=t(isMobile()?'dayNamesShort':'dayNames');
+  return t('date',{weekday:names[date.getUTCDay()],day:num(Number(state.date.slice(-2))),year:num(date.getUTCFullYear())});
+}
+const iconPaths={
+  search:'<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+  chevron:'<path d="m9 5 7 7-7 7"/>',close:'<path d="m6 6 12 12M18 6 6 18"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  moon:'<path d="M20.5 13A8.5 8.5 0 0 1 11 3.5 8.5 8.5 0 1 0 20.5 13Z"/>',
+  calendar:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18"/>',
+  scope:'<path d="M3 5h18M5 5v14h14V5M9 9h6M9 13h6"/>',
+  filter:'<path d="M4 6h16M7 12h10M10 18h4"/>'
+};
+const icon=(name,cls='')=>`<svg class="icon ${cls}" viewBox="0 0 24 24" aria-hidden="true">${iconPaths[name]}</svg>`;
+const label=p=>rowState(p,input)==='leave'?t('leaveSubtype',{subtype:t(`leaves.${p.leave_kind}`)}):t(rowState(p,input));
+function dot(p) {
+  return `<i class="dot ${onSite(p)?'live':''} ${p.corrected?'corrected':''}" data-state="${rowState(p,input)}" aria-hidden="true" title="${esc(label(p)+(p.corrected?' · '+t('corrected'):''))}"></i>`;
+}
+function controls() {
+  document.getElementById('demo-controls').innerHTML=`<header class="demo-bar">
+    <div class="demo-name">${t('mockup')}<span class="sample">· ${t('sample')}</span></div>
+    <div class="demo-controls">
+      <div class="segment" role="group" aria-label="${t('language')}"><button type="button" data-lang="en" aria-pressed="${state.lang==='en'}" lang="en">EN</button><button type="button" data-lang="ar" aria-pressed="${state.lang==='ar'}" lang="ar">العربية</button></div>
+      <button type="button" class="btn" data-action="theme" aria-label="${t('theme')}: ${t(state.theme==='light'?'dark':'light')}">${icon(state.theme==='light'?'moon':'sun')}${t(state.theme==='light'?'dark':'light')}</button>
+      <div class="segment" role="group" aria-label="${t('viewport')}"><button type="button" data-viewport="desktop" aria-pressed="${!state.mobile}">${t('desktop')}</button><button type="button" data-viewport="mobile" aria-pressed="${state.mobile}">${t('mobile')}</button></div>
+      <div class="segment" role="group" aria-label="${t('daySummary')}"><button type="button" data-date="${TODAY}" aria-pressed="${state.date===TODAY}">${t('today')}</button><button type="button" data-date="${PAST}" aria-pressed="${state.date===PAST}">${t('past')}</button></div>
+      <label class="check-label"><input id="print-header" type="checkbox" ${state.printHeader?'checked':''}>${t('printHeader')}</label>
+    </div></header>`;
+}
+function toolbar() {
+  const shiftRows=scopeRows(true);
+  return `<div class="toolbar">
+    <span class="date-label">${icon('calendar')}${time(state.date)}</span>
+    <div class="segment shift-chips" role="group" aria-label="${t('shifts')}">
+      <button type="button" id="shift-all" data-shift="" aria-pressed="${!state.shift}">${t('allShifts')}</button>
+      ${SHIFTS.map(s=>`<button type="button" id="shift-${s.id}" data-shift="${s.id}" aria-pressed="${state.shift===s.id}" aria-label="${esc(t('shift',{count:s.id})+' · '+t('rowsCount',{count:shiftRows.filter(r=>r.shift_id===s.id).length}))}" title="${esc(t(s.label)+' · \u2066'+s.start+'–'+s.end+'\u2069')}">${num(s.id)}<span class="muted shift-count">· ${num(shiftRows.filter(r=>r.shift_id===s.id).length)}</span></button>`).join('')}
+    </div>
+    <label class="company"><span>${t('company')}</span><select id="company-select" aria-label="${t('company')}"><option value="">${t('allCompanies')}</option>${UNITS.map(u=>`<option value="${u.id}" ${state.company===u.id?'selected':''}>${local(u)}</option>`).join('')}</select></label>
+    <label class="search">${icon('search')}<input id="people-search" type="search" dir="${state.lang==='ar'?'rtl':'ltr'}" placeholder="${t('search')}" aria-label="${t('search')}" value="${esc(state.query)}"></label>
+    <div class="segment views" role="group" aria-label="${t('attendance')}">${['register','board','timeline'].map(v=>`<button type="button" id="view-${v}" data-view="${v}" aria-pressed="${state.view===v}">${t(v)}</button>`).join('')}</div>
+  </div>`;
+}
+function summary(rows) {
+  const c=onSiteSummary(rows,input),split=splitNotArrived(rows),keys=bucketKeys();
+  const active=b=>!state.who||state.who===b;
+  const residual=c.people-BUCKETS.reduce((n,b)=>n+c[b],0),decisionCount=attentionRows().length;
+  if(!keys.includes(state.whoFocus)||(c[state.whoFocus]===0&&state.who!==state.whoFocus))state.whoFocus=keys.find(b=>c[b]>0||state.who===b)||'';
+  return `<section class="summary" aria-labelledby="summary-title">
+    <div class="summary-main"><div class="summary-identity">
+      <h2 id="summary-title">${t(state.date===TODAY?'onSiteNow':'daySummary')}</h2>
+      <div class="summary-meta"><span>${t('asOf',{time:time(NOW)})}</span><span data-summary-people>${t('peopleCount',{count:num(c.people)})}</span></div>
+      <div class="residual-wrap"><button type="button" class="residual" aria-describedby="residual-tooltip"><i aria-hidden="true"></i><span>${t('residual',{count:num(residual)})}</span></button><span id="residual-tooltip" class="residual-tooltip" role="tooltip">${t('residualHint')}</span><p class="residual-mobile-hint">${t('residualHint')}</p></div>
+    </div><div class="summary-visual"><h3 class="tier-caption">${t('who')}</h3>
+      <div class="summary-bar" aria-hidden="true">${keys.filter(b=>c[b]>0).map(b=>`<span class="bar-segment ${active(b)?'':'dimmed'}" data-bucket="${b}" style="flex-grow:${c[b]}" title="${esc(t(b)+': '+c[b])}">${b==='notArrived'?`<i class="absent-part" style="flex:${split.absent}"></i><i class="awaited-part" style="flex:${split.awaited}"><svg xmlns="http://www.w3.org/2000/svg"><defs><pattern id="awaited-hatch" width="5" height="5" patternUnits="userSpaceOnUse"><path d="M-1 1 1-1M0 5 5 0M4 6 6 4" stroke="var(--accent)" stroke-width="1.5"/></pattern></defs><rect width="100%" height="100%" fill="url(#awaited-hatch)"/></svg></i>`:''}</span>`).join('')}</div>
+      <svg class="leaders" aria-hidden="true"></svg>
+      <div class="bucket-keys" role="group" aria-label="${t('who')}" data-tier="who" style="--key-count:${keys.length}">
+        ${keys.map(b=>`<button type="button" id="who-${b}" class="bucket-key" data-who="${b}" data-count="${c[b]}" aria-pressed="${state.who===b}" aria-disabled="${c[b]===0}" tabindex="${state.whoFocus===b?0:-1}">
+          <span class="key-value"><i class="swatch" data-bucket="${b}" aria-hidden="true"></i>${num(c[b])}</span><span class="key-label">${t(b)}</span>
+          ${b==='notArrived'?`<span class="key-split">${t('split',{absent:num(split.absent),awaited:num(split.awaited)})}</span>`:''}
+        </button>`).join('')}
+      </div>
+    </div></div>
+    <div class="summary-decision"><a href="#attention-queue" data-action="attention" class="decision-anchor ${decisionCount?'has-decisions':''}">${t('needsDecision',{count:num(decisionCount)})}${icon('chevron','directional')}</a><p>${t('decisionHint')}</p></div>
+  </section>`;
+}
+function stateChips(prefix) {
+  const counts=chipCounts(),available=[...CHIP_ORDER,'corrected'];
+  if(!counts[state.chipFocus]&&!state.states.has(state.chipFocus)&&!(state.chipFocus==='corrected'&&state.corrected))state.chipFocus=available.find(s=>counts[s])||'';
+  return `<div class="state-chips" role="group" aria-label="${t('rowStatus')}" data-tier="state">${CHIP_ORDER.map(s=>`<button type="button" class="filter-chip" id="${prefix}-${s}" data-status="${s}" data-count="${counts[s]}" aria-pressed="${state.states.has(s)}" aria-disabled="${counts[s]===0}" tabindex="${state.chipFocus===s?0:-1}"><i class="dot" data-state="${s}" aria-hidden="true"></i><span>${t(s)}</span><span class="chip-count">${num(counts[s])}</span></button>`).join('')}
+    <div class="corrected-group"><button type="button" class="filter-chip corrected-chip" id="${prefix}-corrected" data-status="corrected" data-count="${counts.corrected}" aria-pressed="${state.corrected}" aria-disabled="${counts.corrected===0}" tabindex="${state.chipFocus==='corrected'?0:-1}"><i class="notch-glyph" aria-hidden="true"></i><span>${t('corrected')}</span><span class="chip-count">${num(counts.corrected)}</span></button><p class="filter-hint">${t('filterHint')}</p></div>
+  </div>`;
+}
+function filters(rows) {
+  const count=tierCount(),selected=[...CHIP_ORDER.filter(s=>state.states.has(s)),...(state.corrected?['corrected']:[])];
+  return `<div class="filter-panel"><div class="filter-heading"><h2>${t('rowStatus')}</h2><button type="button" id="open-filters" class="btn mobile-filter-button" data-action="open-sheet" aria-haspopup="dialog">${icon('filter')}<span>${count?t('filter',{count:num(count)}):t('filterPlain')}</span></button></div>
+    <div class="desktop-filters">${stateChips('chip')}</div><div class="active-filters">${selected.map(s=>`<button type="button" id="token-${s}" class="active-token" data-remove-status="${s}" aria-label="${esc(t('removeFilter',{label:t(s)}))}">${s==='corrected'?'<i class="notch-glyph" aria-hidden="true"></i>':`<i class="dot" data-state="${s}" aria-hidden="true"></i>`}<span>${t(s)}</span>${icon('close')}</button>`).join('')}</div></div>
+    <div class="result-line"><span>${t('result',{people:num(uniquePeople(rows)),rows:num(rows.length)})}</span>${hasFilters()?`<button type="button" class="clear-filters" data-action="clear">${t('clearFilters')}</button>`:''}</div>`;
+}
+function personDetail(p) {
+  return `<span class="person-detail">${num(p.id)}<span aria-hidden="true">·</span><span class="state-text" data-state="${rowState(p,input)}">${label(p)}</span>${p.corrected?`<span class="corrected-text">· ${t('corrected')}</span>`:''}<span>· ${t('shift',{count:num(p.shift_id)})}</span></span>`;
+}
+function inContent(p) {
+  const late=minutesPastGrace(p,input);
+  return `${time(siteTime(inAt(p)))}${late?`<small>${t('pastGrace',{minutes:num('+'+late)})}</small>`:''}`;
+}
+function outContent(p) {return outAt(p)?time(siteTime(outAt(p))):onSite(p)?`<span class="on-site-marker">${t('onSite')}</span>`:missingTime();}
+function rowTag(p,cls,body) {return `<div class="${cls}" data-row="${p.row_id}" data-person="${p.employee_id}" title="${esc(local(p)+' · '+label(p))}">${body}</div>`;}
+// The incumbent register grouping, person rows, punch columns and source footer are retained.
+function register(rows) {
+  return `<div class="register-stack">${UNITS.map((unit,ui)=>{
+    const ur=rows.filter(p=>p.unit===ui);if(!ur.length)return '';
+    const c=onSiteSummary(ur,input),postIds=[...new Set(ur.map(p=>p.post))],review=ur.filter(p=>needsDecision(rowState(p,input))).length;
+    return `<section class="unit"><header class="unit-header"><div><h2>${local(unit)}</h2><p>${t('department')} · ${t('posts',{count:num(postIds.length)})} · ${t('gracePolicy',{minutes:num(GRACE)})}</p></div><div class="unit-meta"><span class="assigned-stat">${t('assigned',{count:`<b>${num(uniquePeople(ur))}</b>`})}</span><span>${t('here',{count:`<b>${num(c.onSite)}</b>`})}</span><span>${t('review',{count:`<b>${num(review)}</b>`})}</span></div></header><div class="posts">${postIds.map(pi=>{
+      const pr=ur.filter(p=>p.post===pi);
+      return `<section class="post"><div class="post-heading"><h3>${local(POSTS[pi])}</h3><span>${t('seenOf',{here:num(onSiteSummary(pr,input).onSite),total:num(uniquePeople(pr))})}</span></div><div class="row-head" aria-hidden="true"><span></span><span>${t('employee')}</span><span class="end">${t('in')}</span><span class="end">${t('out')}</span></div>${ordered(pr).map(p=>rowTag(p,'person-row',`${dot(p)}<span><span class="person-name">${local(p)}</span>${personDetail(p)}</span><span class="row-time">${inContent(p)}</span><span class="row-time">${outContent(p)}</span>`)).join('')}</section>`;
+    }).join('')}</div><footer class="unit-footer">${icon('clock')}<span>${t('source',{time:time(NOW)})}</span></footer></section>`;
+  }).join('')}</div>`;
+}
+function board(rows) {
+  return UNITS.map((unit,ui)=>{
+    const ur=rows.filter(p=>p.unit===ui);if(!ur.length)return '';
+    return `<section class="board-unit"><h2>${local(unit)}</h2><div class="board-posts">${[...new Set(ur.map(p=>p.post))].map(pi=>{
+      const pr=ur.filter(p=>p.post===pi);
+      return `<section class="board-post"><header><h3>${local(POSTS[pi])}</h3><span class="small muted">${t('rowsCount',{count:num(pr.length)})}</span></header><div class="tiles">${ordered(pr).map(p=>rowTag(p,'tile',`<span class="tile-identity">${dot(p)}<span class="person-name">${local(p)}</span></span>${personDetail(p)}<span class="tile-times"><span>${t('in')} ${inContent(p)}</span><span>${t('out')} ${outContent(p)}</span></span>`)).join('')}</div></section>`;
+    }).join('')}</div></section>`;
+  }).join('');
+}
+function timeline(rows) {
+  const pct=x=>((mins(x)-120)/1320*100).toFixed(3),span=(a,b)=>((mins(b)-mins(a))/1320*100).toFixed(3);
+  return `<!-- Timeline axis mirrors in RTL, preserving the incumbent's logical inline-axis decision. -->
+  <section class="timeline" aria-label="${t('timeline')}"><div class="timeline-inner"><div class="timeline-axis"><span>${t('employee')}</span><div class="axis-times">${['02:00','06:00','10:00','14:00','18:00','22:00','24:00'].map((v,i)=>`<span class="axis-label" style="${i===0?'inset-inline-start:0':i===6?'inset-inline-end:0':`inset-inline-start:calc(${pct(v)}% - 22px)`}">${time(v)}</span>`).join('')}</div><span>${t('asOf',{time:time(NOW)})}</span></div>${POSTS.map((post,pi)=>{
+    const pr=rows.filter(p=>p.post===pi);if(!pr.length)return '';
+    return `<h3 class="timeline-group">${local(UNITS[post.unit])} · ${local(post)}</h3>${ordered(pr).map(p=>{
+      const arrived=siteTime(inAt(p)),departed=siteTime(outAt(p)),to=departed||(onSite(p)?NOW:arrived);
+      const segment=arrived?`<i class="track-segment" data-state="${rowState(p,input)}" style="inset-inline-start:${pct(arrived)}%;inline-size:${span(arrived,to)}%"></i><i class="track-punch" style="inset-inline-start:${pct(arrived)}%"></i>${departed?`<i class="track-punch" style="inset-inline-start:${pct(departed)}%"></i>`:''}`:`<span class="track-note">${label(p)}</span>`;
+      return rowTag(p,'timeline-row',`<span class="timeline-person">${dot(p)}<span><span class="person-name">${local(p)}</span><span class="small muted">${num(p.id)}</span></span></span><span class="day-track"><i class="track-schedule" style="inset-inline-start:${pct(p.start)}%;inline-size:${span(p.start,p.end)}%"></i><i class="track-grace" style="inset-inline-start:${pct(p.start)}%;inline-size:${(GRACE/1320*100).toFixed(3)}%"></i>${segment}${state.date===TODAY?`<i class="now-line" style="inset-inline-start:${pct(NOW)}%"></i>`:''}</span><span class="timeline-result">${t('in')} ${time(arrived)} · ${t('out')} ${outContent(p)}<span class="person-detail">${label(p)}${p.corrected?' · '+t('corrected'):''}</span></span>`);
+    }).join('')}`;
+  }).join('')}</div></section>`;
+}
+function attention() {
+  const rows=attentionRows(),shown=state.attentionExpanded?rows:rows.slice(0,6);
+  return `<aside class="attention" id="attention-queue" aria-labelledby="attention-title"><h2 id="attention-title" tabindex="-1">${t('attention')} · ${num(rows.length)}</h2><p class="attention-intro">${t('attentionIntro')}</p>
+    <div class="attention-breakdown">${['absent','unpaired','late'].map(s=>`<span>${t(s)} ${num(rows.filter(p=>rowState(p,input)===s).length)}</span>`).join('')}</div>
+    ${shown.map(p=>`<article class="attention-row">${dot(p)}<div><span class="person-name">${local(p)}</span><p>${num(p.id)} · ${label(p)}${p.corrected?' · '+t('corrected'):''} · ${t('shift',{count:num(p.shift_id)})}</p><p>${local(UNITS[p.unit])} · ${local(POSTS[p.post])}</p></div></article>`).join('')}
+    ${rows.length>shown.length||state.attentionExpanded?`<button type="button" class="btn attention-more" data-action="attention-more"><span>${t(state.attentionExpanded?'fewerDecisions':'allDecisions',{count:num(rows.length)})}</span>${icon('chevron','directional')}</button>`:''}<p class="attention-note">${t('attentionNote')}</p>
+  </aside>`;
+}
+function printSheet(rows) {
+  const tiers=[];
+  if(state.who)tiers.push(t('whoDeclaration',{who:t(state.who)}));
+  if(state.states.size)tiers.push(t('stateDeclaration',{states:CHIP_ORDER.filter(s=>state.states.has(s)).map(s=>t(s)).join(t('listSeparator'))}));
+  if(state.corrected)tiers.push(t('corrected'));
+  const unit=UNITS.find(u=>u.id===state.company),clauses=[tiers.length?t('filtered',{filters:tiers.join(' · ')}):t('allRows'),t('companyDeclaration',{company:unit?local(unit):t('allCompanies')})];
+  if(state.shift)clauses.push(t('shift',{count:num(state.shift)}));
+  if(state.query.trim())clauses.push(t('searchDeclaration',{query:`<bdi dir="auto">${esc(state.query.trim())}</bdi>`}));
+  clauses.push(t('rowDeclaration',{shown:num(rows.length),total:num(dayRows().length)}),t('printAsOf',{time:time(NOW)}));
+  return `<section class="print-sheet ${state.printHeader?'preview-print':''}" aria-label="${t('printTitle')}"><header class="print-masthead"><div><p>${t('brandFull')}</p><h2>${t('printTitle')}</h2></div><div><p>${dateLabel()}</p><p>${t('asOf',{time:time(NOW)})}</p></div></header>
+    <p class="print-declaration">${clauses.join(' · ')}</p></section>`;
+}
+function attendance() {
+  const scope=scopeRows(),rows=filteredRows();
+  return `${printSheet(rows)}<div class="page-heading"><div><h1>${t('attendance')}</h1><p>${dateLabel()} · ${t('subtitle')}</p></div><span class="scope-context">${icon('scope')}${t('scoped')}</span></div>
+    ${toolbar()}${summary(scope)}<div class="main-grid"><section class="main-results" aria-label="${t(state.view)}">${filters(rows)}<div id="attendance-content">${rows.length?(state.view==='register'?register(rows):state.view==='board'?board(rows):timeline(rows)):`<section class="empty">${icon('filter')}<h2>${t('noResults')}</h2>${hasFilters()?`<button type="button" class="btn" data-action="clear">${t('clearFilters')}</button>`:state.query.trim()?`<button type="button" class="btn" data-action="clear-search">${t('clearSearch')}</button>`:''}</section>`}</div></section>${attention()}</div>
+    <footer class="page-footer"><span>${t('source',{time:time(NOW)})}</span><span>${t('sample')} · ${time(state.date)}</span></footer>`;
+}
+function shell(address) {
+  return `<header class="app-nav"><div class="app-nav-inner"><div class="brand"><svg class="brand-mark" viewBox="0 0 40 40" fill="none" aria-hidden="true"><path d="M20 3 35 9v11c0 8-8 14-15 17C13 34 5 28 5 20V9L20 3Z" stroke="currentColor" stroke-width="1.7"/><path d="M12 15h16M12 20h16M15 25h10" stroke="currentColor" stroke-width="1.7"/></svg><div class="brand-copy"><bdi dir="ltr">${t('brand')}</bdi><small>${t('brandFull')}</small></div></div><nav class="app-links" aria-label="${t('brand')}"><span>${t('dashboard')}</span><span aria-current="page">${t('employees')}</span><span>${t('users')}</span></nav><div class="nav-meta"><span class="nav-snapshot">${t('sample')}</span><span>${t('frozen')} ${time(NOW)}</span><span class="avatar" title="${t('actor')}">${t('actorInitials')}</span></div></div></header>
+    <nav class="screen-strip" aria-label="${t('employees')}"><div class="screen-inner"><span aria-current="page">${t('attendance')}</span></div></nav>
+    <div class="address-strip"><code><bdi dir="ltr">${esc(address)}</bdi></code></div><main class="page" id="main">${attendance()}</main>`;
+}
+function drawLeaders() {
+  const visual=document.querySelector('.summary-visual'),svg=visual?.querySelector('.leaders');
+  if(!svg||isMobile())return;
+  const bounds=svg.getBoundingClientRect(),rtl=state.lang==='ar';
+  svg.setAttribute('viewBox',`0 0 ${bounds.width} 36`);
+  const lines=[...visual.querySelectorAll('.bar-segment')].map(segment=>{
+    const a=segment.getBoundingClientRect(),key=visual.querySelector(`[data-who="${segment.dataset.bucket}"]`),swatch=key.querySelector('.swatch').getBoundingClientRect();
+    const start=a.x+a.width/2-bounds.x,end=swatch.x+swatch.width/2-bounds.x;
+    return {start,end,finish:swatch.y+swatch.height/2-bounds.y,backward:rtl?start<end:start>end,pressed:state.who===segment.dataset.bucket,dimmed:segment.classList.contains('dimmed')};
+  });
+  let backwardLane=0,forwardLane=lines.filter(line=>!line.backward).length-1;
+  svg.innerHTML=lines.map(line=>{
+    const lane=6+(line.backward?backwardLane++:forwardLane--)*5;
+    return `<path class="${line.dimmed?'dimmed':''} ${line.pressed?'pressed':''}" d="M${line.start.toFixed(2)} 1 V${lane} H${line.end.toFixed(2)} V${line.finish.toFixed(2)}"/>`;
+  }).join('');
+}
+function renderSheet() {
+  const sheet=document.getElementById('filter-sheet');
+  if(!state.sheet) {if(sheet.open)sheet.close();document.body.style.overflow='';return;}
+  sheet.innerHTML=`<span class="drag-handle" aria-hidden="true"></span><header class="sheet-header"><h2 id="sheet-title">${t('rowStatus')}</h2><button type="button" id="close-filters" class="icon-btn" data-action="close-sheet" aria-label="${t('close')}">${icon('close')}</button></header><div class="sheet-body">${stateChips('sheet')}</div><footer class="sheet-footer">${hasFilters()?`<button type="button" class="clear-filters" data-action="clear">${t('clearFilters')}</button>`:'<span></span>'}<button type="button" class="btn primary" data-action="close-sheet"><span>${t('viewResults')} · ${num(filteredRows().length)}</span></button></footer>`;
+  if(!sheet.open)sheet.showModal();
+  document.body.style.overflow='hidden';
+}
+function render(focusId) {
+  document.documentElement.lang=state.lang;
+  document.documentElement.dir=state.lang==='ar'?'rtl':'ltr';
+  document.documentElement.dataset.theme=state.theme;
+  document.title=t('title');
+  document.body.classList.toggle('mobile-mode',state.mobile);
+  const address=syncURL();
+  controls();
+  document.getElementById('app').innerHTML=shell(address);
+  renderSheet();
+  const announcement=t('result',{people:uniquePeople(filteredRows()),rows:filteredRows().length}),live=document.getElementById('result-announcement');
+  if(live.textContent!==announcement)live.textContent=announcement;
+  requestAnimationFrame(drawLeaders);
+  if(focusId)document.getElementById(focusId)?.focus({preventScroll:true});
+}
+function clearFilters() {
+  state.who='';state.states.clear();state.corrected=false;
+}
+document.addEventListener('click',event=>{
+  const btn=event.target.closest('button,a[data-action]');if(!btn)return;
+  const id=btn.id;
+  if(btn.dataset.lang)state.lang=btn.dataset.lang;
+  else if(btn.dataset.viewport)state.mobile=btn.dataset.viewport==='mobile';
+  else if(btn.dataset.date)changeDate(btn.dataset.date);
+  else if(btn.dataset.view)state.view=btn.dataset.view;
+  else if(Object.hasOwn(btn.dataset,'shift'))state.shift=btn.dataset.shift;
+  else if(btn.dataset.who) {
+    if(Number(btn.dataset.count)===0&&state.who!==btn.dataset.who)return;
+    state.who=state.who===btn.dataset.who?'':btn.dataset.who;state.whoFocus=btn.dataset.who;
+  }
+  else if(btn.dataset.status) {
+    const key=btn.dataset.status,selected=key==='corrected'?state.corrected:state.states.has(key);
+    if(Number(btn.dataset.count)===0&&!selected)return;
+    if(key==='corrected')state.corrected=!state.corrected;
+    else if(selected)state.states.delete(key);else state.states.add(key);
+    state.chipFocus=key;
+  } else if(btn.dataset.removeStatus) {
+    if(btn.dataset.removeStatus==='corrected')state.corrected=false;else state.states.delete(btn.dataset.removeStatus);
+    render('open-filters');return;
+  } else if(btn.dataset.action==='theme')state.theme=state.theme==='light'?'dark':'light';
+  else if(btn.dataset.action==='clear')clearFilters();
+  else if(btn.dataset.action==='clear-search') {state.query='';render('people-search');return;}
+  else if(btn.dataset.action==='open-sheet') {state.sheet=true;render('close-filters');return;}
+  else if(btn.dataset.action==='close-sheet') {state.sheet=false;render('open-filters');return;}
+  else if(btn.dataset.action==='attention-more')state.attentionExpanded=!state.attentionExpanded;
+  else if(btn.dataset.action==='attention') {
+    event.preventDefault();document.getElementById('attention-title').focus();document.getElementById('attention-queue').scrollIntoView({block:'start',behavior:'instant'});return;
+  } else return;
+  event.preventDefault();render(id);
+});
+document.addEventListener('input',event=>{
+  if(event.target.id!=='people-search')return;
+  const pos=event.target.selectionStart;state.query=event.target.value;render('people-search');
+  document.getElementById('people-search').setSelectionRange(pos,pos);
+});
+document.addEventListener('change',event=>{
+  if(event.target.id==='company-select') {state.company=event.target.value;render('company-select');}
+  else if(event.target.id==='print-header') {state.printHeader=event.target.checked;render('print-header');}
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape') {
+    if(state.sheet) {event.preventDefault();state.sheet=false;render('open-filters');return;}
+    if(!hasFilters()||event.target.matches('input,select'))return;
+    event.preventDefault();clearFilters();render(isMobile()?'open-filters':'who-'+state.whoFocus);return;
+  }
+  const tier=event.target.closest('[data-tier]');if(!tier||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
+  const buttons=[...tier.querySelectorAll('button')].filter(b=>b.getAttribute('aria-disabled')!=='true'||b.getAttribute('aria-pressed')==='true');
+  let index=buttons.indexOf(event.target.closest('button'));if(index<0)return;
+  event.preventDefault();
+  if(event.key==='Home')index=0;
+  else if(event.key==='End')index=buttons.length-1;
+  else {
+    const forward=event.key==='ArrowDown'||(event.key==='ArrowRight'&&state.lang!=='ar')||(event.key==='ArrowLeft'&&state.lang==='ar');
+    index=(index+(forward?1:-1)+buttons.length)%buttons.length;
+  }
+  tier.querySelectorAll('button').forEach(b=>b.tabIndex=-1);
+  const next=buttons[index];next.tabIndex=0;next.focus();
+  if(tier.dataset.tier==='who')state.whoFocus=next.dataset.who;else state.chipFocus=next.dataset.status;
+});
+document.getElementById('filter-sheet').addEventListener('cancel',event=>{event.preventDefault();state.sheet=false;render('open-filters');});
+document.getElementById('filter-sheet').addEventListener('click',event=>{
+  if(event.target!==event.currentTarget)return;
+  const box=event.currentTarget.getBoundingClientRect();
+  if(event.clientY<box.y) {state.sheet=false;render('open-filters');}
+});
+addEventListener('resize',drawLeaders);
+function setPreset(preset,paint=true) {
+  for(const key of ['lang','theme','mobile','view','query','shift','company','who','corrected','sheet','printHeader','attentionExpanded'])if(Object.hasOwn(preset,key))state[key]=preset[key];
+  if(preset.date)changeDate(preset.date);
+  if(preset.day)changeDate(preset.day==='past'?PAST:TODAY);
+  if(Object.hasOwn(preset,'states')||Object.hasOwn(preset,'state')) {
+    const values=preset.states??preset.state;
+    state.states=new Set((Array.isArray(values)?values:String(values||'').split(',')).filter(s=>CHIP_ORDER.includes(s)));
+  }
+  if(!bucketKeys().includes(state.who))state.who='';
+  if(!UNITS.some(u=>u.id===state.company))state.company='';
+  if(!['register','board','timeline'].includes(state.view))state.view='register';
+  if(!SHIFTS.some(s=>s.id===state.shift))state.shift='';
+  if(!['en','ar'].includes(state.lang))state.lang='en';
+  if(!['light','dark'].includes(state.theme))state.theme='light';
+  if(paint)render();
+}
+function inspect() {
+  const scope=scopeRows(),rows=filteredRows();
+  return {date:state.date,summary:onSiteSummary(scope,input),split:splitNotArrived(scope),rows:rows.length,people:uniquePeople(rows),chips:chipCounts(),decisions:attentionRows().length,url:filterParams(),rowIds:rows.map(p=>p.row_id)};
+}
+window.__wdf={set:p=>{setPreset(p);return inspect();},inspect,model:{rowState,onSiteBucket,onSiteSummary,BUCKET_RANK},data:DATA};
+const initial=Object.fromEntries(new URLSearchParams(location.search));
+const hash=Object.fromEntries(new URLSearchParams(location.hash.replace(/^#\??/,'')));
+setPreset({...initial,...hash,corrected:(hash.corrected??initial.corrected)==='1',mobile:(hash.mobile??initial.mobile)==='1',printHeader:(hash.printHeader??initial.printHeader)==='1',sheet:(hash.sheet??initial.sheet)==='1',query:hash.q??initial.q??''},false);
+render();
+</script>
+</body>
+</html>
