@@ -277,6 +277,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const canSubmitBook = ctx.has('books.submit') && book.can_write
   const canScan = ctx.has('documents.scan') && book.can_write
   const review = reportReviewOf(book)
+  // Rebuild from current fleet data: the author's unsubmitted or returned letter
+  // (`can_rebuild_vehicle_letter` carries the backend's state and author rule).
+  const canRebuild =
+    scopedFleetLetter && book.can_rebuild_vehicle_letter === true &&
+    ctx.canMutateCurrent && ctx.has('vehicles.edit') && ctx.has('books.submit')
 
   // Gates mirrored from BookRecordPage so the model and the page agree.
   const canWord = book.can_write && ctx.canMutateCurrent && (!scoped || canEditScopedWord)
@@ -367,7 +372,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: 'draft', vars: {} },
         {
           primary: canSend ? 'sendForApproval' : canContinue ? 'continueEditing' : undefined,
-          secondary: pick([['continueEditing', canSend && canContinue]]),
+          secondary: pick([
+            ['rebuildVehicleLetter', canRebuild],
+            ['continueEditing', canSend && canContinue],
+          ]),
           overflow: pick([
             ['print', true],
             ['email', canEmail],
@@ -463,9 +471,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     case 'rejected': {
       const decider = decisionStep(steps, [state])
       const reviseKey = reviseReasonKey(reviseBlockReason(book, ctx))
-      const canRebuild =
-        state === 'returned' && scopedFleetLetter && book.can_rebuild_vehicle_letter === true &&
-        ctx.canMutateCurrent && ctx.has('vehicles.edit') && ctx.has('books.submit')
+      const canRebuildReturned = state === 'returned' && canRebuild
       const canRevise = !scopedFleetLetter && book.can_write && ctx.canGenerate &&
         (scoped ? ctx.reporterAction === 'correct-resubmit' : ctx.canEdit)
       const canResubmit = state === 'returned' && scoped && !scopedFleetLetter && !isInmateReport && canSend &&
@@ -474,7 +480,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: canRebuild ? 'rebuildVehicleLetter' : canRevise ? 'revise' : canResubmit ? 'sendForApproval' : undefined,
+          primary: canRebuildReturned ? 'rebuildVehicleLetter' : canRevise ? 'revise' : canResubmit ? 'sendForApproval' : undefined,
           secondary: pick([['sendForApproval', canRevise && canResubmit]]),
           overflow: pick([
             ['print', true],

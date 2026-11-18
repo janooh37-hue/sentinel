@@ -618,6 +618,12 @@ describe('fleet reporter record workflow', () => {
     expect(next.secondary).toEqual([])
   })
 
+  it.each([false, true])('offers Rebuild beside Send on an unsubmitted letter when can_rebuild_vehicle_letter=%s', (can_rebuild_vehicle_letter) => {
+    const next = recordNextStep(bookOf('none', { service_id: 'Vehicle Fines', can_rebuild_vehicle_letter }), fleet('edit-submit'))
+    expect(next.primary).toBe('sendForApproval')
+    expect(next.secondary).toEqual(can_rebuild_vehicle_letter ? ['rebuildVehicleLetter'] : [])
+  })
+
   it('offers no as-is resubmission for a returned vehicle letter but keeps it for a returned General Book', () => {
     const letter = recordNextStep(bookOf('returned', { service_id: 'Vehicle Fines' }), fleet('read-only'))
     const general = recordNextStep(bookOf('returned', { service_id: 'General Book' }), fleet('correct-resubmit'))

@@ -1065,10 +1065,12 @@ function BookRecordPageBody(): React.JSX.Element {
   const createMarkMutate = createMark.mutate
   const deleteMarkAsync = deleteMark.mutateAsync
   const requestDelete = useCallback((): void => setDeleteOpen(true), [setDeleteOpen])
+  const rebuildOffered =
+    nextStep?.primary === 'rebuildVehicleLetter' || nextStep?.secondary.includes('rebuildVehicleLetter') === true
   const rebuildVehicleLetter = useCallback((): void => {
-    if (!book || !current || nextStep?.primary !== 'rebuildVehicleLetter' || rebuildBusy) return
+    if (!book || !current || !rebuildOffered || rebuildBusy) return
     rebuildLetter({ bookId: book.id, versionId: current.id })
-  }, [book, current, nextStep?.primary, rebuildBusy, rebuildLetter])
+  }, [book, current, rebuildOffered, rebuildBusy, rebuildLetter])
   const actions: RecordActions = useMemo(
     () => ({
       back,

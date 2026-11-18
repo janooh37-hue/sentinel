@@ -716,7 +716,7 @@ export function RecordPane({
             {action.label}
           </PaneBtn>
         ))}
-        {ns.primary === 'rebuildVehicleLetter' && (
+        {(ns.primary === 'rebuildVehicleLetter' || ns.secondary.includes('rebuildVehicleLetter')) && (
           <p className="basis-full text-[0.75em] text-muted-foreground">{t('books.fleetReporter.rebuildHint')}</p>
         )}
         <Link

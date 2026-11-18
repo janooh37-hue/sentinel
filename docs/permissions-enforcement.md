@@ -503,13 +503,15 @@ Arabic or English name, else the account name) and refuses a `recipient_id` (403
 never by passport or Emirates ID. A fleet reporter reaches them through its capabilities;
 `GET /employees/lookup` stays closed to it.
 
-**Rebuilding a returned vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
+**Rebuilding a vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
 (`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
 returned vehicle letter from current fleet data through the ordinary revise path: same
 reference and paper date, a new revision, earlier steps kept as history, state `none`.
 `book_service.vehicle_letter_rebuild_refusal` is the one rule behind the route and
 `BookRead.can_rebuild_vehicle_letter`. Fines letters keep their source selection in the
 version's `_letter_source` field (older letters fall back to the `letter.generated` audit).
+The record pane, record page and mobile dock and More sheet offer Rebuild on the
+author's returned letter (primary) and on its unsubmitted letter (beside Send for approval).
 
 **Tests:** `backend/tests/test_fleet_reporter_scope.py` (route policy, allowlist parity,
 shared routes exist, ceiling, line-manager admin route, migration),
