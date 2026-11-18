@@ -7,9 +7,10 @@ Capabilities authorize actions, but attendance also requires employee scope.
 Give active or locked non-admin holders of both workforce.people.view and
 workforce.attendance.review an organization row only if they have no scope rows.
 Pending, disabled, and rejected accounts receive no standing organization grant.
-The inmate_reporter hard ceiling excludes both capabilities, even if stale role
-rows or overrides purport to grant them. Role rows grant directly (there is no
-enabled flag); user denies and expired grants remove role-granted capabilities.
+The inmate_reporter and fleet_reporter hard ceilings exclude both capabilities,
+even if stale role rows or overrides purport to grant them. Role rows grant
+directly (there is no enabled flag); user denies and expired grants remove
+role-granted capabilities.
 Only permanent per-user grants (expires_at IS NULL) count: temporary access must
 not create a permanent scope row, even while its grant is unexpired.
 Neither required capability belongs to the implicit dynamic capability families
@@ -46,7 +47,7 @@ def upgrade() -> None:
                 (user_id, scope_kind, created_by_user_id, created_at)
             SELECT u.id, 'organization', u.id, :backfill_at
             FROM users AS u
-            WHERE u.role NOT IN ('admin', 'inmate_reporter')
+            WHERE u.role NOT IN ('admin', 'inmate_reporter', 'fleet_reporter')
               AND u.status IN ('active', 'locked')
               AND NOT EXISTS (
                   SELECT 1 FROM user_workforce_scopes AS s WHERE s.user_id = u.id

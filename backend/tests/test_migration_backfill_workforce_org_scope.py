@@ -93,9 +93,11 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                     {"role": "manager", "capability": PEOPLE},
                     {"role": "manager", "capability": REVIEW},
                     {"role": "operator", "capability": PEOPLE},
-                    # Even corrupt role rows cannot lift the reporter's hard ceiling.
+                    # Even corrupt role rows cannot lift a scoped role's hard ceiling.
                     {"role": "inmate_reporter", "capability": PEOPLE},
                     {"role": "inmate_reporter", "capability": REVIEW},
+                    {"role": "fleet_reporter", "capability": PEOPLE},
+                    {"role": "fleet_reporter", "capability": REVIEW},
                 ],
             )
             roles = {
@@ -118,6 +120,7 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                 "self_created_org": "manager",
                 "resaved": "manager",
                 "reporter": "inmate_reporter",
+                "fleet_reporter": "fleet_reporter",
             }
             statuses = {"locked", "pending", "disabled", "rejected"}
             users = {
@@ -138,6 +141,7 @@ def test_backfill_effective_caps_and_reversible_grant_markers(tmp_path: Path) ->
                 connection, users["expired_extra"], REVIEW, expires_at=now - timedelta(days=1)
             )
             _override(connection, users["reporter"], REVIEW)
+            _override(connection, users["fleet_reporter"], REVIEW)
             preserved_ids = {
                 _scope(connection, users["department"], users["department"], kind="department"),
                 _scope(connection, users["existing_org"], users["admin"]),
