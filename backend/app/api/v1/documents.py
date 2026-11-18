@@ -382,7 +382,17 @@ def generate_document(
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
-        book_service.require_revise_access(db, user, revise_book)
+        previous_version = book_service.require_revise_access(db, user, revise_book)
+        if routes_to_line_manager(user) and (
+            previous_version is None or previous_version.template_id != "General Book"
+        ):
+            # Its vehicle letters are rebuilt and its Report reopens in Word;
+            # free General Book content never replaces either.
+            raise AppError(
+                "SCOPED_ROLE_SERVICE_FORBIDDEN",
+                "This role revises only its own General Books here.",
+                http_status=403,
+            )
         if not payload.commit and routes_to_line_manager(user):
             # Its revision's preview: the book only authorizes the render. The
             # preview itself revises, files and allocates nothing.

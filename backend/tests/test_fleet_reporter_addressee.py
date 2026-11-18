@@ -4,6 +4,7 @@ Book to the contractor) and revising its own returned General Book still work.""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -18,7 +19,7 @@ from app.core import signature as signature_core
 from app.db.models import Book, GeneralBookRecipient, Manager, User
 from app.services import report_service, settings_service, word_book_service
 from app.services.job_registry import get_job
-from tests.fleet_support import FleetEnv, general_book
+from tests.fleet_support import FleetEnv, accident_letter, fines_letter, general_book
 
 LINE_TITLE = "مدير فرع الخدمات العامة"
 
@@ -211,6 +212,28 @@ def test_reporter_revision_preview_needs_its_own_returned_book(
     assert response.json()["error"]["code"] == code
     assert _book_count(env) == books_before
     assert len(env.book(book.id).versions) == 1
+
+
+@pytest.mark.parametrize("commit", [True, False])
+@pytest.mark.parametrize("make_letter", [fines_letter, accident_letter])
+def test_reporter_cannot_overwrite_a_vehicle_letter_with_a_general_book(
+    env: FleetEnv, make_letter: Callable[[FleetEnv, User], Book], commit: bool
+) -> None:
+    # Its returned vehicle letter is revised by Rebuild, never replaced by
+    # free General Book content through generic generation.
+    book = make_letter(env, env.reporter)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+    template_before = book.versions[-1].template_id
+
+    response = _generate_general_book(env, revise_of_book_id=book.id, commit=commit)
+
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "SCOPED_ROLE_SERVICE_FORBIDDEN"
+    revised = env.book(book.id)
+    assert len(revised.versions) == 1
+    assert revised.versions[-1].template_id == template_before
 
 
 def test_reporter_still_files_a_maintenance_request(env: FleetEnv) -> None:
