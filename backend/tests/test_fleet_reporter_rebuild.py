@@ -118,6 +118,21 @@ def test_rebuilt_accident_letter_picks_up_the_edited_description(fleet_env: Flee
     assert book.versions[-1].fields["description"] == "اصطدام بالبوابة الشرقية"
 
 
+def test_rebuild_refuses_an_accident_report_edited_to_english_only(fleet_env: FleetEnv) -> None:
+    # Reports may be filed in one language; the Arabic letter still needs both.
+    env = fleet_env
+    letter = _returned(env, accident_letter(env, env.reporter))
+    env.accident.description_ar = None
+    env.accident.description_en = "Hit the east gate"
+    env.db.commit()
+
+    response = _rebuild(env, letter)
+
+    _assert_error(response, 422, "ACCIDENT_ARABIC_REQUIRED")
+    assert response.json()["error"]["details"]["missing"] == ["description_ar"]
+    assert len(env.book(letter.id).versions) == 1
+
+
 def test_rebuilt_accident_letter_keeps_its_issue_date(fleet_env: FleetEnv) -> None:
     env = fleet_env
     letter = _returned(env, accident_letter(env, env.reporter))

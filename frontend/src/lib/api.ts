@@ -1167,6 +1167,7 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   NOT_LINE_MANAGER_STAGE: 'errors.fleet.notLineManagerStage',
   NOT_A_VEHICLE_LETTER: 'errors.fleet.notAVehicleLetter',
   LETTER_SOURCE_CHANGED: 'errors.fleet.letterSourceChanged',
+  ACCIDENT_ARABIC_REQUIRED: 'vehicles.arabicRequired',
   SCOPED_ROLE_CHAIN_AUTHOR_ONLY: 'errors.fleet.chainAuthorOnly',
   SCOPED_ROLE_FOLDERS_FORBIDDEN: 'errors.fleet.foldersForbidden',
   ACCIDENT_LETTER_NOT_VISIBLE: 'errors.fleet.accidentLetterNotVisible',

@@ -465,7 +465,6 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
-  ACCIDENT_ARABIC_REQUIRED: 'vehicles.arabicRequired',
   MAINTENANCE_CONTRACTOR_MISSING: 'vehicles.maintenanceContractorRequired',
   MAINTENANCE_REQUEST_NOT_OPEN: 'vehicles.maintenanceRequestNotOpen',
   ODOMETER_CLOSING_BELOW_OPENING: 'vehicles.odometerClosingBelowOpening',

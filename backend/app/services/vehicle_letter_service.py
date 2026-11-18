@@ -196,23 +196,7 @@ def generate_accident_letter(
             accident.location_ar = arabic.location_ar
         if arabic.description_ar is not None:
             accident.description_ar = arabic.description_ar
-    if not accident.location_ar or not accident.description_ar:
-        missing = [
-            name
-            for name, value in (
-                ("location_ar", accident.location_ar),
-                ("description_ar", accident.description_ar),
-            )
-            if not value
-        ]
-        db.rollback()
-        raise ValidationFailedError(
-            "ACCIDENT_ARABIC_REQUIRED",
-            "The official letter needs the Arabic location and description.",
-            accident_id=accident_id,
-            missing=missing,
-        )
-    fields = _accident_fields(vehicle, accident, today=date.today())
+    fields = _accident_fields(db, vehicle, accident, today=date.today())
     generated = document_service.generate_document(
         db,
         employee_id=None,
@@ -311,7 +295,28 @@ def _fines_fields(
     )
 
 
-def _accident_fields(vehicle: Vehicle, accident: VehicleAccident, *, today: date) -> dict[str, Any]:
+def _accident_fields(
+    db: Session, vehicle: Vehicle, accident: VehicleAccident, *, today: date
+) -> dict[str, Any]:
+    """The letter's fields; the Arabic letter is refused while the report lacks
+    its Arabic location or description (a report may be filed in English only).
+    """
+    location_ar, description_ar = accident.location_ar, accident.description_ar
+    if not location_ar or not description_ar:
+        accident_id = accident.id
+        missing = [
+            name
+            for name, value in (("location_ar", location_ar), ("description_ar", description_ar))
+            if not value
+        ]
+        # Nothing a refused letter brought (its Arabic wording) is stored.
+        db.rollback()
+        raise ValidationFailedError(
+            "ACCIDENT_ARABIC_REQUIRED",
+            "The official letter needs the Arabic location and description.",
+            accident_id=accident_id,
+            missing=missing,
+        )
     employee = accident.employee
     employee_label = None
     if employee is not None:
@@ -324,10 +329,10 @@ def _accident_fields(vehicle: Vehicle, accident: VehicleAccident, *, today: date
         date=accident.date,
         time=accident.time,
         employee_label=employee_label,
-        location_ar=accident.location_ar,
+        location_ar=location_ar,
         police_ref=accident.police_ref,
         status=accident.status,
-        description_ar=accident.description_ar,
+        description_ar=description_ar,
         today=today,
     )
 
@@ -423,7 +428,7 @@ def rebuild_vehicle_letter(db: Session, book_id: int, *, version_id: int, user: 
         if accident is None:
             raise NotFoundError("ACCIDENT_NOT_FOUND", "This letter's accident no longer exists.")
         vehicle = vehicle_service.require_active_vehicle(db, accident.vehicle_id)
-        fields = _accident_fields(vehicle, accident, today=date.today())
+        fields = _accident_fields(db, vehicle, accident, today=date.today())
     else:
         source = source or _generation_audit_source(db, book)
         report = vehicle_service.odometer_month(

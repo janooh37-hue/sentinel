@@ -57,6 +57,7 @@ describe('apiErrorMessage', () => {
     [422, 'BRANCH_APPROVER_NOT_ELIGIBLE', 'Choose an active approver other than the author and the line manager.', 'اختر معتمِدًا نشطًا غير كاتب المعاملة والمدير المباشر.'],
     [422, 'LINE_MANAGER_NOT_APPLICABLE', 'Only fleet reporter accounts have a line manager.', 'لا يُعيَّن المدير المباشر إلا لحسابات موظفي النقليات.'],
     [422, 'NOT_A_VEHICLE_LETTER', 'Only Fines, Accident and Odometer letters can be rebuilt.', 'لا يمكن إعادة إنشاء إلا خطابات المخالفات والحوادث وعداد المسافة.'],
+    [422, 'ACCIDENT_ARABIC_REQUIRED', 'Add the Arabic location and description before issuing the letter.', 'أضف الموقع والوصف بالعربية قبل إصدار الخطاب.'],
     [422, 'LINE_MANAGER_NOT_ELIGIBLE', 'Choose another active account that can approve records.', 'اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.'],
     [403, 'SCOPED_ROLE_INPUT_FORBIDDEN', "Your role can't set this option. Your approval route and signatures are set for you.", 'لا يمكن لدورك تحديد هذا الخيار؛ يُحدَّد مسار الاعتماد والتوقيعات تلقائيًا.'],
     [409, 'SCOPED_ROLE_STATE_LOCKED', 'This paper can no longer be edited. Reload to see its current state.', 'لم يعد بالإمكان تعديل هذه المعاملة. أعد التحميل لمعرفة حالتها الحالية.'],
