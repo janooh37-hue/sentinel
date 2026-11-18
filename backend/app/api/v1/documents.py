@@ -383,6 +383,11 @@ def generate_document(
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
         book_service.require_revise_access(db, user, revise_book)
+        if not payload.commit and routes_to_line_manager(user):
+            # Its revision's preview: the book only authorizes the render. The
+            # preview itself revises, files and allocates nothing.
+            payload = payload.model_copy(update={"revise_of_book_id": None})
+            revise_book = None
     else:
         book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
     # Refuse a duplicate of a live record's leave now, with its reference number,

@@ -484,7 +484,12 @@ same gate.
 `POST /documents/generate` (without `revise_of_book_id`) and the Word create answer 403
 `SCOPED_ROLE_SERVICE_FORBIDDEN`; `POST /documents/generate` accepts from it only a revision of
 its own General Book (its Report is the Word Report, its vehicle letters come from the
-vehicle services). Its General Books come from the vehicle services (the
+vehicle services). The revision's preview (`commit=false`) carries the same
+`revise_of_book_id` as an authorization context only: the route runs
+`book_service.require_revise_access` for that book, then renders the preview without it,
+so nothing is revised, filed or numbered (every other role still gets
+`REVISE_REQUIRES_COMMIT` for a revise preview). The Services form revises it through the
+editor path (preview, then save), never the Word create. Its General Books come from the vehicle services (the
 maintenance request, 11/1, addressed to the contractor), which is why the role keeps
 `books.service.General Book`; it may revise its own returned ones. Its Report is always
 addressed to its line manager: the server writes the name after «السيد»

@@ -261,13 +261,17 @@ function StandardApplicationPage(): React.JSX.Element {
   const [groupId, setGroupId] = useSearchParam('group', { push: true })
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
-  const [classificationCode, setClassificationCode] = useState<string | null>(null)
+  const [pickedClassificationCode, setClassificationCode] = useState<string | null>(null)
   // Record level (عام/شخصي/سري/موجه) picked at creation; a revision keeps the
   // book's level, so revise mode neither shows nor sends it.
   const [confidentiality, setConfidentiality] = useState<Confidentiality>('general')
   // General Book plain-path body-mode toggle (M5-1: editor hidden, word-only).
   // 'word' = body written in Word; kept typed so revert is one char change.
-  const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
+  const [chosenBodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
+  // A scoped author holds no Word create: its General Book revision regenerates
+  // the paper from its fields as a new version of the same book.
+  const scopedRevise = scoped && reviseBookId !== null
+  const bodyMode = scopedRevise ? 'editor' : chosenBodyMode
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
   // Per-book notify switch: the operator's choice (null = untouched) over the
@@ -473,6 +477,9 @@ function StandardApplicationPage(): React.JSX.Element {
     queryFn: () => api.getBook(reviseBookId!),
     enabled: reviseBookId !== null,
   })
+  // A scoped revision keeps its book's classification; there is no picker step.
+  const classificationCode =
+    pickedClassificationCode ?? (scopedRevise ? reviseBookQuery.data?.classification_code ?? null : null)
   // Two-stage to avoid a race: the snapshot is fetched here; the schema-gated
   // effect below applies `form.reset` only once the fields are actually
   // registered. Resetting the instant the fetch resolves silently drops values
@@ -623,8 +630,9 @@ function StandardApplicationPage(): React.JSX.Element {
       notify_employee: showNotifyEmployee ? notifyEmployeeField(notifyChoice, notifyDefault) : undefined,
       attachments: attachmentSpecs.length > 0 ? attachmentSpecs : undefined,
       // Revise mode: only the committed save regenerates a new version under
-      // the existing book's ref (the backend requires commit=True for it).
-      revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
+      // the existing book's ref (the backend requires commit=True for it). A
+      // scoped author's preview carries it too: it authorizes that preview.
+      revise_of_book_id: commit || scopedRevise ? reviseBookId ?? undefined : undefined,
       // Revise mode keeps the book's level server-side; state stays 'general' there.
       confidentiality,
       // General Book: the classification drives the classified-register ref.

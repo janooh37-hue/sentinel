@@ -15,8 +15,9 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api.v1 import documents as documents_api
 from app.core import signature as signature_core
-from app.db.models import Book, GeneralBookRecipient, Manager
+from app.db.models import Book, GeneralBookRecipient, Manager, User
 from app.services import report_service, settings_service, word_book_service
+from app.services.job_registry import get_job
 from tests.fleet_support import FleetEnv, general_book
 
 LINE_TITLE = "مدير فرع الخدمات العامة"
@@ -152,6 +153,64 @@ def test_reporter_revises_its_own_returned_general_book(env: FleetEnv) -> None:
     response = _generate_general_book(env, revise_of_book_id=book.id)
     assert response.status_code == 202, response.text
     assert len(env.book(book.id).versions) == 2
+
+
+def _returned_general_book(env: FleetEnv, author: User) -> Book:
+    book = general_book(env, author)
+    book.approval_state = "returned"
+    book.versions[-1].status = "returned"
+    env.db.commit()
+    return book
+
+
+def test_reporter_previews_the_revision_of_its_own_returned_general_book(
+    env: FleetEnv,
+) -> None:
+    book = _returned_general_book(env, env.reporter)
+    books_before = _book_count(env)
+    ref_before = book.ref_number
+
+    response = _generate_general_book(env, revise_of_book_id=book.id, commit=False)
+
+    assert response.status_code == 202, response.text
+    job = get_job(response.json()["job_id"])
+    assert job is not None and job.status == "done", job
+    assert job.book_id is None
+    # Nothing filed, revised or allocated.
+    assert _book_count(env) == books_before
+    revised = env.book(book.id)
+    assert len(revised.versions) == 1
+    assert (revised.ref_number, revised.approval_state) == (ref_before, "returned")
+
+
+@pytest.mark.parametrize(
+    ("case", "status", "code"),
+    [
+        ("other_author", 403, "SCOPED_ROLE_NOT_OWNER"),
+        ("pending", 409, "SCOPED_ROLE_STATE_LOCKED"),
+        ("no_book", 403, "SCOPED_ROLE_SERVICE_FORBIDDEN"),
+    ],
+)
+def test_reporter_revision_preview_needs_its_own_returned_book(
+    env: FleetEnv, case: str, status: int, code: str
+) -> None:
+    book = _returned_general_book(
+        env, env.other_reporter if case == "other_author" else env.reporter
+    )
+    if case == "pending":
+        book.approval_state = "pending"
+        env.db.commit()
+    books_before = _book_count(env)
+    extra: dict[str, object] = {"commit": False}
+    if case != "no_book":
+        extra["revise_of_book_id"] = book.id
+
+    response = _generate_general_book(env, **extra)
+
+    assert response.status_code == status, response.text
+    assert response.json()["error"]["code"] == code
+    assert _book_count(env) == books_before
+    assert len(env.book(book.id).versions) == 1
 
 
 def test_reporter_still_files_a_maintenance_request(env: FleetEnv) -> None:
