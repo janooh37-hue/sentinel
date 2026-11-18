@@ -35,7 +35,8 @@ from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.roles import FLEET_REPORTER_ROLE, INMATE_REPORTER_ROLE
+from app.core.scoped_roles import is_scoped_role
 from app.db.models import (
     Book,
     BookEditSession,
@@ -67,6 +68,7 @@ from app.schemas.book import (
     BookFolderShareOptions,
     BookFolderSharesUpdate,
     BookFolderUpdate,
+    BookForwardToBranchRequest,
     BookInboxRead,
     BookLinkCreate,
     BookListResponse,
@@ -99,6 +101,7 @@ from app.schemas.book import (
     ScanBackResult,
     ServiceFacetRead,
     TemplateSessionRead,
+    VehicleLetterRebuildRequest,
     WordBookCreate,
     WordSaveStatusRead,
     WordSessionDetailRead,
@@ -117,6 +120,7 @@ from app.services import (
     perm_service,
     scan_inbox_service,
     scan_triage_service,
+    vehicle_letter_service,
     word_book_service,
 )
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
@@ -346,6 +350,73 @@ def delete_word_template(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+def _create_fleet_word_report(
+    db: Session, user: User, payload: WordBookCreate
+) -> word_book_service.WordSessionInfo:
+    """A fleet reporter's author-signed Report, addressed to its line manager.
+
+    The role starts no General Book of its own: the vehicle services (the
+    maintenance request) write those for it.
+    """
+    if user.employee_id is None:
+        raise AppError(
+            "SCOPED_ROLE_EMPLOYEE_REQUIRED",
+            "Your account has no linked employee record yet.",
+            http_status=409,
+        )
+    if payload.manager_id is not None:
+        raise AppError(
+            "SCOPED_ROLE_INPUT_FORBIDDEN",
+            "This role cannot choose the signing manager; it is assigned at submit.",
+            http_status=403,
+        )
+    if payload.signer_employee_id is None:
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role writes General Books only through the vehicle services.",
+            http_status=403,
+        )
+    if payload.signer_employee_id != user.employee_id:
+        raise AppError(
+            "SCOPED_ROLE_IDENTITY_MISMATCH",
+            "The signer must be the employee linked to your account.",
+            http_status=403,
+        )
+    if (
+        payload.recipient_id is not None
+        or payload.classification_code not in (None, "")
+        or payload.cc
+        or payload.template_name not in (None, "")
+        or payload.table_rows
+    ):
+        raise AppError(
+            "SCOPED_ROLE_INPUT_FORBIDDEN",
+            "This role's Report goes to its line manager, with no other options.",
+            http_status=403,
+        )
+    from app.services import report_service
+
+    _name, _title, signature = report_service._resolve_signer(db, user.employee_id)
+    if signature is None:
+        raise AppError(
+            "SIGNATURE_REQUIRED", "Save your signature before creating a Report.", http_status=409
+        )
+    _require_record_type_access(db, user, category_id="GS", service_id="Report")
+    return word_book_service.create_report_word_book(
+        db,
+        user=user,
+        signer_employee_id=user.employee_id,
+        recipient_id=None,
+        recipient_name=book_service.line_manager_addressee(db, user),
+        subject=payload.subject,
+        date=payload.date,
+        sign=True,
+        confidentiality=payload.confidentiality,
+        attachments=payload.attachments,
+        record_access_user=user,
+    )
+
+
 @router.post("/word-sessions", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED)
 def create_word_session(
     payload: WordBookCreate,
@@ -402,6 +473,8 @@ def create_word_session(
             attachments=payload.attachments,
             record_access_user=user,
         )
+    elif user.role == FLEET_REPORTER_ROLE:
+        info = _create_fleet_word_report(db, user, payload)
     else:
         _require_word_capability(db, user, "books.create")
         _require_word_capability(db, user, "books.view")
@@ -541,8 +614,8 @@ def derive_book(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionRead:
-    if user.role == INMATE_REPORTER_ROLE:
-        raise AppError("FORBIDDEN", "Inmate reporters cannot derive records.", http_status=403)
+    if is_scoped_role(user):
+        raise AppError("FORBIDDEN", "This role cannot derive records.", http_status=403)
     original = _require_full_book(db, user, book_id)
     level = payload.confidentiality or original.confidentiality
     book_service.require_confidentiality_clearance(db, user, level)
@@ -614,8 +687,8 @@ def finish_word_session(
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
     """Finish the active Word editing session."""
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -629,8 +702,8 @@ def get_word_session(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionDetailRead:
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -644,8 +717,8 @@ def word_session_status(
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSaveStatusRead:
     """Small poll for Word saves; avoid rebuilding the full Record every second."""
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -669,8 +742,8 @@ def word_session_preview(
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     """PDF preview of the active Word session."""
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
@@ -702,8 +775,8 @@ def reopen_word_session(
     user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionRead:
     """Re-open a finished book for Word editing."""
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -728,8 +801,8 @@ def discard_word_session(
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
     """Discard the active Word editing session."""
-    if user.role == INMATE_REPORTER_ROLE:
-        book_service.require_inmate_report_word_access(db, user, book_id)
+    if is_scoped_role(user):
+        book_service.require_scoped_word_access(db, user, book_id)
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id, write=True)
@@ -1474,7 +1547,7 @@ def _action_flags(
     row: Book,
     user: User,
     selected: BookVersion | None,
-) -> tuple[bool, bool, str | None]:
+) -> tuple[bool, bool, str | None, bool]:
     current = max(row.versions, key=lambda item: item.version_no, default=None)
     if (
         selected is None
@@ -1483,7 +1556,7 @@ def _action_flags(
         or row.deleted_at is not None
         or row.voided_at is not None
     ):
-        return False, False, None
+        return False, False, None, False
     pending = [
         step
         for step in selected.approval_steps
@@ -1501,7 +1574,8 @@ def _action_flags(
         row.approval_state in ("pending", "approved", "returned", "rejected") and reviewer_pending
     )
     your_step_kind = book_service.your_step_kind(row, user.id)
-    return can_sign, can_review, your_step_kind
+    can_forward = can_sign and book_service.is_line_manager_assignee(row, user.id)
+    return can_sign, can_review, your_step_kind, can_forward
 
 
 def _build_scoped_book_response(
@@ -1527,7 +1601,7 @@ def _build_scoped_book_response(
     )
     versions = _build_versions(db, row, version_ids=allowed_version_ids, names_ar_by_id=names_ar)
     selected_read = next(version for version in versions if version.id == selected.id)
-    can_sign, can_review, your_step_kind = _action_flags(db, row, user, selected)
+    can_sign, can_review, your_step_kind, can_forward = _action_flags(db, row, user, selected)
     return BookRead(
         id=row.id,
         ref_number=row.ref_number,
@@ -1547,6 +1621,7 @@ def _build_scoped_book_response(
         selected_version_id=selected.id,
         can_sign=can_sign,
         can_review=can_review,
+        can_forward_to_branch=can_forward,
         classification_code=None,
         voided_at=None,
         is_draft=False,
@@ -1592,15 +1667,23 @@ def _build_scoped_book_response(
     )
 
 
-def _project_inmate_reporter_book(item: BookRead, allowed_version_ids: frozenset[int]) -> BookRead:
-    """Limit reporter projections to current revisions and self-service actions."""
+def _project_scoped_book(
+    item: BookRead, user: User, allowed_version_ids: frozenset[int]
+) -> BookRead:
+    """Limit scoped-role projections to current revisions and self-service actions.
+
+    The Word session stays visible only on the role's own editable Word papers:
+    Reports, plus General Books for a fleet reporter.
+    """
     item.can_sign = False
     item.can_review = False
+    item.can_forward_to_branch = False
     item.your_step_kind = None
+    word_paper = item.ref_number.startswith("REPORT-") or (
+        user.role == FLEET_REPORTER_ROLE and item.classification_code is not None
+    )
     if not (
-        item.ref_number.startswith("REPORT-")
-        and item.category_id == "GS"
-        and item.approval_state in ("none", "returned")
+        word_paper and item.category_id == "GS" and item.approval_state in ("none", "returned")
     ):
         item.edit_session = None
     if item.versions:
@@ -1640,13 +1723,20 @@ def _build_book_response(
             item = BookRead.model_validate(row)
             item.subject = book_service.derive_subject(row)
             item = _enrich_path_fields(item, row, db, fill_draft=False)
-        can_sign, can_review, your_step_kind = _action_flags(db, row, user, selected)
+        can_sign, can_review, your_step_kind, can_forward = _action_flags(db, row, user, selected)
         item.access_scope = "full"
         item.selected_version_id = access.selected_version_id
         item.can_sign = can_sign
         item.can_review = can_review
+        item.can_forward_to_branch = can_forward
+        item.can_rebuild_vehicle_letter = (
+            selected_is_current
+            and perm_service.has_capability(db, user, "vehicles.edit")
+            and perm_service.has_capability(db, user, "books.submit")
+            and book_service.vehicle_letter_rebuild_refusal(db, user, row) is None
+        )
         item.your_step_kind = your_step_kind
-        item.can_send = user.role != INMATE_REPORTER_ROLE
+        item.can_send = not is_scoped_role(user)
         try:
             book_service.require_full_book_access(db, user, row, write=True)
         except AppError:
@@ -1656,8 +1746,8 @@ def _build_book_response(
         item.can_change_confidentiality = book_send_service.can_change_confidentiality(user, row)
         if detail:
             item.my_inbox = book_send_service.my_inbox(db, user.id, [row.id]).get(row.id)
-        if user.role == INMATE_REPORTER_ROLE:
-            item = _project_inmate_reporter_book(item, access.allowed_version_ids)
+        if is_scoped_role(user):
+            item = _project_scoped_book(item, user, access.allowed_version_ids)
         return item
 
     if selected is None:
@@ -2086,6 +2176,53 @@ def sign_book(
     )
 
 
+@router.post("/{book_id}/forward-to-branch", response_model=BookRead)
+def forward_to_branch(
+    book_id: int,
+    payload: BookForwardToBranchRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.approve"))],
+) -> BookRead:
+    """The pending line manager approves their stage unsigned and hands the
+    paper to a branch manager, who finishes the chain."""
+    row = book_service.forward_to_branch(
+        db,
+        book_id,
+        user_id=user.id,
+        version_id=payload.version_id,
+        branch_approver_user_id=payload.branch_approver_user_id,
+        note=payload.note,
+    )
+    return _build_book_response(db, row, user, version_id=payload.version_id)
+
+
+@router.post("/{book_id}/rebuild-vehicle-letter", response_model=BookRead)
+def rebuild_vehicle_letter(
+    book_id: int,
+    payload: VehicleLetterRebuildRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    _submitter: Annotated[User, Depends(require_capability("books.submit"))],
+) -> BookRead:
+    """The fleet author regenerates a returned (or unsubmitted) vehicle letter from
+    current fleet data as a new revision, ready to submit again."""
+    row = vehicle_letter_service.rebuild_vehicle_letter(
+        db, book_id, version_id=payload.version_id, user=user
+    )
+    return _build_book_response(db, row, user)
+
+
+@router.get("/{book_id}/branch-candidates", response_model=list[ApproverOptionRead])
+def list_branch_candidates(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.approve"))],
+) -> list[ApproverOptionRead]:
+    """Accounts the pending line manager may forward to: active approvers other
+    than the author and the line manager."""
+    return book_service.branch_candidates(db, book_id, user_id=user.id)
+
+
 @router.post("/{book_id}/reject", response_model=BookRead)
 def reject_step(
     book_id: int,
@@ -2489,7 +2626,7 @@ def get_imported_document(
     stored file (e.g. the .docx when no PDF rendition exists).
     """
     book = _require_full_book(db, user, book_id)
-    if user.role == INMATE_REPORTER_ROLE and format != "pdf":
+    if is_scoped_role(user) and format != "pdf":
         raise AppError("FORBIDDEN", "This role can only view the PDF copy.", http_status=403)
     abs_path = book_service.resolve_imported_file(book, prefer=format)
     if abs_path is None:

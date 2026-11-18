@@ -30,7 +30,7 @@ import { useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ExternalLink, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 
 import { Field, FieldGrid, FormAlert } from '@/components/forms/DialogShell'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
@@ -58,6 +58,7 @@ import { PlateChip } from './components/PlateChip'
 import { RequestPaperLabel, RequestSection } from './components/RequestShell'
 import { ServiceBand } from './components/ServiceLayout'
 import { BAND_BUTTON, SERVICE_WRAP } from './components/serviceStyles'
+import { VehicleRecordLink } from './components/VehicleRecordLink'
 
 /** What the reference line shows before the book exists. The real ref
  *  (`VA-0232`) is minted server-side and announced in the save toast. */
@@ -181,10 +182,10 @@ function AccidentLetter(): React.JSX.Element {
           actions={
             filedBookId != null ? (
               // Already filed: the destination is the record, not a second book.
-              <Link to={`/books/${filedBookId}`} className={BAND_BUTTON}>
+              <VehicleRecordLink bookId={filedBookId} fallback={<bdi dir="ltr">#{filedBookId}</bdi>} className={BAND_BUTTON}>
                 <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                 {t('vehicles.openLetter')}
-              </Link>
+              </VehicleRecordLink>
             ) : null
           }
         />
@@ -322,13 +323,14 @@ function AccidentLetter(): React.JSX.Element {
                   </div>
                 )}
                 {filedBookId != null && (
-                  <Link
-                    to={`/books/${filedBookId}`}
+                  <VehicleRecordLink
+                    bookId={filedBookId}
+                    fallback={<bdi dir="ltr">#{filedBookId}</bdi>}
                     className={cn(buttonVariants({ variant: 'secondary' }), 'self-end')}
                   >
                     <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                     {t('vehicles.openLetter')}
-                  </Link>
+                  </VehicleRecordLink>
                 )}
               </div>
             </form>

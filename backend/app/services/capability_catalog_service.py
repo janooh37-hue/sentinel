@@ -19,9 +19,15 @@ from app.core.permissions import (
     Capability,
 )
 from app.core.record_categories import SERVICE_RECORD_CATEGORY
-from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.scoped_roles import SCOPED_ROLES
 
-_ROLE_ORDER: Final[tuple[str, ...]] = ("operator", "manager", "admin", "inmate_reporter")
+_ROLE_ORDER: Final[tuple[str, ...]] = (
+    "operator",
+    "manager",
+    "admin",
+    "inmate_reporter",
+    "fleet_reporter",
+)
 _SERVICE_IDS: Final[tuple[str, ...]] = (*SERVICE_IDS, OTHER_SERVICE_ID)
 
 
@@ -76,15 +82,16 @@ def _service_names(service_id: str) -> tuple[str, str | None]:
 
 def _dynamic_default_roles(capability_id: str) -> tuple[str, ...]:
     """Mirror implicit service/category grants, including opt-in HR forms and
-    the inmate reporter's fixed service ceiling."""
+    each scoped role's fixed service ceiling."""
     service_id = capability_id.removeprefix(SERVICE_CAP_PREFIX).removeprefix(
         SERVICE_RECORDS_CAP_PREFIX
     )
     roles: tuple[str, ...] = (
         ("admin",) if service_id in OPT_IN_SERVICE_IDS else ("operator", "manager", "admin")
     )
-    if capability_id in ROLE_DEFAULTS.get(INMATE_REPORTER_ROLE, frozenset()):
-        roles = (*roles, INMATE_REPORTER_ROLE)
+    for role in _ROLE_ORDER:
+        if role in SCOPED_ROLES and capability_id in ROLE_DEFAULTS.get(role, frozenset()):
+            roles = (*roles, role)
     return roles
 
 

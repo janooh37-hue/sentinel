@@ -17,10 +17,11 @@ import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/she
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
+import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
 
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
-import { INMATE_REPORTER_ALLOWED_DESTINATIONS, NAV_ITEMS } from './navItems'
+import { NAV_ITEMS } from './navItems'
 import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
 import { useChromePrefs } from './useChromePrefs'
@@ -40,10 +41,12 @@ export function NavDrawer({ open, onOpenChange, returnFocusRef }: NavDrawerProps
   const { t } = useTranslation()
   const user = useContext(AuthContext)?.user ?? null
   const { has } = useCapabilities()
-  const isInmateReporter = user?.role === 'inmate_reporter'
-  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(isInmateReporter)
-  const navItems = isInmateReporter
-    ? NAV_ITEMS.filter(({ to }) => INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(to as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]))
+  const role = scopedRoleOf(user)
+  const scoped = role !== null
+  const isInmateReporter = role === 'inmate_reporter'
+  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(scoped)
+  const navItems = role
+    ? NAV_ITEMS.filter(({ to }) => scopedDestinations(role, has).includes(to))
     : NAV_ITEMS
 
   const close = (): void => onOpenChange(false)
@@ -124,7 +127,7 @@ export function NavDrawer({ open, onOpenChange, returnFocusRef }: NavDrawerProps
         </nav>
 
         {/* Secondary links */}
-        {!isInmateReporter ? (
+        {!scoped ? (
           <div className="flex flex-col gap-0.5 border-t border-border px-3 py-3 @max-[200px]:px-1.5">
             {has('settings.view') && (
               <NavLink

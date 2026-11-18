@@ -16,8 +16,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
     api: {
       ...mod.api,
       createVehicleMaintenanceRequest: vi.fn(),
-      lookupEmployees: vi.fn(),
-      getEmployeeLookup: vi.fn(),
+      searchVehicleEmployees: vi.fn(),
+      getVehicleEmployee: vi.fn(),
     },
   }
 })
@@ -42,8 +42,8 @@ const previousMaintenance: VehicleMaintenanceRead = {
 beforeEach(async () => {
   vi.clearAllMocks()
   await i18n.changeLanguage('en')
-  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [employee], total: 1, limit: 50, offset: 0 } as never)
-  vi.mocked(api.getEmployeeLookup).mockResolvedValue(employee as never)
+  vi.mocked(api.searchVehicleEmployees).mockResolvedValue({ items: [employee], total: 1, limit: 50, offset: 0 } as never)
+  vi.mocked(api.getVehicleEmployee).mockResolvedValue(employee as never)
   vi.mocked(api.createVehicleMaintenanceRequest).mockResolvedValue({
     request,
     letter: { book_id: 501, document_id: 701, ref_number: '11/1/GSSG/501', pdf_available: true },

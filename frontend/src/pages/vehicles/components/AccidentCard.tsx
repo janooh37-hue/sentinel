@@ -47,6 +47,7 @@ import { DamageCover, InsuranceDialog, InsuranceFacts } from './AccidentInsuranc
 import { PlateChip } from './PlateChip'
 import { VehicleFileThumb } from './VehicleFileViewer'
 import { VehicleStatusBadge } from './VehicleStatusBadge'
+import { VehicleRecordLink } from './VehicleRecordLink'
 
 interface Props {
   accident: VehicleAccidentRead
@@ -236,13 +237,14 @@ export function AccidentCard({
 
         <div className="flex flex-wrap items-center gap-2">
           {accident.letter_book_id ? (
-            <Link
-              to={`/books/${accident.letter_book_id}`}
+            <VehicleRecordLink
+              bookId={accident.letter_book_id}
+              fallback={<bdi dir="ltr">#{accident.letter_book_id}</bdi>}
               className={buttonVariants({ variant: 'secondary', size: 'sm' })}
             >
               <ExternalLink className="h-3.5 w-3.5" aria-hidden />
               {t('vehicles.openLetter')}
-            </Link>
+            </VehicleRecordLink>
           ) : (
             canEdit && (
               <Link

@@ -21,7 +21,7 @@ import type {
 import { nowHM, todayIso } from './resignationDate'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 
-import { useInmateReportSubmit, inmateReportFieldLabel, inmateReportSubmitErrorMessage, notifyInmateReportSubmitError } from '@/components/books/useInmateReportSubmit'
+import { useScopedReporterSubmit, inmateReportFieldLabel, scopedReporterSubmitErrorMessage, notifyScopedReporterSubmitError } from '@/components/books/useScopedReporterSubmit'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { JobStatus } from './JobStatus'
@@ -176,7 +176,7 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     }
   }, [])
 
-  const submitMutation = useInmateReportSubmit({
+  const submitMutation = useScopedReporterSubmit({
     onSuccess: () => {
       setSubmitted(true)
       setSubmissionIssue(null)
@@ -216,8 +216,8 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
     },
     onError: (error) => {
       submitAfterSaveRef.current = false
-      handleSubmitError(error, inmateReportSubmitErrorMessage(error, t))
-      notifyInmateReportSubmitError(error, t, i18n.language, schema, () => {
+      handleSubmitError(error, scopedReporterSubmitErrorMessage(error, t))
+      notifyScopedReporterSubmitError(error, t, i18n.language, schema, () => {
         setLastSaved(null)
         setActiveTab('fields')
       })
@@ -498,7 +498,7 @@ export function WordReportForm({ user, onBack }: { user: SessionUser; onBack: ()
   const [subject, setSubject] = useState('')
   const [date, setDate] = useState(todayIso())
   const isMobile = useIsMobile()
-  const submit = useInmateReportSubmit({
+  const submit = useScopedReporterSubmit({
     onSuccess: () => toast.success(t('application.inmateReporter.sent')),
   })
   const create = useMutation({

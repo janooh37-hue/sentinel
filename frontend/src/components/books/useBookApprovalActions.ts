@@ -20,16 +20,18 @@ interface Params {
   versionId: number | undefined
   /** A Report's "sign" only records the manager's review. */
   isReport?: boolean
-  onDecided: (act: BookDecideAction) => void
-  onSigned: () => void
+  onDecided?: (act: BookDecideAction) => void
+  onSigned?: () => void
+  onForwarded?: () => void
 }
 
 interface Actions {
   decideMutation: UseMutationResult<BookRead, unknown, { act: BookDecideAction; note?: string }>
   signMutation: UseMutationResult<BookRead, unknown, string | undefined>
+  forwardMutation: UseMutationResult<BookRead, unknown, { branchApproverUserId: number; note?: string }>
 }
 
-export function useBookApprovalActions({ bookId, versionId, isReport = false, onDecided, onSigned }: Params): Actions {
+export function useBookApprovalActions({ bookId, versionId, isReport = false, onDecided, onSigned, onForwarded }: Params): Actions {
   const { t } = useTranslation()
   const qc = useQueryClient()
 
@@ -72,7 +74,7 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
             ? 'books.approval.returned'
             : 'books.approval.noteAdded'
       toast.success(t(key), { reference: book.ref_number })
-      onDecided(act)
+      onDecided?.(act)
     },
     onError: handleMutationError,
   })
@@ -86,7 +88,7 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
       toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'), {
         reference: book.ref_number,
       })
-      onSigned()
+      onSigned?.()
     },
     onError: (err) => {
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
@@ -99,5 +101,19 @@ export function useBookApprovalActions({ bookId, versionId, isReport = false, on
     },
   })
 
-  return { decideMutation, signMutation }
+  const forwardMutation = useMutation({
+    mutationFn: ({ branchApproverUserId, note }: { branchApproverUserId: number; note?: string }) =>
+      api.forwardToBranch(bookId!, versionId!, branchApproverUserId, note),
+    onSuccess: (book) => {
+      invalidateAll()
+      toast.success(t('books.fleetReporter.forwarded'), { reference: book.ref_number })
+      onForwarded?.()
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'NOT_LINE_MANAGER_STAGE') invalidateAll()
+      handleMutationError(err)
+    },
+  })
+
+  return { decideMutation, signMutation, forwardMutation }
 }

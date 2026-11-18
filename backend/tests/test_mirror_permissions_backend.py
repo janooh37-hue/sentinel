@@ -244,13 +244,15 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
         permissions.ALL_CAPABILITIES
     )
 
-    # inmate_reporter is the one deliberate exception: its fixed-scope
-    # ceiling (core.permissions.INMATE_REPORTER_CAPS) seeds these same
-    # capability STRINGS as literal static role_permissions rows for that
-    # role only — see perm_service._role_and_dynamic_caps.
+    # Scoped roles are the deliberate exception: their fixed-scope ceilings
+    # (core.scoped_roles) seed these same capability STRINGS as literal static
+    # role_permissions rows for those roles only — see
+    # perm_service._role_and_dynamic_caps.
     seeded = set(
         db_session.scalars(
-            select(RolePermission.capability).where(RolePermission.role != INMATE_REPORTER_ROLE)
+            select(RolePermission.capability).where(
+                RolePermission.role.not_in((INMATE_REPORTER_ROLE, "fleet_reporter"))
+            )
         ).all()
     )
     assert expected_dynamic.isdisjoint(seeded)
@@ -388,6 +390,7 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         "operator",
         "manager",
         "admin",
+        "fleet_reporter",
     ]
     service_record_items = [
         item
@@ -399,11 +402,24 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
             "id": f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}",
             "domain": "books",
             "default_roles": (
-                ["operator", "manager", "admin", "inmate_reporter"]
-                if service_id in {"Inmate Conduct Violations", "Report"}
-                else ["admin"]
+                ["admin"]
                 if service_id in permissions.OPT_IN_SERVICE_IDS
-                else ["operator", "manager", "admin"]
+                else [
+                    "operator",
+                    "manager",
+                    "admin",
+                    *(
+                        ["inmate_reporter"]
+                        if service_id in {"Inmate Conduct Violations", "Report"}
+                        else []
+                    ),
+                    *(
+                        ["fleet_reporter"]
+                        if f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}"
+                        in permissions.FLEET_REPORTER_CAPS
+                        else []
+                    ),
+                ]
             ),
         }
         for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)

@@ -1910,6 +1910,11 @@ class User(Base):
     # Single-holder flag (migration 0034): the manager preselected as assignee
     # when an in_app form is submitted. Swapped via the default-manager endpoint.
     is_default_manager: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # The approving account an administrator assigns to a fleet reporter
+    # (migration 0120); not the org-tree supervisor. Their papers route here.
+    line_manager_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     # Lock-screen idle timeout; one of 30/60/120/300/900/1800 (enforced at the API edge).
     idle_lock_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1800, server_default="1800"
@@ -1918,10 +1923,11 @@ class User(Base):
     lock_layout: Mapped[str] = mapped_column(
         String(16), nullable=False, default="band", server_default="band"
     )
-    # operator | manager | admin | inmate_reporter — stored (admin-assigned),
-    # authoritative for auth. inmate_reporter is a fixed-scope role (see
-    # core.permissions.INMATE_REPORTER_CAPS) bound to one admin-linked G
-    # number; employee identity links are assigned only by administrators.
+    # operator | manager | admin | inmate_reporter | fleet_reporter — stored
+    # (admin-assigned), authoritative for auth. inmate_reporter and
+    # fleet_reporter are scoped roles with a fixed capability ceiling (see
+    # core.scoped_roles) bound to one admin-linked G number; employee identity
+    # links are assigned only by administrators.
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"
     )

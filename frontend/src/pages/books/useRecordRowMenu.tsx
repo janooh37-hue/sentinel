@@ -25,11 +25,11 @@ const icon = 'h-3.5 w-3.5'
 /** Row-menu items for a record plus the dialogs they open (render `dialogs` once on the page). */
 export function useRecordRowMenu({
   open,
-  isInmateReporter,
+  isScopedRole,
   extraItems,
 }: {
   open: (id: number) => void
-  isInmateReporter: boolean
+  isScopedRole: boolean
   /** Other features' items (Reply, Create from, Mark done, Archive …), appended last. */
   extraItems?: (book: BookRead) => RowMenuItem[]
 }): {
@@ -55,7 +55,7 @@ export function useRecordRowMenu({
   const itemsFor = (row: BookRead): RowMenuItem[] => {
     if (menuBook?.id === row.id && detail.isError) return []
     const book = target?.id === row.id ? target : row
-    const papers = papersOf(book, { inmateReporter: isInmateReporter })
+    const papers = papersOf(book, { isScopedRole })
     const mainKey = defaultPaperKey(book, papers)
     const pdf = papers.find((p) => paperKey(p) === mainKey && p.isPdf) ?? papers.find((p) => p.isPdf)
     const items: (RowMenuItem | false)[] = [
@@ -71,13 +71,13 @@ export function useRecordRowMenu({
         icon: <SquareArrowOutUpRight className={cn(icon, 'rtl:-scale-x-100')} aria-hidden />,
         onSelect: () => window.open(`/books/${book.id}`, '_blank', 'noopener'),
       },
-      book.can_send === true && {
+      !isScopedRole && book.can_send === true && {
         key: 'send',
         label: t('books.send.menu'),
         icon: <Send className={icon} aria-hidden />,
         onSelect: () => setDialog({ kind: 'send', book }),
       },
-      book.can_change_confidentiality === true && {
+      !isScopedRole && book.can_change_confidentiality === true && {
         key: 'level',
         label: t('books.confidentiality.menu'),
         icon: <Lock className={icon} aria-hidden />,

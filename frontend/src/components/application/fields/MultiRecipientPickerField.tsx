@@ -213,6 +213,7 @@ export function MultiRecipientPickerField({
                             </button>
                           ))}
                           {showAddInline && (
+                            <CapabilityGate cap="books.edit">
                             <button
                               type="button"
                               role="option"
@@ -236,6 +237,7 @@ export function MultiRecipientPickerField({
                               <span aria-hidden>+</span>
                               <span>{t('application.cc.addNew')}</span>
                             </button>
+                            </CapabilityGate>
                           )}
                         </>
                       )}

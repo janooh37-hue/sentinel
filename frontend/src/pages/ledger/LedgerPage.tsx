@@ -5,6 +5,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 
 import { BooksRoutingDesk } from './BooksRoutingDesk'
 import { LedgerOutlookShell } from './outlook/LedgerOutlookShell'
@@ -35,7 +36,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
   const canEmail = has('ledger.view')
-  const canBooks = has('books.view') && user?.role !== 'inmate_reporter'
+  const canBooks = has('books.view') && scopedRoleOf(user) === null
   const explicit = params.get('tab')
   const wantsEmail = explicit === 'email' || (explicit !== 'books' && (params.has('mail') || params.has('action')))
   const requested = wantsEmail ? 'email' : 'books'

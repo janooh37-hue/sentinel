@@ -142,3 +142,7 @@ def api_db(monkeypatch, tmp_path) -> Iterator[Session]:
     finally:
         db.close()
         engine.dispose()
+
+
+# Fleet-reporter harness (scoped role, authoring, line-manager chain).
+from tests.fleet_support import fleet_env  # noqa: E402, F401

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from datetime import date
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import AppError, ValidationFailedError
+from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.core.vehicle_letters import (
     FineLine,
     accident_letter_fields,
@@ -16,7 +18,17 @@ from app.core.vehicle_letters import (
     maintenance_request_body,
     odometer_form_fields,
 )
-from app.db.models import Book, Document, Employee, User, VehicleMaintenanceRequest
+from app.db.models import (
+    AuditLog,
+    Book,
+    Document,
+    Employee,
+    User,
+    Vehicle,
+    VehicleAccident,
+    VehicleFine,
+    VehicleMaintenanceRequest,
+)
 from app.db.repos.audit_repo import append_audit
 from app.schemas.vehicle import (
     AccidentLetterRequest,
@@ -25,6 +37,13 @@ from app.schemas.vehicle import (
     VehicleMaintenanceRequestResult,
 )
 from app.services import document_service, recipient_service, settings_service, vehicle_service
+
+#: Version field naming what a vehicle letter was generated from, so a returned
+#: letter is rebuilt from the same selection (fines: vehicle and fine ids;
+#: mileage: month and vehicles). An accident letter is found by ``letter_book_id``.
+LETTER_SOURCE_KEY = "_letter_source"
+#: Fields carrying the paper's own date; a rebuild keeps them.
+_PAPER_DATE_KEYS = ("hijri_date", "date")
 
 
 def _letter_result(
@@ -44,10 +63,10 @@ def _letter_result(
     )
 
 
-def _existing_accident_letter(
-    db: Session,
-    book_id: int,
-) -> LetterResult:
+def _existing_accident_letter(db: Session, book_id: int, user: User) -> LetterResult:
+    """The accident's linked letter, returned only to a caller who may read it."""
+    from app.services import book_service
+
     book = db.get(Book, book_id)
     if book is None or book.category_id != "VA":
         raise AppError(
@@ -55,16 +74,22 @@ def _existing_accident_letter(
             "The accident's linked vehicle accident book does not exist.",
             details={"book_id": book_id},
         )
+    try:
+        book_service.resolve_book_read_access(db, user, book)
+    except AppError as exc:
+        raise AppError(
+            "ACCIDENT_LETTER_NOT_VISIBLE",
+            "This accident already has a letter you cannot open.",
+            http_status=409,
+        ) from exc
 
-    primary = db.scalar(
-        select(Document)
-        .where(
-            Document.ref_number == book.ref_number,
-            Document.template_id == "Vehicle Accident Report",
-            Document.role == "primary",
-        )
-        .order_by(Document.id)
-        .limit(1)
+    # The current revision's paper: a rebuilt or revised letter keeps its earlier
+    # documents under the same reference as history.
+    current = book.versions[-1] if book.versions else None
+    primary = (
+        db.get(Document, current.document_id)
+        if current is not None and current.document_id is not None
+        else None
     )
     if primary is None:
         raise AppError(
@@ -103,25 +128,11 @@ def generate_fines_letter(
         )
     document_service.authorize_interactive_generation(db, user, "Vehicle Fines")
 
-    selected.sort(key=lambda fine: (fine.date, fine.id))
-    lines = [
-        FineLine(
-            seq=seq,
-            employee_name_ar=(fine.employee.name_ar if fine.employee is not None else None),
-            employee_name_en=(fine.employee.name_en if fine.employee is not None else None),
-            g_number=fine.employee.id if fine.employee is not None else None,
-            date=fine.date,
-            amount_fils=fine.amount_fils,
-            black_points=fine.black_points,
-        )
-        for seq, fine in enumerate(selected, start=1)
-    ]
-    fields = fines_letter_fields(
-        plate_label=vehicle_service.plate_label(vehicle),
-        fines=lines,
-        hide_names=hide_names,
-        today=date.today(),
-    )
+    fields = _fines_fields(vehicle, selected, hide_names=hide_names, today=date.today())
+    fields[LETTER_SOURCE_KEY] = {
+        "vehicle_id": vehicle_id,
+        "fine_ids": sorted(fine.id for fine in selected),
+    }
     generated = document_service.generate_document(
         db,
         employee_id=None,
@@ -178,7 +189,7 @@ def generate_accident_letter(
     document_service.authorize_interactive_generation(db, user, "Vehicle Accident Report")
 
     if accident.letter_book_id is not None:
-        return _existing_accident_letter(db, accident.letter_book_id)
+        return _existing_accident_letter(db, accident.letter_book_id, user)
 
     if arabic is not None:
         if arabic.location_ar is not None:
@@ -201,25 +212,7 @@ def generate_accident_letter(
             accident_id=accident_id,
             missing=missing,
         )
-
-    employee = accident.employee
-    employee_label = None
-    if employee is not None:
-        employee_label = employee.name_ar or employee.name_en
-    fields = accident_letter_fields(
-        plate_label=vehicle_service.plate_label(vehicle),
-        vehicle_type_ar=vehicle.type_ar or vehicle.type_en,
-        vin=vehicle.vin,
-        site_ar=vehicle.site.name_ar or vehicle.site.name_en,
-        date=accident.date,
-        time=accident.time,
-        employee_label=employee_label,
-        location_ar=accident.location_ar,
-        police_ref=accident.police_ref,
-        status=accident.status,
-        description_ar=accident.description_ar,
-        today=date.today(),
-    )
+    fields = _accident_fields(vehicle, accident, today=date.today())
     generated = document_service.generate_document(
         db,
         employee_id=None,
@@ -265,6 +258,7 @@ def generate_odometer_form(
             "Select at least one active vehicle to generate the monthly mileage log.",
         )
     fields = odometer_form_fields(month=month, rows=report.rows, today=date.today())
+    fields[LETTER_SOURCE_KEY] = {"month": month, "vehicle_ids": _odometer_selection(vehicle_ids)}
     generated = document_service.generate_document(
         db,
         employee_id=None,
@@ -291,6 +285,196 @@ def generate_odometer_form(
         entity_type="book",
     )
     return result
+
+
+def _fines_fields(
+    vehicle: Vehicle, fines: Sequence[VehicleFine], *, hide_names: bool, today: date
+) -> dict[str, Any]:
+    selected = sorted(fines, key=lambda fine: (fine.date, fine.id))
+    lines = [
+        FineLine(
+            seq=seq,
+            employee_name_ar=(fine.employee.name_ar if fine.employee is not None else None),
+            employee_name_en=(fine.employee.name_en if fine.employee is not None else None),
+            g_number=fine.employee.id if fine.employee is not None else None,
+            date=fine.date,
+            amount_fils=fine.amount_fils,
+            black_points=fine.black_points,
+        )
+        for seq, fine in enumerate(selected, start=1)
+    ]
+    return fines_letter_fields(
+        plate_label=vehicle_service.plate_label(vehicle),
+        fines=lines,
+        hide_names=hide_names,
+        today=today,
+    )
+
+
+def _accident_fields(vehicle: Vehicle, accident: VehicleAccident, *, today: date) -> dict[str, Any]:
+    employee = accident.employee
+    employee_label = None
+    if employee is not None:
+        employee_label = employee.name_ar or employee.name_en
+    return accident_letter_fields(
+        plate_label=vehicle_service.plate_label(vehicle),
+        vehicle_type_ar=vehicle.type_ar or vehicle.type_en,
+        vin=vehicle.vin,
+        site_ar=vehicle.site.name_ar or vehicle.site.name_en,
+        date=accident.date,
+        time=accident.time,
+        employee_label=employee_label,
+        location_ar=accident.location_ar,
+        police_ref=accident.police_ref,
+        status=accident.status,
+        description_ar=accident.description_ar,
+        today=today,
+    )
+
+
+def _odometer_selection(vehicle_ids: Sequence[int] | None) -> list[int] | None:
+    return sorted(vehicle_ids) if vehicle_ids is not None else None
+
+
+def _generation_audit_source(db: Session, book: Book) -> dict[str, Any]:
+    """The selection recorded by the ``letter.generated`` audit of a letter filed
+    before its version stored ``LETTER_SOURCE_KEY``."""
+    rows = db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.action == "letter.generated",
+            AuditLog.payload.like(f'%"book_id": {book.id}%'),
+        )
+        .order_by(AuditLog.id.desc())
+    )
+    for row in rows:
+        payload = json.loads(row.payload) if row.payload else {}
+        if payload.get("book_id") != book.id:
+            continue
+        if "fine_ids" in payload:
+            return {
+                "vehicle_id": int(str(row.entity_id)),
+                "fine_ids": sorted(payload["fine_ids"]),
+                "hide_names": bool(payload.get("hide_names")),
+            }
+        if "month" in payload:
+            # A legacy log names the vehicles that had rows, not the request.
+            return {"month": payload["month"], "vehicle_ids": payload.get("vehicle_ids")}
+    raise AppError(
+        "LETTER_SOURCE_CHANGED",
+        "The data this letter was generated from can no longer be found.",
+        http_status=409,
+    )
+
+
+def _rebuilt_fines_fields(
+    db: Session, source: dict[str, Any], *, hide_names: bool
+) -> dict[str, Any]:
+    vehicle = vehicle_service.require_active_vehicle(db, int(source["vehicle_id"]))
+    fine_ids = [int(fine_id) for fine_id in source["fine_ids"]]
+    fines = {
+        fine.id: fine
+        for fine in db.scalars(select(VehicleFine).where(VehicleFine.id.in_(fine_ids)))
+    }
+    missing = sorted(
+        fine_id
+        for fine_id in fine_ids
+        if fine_id not in fines
+        or fines[fine_id].archived_at is not None
+        or fines[fine_id].vehicle_id != vehicle.id
+    )
+    if missing:
+        raise AppError(
+            "LETTER_SOURCE_CHANGED",
+            "A fine on this letter was removed, archived or moved to another vehicle.",
+            http_status=409,
+            details={"fine_ids": missing},
+        )
+    return _fines_fields(vehicle, list(fines.values()), hide_names=hide_names, today=date.today())
+
+
+def rebuild_vehicle_letter(db: Session, book_id: int, *, version_id: int, user: User) -> Book:
+    """Regenerate a returned (or unsubmitted) fleet vehicle letter from current fleet
+    data as a new revision under the same reference and paper date.
+
+    Goes through the ordinary revise path, so earlier steps and retained revision
+    access stay with the previous revision, and the paper returns to ``none``.
+    """
+    from app.services import book_service
+
+    book = book_service.get_book(db, book_id)
+    refusal = book_service.vehicle_letter_rebuild_refusal(db, user, book)
+    if refusal is not None:
+        raise refusal
+    previous = book_service._require_current_revision(db, book, version_id)
+    template_id = previous.template_id or ""
+    stored: dict[str, Any] = dict(previous.fields or {})
+    stored_source = stored.get(LETTER_SOURCE_KEY)
+    source: dict[str, Any] | None = stored_source if isinstance(stored_source, dict) else None
+    classification_code: str | None = None
+    if template_id == "Vehicle Fines":
+        source = source or _generation_audit_source(db, book)
+        fields = _rebuilt_fines_fields(db, source, hide_names=bool(stored.get("hide_names")))
+        source = {"vehicle_id": source["vehicle_id"], "fine_ids": sorted(source["fine_ids"])}
+    elif template_id == "Vehicle Accident Report":
+        accident = db.scalar(
+            select(VehicleAccident).where(VehicleAccident.letter_book_id == book.id)
+        )
+        if accident is None:
+            raise NotFoundError("ACCIDENT_NOT_FOUND", "This letter's accident no longer exists.")
+        vehicle = vehicle_service.require_active_vehicle(db, accident.vehicle_id)
+        fields = _accident_fields(vehicle, accident, today=date.today())
+    else:
+        source = source or _generation_audit_source(db, book)
+        report = vehicle_service.odometer_month(
+            db, source["month"], vehicle_ids=source.get("vehicle_ids")
+        )
+        if not report.rows:
+            raise ValidationFailedError(
+                "ODOMETER_NO_VEHICLES",
+                "Select at least one active vehicle to generate the monthly mileage log.",
+            )
+        fields = odometer_form_fields(month=source["month"], rows=report.rows, today=date.today())
+        classification_code = "11/1"
+    if source is not None:
+        fields[LETTER_SOURCE_KEY] = source
+    for key in _PAPER_DATE_KEYS:
+        if key in stored and key in fields:
+            fields[key] = stored[key]
+    if template_id != "Vehicle Mileage Log":
+        # The fines and accident papers print their Gregorian issue date as
+        # ``today``, which the renderer would otherwise fill with the rebuild day.
+        fields["today"] = book.created_at.strftime("%d/%m/%Y")
+    document_service.authorize_interactive_generation(
+        db, user, template_id, classification_code=classification_code
+    )
+    document_service.generate_document(
+        db,
+        employee_id=None,
+        template_id=template_id,
+        fields=fields,
+        commit=True,
+        current_user=user,
+        record_access_user=user,
+        revise_of_book_id=book.id,
+    )
+    db.refresh(book)
+    rebuilt = book.versions[-1]
+    append_audit(
+        db,
+        action="letter.rebuilt",
+        entity_type="book",
+        entity_id=book.id,
+        actor=user.email,
+        payload={
+            "template_id": template_id,
+            "ref_number": book.ref_number,
+            "old_version_id": previous.id,
+            "new_version_id": rebuilt.id,
+        },
+    )
+    db.commit()
+    return book
 
 
 def create_maintenance_request(

@@ -32,10 +32,10 @@ const DELETABLE_STATES: Readonly<Record<string, true>> = {
  */
 export function deleteBlockReason(
   book: DeletableBook,
-  { has, isInmateReporter }: { has: (cap: string) => boolean; isInmateReporter: boolean },
+  { has, isScopedRole }: { has: (cap: string) => boolean; isScopedRole: boolean },
 ): DeleteBlockReason | null {
   if (!has('books.delete')) return 'noCapability'
-  if (isInmateReporter || book.access_scope !== 'full' || !book.can_write) return 'restricted'
+  if (isScopedRole || book.access_scope !== 'full' || !book.can_write) return 'restricted'
   if (book.voided_at || !DELETABLE_STATES[book.approval_state]) return 'inFlight'
   if (book.edit_session?.state === 'active') return 'wordSession'
   return null

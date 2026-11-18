@@ -72,6 +72,7 @@ export interface TemplateFormProps {
   classificationCode?: string | null
   /** Called when the user changes the classification picker. */
   onClassificationChange?: (code: string | null) => void
+  isClassificationAllowed?: (code: string) => boolean
   /** Body-mode toggle for the General Book.
    *  'editor' = HugeRTE (default); 'word' = body written in Word. */
   bodyMode?: 'editor' | 'word'
@@ -308,6 +309,7 @@ export function TemplateForm({
   onExtractionConsumed,
   classificationCode,
   onClassificationChange,
+  isClassificationAllowed,
   bodyMode = 'word',
   // M5-1: onBodyModeChange is intentionally NOT destructured — the editor/word
   // toggle is hidden for General Books. It stays in TemplateFormProps so callers
@@ -599,6 +601,7 @@ export function TemplateForm({
             required
             value={classificationCode}
             onChange={onClassificationChange}
+            isAllowed={isClassificationAllowed}
           />
           {/* The "body is written in Word" note lives on the submit row only —
               it used to render here TOO, saying the same thing twice. */}

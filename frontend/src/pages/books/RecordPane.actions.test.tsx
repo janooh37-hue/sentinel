@@ -26,7 +26,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => gates.caps.has(cap) || gates.caps.has('*') }),
 }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: gates.role } }) }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: gates.role, scoped_role: gates.role === 'inmate_reporter' || gates.role === 'fleet_reporter' ? gates.role : null } }) }))
 vi.mock('./RecordDeleteProvider', () => ({
   useRecordDelete: () => ({ scheduleDelete, pendingIds: new Set<number>() }),
 }))
@@ -99,6 +99,17 @@ describe('RecordPane footer', () => {
     expect(await screen.findByRole('button', { name: 'Send for approval' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue editing' })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open full record' })).toHaveAttribute('href', '/books/1')
+  })
+
+  it('offers Rebuild beside Send on the fleet author’s unsubmitted vehicle letter', async () => {
+    gates.role = 'fleet_reporter'
+    gates.caps = new Set(['books.view', 'books.submit', 'documents.generate', 'vehicles.edit'])
+    renderPane(makeBook({
+      service_id: 'Vehicle Fines', can_rebuild_vehicle_letter: true, original_creator_user_id: 7,
+    }))
+    expect(await screen.findByRole('button', { name: 'Rebuild letter' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Send for approval' })).toBeInTheDocument()
+    expect(screen.getByText('Correct the fine or accident in the fleet hub first, then rebuild.')).toBeInTheDocument()
   })
 
   it('shows who created the record, with the G-number from the detail (list rows carry none)', async () => {

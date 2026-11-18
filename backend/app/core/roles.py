@@ -16,10 +16,14 @@ from app.db.models import Employee
 ADMIN_ROLE: Final[str] = "admin"
 MANAGER_ROLE: Final[str] = "manager"
 OPERATOR_ROLE: Final[str] = "operator"
-# Stored-only role (never derived): an administrator explicitly assigns it.
-# Scoped to filing/tracking Inmate Conduct Violations reports under a fixed,
-# admin-bound G number — see core.permissions.INMATE_REPORTER_CAPS.
+# Stored-only roles (never derived): an administrator explicitly assigns them.
+# Both are scoped roles with a fixed capability ceiling; see core.scoped_roles.
+# inmate_reporter files/tracks Inmate Conduct Violations reports under a fixed,
+# admin-bound G number (core.permissions.INMATE_REPORTER_CAPS).
 INMATE_REPORTER_ROLE: Final[str] = "inmate_reporter"
+# fleet_reporter runs the fleet hub and authors vehicle papers under their own
+# name (core.permissions.FLEET_REPORTER_CAPS), routed to an admin-set line manager.
+FLEET_REPORTER_ROLE: Final[str] = "fleet_reporter"
 
 # Substrings that mark an employee as a manager. Casefold comparison.
 _MANAGER_TOKENS: Final[tuple[str, ...]] = (
@@ -48,6 +52,7 @@ def derive_role(employee: Employee, admin_employee_id: str | None) -> str:
 
 __all__ = [
     "ADMIN_ROLE",
+    "FLEET_REPORTER_ROLE",
     "INMATE_REPORTER_ROLE",
     "MANAGER_ROLE",
     "OPERATOR_ROLE",
