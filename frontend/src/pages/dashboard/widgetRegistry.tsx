@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import type { ApprovalSummaryResponse, WorkforceAccess } from '@/lib/api'
 import { hasServiceCap, hasServiceRecordsCap, type WidgetId, type WidgetSource } from '@/lib/dashboardLayout'
+import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 import { QuickActionsWidget } from './widgets/QuickActionsWidget'
 import { MyDocumentsWidget } from './widgets/MyDocumentsWidget'
 import { WaitingApprovalsWidget } from './widgets/WaitingApprovalsWidget'
@@ -17,6 +18,7 @@ import { PendingDeparturesWidget } from './widgets/PendingDeparturesWidget'
 import { ViolationMonthsWidget } from './widgets/ViolationMonthsWidget'
 import { PermitsWidget } from './widgets/PermitsWidget'
 import { WorkforcePulseWidget } from './widgets/WorkforcePulseWidget'
+import { PunchLogWidget } from './widgets/PunchLogWidget'
 import { StoreExpiringWidget } from './widgets/StoreExpiringWidget'
 import { StoreLowStockWidget } from './widgets/StoreLowStockWidget'
 import type { WidgetProps } from './widgets/types'
@@ -51,6 +53,7 @@ export const widgetRegistry: Record<WidgetId, WidgetRegistration> = {
   upcoming_leave: { titleKey: 'dashboard.widgets.upcoming_leave.title', source: 'leaves', available: leaves, Component: ReturningWidget },
   pending_departures: { titleKey: 'dashboard.widgets.pending_departures.title', source: 'employees', available: employees, Component: PendingDeparturesWidget },
   workforce_pulse: { titleKey: 'dashboard.workforcePulse.title', source: 'workforce', available: ({ has, capabilitiesLoading }) => !capabilitiesLoading && (has('workforce.self.view') || has('workforce.dashboard.view')), Component: WorkforcePulseWidget },
+  punch_log: { titleKey: 'dashboard.widgets.punch_log.title', source: 'workforce', available: ({ has, capabilitiesLoading }) => !capabilitiesLoading && canViewAttendanceRoster(has), Component: PunchLogWidget },
   violation_months: { titleKey: 'dashboard.widgets.violation_months.title', source: 'records', available: ({ has }) => has('books.view') && has('documents.generate') && hasServiceCap('Inmate Conduct Violations', has) && hasServiceRecordsCap('Inmate Conduct Violations', has), Component: ViolationMonthsWidget },
   permits: { titleKey: 'dashboard.widgets.permits.title', source: 'permits', available: ({ has }) => has('permits.view'), Component: PermitsWidget },
   quick_actions: { titleKey: 'dashboard.widgets.quickActions.title', source: 'services', available: ({ has }) => has('documents.generate') && has('books.view'), Component: QuickActionsWidget },

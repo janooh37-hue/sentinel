@@ -6,8 +6,7 @@
  *      punctuality = on-time ÷ judged, late minutes counted PAST THE GRACE,
  *      absences, unpaired days and shifts actually worked.
  *   2. The month grid renders a weekday header, one cell per calendar day, the
- *      shift letters actually worked, and the outcome colour; rest days are
- *      disabled.
+ *      verdict, In/Out times and outcome colour; rest days are disabled.
  *   3. Selecting a day renders its punch timeline with the grace band, the
  *      absence boundary and one marker per punch.
  *   4. Months the roster never covered still show the device's own sightings,
@@ -21,8 +20,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18n from 'i18next'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import ar from '@/locales/ar.json'
 
 const { getEmployeeAttendance, getEmployeeAttendanceHistory, hasCapability } = vi.hoisted(() => ({
   getEmployeeAttendance: vi.fn(),
@@ -39,12 +41,25 @@ vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: hasCapability }),
 }))
 
+// Keep this tab's tests focused on its targets and the real capability-gated
+// entry. The correction form and evidence drawer have their own suites.
+vi.mock('@/pages/employees/attendance/QuickCorrection', () => ({
+  QuickCorrection: ({ target }: { target: { caseId: number; employeeName: string; shiftCode?: string } | null }) =>
+    target ? <div role="dialog" aria-label="Quick correction">{target.employeeName} · {target.caseId} · {target.shiftCode}</div> : null,
+}))
+vi.mock('@/pages/employees/attendance/AttendanceCorrectionDrawer', () => ({
+  AttendanceCorrectionDrawer: () => null,
+}))
+
 import { AttendanceTab } from './AttendanceTab'
+
+afterEach(async () => { await i18n.changeLanguage('en') })
 
 function day(overrides: Record<string, unknown> = {}) {
   const date = (overrides.operational_date as string | undefined) ?? '2026-08-19'
   return {
     operational_date: date,
+    case_id: 101,
     shift_code: 'morning',
     scheduled_start_at: `${date}T01:00:00`,
     scheduled_end_at: `${date}T09:00:00`,
@@ -81,7 +96,7 @@ function renderTab() {
     <QueryClientProvider client={client}>
       {/* Pinned month: the grid must not depend on the wall clock. */}
       <MemoryRouter>
-        <AttendanceTab employeeId="G-9001" initialMonth="2026-08-19" />
+        <AttendanceTab employeeId="G-9001" employeeName="Ahmed Ali" initialMonth="2026-08-19" />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -126,6 +141,29 @@ beforeEach(() => {
 })
 
 describe('AttendanceTab', () => {
+  it('shows the corrected In and marks the corrected employee day', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      employee_id: 'G-9001', from_date: '2026-08-01', to_date: '2026-08-31',
+      days: [day({
+        corrected: true,
+        first_in_at: '2026-08-19T02:50:00Z',
+        punches: [
+          { occurred_at: '2026-08-19T02:58:00Z', device_name: 'Main Gate Turnstile' },
+          { occurred_at: '2026-08-19T09:06:00Z', device_name: 'Main Gate Turnstile' },
+        ],
+      })],
+    })
+    renderTab()
+    const cell = await screen.findByRole('button', { name: /2026-08-19.*Corrected.*In 06:50/ })
+    expect(within(cell).getByText(/06:50/)).toBeInTheDocument()
+    expect(cell.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+    await userEvent.click(cell)
+    const timeline = screen.getByTestId('attendance-day-timeline')
+    expect(within(timeline).getByText('06:50')).toBeInTheDocument()
+    expect(within(timeline).getByText(/Corrected/)).toBeInTheDocument()
+    expect(timeline.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+  })
+
   it('computes the widget from the month by the shared ladder', async () => {
     renderTab()
 
@@ -177,7 +215,182 @@ describe('AttendanceTab', () => {
     expect(screen.getAllByTestId('attendance-day-punch')).toHaveLength(2)
     expect(screen.getByTestId('attendance-day-grace')).toBeInTheDocument()
     // Site wall time, not UTC: 00:52Z is 04:52 in Asia/Dubai.
-    expect(screen.getByText('04:52')).toBeInTheDocument()
+    expect(within(timeline).getAllByText('04:52')).toHaveLength(2)
+  })
+
+  it('shows National Service with its own dot and excludes it from punctuality', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [
+        day(),
+        day({
+          operational_date: '2026-08-20',
+          case_id: 102,
+          presence_state: 'excused_leave',
+          leave_kind: 'national_service',
+          leave_label: 'National Service',
+          punch_count: 0,
+          punches: [],
+        }),
+      ],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    const nationalService = cells[19]
+    expect(nationalService).toHaveAttribute('data-outcome', 'national_service')
+    expect(nationalService.querySelector('[data-state="national_service"]')).toBeInTheDocument()
+    expect(within(nationalService).getByText('National Service')).toBeInTheDocument()
+    expect(nationalService).toHaveAccessibleName(/2026-08-20.*National Service.*In —.*Out —/)
+    expect(screen.getByTestId('attendance-kpi-punctuality')).toHaveTextContent('100%')
+    expect(screen.getByTestId('attendance-kpi-punctuality')).toHaveTextContent('1/1')
+  })
+
+  it('shows the leave subtype in the calendar and the day detail', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [day({
+        presence_state: 'excused_leave',
+        leave_kind: 'other',
+        leave_label: 'Hajj Leave',
+        punch_count: 0,
+        punches: [],
+      })],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(within(cells[18]).getByText('On leave · Hajj Leave')).toBeInTheDocument()
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('On leave · Hajj Leave')).toBeInTheDocument()
+    expect(cells[18].querySelector('[data-state="leave"]')).toBeInTheDocument()
+  })
+
+  it('does not pair two directionless punches into Out in the calendar or day detail', async () => {
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(cells[18]).toHaveAccessibleName(/2026-08-19.*In 04:52.*Out —/)
+    expect(cells[18]).not.toHaveAccessibleName(/Left/)
+    expect(within(cells[18]).getByText('04:52')).toBeInTheDocument()
+    expect(within(cells[18]).queryByText('13:06')).not.toBeInTheDocument()
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('In').nextElementSibling).toHaveTextContent('04:52')
+    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('—')
+    expect(within(detail).getByText(/Schedule/)).toHaveTextContent('05:00 – 13:00')
+  })
+
+  it('shows the evaluated departure in the calendar and day detail', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [day({ final_out_at: '2026-08-19T09:06:00' })],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(cells[18]).toHaveAccessibleName(/2026-08-19.*Left.*In 04:52.*Out 13:06/)
+    expect(within(cells[18]).getByText('13:06')).toBeInTheDocument()
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('13:06')
+  })
+
+  it('never substitutes the scheduled end for a missing Out', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [day({
+        punch_count: 1,
+        punches: [{ occurred_at: '2026-08-19T00:52:00Z', device_name: 'Main Gate' }],
+      })],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(cells[18]).toHaveAccessibleName(/In 04:52.*Out —/)
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('Out').nextElementSibling).toHaveTextContent('—')
+  })
+
+  it('opens the shared correction with the selected employee, date and shift', async () => {
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    await userEvent.click(cells[18])
+    const trigger = screen.getByRole('button', { name: /Correct attendance: Ahmed Ali, 2026-08-19, Morning/i })
+    await userEvent.click(trigger)
+    expect(screen.getByRole('dialog', { name: 'Quick correction' })).toHaveTextContent('Ahmed Ali · 101 · morning')
+  })
+
+  it('hides correction without its capability while retaining readable attendance', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.correct')
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    await userEvent.click(cells[18])
+    expect(screen.getByTestId('attendance-day-timeline')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Correct attendance/ })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('attendance-correct-trigger')).not.toBeInTheDocument()
+  })
+
+  it('offers a separately named correction for each case of a two-shift day', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      days: [day(), day({ case_id: 102, shift_code: 'night' })],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    await userEvent.click(cells[18])
+    expect(screen.getAllByTestId('attendance-correct-trigger')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /Correct attendance:.*Morning/i })).toBeInTheDocument()
+    const night = screen.getByRole('button', { name: /Correct attendance:.*Night/i })
+    await userEvent.click(night)
+    expect(screen.getByRole('dialog', { name: 'Quick correction' })).toHaveTextContent('102 · night')
+  })
+
+  it('names month navigation buttons and includes the shared off-day legend', async () => {
+    renderTab()
+    await screen.findByTestId('attendance-month-grid')
+    expect(screen.getByRole('button', { name: 'Previous month' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next month' })).toBeInTheDocument()
+    expect(screen.getByText('Status legend')).toBeInTheDocument()
+  })
+
+  it('does not offer a correction for a day without a case', async () => {
+    getEmployeeAttendance.mockResolvedValue({ days: [day({ case_id: null })] })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    await userEvent.click(cells[18])
+    expect(screen.getByTestId('attendance-day-timeline')).toBeInTheDocument()
+    expect(screen.queryByTestId('attendance-correct-trigger')).not.toBeInTheDocument()
+  })
+
+  it('translates state, subtype and month controls in Arabic and isolates punch times', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+    getEmployeeAttendance.mockResolvedValue({
+      days: [
+        day(),
+        day({
+          operational_date: '2026-08-20',
+          case_id: 102,
+          presence_state: 'excused_leave',
+          leave_kind: 'national_service',
+          punch_count: 0,
+          punches: [],
+        }),
+        day({
+          operational_date: '2026-08-21',
+          case_id: 103,
+          presence_state: 'excused_leave',
+          leave_kind: 'other',
+          leave_label: 'Hajj Leave',
+          punch_count: 0,
+          punches: [],
+        }),
+      ],
+    })
+    renderTab()
+    const cells = await screen.findAllByTestId('attendance-month-cell')
+    expect(screen.getByRole('button', { name: 'الشهر السابق' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'الشهر التالي' })).toBeInTheDocument()
+    expect(within(cells[19]).getByText('الخدمة الوطنية')).toBeInTheDocument()
+    expect(within(cells[20]).getByText(/إجازة حج/)).toBeInTheDocument()
+    expect(within(cells[18]).getByText('04:52')).toHaveAttribute('dir', 'ltr')
+    await userEvent.click(cells[18])
+    const detail = await screen.findByTestId('attendance-day-timeline')
+    expect(within(detail).getByText('دخول').nextElementSibling).toHaveTextContent('04:52')
+    expect(within(detail).getByText('خروج').nextElementSibling).toHaveTextContent('—')
   })
 
   it('shows the device record for a month the roster never covered', async () => {

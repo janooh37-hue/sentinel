@@ -13,6 +13,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, vi, test, expect } from 'vitest'
+import { AuthContext } from '@/lib/authContext'
 
 const { mockHasCapability } = vi.hoisted(() => ({
   mockHasCapability: vi.fn<(cap: string) => boolean>(() => true),
@@ -118,6 +119,11 @@ vi.mock('./tabs/ViolationsTab', () => ({
   ),
 }))
 vi.mock('./tabs/ActivityTab', () => ({ ActivityTab: () => null }))
+vi.mock('./tabs/AttendanceTab', () => ({
+  AttendanceTab: ({ employeeId, isSelf = false }: { employeeId: string; isSelf?: boolean }) => (
+    <div data-testid="attendance-tab" data-employee-id={employeeId} data-is-self={String(isSelf)} />
+  ),
+}))
 vi.mock('./tabs/UniformTab', () => ({ UniformTab: () => <div data-testid="uniform-tab" /> }))
 vi.mock('@/components/ui/document-viewer-dialog', () => ({
   DocumentViewerDialog: ({
@@ -165,9 +171,19 @@ const detail = {
   completeness: { filled: 10, tracked: 14 },
 }
 
-function renderPage(initialEntry = '/employees/G100', previous: string[] = []) {
+function renderPage(initialEntry = '/employees/G100', previous: string[] = [], linkedEmployeeId: string | null = null) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <AuthContext.Provider value={{
+        user: linkedEmployeeId ? {
+          id: 1, email: 'self@example.com', employee_id: linkedEmployeeId, name_en: 'Omar Ali',
+          name_ar: null, position: null, department: null, photo_url: null, role: 'operator',
+          status: 'active', is_admin: false, is_manager: false, has_signature: false,
+          idle_lock_seconds: 300, lock_layout: 'default', scoped_role: null,
+        } : null,
+        status: linkedEmployeeId ? 'authed' : 'anon',
+        login: vi.fn(), logout: vi.fn(), refetch: vi.fn(), setUser: vi.fn(),
+      }}>
       <MemoryRouter initialEntries={[...previous, initialEntry]} initialIndex={previous.length}>
         <Routes>
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
@@ -176,6 +192,7 @@ function renderPage(initialEntry = '/employees/G100', previous: string[] = []) {
         </Routes>
         <LocationProbe />
       </MemoryRouter>
+      </AuthContext.Provider>
     </QueryClientProvider>
   )
 }
@@ -265,6 +282,19 @@ test('uniform deep link with uniform.view opens the Uniform tab', async () => {
   expect(await screen.findByTestId('uniform-tab')).toBeInTheDocument()
 })
 
+
+test.each([
+  { linkedEmployeeId: 'G100', expectedSelf: 'true' },
+  { linkedEmployeeId: 'G200', expectedSelf: 'false' },
+  { linkedEmployeeId: null, expectedSelf: 'false' },
+])('attendance tab receives self identity for linked employee $linkedEmployeeId', async ({ linkedEmployeeId, expectedSelf }) => {
+  mockHasCapability.mockImplementation((cap) => cap === 'workforce.self.view')
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?tab=attendance', [], linkedEmployeeId)
+  expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'attendance')
+  expect(screen.getByTestId('attendance-tab')).toHaveAttribute('data-is-self', expectedSelf)
+  expect(screen.getByTestId('attendance-tab')).toHaveAttribute('data-employee-id', 'G100')
+})
 test('document tab callback opens and closes the shared generated-PDF viewer', async () => {
   vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
   renderPage('/employees/G100?tab=documents')

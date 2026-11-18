@@ -1,16 +1,27 @@
 import React from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>(), isLoading: false }))
+const capabilityState = vi.hoisted(() => ({
+  allowed: new Set<string>(),
+  isLoading: false,
+  revision: 0,
+  listeners: new Set<() => void>(),
+}))
 const sessionState = vi.hoisted(() => ({ scoped_role: null as 'inmate_reporter' | 'fleet_reporter' | null }))
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({
-    capabilities: capabilityState.allowed,
-    isLoading: capabilityState.isLoading,
-    has: (capability: string) => capabilityState.allowed.has(capability),
-  }),
+  useCapabilities: () => {
+    React.useSyncExternalStore((listener) => {
+      capabilityState.listeners.add(listener)
+      return () => capabilityState.listeners.delete(listener)
+    }, () => capabilityState.revision)
+    return {
+      capabilities: capabilityState.allowed,
+      isLoading: capabilityState.isLoading,
+      has: (capability: string) => capabilityState.allowed.has(capability),
+    }
+  },
 }))
 vi.mock('@/lib/api', () => ({
   api: {
@@ -127,6 +138,7 @@ import { useNotificationStream } from '@/hooks/useNotificationStream'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
+  ['/employees/attendance', ['workforce.people.view', 'workforce.attendance.review'], 'attendance-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
   ['/employees/G100/edit', ['employees.edit'], 'employee-edit-page'],
   ['/employees/G100/edit', ['employees.change_id'], 'employee-edit-page'],
@@ -210,6 +222,18 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText(pageText)).toBeVisible()
   })
+
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'denies /employees/attendance when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/employees/attendance')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('attendance-page')).not.toBeInTheDocument()
+    },
+  )
 
   it.each(['documents.generate', 'books.view'])(
     'denies /services when %s is the only granted capability',
@@ -328,12 +352,15 @@ describe('App Assets landing route', () => {
   it('waits for capabilities before choosing the Uniform-only destination', async () => {
     capabilityState.isLoading = true
     window.history.pushState({}, '', '/holdings')
-    const view = render(<App />)
+    render(<App />)
 
     expect(window.location.pathname).toBe('/holdings')
-    capabilityState.allowed = new Set(['uniform.view'])
-    capabilityState.isLoading = false
-    view.rerender(<App />)
+    act(() => {
+      capabilityState.allowed = new Set(['uniform.view'])
+      capabilityState.isLoading = false
+      capabilityState.revision += 1
+      capabilityState.listeners.forEach((listener) => listener())
+    })
 
     expect(await screen.findByText('uniform-page')).toBeVisible()
     expect(window.location.pathname).toBe('/holdings/uniform')
@@ -423,14 +450,17 @@ describe('App scoped role routes', () => {
     sessionState.scoped_role = 'fleet_reporter'
     capabilityState.isLoading = true
     window.history.pushState({}, '', '/vehicles/42')
-    const view = render(<App />)
+    render(<App />)
 
     expect(window.location.pathname).toBe('/vehicles/42')
     expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument()
     expect(screen.queryByText('vehicle-detail-page')).not.toBeInTheDocument()
-    capabilityState.allowed.add('vehicles.view')
-    capabilityState.isLoading = false
-    view.rerender(<App />)
+    act(() => {
+      capabilityState.allowed.add('vehicles.view')
+      capabilityState.isLoading = false
+      capabilityState.revision += 1
+      capabilityState.listeners.forEach((listener) => listener())
+    })
 
     expect(await screen.findByText('vehicle-detail-page')).toBeVisible()
     expect(window.location.pathname).toBe('/vehicles/42')
@@ -440,11 +470,14 @@ describe('App scoped role routes', () => {
     sessionState.scoped_role = 'fleet_reporter'
     capabilityState.isLoading = true
     window.history.pushState({}, '', '/vehicles/42')
-    const view = render(<App />)
+    render(<App />)
 
     expect(window.location.pathname).toBe('/vehicles/42')
-    capabilityState.isLoading = false
-    view.rerender(<App />)
+    act(() => {
+      capabilityState.isLoading = false
+      capabilityState.revision += 1
+      capabilityState.listeners.forEach((listener) => listener())
+    })
 
     expect(await screen.findByText('dashboard-page')).toBeVisible()
     expect(window.location.pathname).toBe('/')

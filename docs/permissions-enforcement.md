@@ -517,3 +517,29 @@ author's returned letter (primary) and on its unsubmitted letter (beside Send fo
 shared routes exist, ceiling, line-manager admin route, migration),
 `test_fleet_reporter_authoring.py` (authoring and visibility) and
 `test_fleet_reporter_chain.py` (the approval chain).
+
+## 10. Workforce employee scope (2026-11-18)
+
+Capabilities decide **what** workforce actions a user may take;
+`user_workforce_scopes` decides **which employees** those actions cover. Self
+scope always includes the user's linked employee (`users.employee_id`).
+Additional rows grant organization, department, duty-unit, or duty-post scope;
+admins implicitly have organization scope. Attendance capabilities alone do not
+widen a non-admin user's employee scope.
+
+Grant scope from **Permissions > user > Attendance scope**. The section requires
+`users.manage` and is shown when the selected user holds `workforce.people.view`.
+The API is `GET` / `PUT /api/v1/workforce/access/users/{user_id}/scopes`: read the
+current collection and its `ETag`, then send that value as `If-Match` with the
+replacement scope list. A stale version is rejected rather than overwriting
+another administrator's changes.
+The scope picker uses `GET /api/v1/employees/lookup`, whose alternatives include
+`users.manage`; scope administrators need not also hold employee-profile access.
+
+Migration `0123_backfill_workforce_org_scope` backfilled organization scope for
+active or locked non-admin holders of both `workforce.people.view` and
+`workforce.attendance.review` who had no explicit scope rows. Pending, disabled,
+and rejected accounts receive no backfill. Only permanent per-user capability
+grants count; a temporary grant never creates standing organization scope, even
+before it expires. Existing narrower scope assignments remain unchanged; the
+fixed-scope inmate and fleet reporters are excluded.

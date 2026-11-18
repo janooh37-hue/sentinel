@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
@@ -24,6 +24,7 @@ import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { ATTENDANCE_ROSTER_CAPS } from '@/lib/workforceAttendance'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
 import { serviceHref } from '@/lib/quickActions'
@@ -337,8 +338,10 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/employees/attendance"
                 element={
-                  <RequireCapability cap="workforce.people.view">
-                    <AttendancePage />
+                  <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[0]}>
+                    <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[1]}>
+                      <AttendancePage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />
@@ -764,22 +767,26 @@ function Shell(): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
+  const [router] = useState(() => createBrowserRouter([{
+    path: '*',
+    element: (
+      <KeyboardShortcutsProvider>
+        <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+          <RecordDeleteProvider>
+            <MigrationGate>
+              <Shell />
+            </MigrationGate>
+          </RecordDeleteProvider>
+        </TooltipProvider>
+      </KeyboardShortcutsProvider>
+    ),
+  }]))
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <RefreshShellHost />
         <AuthProvider>
-          <BrowserRouter>
-            <KeyboardShortcutsProvider>
-              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
-                <RecordDeleteProvider>
-                  <MigrationGate>
-                    <Shell />
-                  </MigrationGate>
-                </RecordDeleteProvider>
-              </TooltipProvider>
-            </KeyboardShortcutsProvider>
-          </BrowserRouter>
+          <RouterProvider router={router} />
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

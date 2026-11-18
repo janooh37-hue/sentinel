@@ -47,6 +47,8 @@ export type EmployeeAttendanceHistoryDay =
   components['schemas']['EmployeeAttendanceHistoryDayRead']
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
 export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
+export type WorkforceScopeWrite = components['schemas']['WorkforceScopeWrite']
+export type WorkforceScopeReplace = components['schemas']['WorkforceScopeReplace']
 export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
 export type WorkforceCrewName = components['schemas']['CrewNameRead']
 export type MyDocumentActivity = components['schemas']['MyDocumentActivityRead']
@@ -57,6 +59,8 @@ export type AttendanceExceptionPage = components['schemas']['CursorPage_Attendan
 export type AttendanceCase = components['schemas']['AttendanceCaseRead']
 export type AttendanceAdjustmentWrite = components['schemas']['AttendanceAdjustmentWrite']
 export type AdjustmentRevokeWrite = components['schemas']['AdjustmentRevokeWrite']
+export type AttendancePunchLogItem = components['schemas']['AttendancePunchLogRead']
+export type AttendancePunchLogPage = components['schemas']['CursorPage_AttendancePunchLogRead_']
 
 export interface Versioned<T> {
   data: T
@@ -94,6 +98,12 @@ export interface WorkforceCoverageParams {
 export interface ListAttendanceDayParams {
   operational_date: string
   shift_code?: string
+  limit?: number
+  cursor?: string
+}
+
+export interface ListAttendancePunchesParams {
+  operational_date: string
   limit?: number
   cursor?: string
 }
@@ -1461,6 +1471,8 @@ export const api = {
     request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
   listAttendanceExceptions: (params: ListAttendanceExceptionsParams = {}) =>
     request<AttendanceExceptionPage>('GET', `/workforce/attendance/exceptions${qs({ ...params })}`),
+  listAttendancePunches: (params: ListAttendancePunchesParams) =>
+    request<AttendancePunchLogPage>('GET', `/workforce/attendance/punches${qs({ ...params })}`),
   getAttendanceCase: (caseId: number) =>
     requestVersioned<AttendanceCase>('GET', `/workforce/attendance/cases/${caseId}`),
   createAttendanceAdjustment: async (
@@ -1494,6 +1506,15 @@ export const api = {
   getWorkforceIntegrationStatus: () =>
     request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
   getWorkforceAccess: () => request<WorkforceAccess>('GET', '/workforce/access/me'),
+  getUserWorkforceScopes: (userId: number) =>
+    requestVersioned<WorkforceScopeReplace>('GET', `/workforce/access/users/${userId}/scopes`),
+  replaceUserWorkforceScopes: (userId: number, etag: string, payload: WorkforceScopeReplace) =>
+    requestVersioned<WorkforceScopeReplace>(
+      'PUT',
+      `/workforce/access/users/${userId}/scopes`,
+      payload,
+      requireEtag(etag),
+    ),
   getWorkforceSnapshot: () =>
     request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
   getMyDocumentActivity: () =>

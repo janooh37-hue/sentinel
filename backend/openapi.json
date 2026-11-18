@@ -33878,6 +33878,94 @@
         }
       }
     },
+    "/api/v1/workforce/attendance/punches": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Get Attendance Punches",
+        "description": "The scoped punch log, paged by descending occurrence time and punch ID.",
+        "operationId": "get_attendance_punches_api_v1_workforce_attendance_punches_get",
+        "parameters": [
+          {
+            "name": "operational_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Operational Date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CursorPage_AttendancePunchLogRead_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/employees/{employee_id}/attendance": {
       "get": {
         "tags": [
@@ -40170,6 +40258,64 @@
               }
             ],
             "title": "Grace Minutes"
+          },
+          "final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Out At"
+          },
+          "leave_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "national_service",
+                  "sick",
+                  "annual",
+                  "duty",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Kind"
+          },
+          "leave_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Label"
+          },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "corrected": {
+            "type": "boolean",
+            "title": "Corrected",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -40558,6 +40704,102 @@
           "effective_from"
         ],
         "title": "AttendancePolicyWrite"
+      },
+      "AttendancePunchLogRead": {
+        "properties": {
+          "punch_id": {
+            "type": "integer",
+            "title": "Punch Id"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "duty_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post"
+          },
+          "device": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device"
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "in",
+              "out",
+              "unknown"
+            ],
+            "title": "Direction"
+          },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "punch_id",
+          "occurred_at",
+          "employee_id",
+          "name_en",
+          "direction"
+        ],
+        "title": "AttendancePunchLogRead",
+        "description": "One provider punch from a scoped, mapped employee, for the day's punch log.\n\n``direction`` is the provider's own value; this build reports \"unknown\" for\nnearly every row, so a client must not pair rows into in/out spans.\n``case_id`` is the attendance case the punch was assigned to, if any."
       },
       "AuditEntryRead": {
         "properties": {
@@ -45708,6 +45950,34 @@
         ],
         "title": "CursorPage[AttendanceExceptionRead]"
       },
+      "CursorPage_AttendancePunchLogRead_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AttendancePunchLogRead"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "CursorPage[AttendancePunchLogRead]"
+      },
       "CursorPage_CoverageRowRead_": {
         "properties": {
           "items": {
@@ -46648,7 +46918,8 @@
               "inbox",
               "permits",
               "store_expiring",
-              "store_low_stock"
+              "store_low_stock",
+              "punch_log"
             ],
             "title": "Id"
           },
@@ -48580,6 +48851,17 @@
             "format": "date",
             "title": "Operational Date"
           },
+          "case_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Case Id"
+          },
           "shift_code": {
             "anyOf": [
               {
@@ -48706,6 +48988,52 @@
             },
             "type": "array",
             "title": "Punches"
+          },
+          "leave_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "national_service",
+                  "sick",
+                  "annual",
+                  "duty",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Kind"
+          },
+          "leave_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Label"
+          },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "corrected": {
+            "type": "boolean",
+            "title": "Corrected",
+            "default": false
           }
         },
         "additionalProperties": false,
@@ -60027,6 +60355,77 @@
               }
             ],
             "title": "Scheduled End At"
+          },
+          "first_punch_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Punch At"
+          },
+          "last_punch_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Punch At"
+          },
+          "final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Out At"
+          },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "corrected": {
+            "type": "boolean",
+            "title": "Corrected",
+            "default": false
+          },
+          "leave_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "national_service",
+                  "sick",
+                  "annual",
+                  "duty",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Leave Kind"
           }
         },
         "additionalProperties": false,
@@ -74224,7 +74623,14 @@
             "anyOf": [
               {
                 "additionalProperties": {
-                  "type": "integer"
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
                 },
                 "type": "object"
               },

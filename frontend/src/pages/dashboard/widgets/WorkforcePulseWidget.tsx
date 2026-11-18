@@ -6,22 +6,26 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { AttendanceStatusDot } from '@/pages/employees/attendance/AttendanceStatusDot'
+import { attendanceStatusLabel } from '@/pages/employees/attendance/attendanceStatusLabel'
 import { useDashboardRuntime } from './dashboardWidgetContext'
-import { derivePulseState, type PulseState } from './workforcePulseState'
+import { derivePulseState, selfAttendance, type PulseState } from './workforcePulseState'
 import type { WidgetProps } from './types'
 
 function formatShiftTime(value: string | null | undefined, locale: string, timezone: string): string {
-  if (!value) return '…'
+  if (!value) return '—'
+  // Both schedule and punch instants arrive as UTC when the offset is omitted.
   const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value)
   return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
+    hour: '2-digit',
     minute: '2-digit',
+    hourCycle: 'h23',
     numberingSystem: 'latn',
-    timeZone: hasOffset ? timezone : 'UTC',
+    timeZone: timezone,
   }).format(new Date(hasOffset ? value : `${value}Z`))
 }
 
-const actionClass = `self-start rounded-sm ${WIDGET_SUPPORT} font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
+const actionClass = `inline-flex min-h-11 items-center self-start rounded-sm ${WIDGET_SUPPORT} font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`
 
 export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -48,6 +52,9 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
       : null
   const loading = capabilitiesLoading || (!state && !accessQuery.isError && !snapshotQuery.isError)
   const unknown = t('dashboard.workforcePulse.self.presence.unknown')
+  const self = state?.kind === 'self' ? selfAttendance(state.snapshot) : null
+  const selfLabel = self?.state === 'off' ? t('attendance.state.off')
+    : self ? attendanceStatusLabel(t, self.state, { onSite: self.onSite, hasOut: !!self.out, leaveLabel: self.leaveLabel, corrected: self.corrected }) : unknown
   let message: { title: string; detail: string } | undefined
   if (state?.kind === 'no_scope') {
     message = { title: t('dashboard.workforcePulse.noScope.title'), detail: t('dashboard.workforcePulse.noScope.detail') }
@@ -79,6 +86,9 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
         </div>
       ) : state?.kind === 'aggregate' ? (
         <div className="flex min-h-0 flex-1 flex-col gap-1.5" role="status">
+          {state.snapshot.aggregate?.on_site != null && (
+            <p className="flex items-baseline gap-2"><strong className="text-3xl font-semibold tabular-nums">{state.snapshot.aggregate.on_site}</strong><span className={WIDGET_SUPPORT}>{t('dashboard.workforcePulse.metrics.onSite')}</span></p>
+          )}
           {tier === 'glance' ? (
             <>
               <p className="text-3xl font-semibold tabular-nums text-foreground">{state.snapshot.current_shift.verified_coverage_percent == null ? unknown : `${state.snapshot.current_shift.verified_coverage_percent}%`}<span className="ms-2 text-xs font-normal text-muted-foreground">{t('dashboard.workforcePulse.metrics.coverage')}</span></p>
@@ -106,17 +116,25 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
       ) : state?.kind === 'self' ? (
         <div className="flex min-h-0 flex-col gap-1" role="status">
           <p className="sr-only">{t('dashboard.workforcePulse.self.heading')}</p>
-          <p className="text-[0.9em] font-semibold text-foreground">{t(`dashboard.workforcePulse.self.presence.${state.snapshot.self?.presence_state ?? 'unknown'}`)}</p>
+          <p className="flex items-center gap-2 text-[0.9em] font-semibold text-foreground">
+            {self && <AttendanceStatusDot state={self.state} onSite={self.onSite} corrected={self.corrected} />}
+            {state.snapshot.self?.presence_state === 'unknown' || !state.snapshot.self?.presence_state ? unknown : selfLabel}
+          </p>
           <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t([
+            `dashboard.workforcePulse.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
             `dashboard.widgets.workforce_pulse.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
             `attendance.review.reasons.${state.snapshot.self?.reason_code?.toLowerCase()}`,
             'dashboard.widgets.workforce_pulse.reasonUnknown',
           ])}</p>
+          <dl className="grid grid-cols-2 gap-3">
+            <div><dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.workforcePulse.self.punchIn')}</dt><dd className="font-mono text-[1.1em] font-semibold tabular-nums"><bdi dir="ltr">{formatShiftTime(self?.in, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
+            <div><dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.workforcePulse.self.punchOut')}</dt><dd className="font-mono text-[1.1em] font-semibold tabular-nums"><bdi dir="ltr">{formatShiftTime(self?.out, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
+          </dl>
           {tier !== 'glance' && (
-            <dl className={`${WIDGET_SUPPORT} flex flex-wrap gap-x-4 gap-y-1`}>
-              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.start')}</dt><dd><bdi>{formatShiftTime(state.snapshot.self?.scheduled_start_at, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
-              <div><dt className="text-muted-foreground">{t('dashboard.workforcePulse.self.end')}</dt><dd><bdi>{formatShiftTime(state.snapshot.self?.scheduled_end_at, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
-            </dl>
+            <p className={`${WIDGET_SUPPORT} mt-1 text-muted-foreground`}>
+              {t('dashboard.workforcePulse.self.schedule')}{' '}
+              <bdi dir="ltr">{formatShiftTime(state.snapshot.self?.scheduled_start_at, i18n.language, state.snapshot.timezone)} – {formatShiftTime(state.snapshot.self?.scheduled_end_at, i18n.language, state.snapshot.timezone)}</bdi>
+            </p>
           )}
         </div>
       ) : (

@@ -383,8 +383,8 @@ function EditorForm({
   const hasPendingFiles = pendingGalleryFiles.length > 0 || pendingLicence != null
   const hasUnsavedChanges = isDirty || hasPendingFiles || mainPhotoDraft !== undefined
 
-  // Tab close/reload while dirty — Cancel/back inside the app is handled by
-  // the confirm dialog below (BrowserRouter has no navigation blocker).
+  // Tab close/reload while dirty — the form's Cancel/back controls use the
+  // confirm dialog below.
   useEffect(() => {
     if (!hasUnsavedChanges) return
     const handler = (event: BeforeUnloadEvent) => {

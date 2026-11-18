@@ -115,10 +115,12 @@ def _require_employee_lookup(
         perm_service.has_capability(db, user, "documents.generate")
         or perm_service.has_capability(db, user, "employees.view")
         or perm_service.has_capability(db, user, "uniform.edit")
+        or perm_service.has_capability(db, user, "users.manage")
     ):
         raise AppError(
             "FORBIDDEN",
-            "Employee lookup requires document generation, employee viewing, or uniform editing.",
+            "Employee lookup requires document generation, employee viewing, uniform editing, "
+            "or user management.",
             http_status=403,
         )
     return user

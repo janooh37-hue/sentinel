@@ -16,6 +16,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from '@/lib/toast'
 
 import { AdvancedPermissionsPanel } from '@/components/access/AdvancedPermissionsPanel'
+import { WorkforceScopeSection } from '@/components/access/WorkforceScopeSection'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -1241,6 +1242,7 @@ export function PermissionsPage(): React.JSX.Element {
                   </div>
 
                   <div className="p-5 sm:p-6">
+                    <WorkforceScopeSection user={selectedUser} effective={effective} />
                     <section
                       aria-label={t('access.permissions.mirror.blueprintLabel')}
                       className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
