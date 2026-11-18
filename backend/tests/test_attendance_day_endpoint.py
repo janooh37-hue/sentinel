@@ -199,6 +199,55 @@ def test_day_rows_expose_latest_and_corrected_final_out(api_db, correction) -> N
     assert row["leave_label"] is None
 
 
+@pytest.mark.parametrize("correction", ["none", "arrival", "clear"])
+def test_day_rows_expose_correction_aware_first_in(api_db, correction) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    api_db.add(
+        AttendanceEvaluation(
+            attendance_case_id=case.id,
+            revision=2,
+            presence_state="completed",
+            reason_code="SHIFT_COMPLETED",
+            first_in_at=datetime(2026, 8, 19, 1, 10),
+            algorithm_version="read-contract",
+            input_fingerprint="latest-first-in",
+        )
+    )
+    api_db.flush()
+    expected = "2026-08-19T01:10:00Z"
+    if correction != "none":
+        arrival = datetime(2026, 8, 19, 1, 2) if correction == "arrival" else None
+        attendance_correction_service.correct(
+            api_db,
+            scope=resolve_workforce_scope(api_db, fixture.admin),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "completed",
+                "replacement_first_in_at": arrival,
+                "replacement_latest_in_at": None,
+                "replacement_final_out_at": None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Arrival verified against the gate register",
+            },
+            if_match=attendance_correction_service.case_etag(api_db, case.id),
+            actor=fixture.admin,
+        )
+        expected = "2026-08-19T01:02:00Z" if arrival else None
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(
+        "/api/v1/workforce/attendance/day", params={"operational_date": DAY.isoformat()}
+    )
+
+    assert response.status_code == 200, response.text
+    row = next(row for row in response.json()["items"] if row["case_id"] == case.id)
+    assert row["first_in_at"] == expected
+    assert row["corrected"] is (correction != "none")
+
+
 def test_day_rows_expose_primary_duty_and_other_leave_labels(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 2)])
     duty, hajj = fixture.employees

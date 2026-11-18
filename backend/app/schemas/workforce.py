@@ -404,6 +404,12 @@ class AttendanceDayRowRead(RosterRowRead):
     #: English half of its stored type (for example "Duty Leave").
     leave_kind: LeaveKind | None = None
     leave_label: str | None = None
+    #: The effective arrival: the evaluated first in, replaced by an active
+    #: correction's (possibly cleared) first in. ``first_punch_at`` stays the raw
+    #: punch so the register can show both evidence and verdict.
+    first_in_at: datetime | None = None
+    #: True while an active (unrevoked) human correction overlays this case.
+    corrected: bool = False
 
 
 class AttendancePunchLogRead(ORMBase):
@@ -465,6 +471,9 @@ class EmployeeAttendanceDayRead(ORMBase):
     punches: list[EmployeeAttendancePunchRead] = Field(default_factory=list)
     leave_kind: LeaveKind | None = None
     leave_label: str | None = None
+    #: Same meaning as on ``AttendanceDayRowRead``.
+    first_in_at: datetime | None = None
+    corrected: bool = False
 
 
 class EmployeeAttendanceHabitRead(BaseModel):

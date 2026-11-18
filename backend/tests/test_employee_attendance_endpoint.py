@@ -12,14 +12,19 @@ Contract under test:
 
 from __future__ import annotations
 
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
 from app.api.errors import AppError, ValidationFailedError
 from app.db.models import Leave
-from app.db.workforce_models import AttendancePunchProfile
-from app.services import attendance_evaluation_service, perm_service, workforce_read_service
+from app.db.workforce_models import AttendanceEvaluation, AttendancePunchProfile
+from app.services import (
+    attendance_correction_service,
+    attendance_evaluation_service,
+    perm_service,
+    workforce_read_service,
+)
 from app.services.workforce_scope_service import (
     WorkforceScope,
     WorkforceScopeEntry,
@@ -263,3 +268,51 @@ def test_employee_days_expose_case_and_primary_leave(
     days = response.json()["days"]
     assert {day["case_id"] for day in days} == {case.id for case in fixture.cases}
     assert {(day["leave_kind"], day["leave_label"]) for day in days} == {(leave_kind, leave_label)}
+
+
+@pytest.mark.parametrize("corrected", [False, True])
+def test_employee_days_expose_correction_aware_first_in(api_db, corrected) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    employee = fixture.employees[0]
+    case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
+    api_db.add(
+        AttendanceEvaluation(
+            attendance_case_id=case.id,
+            revision=2,
+            presence_state="completed",
+            reason_code="SHIFT_COMPLETED",
+            first_in_at=datetime(2026, 8, 19, 1, 10),
+            algorithm_version="read-contract",
+            input_fingerprint="employee-first-in",
+        )
+    )
+    api_db.flush()
+    if corrected:
+        attendance_correction_service.correct(
+            api_db,
+            scope=resolve_workforce_scope(api_db, fixture.admin),
+            case_id=case.id,
+            snapshot={
+                "replacement_presence_state": "completed",
+                "replacement_first_in_at": datetime(2026, 8, 19, 1, 2),
+                "replacement_latest_in_at": None,
+                "replacement_final_out_at": None,
+                "replacement_late_minutes": None,
+                "replacement_early_exit_minutes": None,
+                "replacement_missing_checkout": False,
+                "reason": "Arrival verified against the gate register",
+            },
+            if_match=attendance_correction_service.case_etag(api_db, case.id),
+            actor=fixture.admin,
+        )
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(
+        f"/api/v1/workforce/employees/{employee.id}/attendance",
+        params={"from_date": DAY.isoformat(), "to_date": DAY.isoformat()},
+    )
+
+    assert response.status_code == 200, response.text
+    day = next(day for day in response.json()["days"] if day["case_id"] == case.id)
+    assert day["first_in_at"] == ("2026-08-19T01:02:00Z" if corrected else "2026-08-19T01:10:00Z")
+    assert day["corrected"] is corrected
