@@ -15,6 +15,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.core.leave_lifecycle import LeaveKind
 from app.schemas._base import ORMBase
 
 # The leave lifecycle recognizes these configured kinds.  Values are persisted
@@ -232,6 +233,13 @@ class SelfShiftRead(ORMBase):
     reason_code: str | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
+    #: Earliest and latest punch inside the case's match window (see
+    #: ``AttendanceDayRowRead``); ``final_out_at`` is the evaluated or corrected
+    #: departure, the only value that may be shown as "out".
+    first_punch_at: datetime | None = None
+    last_punch_at: datetime | None = None
+    final_out_at: datetime | None = None
+    leave_kind: LeaveKind | None = None
 
 
 class CurrentShiftRead(ORMBase):
@@ -393,6 +401,34 @@ class AttendanceDayRowRead(RosterRowRead):
     judgment_due_at: datetime | None = None
     absence_due_at: datetime | None = None
     grace_minutes: int | None = Field(default=None, ge=0)
+    #: The evaluated (or corrected) departure; None while undetermined.
+    final_out_at: datetime | None = None
+    #: The excusing leave behind ``LEAVE_*`` reason codes: its class and the
+    #: English half of its stored type (for example "Duty Leave").
+    leave_kind: LeaveKind | None = None
+    leave_label: str | None = None
+
+
+class AttendancePunchLogRead(ORMBase):
+    """One provider punch from a scoped, mapped employee, for the day's punch log.
+
+    ``direction`` is the provider's own value; this build reports "unknown" for
+    nearly every row, so a client must not pair rows into in/out spans.
+    ``case_id`` is the attendance case the punch was assigned to, if any.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    punch_id: int
+    occurred_at: datetime
+    employee_id: str
+    name_en: str
+    name_ar: str | None = None
+    department: str | None = None
+    duty_post: str | None = None
+    device: str | None = None
+    direction: Literal["in", "out", "unknown"]
+    case_id: int | None = None
 
 
 class EmployeeAttendancePunchRead(ORMBase):
@@ -415,6 +451,7 @@ class EmployeeAttendanceDayRead(ORMBase):
     model_config = ConfigDict(extra="forbid")
 
     operational_date: date
+    case_id: int | None = None
     shift_code: str | None = None
     scheduled_start_at: datetime | None = None
     scheduled_end_at: datetime | None = None
@@ -429,6 +466,8 @@ class EmployeeAttendanceDayRead(ORMBase):
     judgment_due_at: datetime | None = None
     grace_minutes: int | None = Field(default=None, ge=0)
     punches: list[EmployeeAttendancePunchRead] = Field(default_factory=list)
+    leave_kind: LeaveKind | None = None
+    leave_label: str | None = None
 
 
 class EmployeeAttendanceHabitRead(BaseModel):

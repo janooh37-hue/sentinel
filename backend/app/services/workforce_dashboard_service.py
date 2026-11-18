@@ -99,10 +99,10 @@ def _is_active_employee(status: str | None) -> bool:
     return (status or "").strip().casefold() in _WORKING_EMPLOYEE_STATUSES
 
 
-def _live_leaves(db: Session, *, operational_date: date) -> dict[str, str]:
-    """Return one stable lifecycle category per employee on the local date."""
-    priority = {"national_service": 3, "sick": 2, "annual": 1, "other": 0}
-    result: dict[str, str] = {}
+def _live_leaves(db: Session, *, operational_date: date) -> dict[str, leave_lifecycle.LeaveKind]:
+    """Return the strongest excusing leave kind per employee on the local date."""
+    priority = {"national_service": 4, "sick": 3, "annual": 2, "duty": 1, "other": 0}
+    result: dict[str, leave_lifecycle.LeaveKind] = {}
     rows = db.scalars(
         select(Leave).where(
             Leave.deleted_at.is_(None),
@@ -111,7 +111,7 @@ def _live_leaves(db: Session, *, operational_date: date) -> dict[str, str]:
         )
     )
     for row in rows:
-        kind = leave_lifecycle.live_kind(
+        kind = leave_lifecycle.excusing_kind(
             row.leave_type,
             row.status,
             deleted=row.deleted_at is not None,
@@ -319,10 +319,13 @@ def _current_cases(db: Session, *, scope: Any, as_of_naive: datetime, operationa
 def _leave_composition(db: Session, *, scope: Any, operational_date: date) -> dict[str, int]:
     leave_by_employee = _live_leaves(db, operational_date=operational_date)
     employees = db.scalars(select(Employee).where(Employee.id.in_(list(leave_by_employee)))).all()
+    # The composition keeps its four published buckets; Duty Leave (official
+    # mission) counts under "other" there, and keeps its own kind elsewhere.
     result = {"annual": 0, "sick": 0, "national_service": 0, "other": 0}
     for employee in employees:
         if _employee_in_scope(employee, scope):
-            result[leave_by_employee[employee.id]] += 1
+            kind = leave_by_employee[employee.id]
+            result["other" if kind == "duty" else kind] += 1
     return result
 
 
