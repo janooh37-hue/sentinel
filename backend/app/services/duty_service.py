@@ -160,13 +160,17 @@ def apply_status_change(
       a unit by the same edit keeps it; with nothing to restore they stay
       unassigned.
 
-    Moves between two departed statuses, or between Active and Loaned, change
-    nothing. Stages the rows on ``db``; the caller commits.
+    Moves between two departed statuses, or between Active and Loaned, record
+    nothing; a departed employee stays out of the structure, so a unit/post set
+    by the same edit is dropped. Stages the rows on ``db``; the caller commits.
     """
 
     was_working = from_status in WORKING_STATUSES
     is_working = employee.status in WORKING_STATUSES
     if was_working == is_working:
+        if not is_working:
+            employee.duty_unit = None
+            employee.duty_post = None
         return
     effective_at = datetime.now(UTC).replace(tzinfo=None)
     if not is_working:

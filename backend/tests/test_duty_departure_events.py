@@ -217,6 +217,29 @@ def test_moving_between_departed_statuses_adds_no_duty_event(db_session):
     assert [e.event_type for e in _events(db_session)] == ["transfer_out"]
 
 
+@pytest.mark.parametrize(
+    "edit",
+    [
+        EmployeeUpdate(duty_unit=UNIT, duty_post=POST),
+        EmployeeUpdate(status="Resigned", end_date=TODAY, duty_unit=UNIT, duty_post=POST),
+    ],
+    ids=["same-status", "transferred-to-resigned"],
+)
+def test_editing_a_departed_employee_cannot_post_them(db_session, edit):
+    user = _user(db_session)
+    _emp(db_session)
+    employee_service.update_employee(
+        db_session,
+        "G8001",
+        EmployeeUpdate(status="Transferred", end_date=TODAY, transfer_site="Abu Dhabi"),
+        actor_user_id=user.id,
+    )
+    row = employee_service.update_employee(db_session, "G8001", edit, actor_user_id=user.id)
+    assert (row.duty_unit, row.duty_post) == (None, None)
+    # The departure snapshot stays the only event, so a return restores its post.
+    assert [e.event_type for e in _events(db_session)] == ["transfer_out"]
+
+
 def test_reactivation_without_a_departure_event_stays_unassigned(db_session):
     user = _user(db_session)
     _emp(db_session, status="Resigned", end_date=TODAY, duty_unit=None, duty_post=None)
