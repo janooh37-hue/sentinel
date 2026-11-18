@@ -17,15 +17,16 @@ from datetime import date, time, timedelta
 import pytest
 
 from app.api.errors import AppError, ValidationFailedError
+from app.db.models import Leave
 from app.db.workforce_models import AttendancePunchProfile
-from app.services import perm_service, workforce_read_service
+from app.services import attendance_evaluation_service, perm_service, workforce_read_service
 from app.services.workforce_scope_service import (
     WorkforceScope,
     WorkforceScopeEntry,
     resolve_workforce_scope,
 )
 from tests.conftest import make_user
-from tests.factories.attendance import build_attendance_day
+from tests.factories.attendance import build_attendance_day, local
 
 # `api_db` is a file-backed SQLite session with check_same_thread=False and a
 # monkeypatched SessionLocal, which is what lets TestClient's worker thread
@@ -223,3 +224,42 @@ def test_over_wide_window_is_a_422_through_the_api(api_db) -> None:
 
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "ATTENDANCE_RANGE_TOO_WIDE"
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "leave_kind", "leave_label"),
+    [
+        ("Duty Leave - إجازة مهمة رسمية", "duty", "Duty Leave"),
+        ("Hajj Leave - إجازة حج", "other", "Hajj Leave"),
+    ],
+)
+def test_employee_days_expose_case_and_primary_leave(
+    api_db, leave_type, leave_kind, leave_label
+) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
+    employee = fixture.employees[0]
+    api_db.add(
+        Leave(
+            employee_id=employee.id,
+            leave_type=leave_type,
+            status="Approved",
+            start_date=DAY,
+            end_date=DAY,
+        )
+    )
+    api_db.flush()
+    for case in fixture.cases:
+        attendance_evaluation_service.evaluate_case(
+            api_db, case.id, evaluated_at=local(DAY, time(23, 59))
+        )
+    api_db.commit()
+
+    response = _client(api_db, fixture.admin).get(
+        f"/api/v1/workforce/employees/{employee.id}/attendance",
+        params={"from_date": DAY.isoformat(), "to_date": DAY.isoformat()},
+    )
+
+    assert response.status_code == 200, response.text
+    days = response.json()["days"]
+    assert {day["case_id"] for day in days} == {case.id for case in fixture.cases}
+    assert {(day["leave_kind"], day["leave_label"]) for day in days} == {(leave_kind, leave_label)}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from math import floor
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -14,11 +14,13 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import AuditLog, Employee
+from app.core import leave_lifecycle
+from app.db.models import AuditLog, Employee, Leave
 from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
+    AttendanceEvaluationLeaveSource,
     AttendanceEvaluationPunchSource,
     AttendanceEvaluationQueue,
     AttendanceProviderPerson,
@@ -42,6 +44,7 @@ from app.services import (
     attendance_correction_service,
     attendance_profile_service,
     workforce_admin_service,
+    workforce_leave,
     workforce_schedule_service,
 )
 from app.services.workforce_access_service import (
@@ -65,6 +68,42 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
     for row in rows:
         latest.setdefault(row.attendance_case_id, row)
     return latest
+
+
+def _case_leave_fields(
+    db: Session,
+    *,
+    evaluations: dict[int, AttendanceEvaluation],
+    effective: dict[int, dict[str, Any] | None],
+) -> dict[int, tuple[leave_lifecycle.LeaveKind | None, str | None]]:
+    """Read primary leave labels in one query, classified by the effective reason.
+
+    A replacement reason cannot borrow the automatic verdict's primary label
+    unless it retains that verdict's winning leave kind.
+    """
+    if not evaluations:
+        return {}
+    labels = {
+        evaluation_id: leave_lifecycle.leave_label(leave_type)
+        for evaluation_id, leave_type in db.execute(
+            select(AttendanceEvaluationLeaveSource.evaluation_id, Leave.leave_type)
+            .join(Leave, Leave.id == AttendanceEvaluationLeaveSource.leave_id)
+            .where(
+                AttendanceEvaluationLeaveSource.evaluation_id.in_(
+                    [evaluation.id for evaluation in evaluations.values()]
+                ),
+                AttendanceEvaluationLeaveSource.is_primary.is_(True),
+            )
+        )
+    }
+    result: dict[int, tuple[leave_lifecycle.LeaveKind | None, str | None]] = {}
+    for case_id, evaluation in evaluations.items():
+        values = effective.get(case_id)
+        reason = values["reason_code"] if values else None
+        kind = workforce_leave.LEAVE_KIND_BY_REASON.get(reason)
+        label = labels.get(evaluation.id) if kind and reason == evaluation.reason_code else None
+        result[case_id] = kind, label
+    return result
 
 
 def _case_allowed(case: AttendanceCase, scope: WorkforceScope) -> bool:
@@ -107,22 +146,22 @@ def _person_fields(case: AttendanceCase, employees: dict[str, Employee]) -> dict
     }
 
 
-def list_roster(db: Session, *, scope: WorkforceScope, operational_date: date) -> list[dict[str, Any]]:
+def list_roster(
+    db: Session, *, scope: WorkforceScope, operational_date: date
+) -> list[dict[str, Any]]:
     cases = [
         case
-        for case in db.scalars(select(AttendanceCase).where(AttendanceCase.operational_date == operational_date))
+        for case in db.scalars(
+            select(AttendanceCase).where(AttendanceCase.operational_date == operational_date)
+        )
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = attendance_correction_service.active_corrections(
-        db, [case.id for case in cases]
-    )
+    adjustments = attendance_correction_service.active_corrections(db, [case.id for case in cases])
     employees = _employees_for_cases(db, cases)
     result: list[dict[str, Any]] = []
     for case in cases:
-        effective = _effective_evaluation_values(
-            latest.get(case.id), adjustments.get(case.id)
-        )
+        effective = _effective_evaluation_values(latest.get(case.id), adjustments.get(case.id))
         result.append(
             {
                 **_person_fields(case, employees),
@@ -146,15 +185,11 @@ def list_exceptions(
         query = query.where(AttendanceCase.operational_date == operational_date)
     cases = [case for case in db.scalars(query) if _case_allowed(case, scope)]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = attendance_correction_service.active_corrections(
-        db, [case.id for case in cases]
-    )
+    adjustments = attendance_correction_service.active_corrections(db, [case.id for case in cases])
     employees = _employees_for_cases(db, cases)
     result: list[dict[str, Any]] = []
     for case in cases:
-        effective = _effective_evaluation_values(
-            latest.get(case.id), adjustments.get(case.id)
-        )
+        effective = _effective_evaluation_values(latest.get(case.id), adjustments.get(case.id))
         if effective is None:
             continue
         if presence and effective["presence_state"] != presence:
@@ -180,6 +215,7 @@ def list_exceptions(
                 "missing_checkout": effective["missing_checkout"],
             }
         )
+
     def severity(row: dict[str, Any]) -> tuple[int, str, int]:
         if row.get("presence_state") == "absent":
             return (0, row["employee_id"], row["case_id"])
@@ -194,7 +230,6 @@ def list_exceptions(
         return (5, row["employee_id"], row["case_id"])
 
     return sorted(result, key=severity)
-
 
 
 def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, AttendanceProviderPerson]:
@@ -505,9 +540,12 @@ def list_attendance_day(
         return []
 
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = attendance_correction_service.active_corrections(
-        db, [case.id for case in cases]
-    )
+    adjustments = attendance_correction_service.active_corrections(db, [case.id for case in cases])
+    effective_by_case = {
+        case_id: _effective_evaluation_values(evaluation, adjustments.get(case_id))
+        for case_id, evaluation in latest.items()
+    }
+    leave_fields = _case_leave_fields(db, evaluations=latest, effective=effective_by_case)
     people = _verified_people(db, {case.employee_id for case in cases})
     employees = _employees_for_cases(db, cases)
     policies = _policies_for_cases(db, cases)
@@ -517,9 +555,8 @@ def list_attendance_day(
     result: list[dict[str, Any]] = []
     for case in cases:
         adjustment = adjustments.get(case.id)
-        effective = _effective_evaluation_values(
-            latest.get(case.id), adjustment
-        )
+        effective = effective_by_case.get(case.id)
+        leave_kind, leave_label = leave_fields.get(case.id, (None, None))
         policy = policies.get(case.id)
         first_at, last_at, count = _punch_bounds(case, punch_rows.get(case.id, []))
         result.append(
@@ -528,6 +565,9 @@ def list_attendance_day(
                 "case_id": case.id,
                 "presence_state": effective["presence_state"] if effective else None,
                 "reason_code": effective["reason_code"] if effective else None,
+                "final_out_at": effective["final_out_at"] if effective else None,
+                "leave_kind": leave_kind,
+                "leave_label": leave_label,
                 "first_punch_at": first_at,
                 "last_punch_at": last_at,
                 "punch_count": count,
@@ -536,13 +576,114 @@ def list_attendance_day(
                     if adjustment is not None and effective
                     else _late_minutes(case, first_at)
                 ),
-                "on_leave": effective is not None and effective["presence_state"] == "excused_leave",
+                "on_leave": effective is not None
+                and effective["presence_state"] == "excused_leave",
                 "judgment_due_at": _judgment_due_at(case, policy),
                 "grace_minutes": policy.grace_minutes if policy is not None else None,
                 "absence_due_at": _absence_due_at(case, policy),
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+
+
+def list_attendance_punches(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    operational_date: date,
+    limit: int,
+    before: tuple[datetime, int] | None = None,
+) -> list[dict[str, Any]]:
+    """Return newest-first punches from active, verified employee mappings.
+
+    Assigned punches belong to their case's operational date, including a night
+    shift's next-morning departure. Unassigned punches belong to their Dubai
+    calendar date. Assigned rows use the same captured hierarchy and scope
+    predicate as the day register; unassigned rows use the employee directory.
+    """
+    window_start = (
+        datetime.combine(operational_date, time.min, tzinfo=ZoneInfo("Asia/Dubai"))
+        .astimezone(UTC)
+        .replace(tzinfo=None)
+    )
+    query = (
+        select(AttendancePunch, Employee, AttendanceCase)
+        .join(
+            AttendanceProviderPerson,
+            AttendanceProviderPerson.id == AttendancePunch.provider_person_id,
+        )
+        .join(Employee, Employee.id == AttendanceProviderPerson.employee_id)
+        .outerjoin(
+            AttendancePunchAssignment,
+            AttendancePunchAssignment.punch_id == AttendancePunch.id,
+        )
+        .outerjoin(
+            AttendanceCase,
+            AttendanceCase.id == AttendancePunchAssignment.attendance_case_id,
+        )
+        .where(
+            AttendanceProviderPerson.mapping_state == "verified",
+            AttendanceProviderPerson.active.is_(True),
+            or_(
+                AttendanceCase.operational_date == operational_date,
+                and_(
+                    AttendancePunchAssignment.attendance_case_id.is_(None),
+                    AttendancePunch.occurred_at >= window_start,
+                    AttendancePunch.occurred_at < window_start + timedelta(days=1),
+                ),
+            ),
+            or_(
+                AttendancePunchAssignment.attendance_case_id.is_(None),
+                AttendanceCase.employee_id == Employee.id,
+            ),
+        )
+        .order_by(AttendancePunch.occurred_at.desc(), AttendancePunch.id.desc())
+    )
+    if before is not None:
+        occurred_at, punch_id = before
+        query = query.where(
+            or_(
+                AttendancePunch.occurred_at < occurred_at,
+                and_(AttendancePunch.occurred_at == occurred_at, AttendancePunch.id < punch_id),
+            )
+        )
+    result: list[dict[str, Any]] = []
+    # Apply the shared scope predicate before counting rows toward the page.
+    # Streaming keeps a narrow-scope request from loading the whole day's log.
+    with db.execute(query).yield_per(200) as rows:
+        for punch, employee, case in rows:
+            if case is not None:
+                if not _case_allowed(case, scope):
+                    continue
+            elif not scope_allows(
+                scope,
+                employee_id=employee.id,
+                department=employee.department,
+                duty_unit=employee.duty_unit,
+                duty_post=employee.duty_post,
+            ):
+                continue
+            result.append(
+                {
+                    "punch_id": punch.id,
+                    "occurred_at": punch.occurred_at,
+                    "employee_id": employee.id,
+                    "name_en": employee.name_en,
+                    "name_ar": employee.name_ar,
+                    "department": case.department_snapshot
+                    if case is not None
+                    else employee.department,
+                    "duty_post": case.duty_post_snapshot
+                    if case is not None
+                    else employee.duty_post,
+                    "device": punch.device_name,
+                    "direction": punch.direction,
+                    "case_id": case.id if case is not None else None,
+                }
+            )
+            if len(result) >= limit:
+                break
+    return result
 
 
 #: One request may not span more than a quarter of attendance history.
@@ -583,9 +724,12 @@ def employee_attendance_range(
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = attendance_correction_service.active_corrections(
-        db, [case.id for case in cases]
-    )
+    adjustments = attendance_correction_service.active_corrections(db, [case.id for case in cases])
+    effective_by_case = {
+        case_id: _effective_evaluation_values(evaluation, adjustments.get(case_id))
+        for case_id, evaluation in latest.items()
+    }
+    leave_fields = _case_leave_fields(db, evaluations=latest, effective=effective_by_case)
     person = _verified_people(db, {employee_id}).get(employee_id)
     policies = _policies_for_cases(db, cases)
     profile_rows = list(
@@ -617,9 +761,8 @@ def employee_attendance_range(
     days: list[dict[str, Any]] = []
     for case in cases:
         adjustment = adjustments.get(case.id)
-        effective = _effective_evaluation_values(
-            latest.get(case.id), adjustment
-        )
+        effective = effective_by_case.get(case.id)
+        leave_kind, leave_label = leave_fields.get(case.id, (None, None))
         policy = policies.get(case.id)
         case_punch_rows = punch_rows.get(case.id, [])
         first_at, _last_at, count = _punch_bounds(case, case_punch_rows)
@@ -630,11 +773,14 @@ def employee_attendance_range(
         days.append(
             {
                 "operational_date": case.operational_date,
+                "case_id": case.id,
                 "shift_code": case.shift_code_snapshot,
                 "scheduled_start_at": case.scheduled_start_at,
                 "scheduled_end_at": case.scheduled_end_at,
                 "presence_state": effective["presence_state"] if effective else None,
                 "reason_code": effective["reason_code"] if effective else None,
+                "leave_kind": leave_kind,
+                "leave_label": leave_label,
                 "late_minutes": (
                     effective["late_minutes"]
                     if adjustment is not None and effective
@@ -681,6 +827,7 @@ def _evaluation_read(row: AttendanceEvaluation) -> dict[str, Any]:
         "evaluated_at": row.evaluated_at,
     }
 
+
 def _effective_evaluation_values(
     evaluation: AttendanceEvaluation | None,
     adjustment: AttendanceAdjustment | None,
@@ -706,6 +853,8 @@ def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
         "revoked_at": row.revoked_at,
         "supersedes_adjustment_id": row.supersedes_adjustment_id,
     }
+
+
 def _case_punches(db: Session, case: AttendanceCase) -> list[dict[str, Any]]:
     """Return the immutable provider events recorded by the case evaluations."""
     return [
@@ -857,7 +1006,9 @@ def get_attendance_case(db: Session, *, scope: WorkforceScope, case_id: int) -> 
 
 
 def list_duty_assignment_events(db: Session, *, scope: WorkforceScope) -> list[dict[str, Any]]:
-    rows = list(db.scalars(select(DutyAssignmentEvent).order_by(DutyAssignmentEvent.effective_at.desc())))
+    rows = list(
+        db.scalars(select(DutyAssignmentEvent).order_by(DutyAssignmentEvent.effective_at.desc()))
+    )
     result: list[dict[str, Any]] = []
     for row in rows:
         if not scope_allows(
@@ -935,7 +1086,6 @@ def list_staffing_requirements(
     ]
 
 
-
 def shift_definition_read(row: WorkShiftDefinition) -> dict[str, Any]:
     """Return the full immutable shift definition contract."""
 
@@ -955,10 +1105,7 @@ def list_shift_definitions(
     """Return global shift metadata and the collection version."""
     rows = list(db.scalars(select(WorkShiftDefinition).order_by(WorkShiftDefinition.code)))
     etag = etag_for(
-        [
-            {"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at}
-            for row in rows
-        ]
+        [{"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at} for row in rows]
     )
     return rows, etag
 
@@ -1060,9 +1207,7 @@ def _crew_schedule_rows(db: Session, *, crew_id: int) -> list[WorkCrewSchedule]:
     )
 
 
-def list_crew_schedules(
-    db: Session, *, crew_id: int
-) -> tuple[list[WorkCrewSchedule], str]:
+def list_crew_schedules(db: Session, *, crew_id: int) -> tuple[list[WorkCrewSchedule], str]:
     crew_detail(db, crew_id=crew_id)
     rows = _crew_schedule_rows(db, crew_id=crew_id)
     return rows, workforce_schedule_service.crew_schedule_collection_etag(rows)
@@ -1123,16 +1268,18 @@ def crew_membership_detail(
 
 
 def _as_utc_naive(value: datetime) -> datetime:
-    return value.replace(tzinfo=None) if value.tzinfo is None else value.astimezone(UTC).replace(tzinfo=None)
+    return (
+        value.replace(tzinfo=None)
+        if value.tzinfo is None
+        else value.astimezone(UTC).replace(tzinfo=None)
+    )
 
 
 def _as_utc_aware(value: datetime) -> datetime:
     return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
 
 
-def _preview_conflict(
-    code: str, message: str, *, schedule_id: int | None = None
-) -> dict[str, Any]:
+def _preview_conflict(code: str, message: str, *, schedule_id: int | None = None) -> dict[str, Any]:
     return {"code": code, "message": message, "schedule_id": schedule_id}
 
 
@@ -1213,7 +1360,9 @@ def preview_crew_schedule(
             .order_by(WorkRotationStep.start_offset_minutes, WorkRotationStep.id)
         ).all()
     )
-    zero_steps = [(step, definition) for step, definition in steps if step.start_offset_minutes == 0]
+    zero_steps = [
+        (step, definition) for step, definition in steps if step.start_offset_minutes == 0
+    ]
     if len(zero_steps) != 1:
         conflicts.append(
             _preview_conflict(
@@ -1221,7 +1370,10 @@ def preview_crew_schedule(
                 "Rotation pattern must have exactly one offset-zero shift.",
             )
         )
-    elif _as_utc_aware(anchor).astimezone(ZoneInfo(pattern.timezone)).time().replace(tzinfo=None) != zero_steps[0][1].start_local_time:
+    elif (
+        _as_utc_aware(anchor).astimezone(ZoneInfo(pattern.timezone)).time().replace(tzinfo=None)
+        != zero_steps[0][1].start_local_time
+    ):
         conflicts.append(
             _preview_conflict(
                 "WORKFORCE_SCHEDULE_ANCHOR_INVALID",
@@ -1303,35 +1455,29 @@ def preview_crew_schedule(
                     "operational_date": local_occurrence_start.date(),
                 }
             )
-    occurrences.sort(key=lambda occurrence: (occurrence["starts_at"], occurrence["shift_definition_id"]))
+    occurrences.sort(
+        key=lambda occurrence: (occurrence["starts_at"], occurrence["shift_definition_id"])
+    )
     return {"crew_id": crew_id, "occurrences": occurrences, "conflicts": []}
 
 
 def list_attendance_policies(db: Session) -> list[WorkAttendancePolicy]:
     """Return global attendance policy metadata in established order."""
-    return list(
-        db.scalars(select(WorkAttendancePolicy).order_by(WorkAttendancePolicy.id.desc()))
-    )
+    return list(db.scalars(select(WorkAttendancePolicy).order_by(WorkAttendancePolicy.id.desc())))
 
 
 def list_provider_people(
     db: Session, *, scope: WorkforceScope, mapping_state: str | None = None
 ) -> list[AttendanceProviderPerson]:
-    require_organization(
-        scope, message="Organization workforce scope is required for this change."
-    )
+    require_organization(scope, message="Organization workforce scope is required for this change.")
     query = select(AttendanceProviderPerson).order_by(AttendanceProviderPerson.id)
     if mapping_state is not None:
         query = query.where(AttendanceProviderPerson.mapping_state == mapping_state)
     return list(db.scalars(query))
 
 
-def list_failed_queue(
-    db: Session, *, scope: WorkforceScope
-) -> list[AttendanceEvaluationQueue]:
-    require_organization(
-        scope, message="Organization workforce scope is required for this change."
-    )
+def list_failed_queue(db: Session, *, scope: WorkforceScope) -> list[AttendanceEvaluationQueue]:
+    require_organization(scope, message="Organization workforce scope is required for this change.")
     return list(
         db.scalars(
             select(AttendanceEvaluationQueue)
@@ -1345,15 +1491,35 @@ def integration_status(db: Session) -> dict[str, Any]:
     rows = list(db.scalars(select(AttendanceSyncState)))
     streams = {
         row.stream: {
-            "state": "error" if row.last_error_code else "healthy" if row.last_success_at else "pending",
+            "state": "error"
+            if row.last_error_code
+            else "healthy"
+            if row.last_success_at
+            else "pending",
             "fresh_through": row.fresh_through,
             "last_success_at": row.last_success_at,
             "last_error_code": row.last_error_code,
         }
         for row in rows
     }
-    streams.setdefault("people", {"state": "not_configured", "fresh_through": None, "last_success_at": None, "last_error_code": None})
-    streams.setdefault("punches", {"state": "not_configured", "fresh_through": None, "last_success_at": None, "last_error_code": None})
+    streams.setdefault(
+        "people",
+        {
+            "state": "not_configured",
+            "fresh_through": None,
+            "last_success_at": None,
+            "last_error_code": None,
+        },
+    )
+    streams.setdefault(
+        "punches",
+        {
+            "state": "not_configured",
+            "fresh_through": None,
+            "last_success_at": None,
+            "last_error_code": None,
+        },
+    )
     # These were pinned to "off" while no adapter existed. The installed BioTime
     # adapter now resolves from the environment, so the dashboard must report
     # what is actually configured rather than a constant that hides a working
@@ -1394,6 +1560,7 @@ __all__ = [
     "integration_status",
     "list_attendance_day",
     "list_attendance_policies",
+    "list_attendance_punches",
     "list_crew_memberships",
     "list_crew_schedules",
     "list_crews",

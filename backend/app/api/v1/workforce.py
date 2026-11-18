@@ -28,6 +28,7 @@ from app.schemas.workforce import (
     AttendanceDayRowRead,
     AttendanceExceptionRead,
     AttendancePolicyWrite,
+    AttendancePunchLogRead,
     ConfigurationPatch,
     CoverageRowRead,
     CrewMembershipEndWrite,
@@ -436,6 +437,69 @@ def get_attendance_day(
         limit=limit,
         cursor=cursor,
     )
+    return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/attendance/punches", response_model=CursorPage[AttendancePunchLogRead])
+def get_attendance_punches(
+    operational_date: date,
+    user: Annotated[User, Depends(require_capability("workforce.attendance.review"))],
+    people_user: Annotated[User, Depends(require_capability("workforce.people.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    """The scoped punch log, paged by descending occurrence time and punch ID."""
+    scope = _scope(db, user)
+    endpoint = "attendance-punches"
+    scope_id = _scope_fingerprint(scope)
+    filters = json.dumps(
+        {"operational_date": operational_date}, sort_keys=True, separators=(",", ":"), default=str
+    )
+    before = None
+    try:
+        decoded = decode_cursor(cursor)
+        if decoded is not None:
+            if (
+                decoded.get("endpoint") != endpoint
+                or decoded.get("scope") != scope_id
+                or decoded.get("filters") != filters
+            ):
+                raise ValueError("cursor does not belong to this query")
+            position = decoded.get("position")
+            if (
+                not isinstance(position, list)
+                or len(position) != 2
+                or not isinstance(position[0], str)
+                or type(position[1]) is not int
+                or position[1] < 1
+            ):
+                raise ValueError("invalid sort position")
+            occurred_at = datetime.fromisoformat(position[0])
+            if occurred_at.tzinfo is not None:
+                occurred_at = occurred_at.astimezone(UTC).replace(tzinfo=None)
+            before = occurred_at, position[1]
+    except ValueError as exc:
+        raise ValidationFailedError("INVALID_CURSOR", "Cursor is invalid.") from exc
+    rows = workforce_read_service.list_attendance_punches(
+        db,
+        scope=scope,
+        operational_date=operational_date,
+        limit=limit + 1,
+        before=before,
+    )
+    items = rows[:limit]
+    next_cursor = None
+    if len(rows) > limit:
+        last = items[-1]
+        next_cursor = encode_cursor(
+            {
+                "endpoint": endpoint,
+                "scope": scope_id,
+                "filters": filters,
+                "position": [last["occurred_at"].isoformat(), last["punch_id"]],
+            }
+        )
     return {"items": items, "next_cursor": next_cursor}
 
 
