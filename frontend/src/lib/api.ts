@@ -47,6 +47,8 @@ export type EmployeeAttendanceHistoryDay =
   components['schemas']['EmployeeAttendanceHistoryDayRead']
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
 export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
+export type WorkforceScopeWrite = components['schemas']['WorkforceScopeWrite']
+export type WorkforceScopeReplace = components['schemas']['WorkforceScopeReplace']
 export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
 export type WorkforceCrewName = components['schemas']['CrewNameRead']
 export type MyDocumentActivity = components['schemas']['MyDocumentActivityRead']
@@ -1458,6 +1460,15 @@ export const api = {
   getWorkforceIntegrationStatus: () =>
     request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
   getWorkforceAccess: () => request<WorkforceAccess>('GET', '/workforce/access/me'),
+  getUserWorkforceScopes: (userId: number) =>
+    requestVersioned<WorkforceScopeReplace>('GET', `/workforce/access/users/${userId}/scopes`),
+  replaceUserWorkforceScopes: (userId: number, etag: string, payload: WorkforceScopeReplace) =>
+    requestVersioned<WorkforceScopeReplace>(
+      'PUT',
+      `/workforce/access/users/${userId}/scopes`,
+      payload,
+      requireEtag(etag),
+    ),
   getWorkforceSnapshot: () =>
     request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
   getMyDocumentActivity: () =>
