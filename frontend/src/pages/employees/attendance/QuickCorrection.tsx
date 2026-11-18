@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import {
   AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogTitle,
@@ -76,6 +77,8 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const direction = i18n.dir(i18n.language)
+  const location = useLocation()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [panel, setPanel] = useState<HTMLDivElement | null>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -202,6 +205,36 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
     }))
     return () => onDismissalGuardChange?.(null)
   }, [onDismissalGuardChange, requestDismissal])
+  useEffect(() => {
+    if (!dirty) return
+    const warnBeforeUnload = (event: BeforeUnloadEvent): void => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    const protectNavigation = (event: MouseEvent): void => {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+      if (!(event.target instanceof Element)) return
+      const link = event.target.closest('a[href]')
+      if (!(link instanceof HTMLAnchorElement) || panel?.contains(link) || link.hasAttribute('download')
+        || (link.target !== '' && link.target.toLowerCase() !== '_self')) return
+      const href = new URL(link.href, window.location.href)
+      if (href.origin !== window.location.origin
+        || (href.pathname === location.pathname && href.search === location.search)) return
+      event.preventDefault()
+      event.stopPropagation()
+      requestDismissal(() => {
+        movingToAnotherPanel.current = true
+        onClose()
+        void navigate(`${href.pathname}${href.search}${href.hash}`)
+      })
+    }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    document.addEventListener('click', protectNavigation, true)
+    return () => {
+      window.removeEventListener('beforeunload', warnBeforeUnload)
+      document.removeEventListener('click', protectNavigation, true)
+    }
+  }, [dirty, location.pathname, location.search, navigate, onClose, panel, requestDismissal])
   const viewEvidence = (): void => requestDismissal(() => {
     movingToAnotherPanel.current = true
     onViewEvidence(target.caseId)
@@ -245,7 +278,7 @@ function QuickCorrectionPanel({ target, anchor, onClose, onViewEvidence, onDismi
           onEscapeKeyDown={(event) => { event.preventDefault(); requestDismissal(onClose) }}
           onInteractOutside={(event) => {
             event.preventDefault()
-            if (event.target instanceof Element && event.target.closest('[data-attendance-correction-trigger]')) return
+            if (event.target instanceof Element && event.target.closest('[data-attendance-correction-trigger], [data-attendance-correction-navigation], a[href]')) return
             requestDismissal(onClose)
           }}
           style={isMobile ? {

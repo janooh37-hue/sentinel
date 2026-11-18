@@ -14,7 +14,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listAttendanceDay, listAttendanceExceptions, getAttendanceCase, hasCapability } = vi.hoisted(() => ({
@@ -101,11 +101,17 @@ const DAY_ROWS = [
   }),
 ]
 
+function RouteLocation(): React.JSX.Element {
+  const location = useLocation()
+  return <output data-testid="attendance-route">{location.pathname}{location.search}</output>
+}
+
 function renderPage(initialEntry = '/employees/attendance') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[initialEntry]}>
+        <RouteLocation />
         <Routes>
           <Route path="/employees/attendance" element={<AttendancePage />} />
           <Route path="/employees/:id" element={<div>employee file</div>} />
@@ -306,6 +312,43 @@ describe('AttendancePage', () => {
     await user.click(within(morning).getByText('Faisal Hamad'))
 
     expect(await screen.findByText('employee file')).toBeInTheDocument()
+  })
+
+  it.each(['register', 'board', 'timeline'] as const)('guards employee navigation from a dirty %s correction until Discard', async (view) => {
+    getAttendanceCase.mockResolvedValue({
+      data: {
+        id: 42,
+        employee_id: 'G-9001',
+        name_en: 'Ahmed Ali',
+        operational_date: '2026-08-19',
+        scheduled_start_at: MORNING_START,
+        scheduled_end_at: MORNING_END,
+        shift_code_snapshot: 'morning',
+        organization_snapshot_state: 'assigned',
+        effective: { presence_state: 'completed', first_in_at: '2026-08-19T01:10:00Z' },
+      },
+      etag: 'case-v1',
+    })
+    const user = userEvent.setup()
+    const route = `/employees/attendance?view=${view}`
+    renderPage(route)
+    const [surface] = await screen.findAllByTestId(view === 'board' ? 'attendance-board'
+      : view === 'timeline' ? 'attendance-timeline-unit' : 'attendance-register-unit')
+    await user.click(within(surface).getByRole('button', { name: /Correct attendance: Ahmed Ali/ }))
+    await screen.findByLabelText('In time (24h)')
+    await user.type(screen.getByLabelText('Reason details'), 'Confirmed against gate register')
+    await user.click(within(surface).getByText('Ahmed Ali'))
+    const confirmation = await screen.findByRole('alertdialog')
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent(route)
+    expect(screen.queryByText('employee file')).not.toBeInTheDocument()
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent(route)
+    expect(screen.getByLabelText('Reason details')).toHaveValue('Confirmed against gate register')
+    await user.click(within(surface).getByText('Ahmed Ali'))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByText('employee file')).toBeInTheDocument()
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent('/employees/G-9001?tab=attendance')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('shows the derived attention queue ordered worst first', async () => {

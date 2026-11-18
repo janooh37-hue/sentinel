@@ -60,14 +60,24 @@ export function AttendanceCorrectionProvider({ children }: { children: React.Rea
     if (dismissalGuard.current) dismissalGuard.current(proceed)
     else proceed()
   }, [showEvidence])
+  const requestNavigation = useCallback<CorrectionDismissalGuard>((navigate) => {
+    const proceed = (): void => {
+      setCurrent(null)
+      setEvidenceCaseId(null)
+      navigate()
+    }
+    if (dismissalGuard.current) dismissalGuard.current(proceed)
+    else proceed()
+  }, [])
 
   const value = useMemo<AttendanceCorrectionContextValue>(
     () => ({
       openCorrection: canCorrect ? openCorrection : null,
       viewEvidence,
+      requestNavigation,
       overlayOpen: current !== null || evidenceCaseId !== null,
     }),
-    [canCorrect, current, evidenceCaseId, openCorrection, viewEvidence],
+    [canCorrect, current, evidenceCaseId, openCorrection, viewEvidence, requestNavigation],
   )
 
   return (

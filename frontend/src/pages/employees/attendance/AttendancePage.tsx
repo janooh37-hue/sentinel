@@ -73,7 +73,7 @@ function AttendancePageBody(): React.JSX.Element | null {
   // is switched BEFORE the dialog opens, so React has committed the right
   // layout by the time the browser paints the preview.
   const [printLayout, setPrintLayout] = useState<PrintLayout>('sheet')
-  const { viewEvidence, overlayOpen } = useAttendanceCorrection()
+  const { viewEvidence, overlayOpen, requestNavigation } = useAttendanceCorrection()
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
   const canReview = canViewAttendanceRoster(has)
@@ -165,9 +165,9 @@ function AttendancePageBody(): React.JSX.Element | null {
 
   const openEmployee = useCallback(
     (employeeId: string) => {
-      navigate(`/employees/${encodeURIComponent(employeeId)}?tab=attendance`)
+      requestNavigation(() => navigate(`/employees/${encodeURIComponent(employeeId)}?tab=attendance`))
     },
-    [navigate],
+    [navigate, requestNavigation],
   )
 
   // `window.print()` blocks the thread, so the layout it is meant to print has

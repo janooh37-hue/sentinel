@@ -109,6 +109,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                           <div key={`${row.employee_id}-${row.shift_code}`} className="min-w-0 rounded-md border border-border bg-surface-raised p-2">
                             <button
                               type="button"
+                              data-attendance-correction-navigation=""
                               onClick={() => onOpenEmployee(row.employee_id)}
                               aria-label={t('attendance.board.openEmployee', { details })}
                               title={details}

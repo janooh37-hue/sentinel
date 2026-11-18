@@ -188,6 +188,7 @@ function TimelineRow({
     <li className="flex items-center gap-3 border-t border-hairline px-4 py-1.5 first:border-t-0">
       <button
         type="button"
+        data-attendance-correction-navigation=""
         onClick={() => onOpenEmployee(row.employee_id)}
         aria-label={t('attendance.timeline.rowLabel', {
           name,

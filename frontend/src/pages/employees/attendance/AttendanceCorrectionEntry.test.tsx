@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import type * as ApiModule from '@/lib/api'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -48,13 +49,27 @@ const CASE: AttendanceCase = {
   effective: { presence_state: 'on_duty', first_in_at: '2026-08-19T03:10:00Z' },
 }
 
+function RouteLocation(): React.JSX.Element {
+  const location = useLocation()
+  return <output data-testid="correction-route">{location.pathname}{location.search}</output>
+}
+
 function renderEntry(): void {
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <AttendanceCorrectionProvider>
-        <CorrectAttendanceButton target={TARGET} />
-        <CorrectAttendanceButton target={SECOND_TARGET} />
-      </AttendanceCorrectionProvider>
+      <MemoryRouter initialEntries={['/employees/attendance']}>
+        <header><Link to="/employees">Employee directory</Link></header>
+        <RouteLocation />
+        <Routes>
+          <Route path="/employees/attendance" element={
+            <AttendanceCorrectionProvider>
+              <CorrectAttendanceButton target={TARGET} />
+              <CorrectAttendanceButton target={SECOND_TARGET} />
+            </AttendanceCorrectionProvider>
+          } />
+          <Route path="/employees" element={<div>Employee directory destination</div>} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -139,6 +154,28 @@ describe('CorrectAttendanceButton', () => {
     await user.click(screen.getByRole('button', { name: /Correct attendance: Omar Hassan/ }))
     await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Omar Hassan'))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('guards a top-navigation Link outside the provider until the dirty draft is discarded', async () => {
+    hasCapability.mockReturnValue(true)
+    const user = userEvent.setup()
+    renderEntry()
+    await user.click(screen.getByRole('button', { name: /Correct attendance: Ahmed Ali/ }))
+    await screen.findByLabelText('In time (24h)')
+    await user.type(screen.getByLabelText('Reason details'), 'Confirmed against gate register')
+    const navigation = screen.getByRole('link', { name: 'Employee directory' })
+    await user.click(navigation)
+    const confirmation = await screen.findByRole('alertdialog')
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees/attendance')
+    expect(screen.queryByText('Employee directory destination')).not.toBeInTheDocument()
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees/attendance')
+    expect(screen.getByLabelText('Reason details')).toHaveValue('Confirmed against gate register')
+    await user.click(navigation)
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByText('Employee directory destination')).toBeInTheDocument()
+    expect(screen.getByTestId('correction-route')).toHaveTextContent('/employees')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

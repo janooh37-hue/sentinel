@@ -5,6 +5,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import type * as ApiModule from '@/lib/api'
 import i18n from 'i18next'
 import { useState } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import ar from '@/locales/ar.json'
@@ -76,7 +77,7 @@ function renderCorrection(target: CorrectionTarget | null = TARGET, anchorBounds
       onClose={() => { onClose(); setCurrent(null) }}
       onViewEvidence={(caseId) => { onViewEvidence(caseId); setCurrent(null) }} />
   }
-  render(<QueryClientProvider client={client}><Controlled /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter><Controlled /></MemoryRouter></QueryClientProvider>)
   return { client, onClose, onViewEvidence, anchor }
 }
 
@@ -324,6 +325,31 @@ describe('QuickCorrection', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledOnce())
     await waitFor(() => expect(anchor).toHaveFocus())
     expect(createAttendanceAdjustment).not.toHaveBeenCalled()
+  })
+
+  it('prompts before reload only while dirty and removes protection after reverting or discarding', async () => {
+    const user = userEvent.setup()
+    renderCorrection()
+    await screen.findByLabelText('In time (24h)')
+    const pristine = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(pristine)
+    expect(pristine.defaultPrevented).toBe(false)
+    const details = screen.getByLabelText('Reason details')
+    await user.type(details, 'Unsaved gate register correction')
+    const dirty = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(dirty)
+    expect(dirty.defaultPrevented).toBe(true)
+    await user.clear(details)
+    const reverted = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(reverted)
+    expect(reverted.defaultPrevented).toBe(false)
+    await user.type(details, 'Another unsaved correction')
+    await user.click(screen.getByRole('button', { name: 'Close correction' }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    const discarded = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(discarded)
+    expect(discarded.defaultPrevented).toBe(false)
   })
 
   it('asks Keep editing or Discard on dirty Escape and preserves the draft when editing continues', async () => {

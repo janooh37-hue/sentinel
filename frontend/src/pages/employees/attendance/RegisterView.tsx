@@ -185,6 +185,7 @@ export function RegisterView({
                             <div className="min-w-0 flex-1">
                               <button
                                 type="button"
+                                data-attendance-correction-navigation=""
                                 onClick={() => onOpenEmployee(row.employee_id)}
                                 aria-label={t('attendance.register.openEmployee', { name, employeeId: row.employee_id })}
                                 className="min-h-11 w-full rounded-sm text-start font-semibold text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring min-[641px]:min-h-7"
