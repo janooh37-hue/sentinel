@@ -6500,7 +6500,11 @@
         "selfOnly": "Self only",
         "locationsLoading": "Loading locations…",
         "locationsError": "Could not load locations. Retry to add a scope.",
-        "conflict": "Attendance scope changed. The latest saved scope has been loaded. Review it before saving again."
+        "conflict": "Attendance scope changed elsewhere. Your unsaved selections are kept. Compare them with the latest saved scope before saving again, or discard your changes to use the saved scope.",
+        "latestLoading": "Loading the latest saved scope…",
+        "serverScope": "Latest saved scope",
+        "refreshError": "The latest saved scope could not be loaded. Your unsaved selections are kept. Retry loading before saving or discarding.",
+        "discard": "Discard unsaved changes"
       },
       "mirror": {
         "title": "Permissions studio",

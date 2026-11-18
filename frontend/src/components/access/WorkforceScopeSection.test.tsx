@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -210,7 +210,7 @@ describe('Attendance scope', () => {
   it.each([
     { status: 409, code: 'WORKFORCE_VERSION_CONFLICT' },
     { status: 412, code: 'PRECONDITION_FAILED' },
-  ])('refreshes a $status conflict and uses the refreshed ETag on the next deliberate save', async ({ status, code }) => {
+  ])('preserves unsaved additions after a $status conflict and uses the refreshed ETag only on explicit save', async ({ status, code }) => {
     let body: unknown = { scopes: [] }
     let revision = 1
     fetchMock.mockImplementation(async (url, init) => {
@@ -220,7 +220,7 @@ describe('Attendance scope', () => {
       if (init?.method === 'PUT') {
         if (revision === 1) {
           revision = 2
-          body = { scopes: [{ scope_kind: 'department', department: 'Operations', duty_unit: null, duty_post: null }] }
+          body = { scopes: [{ scope_kind: 'department', department: 'Administration', duty_unit: null, duty_post: null }] }
           return new Response(JSON.stringify({ error: { code, message: 'Scope changed.', details: {} } }), { status })
         }
         body = JSON.parse(String(init.body))
@@ -230,16 +230,76 @@ describe('Attendance scope', () => {
     })
     const user = userEvent.setup()
     renderSection()
-    await user.click(await screen.findByRole('radio', { name: 'Whole organization' }))
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Department' }), 'Operations')
+    await user.click(screen.getByRole('button', { name: 'Add scope' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Scope type' }), 'duty_unit')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Duty unit' }), 'First unit')
+    await user.click(screen.getByRole('button', { name: 'Add scope' }))
     await user.click(screen.getByRole('button', { name: 'Save scope' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Attendance scope changed.')
-    expect(screen.getByRole('radio', { name: 'Self and selected locations' })).toBeChecked()
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save scope' })).toBeEnabled())
     expect(screen.getByRole('button', { name: 'Remove Department · Operations' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save scope' })).toBeDisabled()
-    await user.click(screen.getByRole('radio', { name: 'Whole organization' }))
+    expect(screen.getByRole('button', { name: 'Remove Duty unit · Operations · First unit' })).toBeInTheDocument()
+    const notice = screen.getByRole('alert')
+    expect(notice).toHaveTextContent('Attendance scope changed elsewhere.')
+    expect(within(notice).getByRole('list', { name: 'Latest saved scope' })).toHaveTextContent('Department · Administration')
+    expect(screen.queryByRole('button', { name: 'Remove Department · Administration' })).not.toBeInTheDocument()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
+
     await user.click(screen.getByRole('button', { name: 'Save scope' }))
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(scopesUrl, expect.objectContaining({
-      method: 'PUT', headers: expect.objectContaining({ 'If-Match': '"scope-2"' }),
+      method: 'PUT',
+      headers: expect.objectContaining({ 'If-Match': '"scope-2"' }),
+      body: JSON.stringify({ scopes: [
+        { scope_kind: 'department', department: 'Operations', duty_unit: null, duty_post: null },
+        { scope_kind: 'duty_unit', department: 'Operations', duty_unit: 'First unit', duty_post: null },
+      ] }),
     })))
+  })
+
+  it('preserves unsaved additions when conflict refresh fails, then allows retry and explicit discard', async () => {
+    let conflicted = false
+    let refreshFailed = false
+    fetchMock.mockImplementation(async (url, init) => {
+      if (String(url).startsWith('/api/v1/employees/lookup')) {
+        return jsonResponse({ items: roster, total: roster.length, limit: 500, offset: 0 })
+      }
+      if (init?.method === 'PUT') {
+        conflicted = true
+        return new Response(JSON.stringify({ error: { code: 'WORKFORCE_VERSION_CONFLICT', message: 'Scope changed.', details: {} } }), { status: 409 })
+      }
+      if (conflicted && !refreshFailed) {
+        refreshFailed = true
+        return new Response(JSON.stringify({ error: { code: 'SERVER_ERROR', message: 'Unavailable.', details: {} } }), { status: 500 })
+      }
+      return jsonResponse({
+        scopes: conflicted ? [{ scope_kind: 'organization', department: null, duty_unit: null, duty_post: null }] : [],
+      }, conflicted ? '"scope-2"' : '"scope-1"')
+    })
+    const user = userEvent.setup()
+    renderSection()
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Department' }), 'Operations')
+    await user.click(screen.getByRole('button', { name: 'Add scope' }))
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Scope type' }), 'duty_unit')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Duty unit' }), 'First unit')
+    await user.click(screen.getByRole('button', { name: 'Add scope' }))
+    await user.click(screen.getByRole('button', { name: 'Save scope' }))
+
+    await waitFor(() => expect(refreshFailed).toBe(true))
+    expect(screen.getByRole('button', { name: 'Remove Department · Operations' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Duty unit · Operations · First unit' })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('The latest saved scope could not be loaded. Your unsaved selections are kept. Retry loading before saving or discarding.')
+    expect(screen.queryByRole('list', { name: 'Latest saved scope' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save scope' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(await screen.findByRole('list', { name: 'Latest saved scope' })).toHaveTextContent('Whole organization')
+    expect(screen.getByRole('button', { name: 'Remove Department · Operations' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove Duty unit · Operations · First unit' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Discard unsaved changes' }))
+    expect(screen.getByRole('radio', { name: 'Whole organization' })).toBeChecked()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save scope' })).toBeDisabled()
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'PUT')).toHaveLength(1)
   })
 })

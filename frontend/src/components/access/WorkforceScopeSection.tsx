@@ -90,6 +90,13 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
   }
   const candidateValid = kind === 'department' ? department !== '' : unit !== '' && (kind !== 'duty_post' || post !== '')
   const duplicate = scopes.some((entry) => scopeKey(entry) === scopeKey(candidate))
+  const refreshConflict = async (): Promise<void> => {
+    const latest = await scopesQuery.refetch()
+    if (!latest.isError && latest.data) {
+      const etag = latest.data.etag
+      setDraft((current) => current ? { ...current, etag } : current)
+    }
+  }
   const mutation = useMutation({
     mutationFn: (next: Versioned<WorkforceScopeReplace>) =>
       api.replaceUserWorkforceScopes(userId, next.etag, next.data),
@@ -105,10 +112,9 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
       toast.success(t('access.permissions.scope.saved'))
     },
     onError: async (error) => {
-      if (error instanceof ApiError && (error.status === 412 || error.code === 'WORKFORCE_VERSION_CONFLICT')) {
-        await scopesQuery.refetch()
-        setDraft(null)
+      if (error instanceof ApiError && (error.status === 409 || error.status === 412 || error.code === 'WORKFORCE_VERSION_CONFLICT')) {
         setConflict(true)
+        await refreshConflict()
         toast.error(t('access.permissions.scope.conflict'))
       } else {
         toast.error(apiErrorMessage(error))
@@ -137,19 +143,41 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
         {t('access.permissions.scope.selfHint')}
       </p>
       {conflict ? (
-        <p role="alert" className="mt-3 text-sm text-destructive-text">
-          {t('access.permissions.scope.conflict')}
-        </p>
+        <div role="alert" className="mt-3 space-y-2 text-sm text-destructive-text">
+          <p>{t('access.permissions.scope.conflict')}</p>
+          {scopesQuery.isFetching ? (
+            <p>{t('access.permissions.scope.latestLoading')}</p>
+          ) : scopesQuery.isError ? (
+            <>
+              <p>{t('access.permissions.scope.refreshError')}</p>
+              <Button type="button" variant="ghost" onClick={() => void refreshConflict()} className="min-h-11">
+                {t('access.permissions.scope.retry')}
+              </Button>
+            </>
+          ) : (
+            <div className="text-foreground">
+              <p className="font-semibold">{t('access.permissions.scope.serverScope')}</p>
+              <ul aria-label={t('access.permissions.scope.serverScope')} className="mt-1 space-y-1">
+                {scopesQuery.data?.data.scopes.length ? scopesQuery.data.data.scopes.map((entry) => (
+                  <li key={scopeKey(entry)} className="min-w-0 break-words">
+                    <bdi dir="auto">{entry.scope_kind === 'organization' ? t('access.permissions.scope.organization') : scopeLabel(entry)}</bdi>
+                  </li>
+                )) : <li>{t('access.permissions.scope.selfOnly')}</li>}
+              </ul>
+            </div>
+          )}
+        </div>
       ) : null}
-      {scopesQuery.isError ? (
+      {scopesQuery.isError && !conflict ? (
         <div className="mt-3">
           <p role="alert" className="text-sm text-destructive-text">{t('access.permissions.scope.loadError')}</p>
           <Button type="button" variant="ghost" onClick={() => void scopesQuery.refetch()}>
             {t('access.permissions.scope.retry')}
           </Button>
         </div>
-      ) : !snapshot ? (
-        <Skeleton className="mt-4 h-24 w-full rounded-lg" />
+      ) : null}
+      {!snapshot ? (
+        scopesQuery.isError ? null : <Skeleton className="mt-4 h-24 w-full rounded-lg" />
       ) : (
         <div className="mt-4 space-y-4">
           <fieldset disabled={mutation.isPending} className="space-y-2">
@@ -285,10 +313,24 @@ function WorkforceScopeEditor({ userId }: { userId: number }): React.JSX.Element
               )}
             </div>
           ) : null}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            {conflict ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={mutation.isPending || scopesQuery.isFetching || scopesQuery.isError}
+                onClick={() => {
+                  setDraft(null)
+                  setConflict(false)
+                }}
+                className="min-h-11"
+              >
+                {t('access.permissions.scope.discard')}
+              </Button>
+            ) : null}
             <Button
               type="button"
-              disabled={!dirty || mutation.isPending || scopesQuery.isFetching}
+              disabled={!dirty || mutation.isPending || scopesQuery.isFetching || scopesQuery.isError}
               onClick={() => mutation.mutate(snapshot)}
               className="min-h-11"
             >
