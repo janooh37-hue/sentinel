@@ -340,3 +340,114 @@ def test_leave_amendment_reevaluates_the_union_of_old_and_new_operational_dates(
         (window.employee_id, window.start_date, window.end_date)
         for window in windows
     ] == [(employee.id, date(2026, 8, 17), date(2026, 8, 22))]
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "reason_code"),
+    [
+        ("Duty Leave", "LEAVE_DUTY"),
+        ("Duty Leave - إجازة مهمة رسمية", "LEAVE_DUTY"),
+        ("Compassionate Leave", "LEAVE_OTHER"),
+        ("Emergency Leave", "LEAVE_OTHER"),
+        ("Hajj Leave", "LEAVE_OTHER"),
+        ("Others", "LEAVE_OTHER"),
+        ("Administrative Leave", "LEAVE_OTHER"),
+    ],
+)
+@pytest.mark.parametrize("status", ["Approved", "Pending", "Rejected", "Cancelled"])
+def test_new_excusing_kinds_require_approval_and_covering_dates(
+    db_session, leave_type, reason_code, status
+):
+    employee = _employee(db_session, "G-NEW-KIND")
+    operational_date = date(2026, 8, 18)
+    leave = _leave(
+        db_session,
+        employee_id=employee.id,
+        leave_type=leave_type,
+        start_date=operational_date,
+        end_date=operational_date + timedelta(days=1),
+        status=status,
+    )
+
+    resolution = _resolve(db_session, employee.id, operational_date)
+
+    if status == "Approved":
+        assert resolution is not None
+        assert resolution.reason_code == reason_code
+        assert resolution.source_leave_ids == (leave.id,)
+        assert _resolve(db_session, employee.id, leave.end_date) is not None
+    else:
+        assert resolution is None
+    assert _resolve(db_session, employee.id, operational_date - timedelta(days=1)) is None
+    assert _resolve(db_session, employee.id, leave.end_date + timedelta(days=1)) is None
+    leave.deleted_at = datetime(2026, 8, 18, 12)
+    db_session.flush()
+    assert _resolve(db_session, employee.id, operational_date) is None
+
+
+@pytest.mark.parametrize("leave_type", ["Leave Permit", "Passport Release", "Duty Resumption"])
+def test_approved_non_excusing_records_never_supply_leave_sources(db_session, leave_type):
+    employee = _employee(db_session, "G-NON-EXCUSING")
+    operational_date = date(2026, 8, 18)
+    _leave(
+        db_session,
+        employee_id=employee.id,
+        leave_type=leave_type,
+        start_date=operational_date,
+        end_date=operational_date,
+        status="Approved",
+    )
+
+    assert _resolve(db_session, employee.id, operational_date) is None
+
+
+@pytest.mark.parametrize(
+    ("winning_type", "reason_code"),
+    [
+        ("National Service", "LEAVE_NATIONAL_SERVICE"),
+        ("Sick Leave", "LEAVE_SICK"),
+        ("Annual Leave", "LEAVE_ANNUAL"),
+        ("Duty Leave", "LEAVE_DUTY"),
+        ("Compassionate Leave", "LEAVE_OTHER"),
+    ],
+)
+def test_excusing_precedence_keeps_every_qualifying_source(db_session, winning_type, reason_code):
+    employee = _employee(db_session, "G-ALL-KINDS")
+    operational_date = date(2026, 8, 18)
+    # Insert weakest first: neither row order nor smallest id decides precedence.
+    leave_types = [
+        "Others",
+        "Administrative Leave",
+        "Hajj Leave",
+        "Emergency Leave",
+        "Compassionate Leave",
+        "Duty Leave",
+        "Annual Leave",
+        "Sick Leave",
+        "National Service",
+    ]
+    source_ids = []
+    for leave_type in leave_types[: leave_types.index(winning_type) + 1]:
+        leave = _leave(
+            db_session,
+            employee_id=employee.id,
+            leave_type=leave_type,
+            start_date=operational_date,
+            end_date=operational_date,
+            status="Pending" if leave_type == "National Service" else "Approved",
+        )
+        source_ids.append(leave.id)
+    _leave(
+        db_session,
+        employee_id=employee.id,
+        leave_type="Leave Permit",
+        start_date=operational_date,
+        end_date=operational_date,
+        status="Approved",
+    )
+
+    resolution = _resolve(db_session, employee.id, operational_date)
+
+    assert resolution is not None
+    assert resolution.reason_code == reason_code
+    assert resolution.source_leave_ids == tuple(source_ids)

@@ -296,12 +296,18 @@ def test_unchanged_fingerprint_returns_existing_revision_and_changed_source_appe
     ).all()
 
 
-def test_approved_leave_wins_precedence_and_stores_canonical_source_links(db_session):
+@pytest.mark.parametrize(
+    ("leave_type", "reason_code"),
+    [("Annual Leave", "LEAVE_ANNUAL"), ("Duty Leave", "LEAVE_DUTY")],
+)
+def test_approved_leave_wins_precedence_and_stores_canonical_source_links(
+    db_session, leave_type, reason_code
+):
     case = _seed_case(db_session)
     punch = _punch(db_session, case, event_id="source-in", at=SHIFT_START + timedelta(minutes=1), direction="in")
     leave = Leave(
         employee_id=case.employee_id,
-        leave_type="Annual Leave",
+        leave_type=leave_type,
         start_date=date(2026, 8, 17),
         end_date=date(2026, 8, 17),
         days=1,
@@ -312,12 +318,64 @@ def test_approved_leave_wins_precedence_and_stores_canonical_source_links(db_ses
 
     evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
     assert evaluated.presence_state == "excused_leave"
-    assert evaluated.reason_code == "LEAVE_ANNUAL"
+    assert evaluated.reason_code == reason_code
     assert [(link.punch_id, link.ordinal) for link in evaluated.punch_sources] == [(punch.id, 1)]
     assert [(link.leave_id, link.is_primary) for link in evaluated.leave_sources] == [(leave.id, True)]
 
 
-def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_raw_evidence(db_session):
+def test_overlapping_annual_and_duty_leave_keep_annual_as_primary_source(db_session):
+    case = _seed_case(db_session)
+    duty, annual = [
+        Leave(
+            employee_id=case.employee_id,
+            leave_type=leave_type,
+            start_date=case.operational_date,
+            end_date=case.operational_date,
+            days=1,
+            status="Approved",
+        )
+        for leave_type in ("Duty Leave", "Annual Leave")
+    ]
+    db_session.add_all((duty, annual))
+    db_session.flush()
+
+    evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+
+    assert (evaluated.presence_state, evaluated.reason_code) == ("excused_leave", "LEAVE_ANNUAL")
+    assert {(link.leave_id, link.is_primary) for link in evaluated.leave_sources} == {
+        (duty.id, False),
+        (annual.id, True),
+    }
+
+
+def test_approved_leave_permit_does_not_change_attendance_verdict(db_session):
+    case = _seed_case(db_session)
+    baseline = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+    assert baseline.presence_state == "absent"
+    db_session.add(
+        Leave(
+            employee_id=case.employee_id,
+            leave_type="Leave Permit",
+            start_date=case.operational_date,
+            end_date=case.operational_date,
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.flush()
+
+    evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+
+    assert (evaluated.presence_state, evaluated.reason_code) == (
+        baseline.presence_state,
+        baseline.reason_code,
+    )
+    assert evaluated.leave_sources == []
+
+
+def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_raw_evidence(
+    db_session,
+):
     case = _seed_case(db_session)
     actor = db_session.scalar(select(User))
     assert actor is not None
