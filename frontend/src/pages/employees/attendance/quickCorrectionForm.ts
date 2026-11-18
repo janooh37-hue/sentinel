@@ -13,6 +13,10 @@ export type QuickCorrectionLeaveKind = typeof QUICK_CORRECTION_LEAVE_KINDS[numbe
 
 export interface QuickCorrectionDraft {
   action: QuickCorrectionAction
+  inDate: string
+  outDate: string
+  inDateConfirmed: boolean
+  outDateConfirmed: boolean
   inTime: string
   outTime: string
   leaveKind: QuickCorrectionLeaveKind
@@ -29,7 +33,7 @@ export interface QuickCorrectionReasonLabels {
   auditNoteLabel: string
 }
 
-export type QuickCorrectionError = 'reasonRequired' | 'inRequired' | 'invalidTime' | 'outBeforeIn'
+export type QuickCorrectionError = 'reasonRequired' | 'inRequired' | 'dateRequired' | 'invalidTime' | 'outBeforeIn'
   | 'futureTime' | 'clearUnavailable'
 
 type QuickCorrectionCase = Pick<AttendanceCase,
@@ -41,11 +45,19 @@ export function quickCorrectionDraftFromCase(attendanceCase: QuickCorrectionCase
   const leaveKind = QUICK_CORRECTION_LEAVE_KINDS.find((kind) =>
     kind === effective?.leave_kind || reasonCode === `leave_${kind}`,
   ) ?? 'annual'
+  const startDate = toLocalInput(attendanceCase.scheduled_start_at).slice(0, 10)
+  const endDate = toLocalInput(attendanceCase.scheduled_end_at).slice(0, 10)
+  const firstIn = typeof effective?.first_in_at === 'string' ? toLocalInput(effective.first_in_at) : ''
+  const finalOut = typeof effective?.final_out_at === 'string' ? toLocalInput(effective.final_out_at) : ''
   return {
     action: effective?.presence_state === 'absent' ? 'absent'
       : effective?.presence_state === 'excused_leave' ? 'leave' : 'present',
-    inTime: typeof effective?.first_in_at === 'string' ? toLocalInput(effective.first_in_at).slice(11) : '',
-    outTime: typeof effective?.final_out_at === 'string' ? toLocalInput(effective.final_out_at).slice(11) : '',
+    inDate: firstIn.slice(0, 10) || startDate,
+    outDate: finalOut.slice(0, 10) || endDate,
+    inDateConfirmed: firstIn !== '' || startDate === endDate,
+    outDateConfirmed: finalOut !== '' || startDate === endDate,
+    inTime: firstIn.slice(11),
+    outTime: finalOut.slice(11),
     leaveKind,
     reason: '',
     details: '',
@@ -55,8 +67,8 @@ export function quickCorrectionDraftFromCase(attendanceCase: QuickCorrectionCase
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
-/** Time-only controls follow the scheduled Dubai dates, including an overnight rollover. */
-export function quickCorrectionTimes(attendanceCase: QuickCorrectionCase, draft: QuickCorrectionDraft): {
+/** Convert explicitly selected Dubai dates and wall times without guessing a rollover. */
+export function quickCorrectionTimes(draft: QuickCorrectionDraft): {
   firstInAt: string
   finalOutAt: string | null
   inDate: string
@@ -66,17 +78,16 @@ export function quickCorrectionTimes(attendanceCase: QuickCorrectionCase, draft:
   if (!TIME.test(draft.inTime) || (draft.outTime !== '' && !TIME.test(draft.outTime))) {
     throw new Error('invalidTime')
   }
-  const start = toLocalInput(attendanceCase.scheduled_start_at)
-  const end = toLocalInput(attendanceCase.scheduled_end_at)
-  const startDate = start.slice(0, 10)
-  const endDate = end.slice(0, 10)
-  const overnight = endDate > startDate
-  const inDate = overnight && draft.inTime <= end.slice(11) ? endDate : startDate
+  if (!draft.inDateConfirmed || draft.inDate === ''
+    || (draft.outTime !== '' && (!draft.outDateConfirmed || draft.outDate === ''))) {
+    throw new Error('dateRequired')
+  }
+  const inDate = draft.inDate
   const firstInAt = localDubaiInputToUtc(`${inDate}T${draft.inTime}`)
   let outDate: string | null = null
   let finalOutAt: string | null = null
   if (draft.outTime !== '') {
-    outDate = overnight && inDate === startDate && draft.outTime < draft.inTime ? endDate : inDate
+    outDate = draft.outDate
     finalOutAt = localDubaiInputToUtc(`${outDate}T${draft.outTime}`)
     if (Date.parse(finalOutAt) <= Date.parse(firstInAt)) throw new Error('outBeforeIn')
   }
@@ -94,11 +105,12 @@ export function validateQuickCorrection(
   }
   if (draft.action !== 'present') return null
   try {
-    const times = quickCorrectionTimes(attendanceCase, draft)
+    const times = quickCorrectionTimes(draft)
     if (Date.parse(times.firstInAt) > now.getTime()
       || (times.finalOutAt !== null && Date.parse(times.finalOutAt) > now.getTime())) return 'futureTime'
   } catch (error) {
     if (error instanceof Error && error.message === 'inRequired') return 'inRequired'
+    if (error instanceof Error && error.message === 'dateRequired') return 'dateRequired'
     if (error instanceof Error && error.message === 'outBeforeIn') return 'outBeforeIn'
     return 'invalidTime'
   }
@@ -137,7 +149,7 @@ export function buildQuickCorrectionPayload(
       reason,
     }
   }
-  const { firstInAt, finalOutAt } = quickCorrectionTimes(attendanceCase, draft)
+  const { firstInAt, finalOutAt } = quickCorrectionTimes(draft)
   return {
     replacement_presence_state: finalOutAt === null ? 'on_duty' : 'completed',
     replacement_first_in_at: firstInAt,

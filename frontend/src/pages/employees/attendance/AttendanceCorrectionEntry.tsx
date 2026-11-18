@@ -9,7 +9,7 @@
  */
 
 import { PencilLine } from 'lucide-react'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -23,6 +23,7 @@ import {
   useAttendanceCorrection,
   type AttendanceCorrectionContextValue,
   type CorrectionTarget,
+  type CorrectionDismissalGuard,
 } from './attendanceCorrectionContext'
 
 interface OpenCorrection {
@@ -35,16 +36,30 @@ export function AttendanceCorrectionProvider({ children }: { children: React.Rea
   const canCorrect = has(ATTENDANCE_CORRECT_CAP)
   const [current, setCurrent] = useState<OpenCorrection | null>(null)
   const [evidenceCaseId, setEvidenceCaseId] = useState<number | null>(null)
+  const dismissalGuard = useRef<CorrectionDismissalGuard | null>(null)
+  const registerDismissalGuard = useCallback((guard: CorrectionDismissalGuard | null) => {
+    dismissalGuard.current = guard
+  }, [])
 
   const openCorrection = useCallback((target: CorrectionTarget, trigger: HTMLElement | null) => {
-    setEvidenceCaseId(null)
-    setCurrent({ target, trigger })
-  }, [])
-  const viewEvidence = useCallback((caseId: number) => {
+    if (current?.target.caseId === target.caseId) return
+    const proceed = (): void => {
+      setEvidenceCaseId(null)
+      setCurrent({ target, trigger })
+    }
+    if (dismissalGuard.current) dismissalGuard.current(proceed)
+    else proceed()
+  }, [current])
+  const showEvidence = useCallback((caseId: number) => {
     // One overlay at a time: evidence replaces Quick correction, never stacks on it.
     setCurrent(null)
     setEvidenceCaseId(caseId)
   }, [])
+  const viewEvidence = useCallback((caseId: number) => {
+    const proceed = (): void => showEvidence(caseId)
+    if (dismissalGuard.current) dismissalGuard.current(proceed)
+    else proceed()
+  }, [showEvidence])
 
   const value = useMemo<AttendanceCorrectionContextValue>(
     () => ({
@@ -63,7 +78,8 @@ export function AttendanceCorrectionProvider({ children }: { children: React.Rea
           target={current?.target ?? null}
           anchor={current?.trigger ?? null}
           onClose={() => setCurrent(null)}
-          onViewEvidence={viewEvidence}
+          onViewEvidence={showEvidence}
+          onDismissalGuardChange={registerDismissalGuard}
         />
       )}
       <AttendanceCorrectionDrawer caseId={evidenceCaseId} onClose={() => setEvidenceCaseId(null)} />
@@ -94,6 +110,7 @@ export function CorrectAttendanceButton({ target, variant = 'icon', className }:
     <button
       type="button"
       data-testid="attendance-correct-trigger"
+      data-attendance-correction-trigger=""
       aria-label={name}
       title={name}
       aria-haspopup="dialog"

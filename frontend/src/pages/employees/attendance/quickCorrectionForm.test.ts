@@ -38,6 +38,10 @@ const labels: QuickCorrectionReasonLabels = {
 }
 const draft: QuickCorrectionDraft = {
   action: 'present',
+  inDate: '2026-11-17',
+  outDate: '2026-11-17',
+  inDateConfirmed: true,
+  outDateConfirmed: true,
   inTime: '07:10',
   outTime: '14:45',
   leaveKind: 'hajj',
@@ -125,22 +129,82 @@ describe('quick correction snapshots', () => {
       scheduled_end_at: '2026-11-18T02:00:00Z',
     }
     expect(buildQuickCorrectionPayload(overnight, {
-      ...draft, inTime: '22:10', outTime: '05:40',
+      ...draft, inTime: '22:10', outTime: '05:40', outDate: '2026-11-18',
     }, labels, now)).toMatchObject({
       replacement_first_in_at: '2026-11-17T18:10:00.000Z',
       replacement_final_out_at: '2026-11-18T01:40:00.000Z',
       replacement_late_minutes: 10,
       replacement_early_exit_minutes: 20,
     })
-    expect(quickCorrectionTimes(overnight, { ...draft, inTime: '22:10', outTime: '05:40' }))
+    expect(quickCorrectionTimes({ ...draft, inTime: '22:10', outTime: '05:40', outDate: '2026-11-18' }))
       .toMatchObject({ inDate: '2026-11-17', outDate: '2026-11-18' })
     expect(buildQuickCorrectionPayload(overnight, {
-      ...draft, inTime: '00:10', outTime: '05:40',
+      ...draft, inTime: '00:10', outTime: '05:40', inDate: '2026-11-18', outDate: '2026-11-18',
     }, labels, now)).toMatchObject({
       replacement_first_in_at: '2026-11-17T20:10:00.000Z',
       replacement_final_out_at: '2026-11-18T01:40:00.000Z',
       replacement_late_minutes: 130,
     })
+  })
+
+  it('saves a next-day overnight arrival after the scheduled end on its selected date', () => {
+    const overnight = {
+      ...attendanceCase,
+      scheduled_start_at: '2026-11-17T18:00:00Z',
+      scheduled_end_at: '2026-11-18T02:00:00Z',
+    }
+    expect(buildQuickCorrectionPayload(overnight, {
+      ...draft,
+      inDate: '2026-11-18',
+      outDate: '2026-11-18',
+      inTime: '06:10',
+      outTime: '06:30',
+    }, labels, now)).toMatchObject({
+      replacement_first_in_at: '2026-11-18T02:10:00.000Z',
+      replacement_final_out_at: '2026-11-18T02:30:00.000Z',
+      replacement_late_minutes: 490,
+      replacement_early_exit_minutes: 0,
+    })
+  })
+
+  it('preserves the effective next-day arrival date when prefilling an overnight correction', () => {
+    const overnight = {
+      ...attendanceCase,
+      scheduled_start_at: '2026-11-17T18:00:00Z',
+      scheduled_end_at: '2026-11-18T02:00:00Z',
+      effective: {
+        presence_state: 'completed',
+        first_in_at: '2026-11-18T02:10:00Z',
+        final_out_at: '2026-11-18T02:30:00Z',
+      },
+    }
+    const prefilled = { ...quickCorrectionDraftFromCase(overnight), reason: draft.reason, details: draft.details }
+    expect(buildQuickCorrectionPayload(overnight, prefilled, labels, now)).toMatchObject({
+      replacement_first_in_at: '2026-11-18T02:10:00.000Z',
+      replacement_final_out_at: '2026-11-18T02:30:00.000Z',
+    })
+    expect(prefilled).toMatchObject({
+      inDate: '2026-11-18', outDate: '2026-11-18', inDateConfirmed: true, outDateConfirmed: true,
+    })
+  })
+
+  it('requires an explicit date choice for new overnight In and Out times', () => {
+    const overnight = {
+      ...attendanceCase,
+      scheduled_start_at: '2026-11-17T18:00:00Z',
+      scheduled_end_at: '2026-11-18T02:00:00Z',
+      effective: { presence_state: 'unknown' },
+    }
+    const entered = {
+      ...quickCorrectionDraftFromCase(overnight),
+      inTime: '06:10', outTime: '06:30', reason: draft.reason, details: draft.details,
+    }
+    expect(validateQuickCorrection(overnight, entered, now)).toBe('dateRequired')
+    expect(validateQuickCorrection(overnight, { ...entered, inDate: '2026-11-18', inDateConfirmed: true }, now)).toBe('dateRequired')
+    expect(validateQuickCorrection(overnight, {
+      ...entered, inDate: '2026-11-18', outDate: '2026-11-18', inDateConfirmed: true, outDateConfirmed: true,
+    }, now)).toBeNull()
+    expect(entered).toMatchObject({ inDate: '2026-11-17', outDate: '2026-11-18' })
   })
 
   it.each([
@@ -162,9 +226,9 @@ describe('quick correction snapshots', () => {
       scheduled_start_at: '2026-11-18T03:00:00Z',
       scheduled_end_at: '2026-11-18T11:00:00Z',
     }
-    expect(validateQuickCorrection(today, { ...draft, inTime: '11:41', outTime: '' }, now)).toBe('futureTime')
-    expect(validateQuickCorrection(today, { ...draft, outTime: '11:41' }, now)).toBe('futureTime')
-    expect(validateQuickCorrection(today, { ...draft, outTime: '11:40' }, now)).toBeNull()
+    expect(validateQuickCorrection(today, { ...draft, inDate: '2026-11-18', inTime: '11:41', outTime: '' }, now)).toBe('futureTime')
+    expect(validateQuickCorrection(today, { ...draft, inDate: '2026-11-18', outDate: '2026-11-18', outTime: '11:41' }, now)).toBe('futureTime')
+    expect(validateQuickCorrection(today, { ...draft, inDate: '2026-11-18', outDate: '2026-11-18', outTime: '11:40' }, now)).toBeNull()
   })
 
   it('also rejects a future next-day checkout for an overnight operational date', () => {
@@ -173,7 +237,7 @@ describe('quick correction snapshots', () => {
       scheduled_start_at: '2026-11-17T18:00:00Z',
       scheduled_end_at: '2026-11-18T02:00:00Z',
     }
-    expect(validateQuickCorrection(overnight, { ...draft, inTime: '22:10', outTime: '05:40' },
+    expect(validateQuickCorrection(overnight, { ...draft, inTime: '22:10', outTime: '05:40', outDate: '2026-11-18' },
       new Date('2026-11-18T01:00:00Z'))).toBe('futureTime')
   })
 

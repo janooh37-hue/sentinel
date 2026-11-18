@@ -81,8 +81,8 @@ function renderCorrection(target: CorrectionTarget | null = TARGET, anchorBounds
 }
 
 async function enterReason(user: UserEvent, details = 'Confirmed by the post supervisor') {
-  await user.selectOptions(screen.getByLabelText('Reason'), 'supervisor')
-  await user.type(screen.getByLabelText('Reason details'), details)
+  await user.selectOptions(screen.getByLabelText(i18n.t('attendance.quickCorrection.reason')), 'supervisor')
+  await user.type(screen.getByLabelText(i18n.t('attendance.quickCorrection.reasonText')), details)
 }
 
 beforeEach(() => {
@@ -116,6 +116,8 @@ describe('QuickCorrection', () => {
     expect(evidence).toHaveTextContent('Corrected · human correction')
     expect(screen.getByText(/Last correction: Duty Officer/)).toHaveTextContent('2026-11-17 16:00')
     expect(screen.getByText('BioTime punches stay untouched; this overlays the day')).toBeInTheDocument()
+    expect(screen.queryByLabelText('In date')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Out date')).not.toBeInTheDocument()
   })
 
   it('anchors the desktop panel to the trigger and mirrors its logical placement in RTL', async () => {
@@ -135,6 +137,85 @@ describe('QuickCorrection', () => {
     renderCorrection()
     expect(await screen.findByLabelText(/Out time \(24h\)/)).toHaveValue('')
     expect(screen.getByRole('region', { name: 'Current evidence' })).toHaveTextContent('—')
+  })
+
+  it.each(['desktop', 'mobile'] as const)('requires date choices for a new post-shift overnight arrival on %s', async (surface) => {
+    if (surface === 'mobile') {
+      vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        matches: query === '(max-width: 640px)', media: query, onchange: null,
+        addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: () => false,
+      }))
+    }
+    getAttendanceCase.mockResolvedValue({
+      data: {
+        ...CASE,
+        scheduled_start_at: '2026-11-17T18:00:00Z',
+        scheduled_end_at: '2026-11-18T02:00:00Z',
+        effective: { presence_state: 'unknown' },
+      },
+      etag: 'case-v1',
+    })
+    const user = userEvent.setup()
+    renderCorrection()
+    await user.type(await screen.findByLabelText('In time (24h)'), '06:10')
+    await user.type(screen.getByLabelText(/Out time \(24h\)/), '06:30')
+    await enterReason(user)
+    expect(screen.getByRole('button', { name: 'Save correction' })).toBeDisabled()
+    const inDate = screen.getByLabelText('In date')
+    const outDate = screen.getByLabelText('Out date')
+    expect(inDate).toHaveValue('')
+    expect(outDate).toHaveValue('')
+    expect(within(inDate).getAllByRole('option').map((option) => option.getAttribute('value'))).toEqual(['', '2026-11-17', '2026-11-18'])
+    await user.selectOptions(inDate, '2026-11-18')
+    expect(screen.getByRole('button', { name: 'Save correction' })).toBeDisabled()
+    await user.selectOptions(outDate, '2026-11-18')
+    await user.click(screen.getByRole('button', { name: 'Save correction' }))
+    await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', expect.objectContaining({
+      replacement_first_in_at: '2026-11-18T02:10:00.000Z',
+      replacement_final_out_at: '2026-11-18T02:30:00.000Z',
+    })))
+  })
+
+  it.each([
+    { language: 'en', surface: 'desktop' },
+    { language: 'ar', surface: 'mobile' },
+  ] as const)('prefills and saves effective next-day overnight dates in $language on $surface', async ({ language, surface }) => {
+    if (surface === 'mobile') {
+      vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        matches: query === '(max-width: 640px)', media: query, onchange: null,
+        addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: () => false,
+      }))
+    }
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(language)
+    getAttendanceCase.mockResolvedValue({
+      data: {
+        ...CASE,
+        scheduled_start_at: '2026-11-17T18:00:00Z',
+        scheduled_end_at: '2026-11-18T02:00:00Z',
+        effective: {
+          presence_state: 'completed',
+          first_in_at: '2026-11-18T02:10:00Z',
+          final_out_at: '2026-11-18T02:30:00Z',
+        },
+      },
+      etag: 'case-v1',
+    })
+    const user = userEvent.setup()
+    renderCorrection()
+    expect(await screen.findByLabelText(i18n.t('attendance.quickCorrection.inTime'))).toHaveValue('06:10')
+    const inDate = screen.getByLabelText(language === 'en' ? 'In date' : 'تاريخ الدخول')
+    const outDate = screen.getByLabelText(language === 'en' ? 'Out date' : 'تاريخ الخروج')
+    expect(inDate).toHaveValue('2026-11-18')
+    expect(outDate).toHaveValue('2026-11-18')
+    expect(inDate).toHaveAttribute('dir', 'ltr')
+    expect(outDate).toHaveAttribute('dir', 'ltr')
+    await enterReason(user)
+    await user.click(screen.getByRole('button', { name: i18n.t('attendance.quickCorrection.save') }))
+    await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', expect.objectContaining({
+      replacement_first_in_at: '2026-11-18T02:10:00.000Z',
+      replacement_final_out_at: '2026-11-18T02:30:00.000Z',
+    })))
   })
 
   it('saves absent as a complete cleared snapshot with reason and audit note, refreshes every view, and announces success', async () => {

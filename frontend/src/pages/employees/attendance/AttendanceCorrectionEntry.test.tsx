@@ -3,30 +3,29 @@
  * point that must not exist for a user who cannot correct.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import i18n from 'i18next'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as ApiModule from '@/lib/api'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { hasCapability, quickCorrection } = vi.hoisted(() => ({
+const { hasCapability, getAttendanceCase } = vi.hoisted(() => ({
   hasCapability: vi.fn(),
-  quickCorrection: vi.fn(),
+  getAttendanceCase: vi.fn(),
 }))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: hasCapability }),
 }))
 
-// The overlay itself is tested on its own; here only who may open it matters.
-vi.mock('./QuickCorrection', () => ({
-  QuickCorrection: (props: { target: { caseId: number } | null }) => {
-    quickCorrection(props.target)
-    return props.target ? <div role="dialog">quick correction {props.target.caseId}</div> : null
-  },
-}))
+vi.mock('@/lib/api', async (original) => {
+  const real = await original<typeof ApiModule>()
+  return { ...real, api: { ...real.api, getAttendanceCase } }
+})
 
 import { AttendanceCorrectionProvider, CorrectAttendanceButton } from './AttendanceCorrectionEntry'
 import { AttendanceLegend } from './AttendanceLegend'
+import type { AttendanceCase } from '@/lib/api'
 
 const TARGET = {
   caseId: 42,
@@ -36,11 +35,25 @@ const TARGET = {
   shiftCode: 'morning',
 }
 
+const SECOND_TARGET = { ...TARGET, caseId: 43, employeeId: 'G-9002', employeeName: 'Omar Hassan' }
+const CASE: AttendanceCase = {
+  id: 42,
+  employee_id: TARGET.employeeId,
+  name_en: TARGET.employeeName,
+  operational_date: TARGET.operationalDate,
+  scheduled_start_at: '2026-08-19T03:00:00Z',
+  scheduled_end_at: '2026-08-19T11:00:00Z',
+  shift_code_snapshot: 'morning',
+  organization_snapshot_state: 'assigned',
+  effective: { presence_state: 'on_duty', first_in_at: '2026-08-19T03:10:00Z' },
+}
+
 function renderEntry(): void {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <AttendanceCorrectionProvider>
         <CorrectAttendanceButton target={TARGET} />
+        <CorrectAttendanceButton target={SECOND_TARGET} />
       </AttendanceCorrectionProvider>
     </QueryClientProvider>,
   )
@@ -48,8 +61,16 @@ function renderEntry(): void {
 
 beforeEach(async () => {
   hasCapability.mockReset()
-  quickCorrection.mockReset()
+  getAttendanceCase.mockReset().mockImplementation(async (caseId: number) => ({
+    data: caseId === 42 ? CASE : { ...CASE, id: 43, employee_id: SECOND_TARGET.employeeId, name_en: SECOND_TARGET.employeeName },
+    etag: `case-${caseId}`,
+  }))
   await i18n.changeLanguage('en')
+})
+
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
 })
 
 describe('CorrectAttendanceButton', () => {
@@ -57,14 +78,67 @@ describe('CorrectAttendanceButton', () => {
     hasCapability.mockImplementation((cap: string) => cap !== 'workforce.attendance.correct')
     renderEntry()
     expect(screen.queryByTestId('attendance-correct-trigger')).toBeNull()
-    expect(quickCorrection).not.toHaveBeenCalled()
+    expect(getAttendanceCase).not.toHaveBeenCalled()
   })
 
   it('opens Quick correction for that person-day with the capability', async () => {
     hasCapability.mockReturnValue(true)
     renderEntry()
     await userEvent.click(screen.getByRole('button', { name: /Correct attendance: Ahmed Ali, 2026-08-19/ }))
-    expect(screen.getByRole('dialog')).toHaveTextContent('quick correction 42')
+    expect(await screen.findByLabelText('In time (24h)')).toHaveValue('07:10')
+    expect(screen.getByRole('dialog')).toHaveTextContent('Ahmed Ali')
+    expect(getAttendanceCase).toHaveBeenCalledWith(42)
+  })
+
+  it.each(['desktop', 'mobile'] as const)('guards a dirty target switch on %s and preserves the draft until Discard', async (surface) => {
+    if (surface === 'mobile') {
+      vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+        matches: query === '(max-width: 640px)', media: query, onchange: null,
+        addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: () => false,
+      }))
+    }
+    hasCapability.mockReturnValue(true)
+    const user = userEvent.setup()
+    renderEntry()
+    const firstTrigger = screen.getByRole('button', { name: /Correct attendance: Ahmed Ali/ })
+    const secondTrigger = screen.getByRole('button', { name: /Correct attendance: Omar Hassan/ })
+    await user.click(firstTrigger)
+    await screen.findByLabelText('In time (24h)')
+    await user.type(screen.getByLabelText('Reason details'), 'Keep Ahmed’s draft')
+    const requestSecond = async (): Promise<void> => {
+      // A modal sheet blocks pointer access to the background, but external
+      // selections must still use the same guard as desktop trigger clicks.
+      if (surface === 'mobile') fireEvent.click(secondTrigger)
+      else await user.click(secondTrigger)
+    }
+    await requestSecond()
+    const confirmation = await screen.findByRole('alertdialog')
+    expect(getAttendanceCase).not.toHaveBeenCalledWith(43)
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('Ahmed Ali')
+    expect(screen.getByLabelText('Reason details')).toHaveValue('Keep Ahmed’s draft')
+    await requestSecond()
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Omar Hassan'))
+    expect(screen.getByLabelText('Reason details')).toHaveValue('')
+    expect(getAttendanceCase).toHaveBeenCalledWith(43)
+    await user.click(screen.getByRole('button', { name: 'Close correction' }))
+    await waitFor(() => expect(secondTrigger).toHaveFocus())
+  })
+
+  it('switches a clean panel immediately and treats its current target as a no-op', async () => {
+    hasCapability.mockReturnValue(true)
+    const user = userEvent.setup()
+    renderEntry()
+    const firstTrigger = screen.getByRole('button', { name: /Correct attendance: Ahmed Ali/ })
+    await user.click(firstTrigger)
+    await screen.findByLabelText('In time (24h)')
+    await user.click(firstTrigger)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Ahmed Ali')
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Correct attendance: Omar Hassan/ }))
+    await waitFor(() => expect(screen.getByRole('dialog')).toHaveTextContent('Omar Hassan'))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
 })
 

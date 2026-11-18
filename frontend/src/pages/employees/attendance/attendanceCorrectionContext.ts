@@ -16,6 +16,9 @@ export interface CorrectionTarget {
   shiftCode?: string | null
 }
 
+/** The active panel retains a requested navigation until its draft may be dismissed. */
+export type CorrectionDismissalGuard = (proceed: () => void) => void
+
 export interface AttendanceCorrectionContextValue {
   /** Null without `workforce.attendance.correct`: callers render no entry point. */
   openCorrection: ((target: CorrectionTarget, trigger: HTMLElement | null) => void) | null
