@@ -236,6 +236,11 @@ class SelfShiftRead(ORMBase):
     first_punch_at: datetime | None = None
     last_punch_at: datetime | None = None
     final_out_at: datetime | None = None
+    #: Effective arrival, including a correction that deliberately clears it.
+    #: The raw punch bounds above remain untouched evidence.
+    first_in_at: datetime | None = None
+    #: True while an active (unrevoked) human correction overlays this case.
+    corrected: bool = False
     leave_kind: LeaveKind | None = None
 
 

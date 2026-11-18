@@ -66,7 +66,7 @@ function snapshot(overrides: Partial<WorkforceSnapshot> = {}): WorkforceSnapshot
     leave_today: { annual: 1, sick: 0, national_service: 0, other: 0 },
     mapping_completeness: {},
     schedule_completeness: {},
-    self: { employee_id: 'G100', presence_state: 'on_duty' },
+    self: { employee_id: 'G100', presence_state: 'on_duty', corrected: false },
     aggregate: null,
     ...overrides,
   }
@@ -91,6 +91,7 @@ function selfSnapshot(): WorkforceSnapshot {
       first_punch_at: '2026-08-24T04:06:00',
       last_punch_at: '2026-08-24T12:03:00',
       final_out_at: '2026-08-24T12:01:00',
+      corrected: false,
     },
     aggregate: undefined,
   })
@@ -98,7 +99,7 @@ function selfSnapshot(): WorkforceSnapshot {
 
 function selfSnapshotWith(self: Partial<NonNullable<WorkforceSnapshot['self']>>): WorkforceSnapshot {
   const payload = selfSnapshot()
-  return { ...payload, self: { employee_id: 'G100', ...payload.self, ...self } }
+  return { ...payload, self: { employee_id: 'G100', corrected: false, ...payload.self, ...self } }
 }
 
 
@@ -164,8 +165,8 @@ describe('WorkforcePulseWidget', () => {
 
     expect(await screen.findByText('Left')).toBeInTheDocument()
     expect(screen.getByText('On-duty punch')).toBeInTheDocument()
-    expect(screen.getByText('Punch in')).toBeInTheDocument()
-    expect(screen.getByText('Punch out')).toBeInTheDocument()
+    expect(screen.getByText('In')).toBeInTheDocument()
+    expect(screen.getByText('Out')).toBeInTheDocument()
     expect(screen.getByText('08:06')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('08:00 – 16:00')).toBeInTheDocument()
@@ -204,6 +205,35 @@ describe('WorkforcePulseWidget', () => {
     expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
     expect(screen.getByText('07:00 – 15:00')).toHaveAttribute('dir', 'ltr')
     expect(screen.queryByText('16:03')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['en', 'In', 'Out'],
+    ['ar', 'الدخول', 'الخروج'],
+  ])('uses the corrected arrival and cleared Out from the self snapshot in %s', async (language, inLabel, outLabel) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      scheduled_start_at: '2026-11-18T03:00:00',
+      scheduled_end_at: '2026-11-18T11:00:00',
+      first_punch_at: '2026-11-18T03:10:00',
+      last_punch_at: '2026-11-18T11:00:00',
+      first_in_at: '2026-11-18T03:00:00',
+      final_out_at: null,
+      corrected: true,
+    }))
+    await i18n.changeLanguage(language)
+
+    const { container } = renderWidget()
+
+    expect(await screen.findByText('07:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText(inLabel)).toBeInTheDocument()
+    expect(screen.getByText(outLabel)).toBeInTheDocument()
+    expect(screen.queryByText('07:10')).not.toBeInTheDocument()
+    expect(screen.queryByText('15:00')).not.toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(i18n.t('attendance.state.left')))).not.toBeInTheDocument()
+    expect(screen.getByText(new RegExp(i18n.t('attendance.state.corrected')))).toBeInTheDocument()
+    expect(container.querySelector('[data-corrected="true"]')).toBeInTheDocument()
   })
 
   it.each([
@@ -347,7 +377,7 @@ describe('WorkforcePulseWidget', () => {
   ])('translates self reason %s without leaking raw codes', async (reason, label) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(
-      snapshot({ ...selfSnapshot(), self: { employee_id: 'G100', presence_state: 'on_duty', reason_code: reason } }),
+      snapshot({ ...selfSnapshot(), self: { employee_id: 'G100', presence_state: 'on_duty', reason_code: reason, corrected: false } }),
     )
     renderWidget(vi.fn(), { tier: 'glance', rows: 0 })
 

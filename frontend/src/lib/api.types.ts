@@ -15530,6 +15530,13 @@ export interface components {
             last_punch_at?: string | null;
             /** Final Out At */
             final_out_at?: string | null;
+            /** First In At */
+            first_in_at?: string | null;
+            /**
+             * Corrected
+             * @default false
+             */
+            corrected: boolean;
             /** Leave Kind */
             leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
         };

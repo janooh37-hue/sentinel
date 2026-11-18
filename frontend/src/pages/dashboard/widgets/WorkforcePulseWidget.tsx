@@ -54,7 +54,7 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
   const unknown = t('dashboard.workforcePulse.self.presence.unknown')
   const self = state?.kind === 'self' ? selfAttendance(state.snapshot) : null
   const selfLabel = self?.state === 'off' ? t('attendance.state.off')
-    : self ? attendanceStatusLabel(t, self.state, { onSite: self.onSite, hasOut: !!self.out, leaveLabel: self.leaveLabel }) : unknown
+    : self ? attendanceStatusLabel(t, self.state, { onSite: self.onSite, hasOut: !!self.out, leaveLabel: self.leaveLabel, corrected: self.corrected }) : unknown
   let message: { title: string; detail: string } | undefined
   if (state?.kind === 'no_scope') {
     message = { title: t('dashboard.workforcePulse.noScope.title'), detail: t('dashboard.workforcePulse.noScope.detail') }
@@ -117,7 +117,7 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
         <div className="flex min-h-0 flex-col gap-1" role="status">
           <p className="sr-only">{t('dashboard.workforcePulse.self.heading')}</p>
           <p className="flex items-center gap-2 text-[0.9em] font-semibold text-foreground">
-            {self && <AttendanceStatusDot state={self.state} onSite={self.onSite} />}
+            {self && <AttendanceStatusDot state={self.state} onSite={self.onSite} corrected={self.corrected} />}
             {state.snapshot.self?.presence_state === 'unknown' || !state.snapshot.self?.presence_state ? unknown : selfLabel}
           </p>
           <p className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t([
@@ -127,7 +127,7 @@ export function WorkforcePulseWidget({ tier }: WidgetProps): React.JSX.Element {
             'dashboard.widgets.workforce_pulse.reasonUnknown',
           ])}</p>
           <dl className="grid grid-cols-2 gap-3">
-            <div><dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.workforcePulse.self.punchIn')}</dt><dd className="font-mono text-[1.1em] font-semibold tabular-nums"><bdi dir="ltr">{formatShiftTime(state.snapshot.self?.first_punch_at, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
+            <div><dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.workforcePulse.self.punchIn')}</dt><dd className="font-mono text-[1.1em] font-semibold tabular-nums"><bdi dir="ltr">{formatShiftTime(self?.in, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
             <div><dt className={`${WIDGET_SUPPORT} text-muted-foreground`}>{t('dashboard.workforcePulse.self.punchOut')}</dt><dd className="font-mono text-[1.1em] font-semibold tabular-nums"><bdi dir="ltr">{formatShiftTime(self?.out, i18n.language, state.snapshot.timezone)}</bdi></dd></div>
           </dl>
           {tier !== 'glance' && (

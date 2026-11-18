@@ -59778,6 +59778,23 @@
             ],
             "title": "Final Out At"
           },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "corrected": {
+            "type": "boolean",
+            "title": "Corrected",
+            "default": false
+          },
           "leave_kind": {
             "anyOf": [
               {

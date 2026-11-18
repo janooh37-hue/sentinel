@@ -5516,8 +5516,8 @@
       },
       "self": {
         "heading": "My shift",
-        "punchIn": "Punch in",
-        "punchOut": "Punch out",
+        "punchIn": "In",
+        "punchOut": "Out",
         "schedule": "Scheduled shift",
         "presence": {
           "scheduled": "Scheduled",

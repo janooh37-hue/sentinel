@@ -406,6 +406,8 @@ def _self_block(
             "first_punch_at": None,
             "last_punch_at": None,
             "final_out_at": None,
+            "first_in_at": None,
+            "corrected": False,
             "leave_kind": _live_leaves(db, operational_date=operational_date).get(employee_id),
         }
     latest = _latest_evaluations(db, [case.id]).get(case.id)
@@ -415,6 +417,7 @@ def _self_block(
             {
                 "presence_state": latest.presence_state,
                 "reason_code": latest.reason_code,
+                "first_in_at": latest.first_in_at,
                 "final_out_at": latest.final_out_at,
             },
             adjustment,
@@ -433,6 +436,8 @@ def _self_block(
         "first_punch_at": first_at,
         "last_punch_at": last_at,
         "final_out_at": effective["final_out_at"] if effective else None,
+        "first_in_at": effective["first_in_at"] if effective else None,
+        "corrected": adjustment is not None,
         "leave_kind": workforce_leave.LEAVE_KIND_BY_REASON.get(effective["reason_code"])
         if effective
         else None,

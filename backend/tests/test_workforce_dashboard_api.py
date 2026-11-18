@@ -1084,7 +1084,116 @@ def test_snapshot_self_exposes_punch_bounds_and_effective_final_out(
     assert datetime.fromisoformat(block["final_out_at"]).replace(tzinfo=None) == (
         corrected_out if corrected else final_out
     )
+    assert datetime.fromisoformat(block["first_in_at"]).replace(tzinfo=None) == (
+        first_at + timedelta(minutes=2) if corrected else NOW - timedelta(hours=2)
+    )
+    assert block["corrected"] is corrected
     assert block["leave_kind"] is None
+
+
+def test_snapshot_self_preserves_corrected_arrival_and_cleared_departure_with_two_punches(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.workforce_models import (
+        AttendanceCase,
+        AttendanceEvaluation,
+        AttendanceProviderPerson,
+        AttendancePunch,
+        WorkAttendancePolicy,
+    )
+
+    admin = _create_user(workforce_api_db, email="self-cleared-out@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+    admin.employee_id = "G-COVERAGE-A"
+    case = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == admin.employee_id)
+    )
+    assert case is not None
+    start_at = (
+        datetime.combine(TODAY, time(7), tzinfo=ZoneInfo("Asia/Dubai"))
+        .astimezone(UTC)
+        .replace(tzinfo=None)
+    )
+    raw_in = start_at + timedelta(minutes=10)
+    raw_out = start_at + timedelta(hours=8)
+    case.scheduled_start_at = start_at
+    case.scheduled_end_at = raw_out
+    evaluation = workforce_api_db.scalar(
+        select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+    )
+    assert evaluation is not None
+    evaluation.presence_state = "completed"
+    evaluation.first_in_at = raw_in
+    evaluation.latest_in_at = raw_in
+    evaluation.final_out_at = raw_out
+    person = AttendanceProviderPerson(
+        provider="biotime",
+        external_person_id="self-cleared-out",
+        employee_id=case.employee_id,
+        mapping_state="verified",
+        verified_by_user_id=admin.id,
+        verified_at=NOW,
+        active=True,
+    )
+    workforce_api_db.add_all(
+        [
+            person,
+            WorkAttendancePolicy(
+                grace_minutes=15,
+                absence_after_minutes=60,
+                early_exit_grace_minutes=15,
+                match_before_minutes=30,
+                match_after_minutes=30,
+                effective_from=TODAY,
+                created_by_user_id=admin.id,
+                approved_by_user_id=admin.id,
+                approved_at=NOW,
+            ),
+        ]
+    )
+    workforce_api_db.flush()
+    workforce_api_db.add_all(
+        AttendancePunch(
+            provider="biotime",
+            external_event_id=f"self-cleared-out-{index}",
+            provider_person_id=person.id,
+            occurred_at=occurred_at,
+            direction="unknown",
+            normalized_payload_hash=f"self-cleared-out-{index}",
+        )
+        for index, occurred_at in enumerate([raw_in, raw_out])
+    )
+    workforce_api_db.commit()
+    attendance_correction_service.correct(
+        workforce_api_db,
+        scope=organization_scope(),
+        case_id=case.id,
+        snapshot={
+            "replacement_presence_state": "on_duty",
+            "replacement_first_in_at": start_at,
+            "replacement_latest_in_at": start_at,
+            "replacement_final_out_at": None,
+            "replacement_late_minutes": 0,
+            "replacement_early_exit_minutes": None,
+            "replacement_missing_checkout": False,
+            "reason": "Confirmed 07:00 arrival; checkout was not recorded",
+        },
+        if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
+        actor=admin,
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    block = response.json()["self"]
+    assert datetime.fromisoformat(block["first_punch_at"]).replace(tzinfo=None) == raw_in
+    assert datetime.fromisoformat(block["last_punch_at"]).replace(tzinfo=None) == raw_out
+    assert datetime.fromisoformat(block["first_in_at"]).replace(tzinfo=None) == start_at
+    assert block["final_out_at"] is None
+    assert block["corrected"] is True
+    assert block["presence_state"] == "on_duty"
 
 
 def test_snapshot_self_without_case_has_explicit_nullable_punch_fields(
@@ -1100,11 +1209,21 @@ def test_snapshot_self_without_case_has_explicit_nullable_punch_fields(
     ).value["self"]
 
     assert {
-        key: block[key] for key in ("first_punch_at", "last_punch_at", "final_out_at", "leave_kind")
+        key: block[key]
+        for key in (
+            "first_punch_at",
+            "last_punch_at",
+            "first_in_at",
+            "final_out_at",
+            "corrected",
+            "leave_kind",
+        )
     } == {
         "first_punch_at": None,
         "last_punch_at": None,
+        "first_in_at": None,
         "final_out_at": None,
+        "corrected": False,
         "leave_kind": None,
     }
 

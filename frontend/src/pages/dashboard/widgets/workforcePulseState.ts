@@ -1,5 +1,5 @@
 import type { WorkforceAccess, WorkforceSnapshot } from '@/lib/api'
-import { isOnSiteNow, outAt, rowState, type LeaveKind } from '@/pages/employees/attendance/attendanceModel'
+import { inAt, isOnSiteNow, outAt, rowState, type LeaveKind } from '@/pages/employees/attendance/attendanceModel'
 
 const REASON_LEAVE_KINDS: Partial<Record<string, LeaveKind>> = {
   LEAVE_NATIONAL_SERVICE: 'national_service', LEAVE_SICK: 'sick',
@@ -29,8 +29,10 @@ export function selfAttendance(snapshot: WorkforceSnapshot) {
   const leaveLabel = leaveKind ? LEAVE_LABELS[leaveKind] : null
   return {
     state,
+    in: inAt(judged),
     out,
     leaveLabel,
+    corrected: self?.corrected ?? false,
     onSite: self?.presence_state === 'on_duty' && isOnSiteNow(judged, { now }),
   }
 }

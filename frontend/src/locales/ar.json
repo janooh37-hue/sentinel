@@ -5949,8 +5949,8 @@
       },
       "self": {
         "heading": "ورديتي",
-        "punchIn": "بصمة الدخول",
-        "punchOut": "بصمة الخروج",
+        "punchIn": "الدخول",
+        "punchOut": "الخروج",
         "schedule": "الوردية المجدولة",
         "presence": {
           "scheduled": "مجدولة",
