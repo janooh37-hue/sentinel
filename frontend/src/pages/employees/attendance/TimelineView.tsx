@@ -17,6 +17,7 @@ import {
   DEFAULT_GRACE_MINUTES,
   arrivalOffsetMinutes,
   groupByUnitAndPost,
+  inAt,
   isOnSiteNow,
   outAt,
   parseInstant,
@@ -44,7 +45,7 @@ function timeAxis(rows: readonly AttendanceRow[], input: StateInput): Axis | nul
   let from = Infinity
   let to = -Infinity
   for (const row of rows) {
-    for (const iso of [row.scheduled_start_at, row.scheduled_end_at, row.first_punch_at, outAt(row)]) {
+    for (const iso of [row.scheduled_start_at, row.scheduled_end_at, inAt(row), outAt(row)]) {
       const at = parseInstant(iso)
       if (at === null) continue
       from = Math.min(from, at)
@@ -170,8 +171,13 @@ function TimelineRow({
   const departure = outAt(row)
   const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
   const label = attendanceStatusLabel(t, state, { onSite, hasOut: departure !== null, leaveLabel: row.leave_label })
-  const status = onSite && state !== 'verified' ? `${label} · ${t('attendance.state.onSite')}` : label
-  const first = parseInstant(row.first_punch_at)
+  // The correction marker reads last, after "On site", as on every other surface.
+  const status = [
+    label,
+    onSite && state !== 'verified' ? t('attendance.state.onSite') : null,
+    row.corrected ? t('attendance.state.corrected') : null,
+  ].filter(Boolean).join(' · ')
+  const first = parseInstant(inAt(row))
   const last = parseInstant(departure) ?? (onSite ? input.now.getTime() : first)
   const scheduledStart = parseInstant(row.scheduled_start_at)
   const scheduledEnd = parseInstant(row.scheduled_end_at)
@@ -189,13 +195,13 @@ function TimelineRow({
           date: bidi(operationalDate),
           shift,
           state: status,
-          in: siteTime(row.first_punch_at),
+          in: siteTime(inAt(row)),
           out: siteTime(departure),
         })}
         className="grid min-h-11 min-w-0 flex-1 grid-cols-1 items-center gap-x-3 gap-y-1 rounded-md py-1 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:grid-cols-[190px_minmax(0,1fr)_170px] [@media(pointer:coarse)]:grid-cols-1"
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <AttendanceStatusDot state={state} onSite={onSite} />
+          <AttendanceStatusDot state={state} onSite={onSite} corrected={row.corrected} />
           <span className="min-w-0">
             <span dir="auto" className="block text-[0.8em] font-semibold">{name}</span>
             <bdi dir="ltr" className="block text-[0.72em] text-muted-foreground">{row.employee_id}</bdi>
@@ -238,7 +244,7 @@ function TimelineRow({
         </span>
         <span className="ps-5 text-[0.72em] sm:ps-0 sm:text-end [@media(pointer:coarse)]:ps-5 [@media(pointer:coarse)]:text-start">
           <span className="block text-muted-foreground">
-            {t('attendance.timeline.in')}{' '}<bdi dir="ltr">{siteTime(row.first_punch_at)}</bdi>
+            {t('attendance.timeline.in')}{' '}<bdi dir="ltr">{siteTime(inAt(row))}</bdi>
             {' · '}{t('attendance.timeline.out')}{' '}<bdi dir="ltr">{siteTime(departure)}</bdi>
           </span>
           <span className="block">{status}</span>

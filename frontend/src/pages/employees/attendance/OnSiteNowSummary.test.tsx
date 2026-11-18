@@ -10,6 +10,7 @@ const now = new Date('2026-11-18T07:40:00Z')
 
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
   return {
+    corrected: false,
     employee_id: 'G-1', name_en: 'Ahmed', name_ar: null,
     department: 'Security', duty_unit: 'A', duty_post: 'Gate', crew_code: 'A',
     shift_code: 'morning', presence_state: 'on_duty', reason_code: null,

@@ -141,6 +141,29 @@ beforeEach(() => {
 })
 
 describe('AttendanceTab', () => {
+  it('shows the corrected In and marks the corrected employee day', async () => {
+    getEmployeeAttendance.mockResolvedValue({
+      employee_id: 'G-9001', from_date: '2026-08-01', to_date: '2026-08-31',
+      days: [day({
+        corrected: true,
+        first_in_at: '2026-08-19T02:50:00Z',
+        punches: [
+          { occurred_at: '2026-08-19T02:58:00Z', device_name: 'Main Gate Turnstile' },
+          { occurred_at: '2026-08-19T09:06:00Z', device_name: 'Main Gate Turnstile' },
+        ],
+      })],
+    })
+    renderTab()
+    const cell = await screen.findByRole('button', { name: /2026-08-19.*Corrected.*In 06:50/ })
+    expect(within(cell).getByText(/06:50/)).toBeInTheDocument()
+    expect(cell.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+    await userEvent.click(cell)
+    const timeline = screen.getByTestId('attendance-day-timeline')
+    expect(within(timeline).getByText('06:50')).toBeInTheDocument()
+    expect(within(timeline).getByText(/Corrected/)).toBeInTheDocument()
+    expect(timeline.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+  })
+
   it('computes the widget from the month by the shared ladder', async () => {
     renderTab()
 

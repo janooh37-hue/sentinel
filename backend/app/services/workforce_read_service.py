@@ -568,6 +568,8 @@ def list_attendance_day(
                 "final_out_at": effective["final_out_at"] if effective else None,
                 "leave_kind": leave_kind,
                 "leave_label": leave_label,
+                "first_in_at": effective["first_in_at"] if effective else None,
+                "corrected": adjustment is not None,
                 "first_punch_at": first_at,
                 "last_punch_at": last_at,
                 "punch_count": count,
@@ -781,6 +783,8 @@ def employee_attendance_range(
                 "reason_code": effective["reason_code"] if effective else None,
                 "leave_kind": leave_kind,
                 "leave_label": leave_label,
+                "first_in_at": effective["first_in_at"] if effective else None,
+                "corrected": adjustment is not None,
                 "late_minutes": (
                     effective["late_minutes"]
                     if adjustment is not None and effective

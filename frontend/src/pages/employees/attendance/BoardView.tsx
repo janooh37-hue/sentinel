@@ -12,6 +12,7 @@ import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
 import type { AttendanceRow } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  inAt,
   isExcused,
   isOnSiteNow,
   minutesPastGrace,
@@ -93,6 +94,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                           onSite,
                           hasOut: departure !== null,
                           leaveLabel: row.leave_label,
+                          corrected: row.corrected,
                         })
                         const details = t('attendance.board.personDetails', {
                           name,
@@ -100,7 +102,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                           date: bidi(operationalDate),
                           shift: shiftLabel,
                           state: label,
-                          in: siteTime(row.first_punch_at),
+                          in: siteTime(inAt(row)),
                           out: siteTime(departure),
                         })
                         return (
@@ -113,7 +115,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                               className="min-h-[44px] w-full rounded-sm text-start hover:bg-surface-tinted focus-visible:ring-2 focus-visible:ring-ring"
                             >
                               <span className="flex items-center gap-2">
-                                <AttendanceStatusDot state={state} onSite={onSite} />
+                                <AttendanceStatusDot state={state} onSite={onSite} corrected={row.corrected} />
                                 <span className="min-w-0 text-[0.76em] font-semibold text-foreground [overflow-wrap:anywhere]">{name}</span>
                               </span>
                               <span className="mt-1 flex flex-wrap gap-x-1.5 text-[0.68em] text-muted-foreground">
@@ -122,7 +124,7 @@ export function BoardView({ rows, operationalDate, now, graceMinutes, onOpenEmpl
                               </span>
                               <span className="mt-2 flex flex-wrap justify-between gap-2 text-[0.7em] text-foreground">
                                 <span>
-                                  {t('attendance.register.in')} <bdi dir="ltr" className="font-mono">{siteTime(row.first_punch_at)}</bdi>
+                                  {t('attendance.register.in')} <bdi dir="ltr" className="font-mono">{siteTime(inAt(row))}</bdi>
                                   {state === 'late' && (
                                     <span className="ms-1 text-warning">{t('attendance.register.pastGrace', { minutes: minutesPastGrace(row, input) })}</span>
                                   )}

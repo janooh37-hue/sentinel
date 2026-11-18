@@ -29,6 +29,7 @@ const openEmployee = vi.fn()
 
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
   return {
+    corrected: false,
     case_id: 42,
     employee_id: 'G1042',
     name_en: 'Ahmed Ali',
@@ -68,6 +69,18 @@ beforeEach(async () => {
 afterEach(async () => { await i18n.changeLanguage('en') })
 
 describe('TimelineView', () => {
+  it('shows the corrected In and marks the corrected day', () => {
+    timeline([row({
+      corrected: true,
+      first_punch_at: '2026-11-18T02:58:00Z',
+      first_in_at: '2026-11-18T02:50:00Z',
+    })])
+    const person = screen.getByRole('button', { name: /Ahmed Ali.*Corrected.*In 06:50/ })
+    expect(within(person).getByText('06:50')).toBeInTheDocument()
+    expect(person.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+    expect(parseFloat(screen.getByTestId('attendance-timeline-bar').style.insetInlineStart)).toBeCloseTo(45 / 580 * 100)
+  })
+
   it('draws actual In to Out, preferring final out, using only logical inline positions', () => {
     const { container } = timeline([row({ final_out_at: '2026-11-18T10:00:00Z' })])
     const bar = screen.getByTestId('attendance-timeline-bar')

@@ -85,4 +85,12 @@ describe('AttendanceLegend', () => {
     render(<AttendanceLegend showOff />)
     expect(screen.getByTestId('attendance-legend').querySelector('[data-state="off"]')).not.toBeNull()
   })
+
+  it('explains the corrected notch with a notched dot', () => {
+    render(<AttendanceLegend />)
+    const legend = screen.getByTestId('attendance-legend')
+    expect(legend).toHaveTextContent('Corrected')
+    expect(legend).toHaveTextContent('notch = corrected')
+    expect(legend.querySelector('[data-corrected="true"]')).not.toBeNull()
+  })
 })

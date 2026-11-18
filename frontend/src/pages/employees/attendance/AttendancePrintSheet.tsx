@@ -34,6 +34,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import type { AttendanceRow, RowState, StateInput } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  inAt,
   isExcused,
   isUnpaired,
   minutesPastGrace,
@@ -558,7 +559,7 @@ function PostBlock({
  * takes precedence over raw punches; a missing Out gives no duration.
  */
 function totalMinutes(row: AttendanceRow): number | null {
-  const from = parseInstant(row.first_punch_at)
+  const from = parseInstant(inAt(row))
   const to = parseInstant(outAt(row))
   if (from === null || to === null || to <= from) return null
   return Math.round((to - from) / 60_000)
@@ -762,7 +763,7 @@ function RosterRow({
       <td className={cell(5)}>
         <ShiftChip code={row.shift_code ?? '—'} className="text-[7.8pt]" />
       </td>
-      <td className={cell(6)}><bdi dir="ltr">{siteTime(row.first_punch_at)}</bdi></td>
+      <td className={cell(6)}><bdi dir="ltr">{siteTime(inAt(row))}</bdi></td>
       <td className={cell(7)}><bdi dir="ltr">{siteTime(outAt(row))}</bdi></td>
       <td className={cell(8)}>
         {total === null
@@ -778,7 +779,7 @@ function RosterRow({
         {past > 0 ? `+${past}` : '—'}
       </td>
       <td className={`${cell(10)} ${TONE[state]} ${needsDecision(state) ? 'font-bold' : ''}`}>
-        {attendanceStatusLabel(t, state, { leaveLabel: row.leave_label })}
+        {attendanceStatusLabel(t, state, { leaveLabel: row.leave_label, corrected: row.corrected })}
       </td>
     </tr>
   )
@@ -796,8 +797,8 @@ function PersonRow({
   const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
   const past = minutesPastGrace(row, input)
   const verdict = isExcused(state)
-    ? attendanceStatusLabel(t, state, { leaveLabel: row.leave_label })
-    : `${t(`attendance.print.verdict.${state}`)}${state === 'late' && past > 0 ? ` +${past}` : ''}`
+    ? attendanceStatusLabel(t, state, { leaveLabel: row.leave_label, corrected: row.corrected })
+    : `${t(`attendance.print.verdict.${state}`)}${state === 'late' && past > 0 ? ` +${past}` : ''}${row.corrected ? ` · ${t('attendance.state.corrected')}` : ''}`
   return (
     <div data-testid="attendance-print-person" className="grid grid-cols-[minmax(0,1fr)_10mm_10mm] items-center gap-1 break-inside-avoid py-0.5 text-[8pt]">
       <span className="min-w-0">
@@ -810,7 +811,7 @@ function PersonRow({
       </span>
       <span className="text-center">
         <span className="block text-[6.4pt] text-muted-foreground">{t('attendance.print.colIn')}</span>
-        <bdi dir="ltr" className="font-mono text-[7.8pt] tabular-nums">{siteTime(row.first_punch_at)}</bdi>
+        <bdi dir="ltr" className="font-mono text-[7.8pt] tabular-nums">{siteTime(inAt(row))}</bdi>
       </span>
       <span className="text-center">
         <span className="block text-[6.4pt] text-muted-foreground">{t('attendance.print.colOut')}</span>

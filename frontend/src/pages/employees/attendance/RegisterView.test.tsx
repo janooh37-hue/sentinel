@@ -22,6 +22,7 @@ import { RegisterView } from './RegisterView'
 const now = new Date('2026-11-18T07:40:00Z')
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
   return {
+    corrected: false,
     case_id: 42, employee_id: 'G-1042', name_en: 'Ahmed Ali', name_ar: 'أحمد علي',
     duty_unit: 'First Company', duty_post: 'Main Gate', shift_code: 'morning',
     scheduled_start_at: '2026-11-18T03:00:00Z', scheduled_end_at: '2026-11-18T11:00:00Z',
@@ -40,6 +41,14 @@ beforeEach(() => hasCapability.mockReturnValue(true))
 afterEach(async () => { await i18n.changeLanguage('en') })
 
 describe('RegisterView', () => {
+  it('shows the corrected In and marks the corrected day', () => {
+    const { container } = renderRegister([row({ corrected: true, first_in_at: '2026-11-18T02:50:00Z' })])
+    const post = screen.getByTestId('attendance-register-post')
+    expect(within(post).getByText('In').parentElement).toHaveTextContent('06:50')
+    expect(container.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+    expect(within(post).getByText(/Corrected/)).toBeInTheDocument()
+  })
+
   it('shows National Service and leave subtype as separate excused states', () => {
     const { container } = renderRegister([
       row({ on_leave: true, leave_kind: 'national_service', first_punch_at: null, punch_count: 0 }),

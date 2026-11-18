@@ -168,9 +168,25 @@ export interface PunchedDay {
   punch_count: number
   first_punch_at?: string | null
   last_punch_at?: string | null
+  /** Effective arrival: the evaluated first in, or an active correction's. */
+  first_in_at?: string | null
   final_out_at?: string | null
+  /** An active human correction overlays the day (BioTime punches untouched). */
+  corrected?: boolean
   judgment_due_at?: string | null
   scheduled_end_at?: string | null
+}
+
+/**
+ * The arrival to show as "In".
+ *
+ * A correction is a full overlay: its first in wins, and a correction that
+ * cleared it reads "—" rather than resurrecting the raw punch it overruled.
+ * Without one, the evaluated first in, else the first punch.
+ */
+export function inAt(row: PunchedDay): string | null {
+  if (row.corrected) return row.first_in_at ?? null
+  return row.first_in_at ?? row.first_punch_at ?? null
 }
 
 /**
@@ -178,10 +194,11 @@ export interface PunchedDay {
  *
  * The evaluated (or corrected) `final_out_at` wins. Without it, a second punch
  * is the latest departure seen; a lone punch is an arrival, never an Out.
- * A missing Out stays null and renders "—", never the scheduled end.
+ * A corrected day never falls back to punches. A missing Out stays null and
+ * renders "—", never the scheduled end.
  */
 export function outAt(row: PunchedDay): string | null {
-  if (row.final_out_at) return row.final_out_at
+  if (row.final_out_at || row.corrected) return row.final_out_at ?? null
   return row.punch_count >= 2 ? (row.last_punch_at ?? null) : null
 }
 
@@ -193,7 +210,7 @@ export function outAt(row: PunchedDay): string | null {
 export function isOnSiteNow(row: JudgedDay & PunchedDay, input: StateInput): boolean {
   const state = rowState(row, input)
   if (state !== 'verified' && state !== 'grace' && state !== 'late') return false
-  if (row.punch_count === 0 || outAt(row) !== null) return false
+  if (inAt(row) === null || outAt(row) !== null) return false
   const until = parseInstant(row.judgment_due_at) ?? parseInstant(row.scheduled_end_at)
   return until !== null && until > input.now.getTime()
 }
@@ -206,7 +223,7 @@ export function onSiteBucket(row: AttendanceRow, input: StateInput): OnSiteBucke
   if (state === 'national_service') return 'nationalService'
   if (state === 'leave') return 'leave'
   if (isOnSiteNow(row, input)) return 'onSite'
-  if (row.punch_count > 0 && outAt(row) !== null) return 'left'
+  if (inAt(row) !== null && outAt(row) !== null) return 'left'
   if (row.punch_count === 0 && state !== 'verified') {
     const start = parseInstant(row.scheduled_start_at)
     if (start !== null && start <= input.now.getTime()) return 'notArrived'

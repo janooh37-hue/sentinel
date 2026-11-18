@@ -19,6 +19,7 @@ import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
 import type { AttendanceRow } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  inAt,
   isExcused,
   isOnSiteNow,
   isUnpaired,
@@ -170,6 +171,7 @@ export function RegisterView({
                         onSite,
                         hasOut: departure !== null,
                         leaveLabel: row.leave_label,
+                        corrected: row.corrected,
                       })
                       return (
                         <div
@@ -178,7 +180,7 @@ export function RegisterView({
                             attention ? 'font-semibold text-foreground' : 'text-muted-foreground'
                           }`}
                         >
-                          <AttendanceStatusDot state={state} onSite={onSite} />
+                          <AttendanceStatusDot state={state} onSite={onSite} corrected={row.corrected} />
                           <div className="min-w-0 flex-1 min-[641px]:flex min-[641px]:items-center min-[641px]:gap-3">
                             <div className="min-w-0 flex-1">
                               <button
@@ -196,7 +198,7 @@ export function RegisterView({
                               <div>
                                 <dt className="text-muted-foreground">{t('attendance.register.in')}</dt>
                                 <dd className="font-mono text-foreground">
-                                  <bdi dir="ltr">{siteTime(row.first_punch_at)}</bdi>
+                                  <bdi dir="ltr">{siteTime(inAt(row))}</bdi>
                                   {state === 'late' && (
                                     <span className="ms-1 text-warning">
                                       {t('attendance.register.pastGrace', { minutes: minutesPastGrace(row, input) })}

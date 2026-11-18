@@ -9028,6 +9028,13 @@ export interface components {
             leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
             /** Leave Label */
             leave_label?: string | null;
+            /** First In At */
+            first_in_at?: string | null;
+            /**
+             * Corrected
+             * @default false
+             */
+            corrected: boolean;
         };
         /** AttendanceEvaluationRead */
         AttendanceEvaluationRead: {
@@ -11880,6 +11887,13 @@ export interface components {
             leave_kind?: ("national_service" | "sick" | "annual" | "duty" | "other") | null;
             /** Leave Label */
             leave_label?: string | null;
+            /** First In At */
+            first_in_at?: string | null;
+            /**
+             * Corrected
+             * @default false
+             */
+            corrected: boolean;
         };
         /**
          * EmployeeAttendanceHabitRead

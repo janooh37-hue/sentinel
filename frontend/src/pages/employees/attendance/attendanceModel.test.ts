@@ -14,6 +14,7 @@ import type { AttendanceRow } from './attendanceModel'
 import {
   arrivalOffsetMinutes,
   groupByUnitAndPost,
+  inAt,
   isOnSiteNow,
   isWindowOpen,
   minutesPastGrace,
@@ -265,6 +266,22 @@ describe('outAt', () => {
     expect(outAt(row({ final_out_at: '2026-08-19T09:10:00' }))).toBe('2026-08-19T09:10:00')
     expect(outAt(row({ final_out_at: null }))).toBe('2026-08-19T09:06:00')
     expect(outAt(row({ final_out_at: null, punch_count: 1, last_punch_at: '2026-08-19T00:52:00' }))).toBeNull()
+  })
+
+  it('never falls back to punches once a correction cleared the departure', () => {
+    expect(outAt(row({ final_out_at: null, corrected: true }))).toBeNull()
+  })
+})
+
+describe('inAt', () => {
+  it('shows the effective first in, else the first punch', () => {
+    expect(inAt(row({ first_in_at: '2026-08-19T00:50:00' }))).toBe('2026-08-19T00:50:00')
+    expect(inAt(row({ first_in_at: null }))).toBe('2026-08-19T00:52:00')
+  })
+
+  it('takes a correction whole, including a cleared arrival', () => {
+    expect(inAt(row({ corrected: true, first_in_at: '2026-08-19T00:45:00' }))).toBe('2026-08-19T00:45:00')
+    expect(inAt(row({ corrected: true, first_in_at: null }))).toBeNull()
   })
 })
 
