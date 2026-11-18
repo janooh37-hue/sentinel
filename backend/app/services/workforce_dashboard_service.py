@@ -261,7 +261,7 @@ def _case_metrics(
     *,
     cases: list[AttendanceCase],
     sync_health: dict[str, dict[str, Any]],
-    live_leave_by_employee: dict[str, leave_lifecycle.LeaveKind],
+    live_leave_by_date: dict[date, dict[str, leave_lifecycle.LeaveKind]],
     latest: dict[int, AttendanceEvaluation] | None = None,
     adjustments: dict[int, AttendanceAdjustment] | None = None,
 ) -> dict[str, Any]:
@@ -271,14 +271,19 @@ def _case_metrics(
         if adjustments is not None
         else attendance_correction_service.active_corrections(db, (case.id for case in cases))
     )
-    queued = _queued_case_ids(db, cases)
+    excluded_case_ids = _queued_case_ids(db, cases) | {
+        case.id for case in cases if case.id not in latest
+    }
     scheduled = len(cases)
-    excused = sum(case.employee_id in live_leave_by_employee for case in cases)
+    excused_case_ids = {
+        case.id for case in cases if case.employee_id in live_leave_by_date[case.operational_date]
+    }
+    excused = len(excused_case_ids)
     expected = scheduled - excused
     suppressed = not _attendance_is_trustworthy(sync_health)
-    evaluable = [case for case in cases if case.id not in queued and case.id in latest]
+    evaluable = [case for case in cases if case.id not in excluded_case_ids]
     evaluated_count = 0 if suppressed else len(evaluable)
-    pending_or_error = len(queued)
+    pending_or_error = len(excluded_case_ids)
     if suppressed:
         working: int | None = None
     else:
@@ -289,7 +294,7 @@ def _case_metrics(
             )["presence_state"]
             in {"on_duty", "completed"}
             for case in evaluable
-            if case.employee_id not in live_leave_by_employee
+            if case.id not in excused_case_ids
         )
     return {
         "scheduled": scheduled,
@@ -779,14 +784,17 @@ def get_workforce_snapshot(
         as_of_naive=naive_now,
         operational_date=operational_date,
     )
-    live = _live_leaves(db, operational_date=operational_date)
+    live_by_date = {
+        case_date: _live_leaves(db, operational_date=case_date)
+        for case_date in {case.operational_date for case in cases}
+    }
     latest = _latest_evaluations(db, (case.id for case in cases))
     adjustments = attendance_correction_service.active_corrections(db, (case.id for case in cases))
     metrics = _case_metrics(
         db,
         cases=cases,
         sync_health=sync_health,
-        live_leave_by_employee=live,
+        live_leave_by_date=live_by_date,
         latest=latest,
         adjustments=adjustments,
     )
@@ -833,16 +841,18 @@ def get_workforce_snapshot(
     on_site_cases = [
         case for case in cases if case.scheduled_start_at <= naive_now < case.scheduled_end_at
     ]
-    on_site_available = _attendance_is_trustworthy(sync_health) and not _queued_case_ids(
-        db, on_site_cases
+    on_site_available = (
+        _attendance_is_trustworthy(sync_health)
+        and not _queued_case_ids(db, on_site_cases)
+        and all(case.id in latest for case in on_site_cases)
     )
     for case in on_site_cases if on_site_available else ():
-        evaluation = latest.get(case.id)
+        evaluation = latest[case.id]
         effective = attendance_correction_service.overlay(
             {
-                "presence_state": evaluation.presence_state if evaluation is not None else None,
-                "first_in_at": evaluation.first_in_at if evaluation is not None else None,
-                "final_out_at": evaluation.final_out_at if evaluation is not None else None,
+                "presence_state": evaluation.presence_state,
+                "first_in_at": evaluation.first_in_at,
+                "final_out_at": evaluation.final_out_at,
             },
             adjustments.get(case.id),
         )
@@ -903,7 +913,7 @@ def get_coverage_children(
         )
     else:
         raise ValueError("parent_kind must be organization, department, or duty_unit")
-    live = _live_leaves(db, operational_date=operational_date)
+    live_by_date = {operational_date: _live_leaves(db, operational_date=operational_date)}
     health = _stream_health(db, now=datetime.now(UTC))
     latest = _latest_evaluations(db, (case.id for case in cases))
     adjustments = attendance_correction_service.active_corrections(db, (case.id for case in cases))
@@ -916,7 +926,7 @@ def get_coverage_children(
             db,
             cases=bucket,
             sync_health=health,
-            live_leave_by_employee=live,
+            live_leave_by_date=live_by_date,
             latest=latest,
             adjustments=adjustments,
         )
@@ -956,7 +966,7 @@ def get_workforce_analytics(
         )
         if _case_in_scope(case, scope)
     ]
-    live = _live_leaves(db, operational_date=operational_date)
+    live_by_date = {operational_date: _live_leaves(db, operational_date=operational_date)}
     latest = _latest_evaluations(db, (case.id for case in cases))
     adjustments = attendance_correction_service.active_corrections(db, (case.id for case in cases))
     by_department: dict[str | None, list[AttendanceCase]] = defaultdict(list)
@@ -976,7 +986,7 @@ def get_workforce_analytics(
                     db,
                     cases=bucket,
                     sync_health=health,
-                    live_leave_by_employee=live,
+                    live_leave_by_date=live_by_date,
                     latest=latest,
                     adjustments=adjustments,
                 ),
@@ -990,7 +1000,7 @@ def get_workforce_analytics(
                 db,
                 cases=bucket,
                 sync_health=health,
-                live_leave_by_employee=live,
+                live_leave_by_date=live_by_date,
                 latest=latest,
                 adjustments=adjustments,
             ),

@@ -1751,3 +1751,120 @@ def test_snapshot_on_site_requires_effective_arrival(
     assert value["aggregate"]["on_site"] == (
         2 if arrival_offset is not None and arrival_offset <= 0 else 1
     )
+
+
+@pytest.mark.parametrize("leave_offset", [0, -1], ids=["leave-today", "leave-yesterday"])
+@pytest.mark.parametrize("today_case", [False, True], ids=["overnight-only", "mixed-case-dates"])
+def test_snapshot_current_shift_resolves_leave_on_each_case_date(
+    workforce_api_db: Session, leave_offset: int, today_case: bool
+) -> None:
+    from app.db.models import Leave
+    from app.db.workforce_models import AttendanceCase, AttendanceEvaluation
+
+    admin = _create_user(workforce_api_db, email="overnight-leave-date@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
+    midnight = datetime.combine(TODAY, time(), tzinfo=ZoneInfo("Asia/Dubai"))
+    now = midnight + timedelta(hours=2)
+    overnight = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-A")
+    )
+    later = workforce_api_db.scalar(
+        select(AttendanceCase).where(AttendanceCase.employee_id == "G-COVERAGE-B")
+    )
+    assert overnight is not None and later is not None
+    overnight.operational_date = TODAY - timedelta(days=1)
+    overnight.scheduled_start_at = (
+        (midnight - timedelta(hours=2)).astimezone(UTC).replace(tzinfo=None)
+    )
+    overnight.scheduled_end_at = overnight.scheduled_start_at + timedelta(hours=8)
+    later.employee_id = overnight.employee_id
+    later.scheduled_start_at = (
+        (midnight + timedelta(hours=1 if today_case else 22)).astimezone(UTC).replace(tzinfo=None)
+    )
+    later.scheduled_end_at = later.scheduled_start_at + timedelta(hours=8)
+    leave_date = TODAY + timedelta(days=leave_offset)
+    workforce_api_db.add(
+        Leave(
+            employee_id=overnight.employee_id,
+            leave_type="Annual Leave",
+            start_date=leave_date,
+            end_date=leave_date,
+            days=1,
+            status="Approved",
+        )
+    )
+    for evaluation in workforce_api_db.scalars(select(AttendanceEvaluation)):
+        case = overnight if evaluation.attendance_case_id == overnight.id else later
+        on_leave = case.operational_date == leave_date
+        evaluation.presence_state = "excused_leave" if on_leave else "on_duty"
+        evaluation.reason_code = "LEAVE_ANNUAL" if on_leave else "PUNCH_IN_ACTIVE"
+        evaluation.first_in_at = case.scheduled_start_at
+        evaluation.latest_in_at = case.scheduled_start_at
+    workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=overnight.employee_id,
+        include_aggregate=True,
+        now=now,
+    ).value
+
+    scheduled = 2 if today_case else 1
+    excused = int(leave_offset == -1) + int(today_case and leave_offset == 0)
+    working = scheduled - excused
+    assert value["current_shift"]["scheduled"] == scheduled
+    assert value["current_shift"]["excused"] == excused
+    assert value["current_shift"]["expected"] == working
+    assert value["current_shift"]["evaluated_count"] == scheduled
+    assert value["current_shift"]["working"] == working
+    assert value["current_shift"]["verified_coverage_percent"] is None
+    assert value["aggregate"]["on_site"] == working
+    assert value["self"]["presence_state"] == ("excused_leave" if leave_offset == -1 else "on_duty")
+    assert value["self"]["leave_kind"] == ("annual" if leave_offset == -1 else None)
+    assert value["leave_today"]["annual"] == int(leave_offset == 0)
+
+
+@pytest.mark.parametrize(
+    "missing_count", [0, 1, 2], ids=["evaluated", "partly-unevaluated", "unevaluated"]
+)
+@pytest.mark.parametrize("queued", [False, True], ids=["unqueued", "queued"])
+def test_snapshot_treats_missing_evaluations_as_pending_cases(
+    workforce_api_db: Session, missing_count: int, queued: bool
+) -> None:
+    from app.db.workforce_models import AttendanceEvaluation, AttendanceEvaluationQueue
+
+    admin = _create_user(workforce_api_db, email="missing-evaluation@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin, trusted_source=True)
+    evaluations = list(
+        workforce_api_db.scalars(select(AttendanceEvaluation).order_by(AttendanceEvaluation.id))
+    )
+    for evaluation in evaluations[:missing_count]:
+        workforce_api_db.delete(evaluation)
+    if queued:
+        workforce_api_db.add(
+            AttendanceEvaluationQueue(
+                employee_id="G-COVERAGE-A",
+                window_start_at=NOW - timedelta(hours=1),
+                window_end_at=NOW + timedelta(hours=1),
+                reason_codes=["CASE_MATERIALIZED"],
+                available_at=NOW,
+                attempts=0,
+            )
+        )
+    workforce_api_db.commit()
+
+    value = workforce_dashboard_service.get_workforce_snapshot(
+        workforce_api_db,
+        scope=organization_scope(),
+        self_employee_id=None,
+        include_aggregate=True,
+        now=NOW.replace(tzinfo=UTC),
+    ).value
+
+    excluded = max(missing_count, int(queued))
+    assert value["sync_health"]["punches"]["state"] == "healthy"
+    assert value["current_shift"]["evaluated_count"] == 2 - excluded
+    assert value["current_shift"]["pending_or_error_excluded_count"] == excluded
+    assert value["current_shift"]["working"] == 2 - excluded
+    assert value["aggregate"]["on_site"] == (None if excluded else 2)
