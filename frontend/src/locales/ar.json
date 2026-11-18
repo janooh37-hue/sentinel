@@ -5943,10 +5943,17 @@
     "workforcePulse": {
       "title": "نبض القوى العاملة",
       "openCoverage": "فتح التغطية",
+      "reasons": {
+        "leave_duty": "إجازة مهمة رسمية",
+        "leave_other": "إجازة أخرى"
+      },
       "self": {
         "heading": "ورديتي",
         "start": "تبدأ",
         "end": "تنتهي",
+        "punchIn": "بصمة الدخول",
+        "punchOut": "بصمة الخروج",
+        "schedule": "الوردية المجدولة",
         "presence": {
           "scheduled": "مجدولة",
           "on_duty": "على رأس العمل",
@@ -5958,6 +5965,7 @@
         }
       },
       "metrics": {
+        "onSite": "الموجودون في الموقع الآن",
         "scheduled": "المجدول",
         "working": "على رأس العمل",
         "coverage": "التغطية"
@@ -6071,6 +6079,22 @@
       "onLeave": "في إجازة"
     },
     "widgets": {
+      "punch_log": {
+        "title": "سجل البصمات",
+        "subtitle": "اليوم · الأحدث أولًا · بصمات BioTime الأصلية",
+        "empty": "لم تُسجَّل بصمات اليوم.",
+        "footer": "التصحيحات لا تغيّر هذا السجل.",
+        "time": "الوقت",
+        "employee": "الموظف",
+        "post": "الموقع",
+        "device": "الجهاز",
+        "directionLabel": "الاتجاه",
+        "direction": {
+          "in": "دخول",
+          "out": "خروج",
+          "unknown": "بصمة"
+        }
+      },
       "store_expiring": {
         "title": "صلاحية مواد المخزن",
         "window": "الدفعات المنتهية الصلاحية أو التي تنتهي خلال {{days}} يومًا",
@@ -7716,7 +7740,114 @@
       "unpaired": "بصمة واحدة",
       "absent": "غائب",
       "leave": "في إجازة",
-      "pending": "لم تبدأ"
+      "pending": "لم يحن موعده",
+      "national_service": "الخدمة الوطنية",
+      "onSite": "في الموقع",
+      "left": "غادر",
+      "off": "راحة",
+      "leaveWith": "في {{subtype}}",
+      "leaveOther": "في إجازة أخرى"
+    },
+    "legend": {
+      "title": "دليل الحالات",
+      "hint": "الهالة = في الموقع الآن",
+      "details": "كل إجازة معتمدة تعفي من الدوام تظهر بالأزرق مع اسم نوعها. الخدمة الوطنية بالبنفسجي. الحضور داخل مدة السماح ليس مخالفة."
+    },
+    "quickCorrection": {
+      "title": "تصحيح سريع",
+      "subtitle": "اختر النتيجة النهائية لليوم",
+      "result": "تصحيح الحضور",
+      "present": "حاضر",
+      "absent": "غائب",
+      "leave": "في إجازة",
+      "clear": "إلغاء التصحيح",
+      "clearSave": "تأكيد إلغاء التصحيح",
+      "clearHint": "إلغاء التصحيح الساري. قد يصبح تصحيح سابق غير ملغى ساريًا؛ وإلا تعود النتيجة التلقائية. يجب تسجيل سبب الإلغاء.",
+      "inTime": "وقت الدخول (24 ساعة)",
+      "outTime": "وقت الخروج (24 ساعة)",
+      "optional": "اختياري",
+      "timeHint": "بتوقيت دبي · HH:MM (24 ساعة). الخروج اختياري ويجب أن يكون بعد الدخول. في الوردية الليلية، يُحتسب وقت الخروج الأسبق في اليوم التالي.",
+      "overnightDates": "تاريخ الدخول: <inDate>{{inDate}}</inDate> · تاريخ الخروج: <outDate>{{outDate}}</outDate>",
+      "subtype": "نوع الإجازة",
+      "leaveHint": "يُحفظ نوع الإجازة ضمن السبب، وليس كسجل إجازة مستقل.",
+      "reason": "السبب",
+      "chooseReason": "اختر سببًا",
+      "reasonText": "تفاصيل السبب",
+      "reasonPlaceholder": "وضّح سبب تصحيح هذا اليوم",
+      "reasonHint": "اختر السبب وأضف التفاصيل لتفعيل الحفظ.",
+      "reasonReady": "سيُحفظ السبب في سجل التدقيق.",
+      "audit": "ملاحظة للتدقيق",
+      "auditPlaceholder": "مرجع أو تفاصيل داعمة",
+      "save": "حفظ التصحيح",
+      "cancel": "تراجع",
+      "close": "إغلاق التصحيح",
+      "viewEvidence": "عرض الأدلة",
+      "overlayFooter": "بصمات BioTime تبقى دون تغيير؛ التصحيح يُطبَّق على نتيجة اليوم",
+      "lastCorrection": "آخر تصحيح: {{name}} · <at>{{at}}</at>",
+      "noPrevious": "لا يوجد تصحيح سابق",
+      "unknownActor": "مستخدم غير معروف",
+      "saved": "حُفظ التصحيح وحُدّثت نتيجة اليوم.",
+      "cleared": "أُلغي التصحيح وحُدّثت نتيجة اليوم.",
+      "currentEvidence": "الأدلة الحالية",
+      "currentResult": "النتيجة السارية الحالية",
+      "automatic": "تلقائي · تقييم النظام",
+      "corrected": "مُصحَّح · تصحيح بشري",
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الوردية المجدولة · بتوقيت دبي",
+      "loadFailed": "تعذّر تحميل حالة الحضور.",
+      "refreshFailed": "تعذّر تحديث الأدلة الحالية. أعد المحاولة قبل الحفظ.",
+      "conflictWarning": "تغيّرت حالة الحضور هذه. قارن الأدلة المحدّثة قبل إرسال المسودة المحفوظة.",
+      "discardTitle": "تجاهل التغييرات غير المحفوظة؟",
+      "discardDescription": "لم يُحفظ هذا التصحيح. واصل التعديل أو تجاهل المسودة.",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل",
+      "errors": {
+        "reasonRequired": "اختر السبب وأضف التفاصيل قبل الحفظ.",
+        "inRequired": "أدخل وقت الدخول.",
+        "invalidTime": "استخدم صيغة 24 ساعة مثل 07:02.",
+        "outBeforeIn": "يجب أن يكون وقت الخروج بعد وقت الدخول.",
+        "futureTime": "لا يمكن أن يكون وقت الدخول أو الخروج في المستقبل.",
+        "clearUnavailable": "لا يوجد تصحيح سارٍ لإلغائه."
+      },
+      "reasons": {
+        "device": "الجهاز / بصمة مفقودة",
+        "supervisor": "تأكيد المشرف",
+        "leave": "مرجع إجازة معتمدة",
+        "roster": "تصحيح جدول الدوام",
+        "other": "أخرى"
+      },
+      "leaves": {
+        "annual": "إجازة سنوية",
+        "sick": "إجازة مرضية",
+        "duty": "إجازة مهمة رسمية",
+        "compassionate": "إجازة تعزية",
+        "emergency": "إجازة طارئة",
+        "hajj": "إجازة حج",
+        "administrative": "إجازة إدارية",
+        "other": "أخرى"
+      }
+    },
+    "onSiteNow": {
+      "title": "الموجودون في الموقع الآن",
+      "daySummary": "ملخص اليوم",
+      "asOf": "حتى <0>{{time}}</0>",
+      "people_zero": "الموظفون: <0>{{count}}</0>",
+      "people_one": "الموظفون: <0>{{count}}</0>",
+      "people_two": "الموظفون: <0>{{count}}</0>",
+      "people_few": "الموظفون: <0>{{count}}</0>",
+      "people_many": "الموظفون: <0>{{count}}</0>",
+      "people_other": "الموظفون: <0>{{count}}</0>",
+      "onSite": "في الموقع",
+      "left": "غادروا",
+      "notArrived": "لم يصلوا",
+      "leave": "في إجازة",
+      "nationalService": "الخدمة الوطنية"
+    },
+    "correct": {
+      "action": "تصحيح الحضور",
+      "actionFor": "تصحيح حضور {{name}}، {{date}}",
+      "actionForShift": "تصحيح حضور {{name}}، {{date}}، {{shift}}"
     },
     "toolbar": {
       "today": "اليوم",
@@ -7737,14 +7868,25 @@
       "late": "متأخر",
       "unpaired": "غير مكتمل",
       "leave": "إجازة",
-      "posts": "{{count}} مواقع",
+      "posts_zero": "المواقع: {{count}}",
+      "posts_one": "المواقع: {{count}}",
+      "posts_two": "المواقع: {{count}}",
+      "posts_few": "المواقع: {{count}}",
+      "posts_many": "المواقع: {{count}}",
+      "posts_other": "المواقع: {{count}}",
       "source": "المصدر: مرآة BioTime · قراءة فقط · محدث حتى {{through}}",
       "sourceUnknown": "المصدر: مرآة BioTime · قراءة فقط · التحديث غير معروف",
       "noPunch": "لا بصمة",
       "absent": "غائب",
       "onlyPunch": "{{time}} فقط",
       "latePunch": "{{time}} +{{minutes}} د",
-      "duePunch": "الموعد {{time}}"
+      "duePunch": "الموعد {{time}}",
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الوردية المجدولة",
+      "pastGrace": "+{{minutes}} د",
+      "nationalService": "الخدمة الوطنية",
+      "openEmployee": "فتح ملف الموظف · {{name}} · {{employeeId}}"
     },
     "print": {
       "title": "سجل الحضور اليومي",
@@ -7779,7 +7921,6 @@
       "postCount": "{{count}} مواقع",
       "layoutSheet": "كشف البصمة العام",
       "layoutShift": "كشف الحضور الوظيفي",
-      "gracePunch": "{{time}} (سماح)",
       "printedBy": "بواسطة",
       "layoutRoster": "كشف تدقيق الحضور",
       "colLine": "#",
@@ -7808,15 +7949,29 @@
     },
     "board": {
       "seenOf": "{{seen}}/{{due}}",
-      "legend": "اللون للمشكلات فقط"
+      "personDetails": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · دخول {{in}} · خروج {{out}}",
+      "openEmployee": "فتح ملف الموظف · {{details}}",
+      "leaveCount_zero": "في إجازة: {{count}}",
+      "leaveCount_one": "في إجازة: {{count}}",
+      "leaveCount_two": "في إجازة: {{count}}",
+      "leaveCount_few": "في إجازة: {{count}}",
+      "leaveCount_many": "في إجازة: {{count}}",
+      "leaveCount_other": "في إجازة: {{count}}",
+      "nationalServiceCount_zero": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_one": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_two": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_few": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_many": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_other": "الخدمة الوطنية: {{count}}"
     },
     "timeline": {
-      "grace": "السماح {{time}}",
-      "start": "البداية {{time}}",
-      "closes": "الانتهاء {{time}}",
-      "missingGutter": "−{{count}}",
       "median": "وسيط الحضور",
-      "glance": "نظرة واحدة: هل التجمع يسار الخط؟"
+      "glance": "تمتد الأشرطة من الدخول إلى الخروج، أو إلى الوقت الحالي لمن لا يزال في الموقع.",
+      "schedule": "الوردية المجدولة",
+      "employee": "الموظف",
+      "in": "دخول",
+      "out": "خروج",
+      "rowLabel": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · دخول {{in}} · خروج {{out}}"
     },
     "attention": {
       "title": "يحتاج قراراً",
@@ -7879,7 +8034,9 @@
         "attendance_adjustment_changed": "تغير تصحيح الحضور",
         "leave_national_service": "إجازة خدمة وطنية",
         "leave_sick": "إجازة مرضية",
-        "leave_annual": "إجازة سنوية"
+        "leave_annual": "إجازة سنوية",
+        "leave_duty": "إجازة مهمة رسمية",
+        "leave_other": "إجازة معتمدة أخرى"
       },
       "auditActions": {
         "created": "تم إنشاء التصحيح",
@@ -7930,6 +8087,11 @@
       "firstSeen": "أول ظهور",
       "lastSeen": "آخر ظهور",
       "punchCount": "عدد البصمات",
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الجدول",
+      "previousMonth": "الشهر السابق",
+      "nextMonth": "الشهر التالي",
       "devices": "الجهاز",
       "unenrolled": "غير مسجَّل على أي جهاز حضور.",
       "wholeRecord": "السجل الكامل",
@@ -8103,6 +8265,7 @@
         "absent": "غياب",
         "unpaired": "بصمة واحدة",
         "leave": "في إجازة",
+        "national_service": "الخدمة الوطنية",
         "pending": "لم يُقيَّم بعد",
         "rest": "يوم راحة أو غير مجدول",
         "withheld": "محجوب: إجازة أو غياب لا يطّلع عليه هذا الحساب"

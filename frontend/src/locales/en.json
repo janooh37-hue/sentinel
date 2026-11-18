@@ -5510,10 +5510,17 @@
     "workforcePulse": {
       "title": "Workforce Pulse",
       "openCoverage": "Open coverage",
+      "reasons": {
+        "leave_duty": "Duty Leave",
+        "leave_other": "Other leave"
+      },
       "self": {
         "heading": "My shift",
         "start": "Starts",
         "end": "Ends",
+        "punchIn": "Punch in",
+        "punchOut": "Punch out",
+        "schedule": "Scheduled shift",
         "presence": {
           "scheduled": "Scheduled",
           "on_duty": "On duty",
@@ -5525,6 +5532,7 @@
         }
       },
       "metrics": {
+        "onSite": "On site now",
         "scheduled": "Scheduled",
         "working": "On duty",
         "coverage": "Coverage"
@@ -5634,6 +5642,22 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "punch_log": {
+        "title": "Punch log",
+        "subtitle": "Today · newest first · original BioTime punches",
+        "empty": "No punches recorded today.",
+        "footer": "Corrections never rewrite this log.",
+        "time": "Time",
+        "employee": "Employee",
+        "post": "Post",
+        "device": "Device",
+        "directionLabel": "Direction",
+        "direction": {
+          "in": "In",
+          "out": "Out",
+          "unknown": "Punch"
+        }
+      },
       "store_expiring": {
         "title": "Store expiry",
         "window": "Batches expired or expiring within {{days}} days",
@@ -7115,7 +7139,110 @@
       "unpaired": "Single punch",
       "absent": "Absent",
       "leave": "On leave",
-      "pending": "Not started"
+      "pending": "Not due yet",
+      "national_service": "National Service",
+      "onSite": "On site",
+      "left": "Left",
+      "off": "Off",
+      "leaveWith": "On leave · {{subtype}}",
+      "leaveOther": "On leave · Other"
+    },
+    "legend": {
+      "title": "Status legend",
+      "hint": "Halo = on site now",
+      "details": "All approved excusing leave is blue and names its type. National Service is purple. Arriving inside the grace is not an exception."
+    },
+    "quickCorrection": {
+      "title": "Quick correction",
+      "subtitle": "Choose the day’s effective result",
+      "result": "Correct attendance",
+      "present": "Present",
+      "absent": "Absent",
+      "leave": "On leave",
+      "clear": "Clear correction",
+      "clearSave": "Confirm clear correction",
+      "clearHint": "Remove the active correction. An earlier unrevoked correction may become effective; otherwise the automatic result returns. A reason is still required.",
+      "inTime": "In time (24h)",
+      "outTime": "Out time (24h)",
+      "optional": "optional",
+      "timeHint": "Asia/Dubai · HH:MM (24h). Out is optional and must follow In. For an overnight shift, an earlier Out time is on the following day.",
+      "overnightDates": "In date: <inDate>{{inDate}}</inDate> · Out date: <outDate>{{outDate}}</outDate>",
+      "subtype": "Leave subtype",
+      "leaveHint": "The subtype is saved in the reason, not as a structured leave record.",
+      "reason": "Reason",
+      "chooseReason": "Select a reason",
+      "reasonText": "Reason details",
+      "reasonPlaceholder": "Explain why this day needs a correction",
+      "reasonHint": "Choose a reason and add details to enable Save.",
+      "reasonReady": "The reason will be saved in the audit history.",
+      "audit": "Audit note",
+      "auditPlaceholder": "Reference or supporting detail",
+      "save": "Save correction",
+      "cancel": "Cancel",
+      "close": "Close correction",
+      "viewEvidence": "View evidence",
+      "overlayFooter": "BioTime punches stay untouched; this overlays the day",
+      "lastCorrection": "Last correction: {{name}} · <at>{{at}}</at>",
+      "noPrevious": "No previous correction",
+      "unknownActor": "Unknown user",
+      "saved": "Correction saved. The day has been updated.",
+      "cleared": "Correction cleared. The day has been updated.",
+      "currentEvidence": "Current evidence",
+      "currentResult": "Current effective result",
+      "automatic": "Automatic · system evaluation",
+      "corrected": "Corrected · human correction",
+      "in": "In",
+      "out": "Out",
+      "schedule": "Scheduled shift · Asia/Dubai",
+      "loadFailed": "Attendance case could not be loaded.",
+      "refreshFailed": "Current evidence could not be refreshed. Retry before saving.",
+      "conflictWarning": "This attendance case changed. Compare the refreshed evidence before submitting your preserved draft.",
+      "discardTitle": "Discard unsaved changes?",
+      "discardDescription": "This correction has not been saved. Keep editing or discard the draft.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard",
+      "errors": {
+        "reasonRequired": "Choose a reason and add details before saving.",
+        "inRequired": "Enter the In time.",
+        "invalidTime": "Use 24h times in HH:MM format, for example 07:02.",
+        "outBeforeIn": "Out must follow In.",
+        "futureTime": "Recorded times cannot be in the future.",
+        "clearUnavailable": "There is no active correction to clear."
+      },
+      "reasons": {
+        "device": "Device / missing punch",
+        "supervisor": "Supervisor confirmation",
+        "leave": "Approved leave reference",
+        "roster": "Roster correction",
+        "other": "Other"
+      },
+      "leaves": {
+        "annual": "Annual",
+        "sick": "Sick",
+        "duty": "Duty Leave (official mission)",
+        "compassionate": "Compassionate",
+        "emergency": "Emergency",
+        "hajj": "Hajj",
+        "administrative": "Administrative",
+        "other": "Others"
+      }
+    },
+    "onSiteNow": {
+      "title": "On site now",
+      "daySummary": "Day summary",
+      "asOf": "As of <0>{{time}}</0>",
+      "people_one": "<0>{{count}}</0> person",
+      "people_other": "<0>{{count}}</0> people",
+      "onSite": "On site",
+      "left": "Left",
+      "notArrived": "Not arrived",
+      "leave": "On leave",
+      "nationalService": "National Service"
+    },
+    "correct": {
+      "action": "Correct attendance",
+      "actionFor": "Correct attendance: {{name}}, {{date}}",
+      "actionForShift": "Correct attendance: {{name}}, {{date}}, {{shift}}"
     },
     "toolbar": {
       "today": "Today",
@@ -7136,14 +7263,21 @@
       "late": "late",
       "unpaired": "unpaired",
       "leave": "leave",
-      "posts": "{{count}} posts",
+      "posts_one": "{{count}} post",
+      "posts_other": "{{count}} posts",
       "source": "Source: BioTime mirror · read-only · fresh through {{through}}",
       "sourceUnknown": "Source: BioTime mirror · read-only · freshness unknown",
       "noPunch": "no punch",
       "absent": "absent",
       "onlyPunch": "{{time}} only",
       "latePunch": "{{time}} +{{minutes}}m",
-      "duePunch": "due {{time}}"
+      "duePunch": "due {{time}}",
+      "in": "In",
+      "out": "Out",
+      "schedule": "Scheduled shift",
+      "pastGrace": "+{{minutes}} min",
+      "nationalService": "National Service",
+      "openEmployee": "Open employee file · {{name}} · {{employeeId}}"
     },
     "print": {
       "title": "Daily Duty Register",
@@ -7178,7 +7312,6 @@
       "postCount": "{{count}} posts",
       "layoutSheet": "Biometric register",
       "layoutShift": "Duty attendance",
-      "gracePunch": "{{time}} (grace)",
       "printedBy": "By",
       "layoutRoster": "Attendance audit",
       "colLine": "#",
@@ -7207,15 +7340,21 @@
     },
     "board": {
       "seenOf": "{{seen}}/{{due}}",
-      "legend": "Colour marks only trouble"
+      "personDetails": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · In {{in}} · Out {{out}}",
+      "openEmployee": "Open employee file · {{details}}",
+      "leaveCount_one": "On leave: {{count}}",
+      "leaveCount_other": "On leave: {{count}}",
+      "nationalServiceCount_one": "National Service: {{count}}",
+      "nationalServiceCount_other": "National Service: {{count}}"
     },
     "timeline": {
-      "grace": "grace {{time}}",
-      "start": "start {{time}}",
-      "closes": "closes {{time}}",
-      "missingGutter": "−{{count}}",
       "median": "median arrival",
-      "glance": "One glance: is the cloud left of the amber line?"
+      "glance": "Bars show In to Out, or now while on site.",
+      "schedule": "Scheduled shift",
+      "employee": "Employee",
+      "in": "In",
+      "out": "Out",
+      "rowLabel": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · In {{in}} · Out {{out}}"
     },
     "attention": {
       "title": "Needs a decision",
@@ -7278,7 +7417,9 @@
         "attendance_adjustment_changed": "Attendance adjustment changed",
         "leave_national_service": "National service leave",
         "leave_sick": "Sick leave",
-        "leave_annual": "Annual leave"
+        "leave_annual": "Annual leave",
+        "leave_duty": "Duty leave (official mission)",
+        "leave_other": "Other approved leave"
       },
       "auditActions": {
         "created": "Correction created",
@@ -7329,6 +7470,11 @@
       "firstSeen": "First seen",
       "lastSeen": "Last seen",
       "punchCount": "Punches",
+      "in": "In",
+      "out": "Out",
+      "schedule": "Schedule",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
       "devices": "Device",
       "unenrolled": "Not enrolled on any attendance device.",
       "wholeRecord": "Whole record",
@@ -7506,6 +7652,7 @@
         "absent": "Absent",
         "unpaired": "Single punch",
         "leave": "On leave",
+        "national_service": "National Service",
         "pending": "Not judged yet",
         "rest": "Rest day or not rostered",
         "withheld": "Withheld: leave or absence not visible to this account"

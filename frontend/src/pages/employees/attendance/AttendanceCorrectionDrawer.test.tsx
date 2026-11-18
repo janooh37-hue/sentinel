@@ -203,6 +203,7 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'snapshot'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['workforce', 'coverage'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notification-counts'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['attendance-punches'] })
   })
 
   it('prevents a correction with a blank reason from reaching the API', async () => {
