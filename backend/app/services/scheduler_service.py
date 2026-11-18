@@ -57,6 +57,7 @@ from app.services import (
     scan_inbox_service,
     settings_service,
     vehicle_reminder_service,
+    workforce_leave,
     workforce_retention_service,
     workforce_schedule_service,
     workforce_seed_service,
@@ -87,6 +88,7 @@ _WORKFORCE_ATTENDANCE_SYNC_JOB_ID = "workforce-attendance-sync"
 _WORKFORCE_QUEUE_DRAIN_JOB_ID = "workforce-evaluation-queue-drain"
 _WORKFORCE_RETENTION_JOB_ID = "workforce-retention"
 _WORKFORCE_PROFILE_JOB_ID = "workforce-punch-profiles"
+_WORKFORCE_LEAVE_EXCUSAL_JOB_ID = "workforce-leave-excusal-reconciliation"
 _VEHICLE_REMINDER_JOB_ID = "vehicle_reminders"
 _WORKFORCE_OCCURRENCE_INTERVAL_MINUTES = 15
 _WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES = 1
@@ -295,6 +297,50 @@ def _run_workforce_evaluation_queue_drain() -> None:
     completed = run_workforce_evaluation_queue_drain_once()
     if completed:
         log.info("scheduler: evaluated %d workforce queue item(s)", completed)
+
+
+def _reconcile_leave_excusals(session: Session, *, now: datetime) -> int:
+    """Requeue retained cases whose latest evaluation misses an excusing leave.
+
+    Bounded by what the system still keeps and judges: no earlier than the
+    evaluation start nor the attendance retention window, through today's site
+    date. Dormant without a validated configuration. Flushes, never commits.
+    """
+    configuration = _load_workforce_configuration(session)
+    if configuration is None:
+        return 0
+    zone = ZoneInfo(workforce_seed_service.SITE_TIMEZONE)
+    today = now.astimezone(zone).date()
+    since = max(
+        configuration.evaluation_start_at.astimezone(zone).date(),
+        today - timedelta(days=configuration.attendance_retention_days),
+    )
+    return workforce_leave.enqueue_unreflected_leave_excusals(
+        session,
+        since=since,
+        until=today,
+        now=now,
+        evaluation_start_at=configuration.evaluation_start_at,
+    )
+
+
+def _run_workforce_leave_excusal_reconciliation() -> None:
+    """Once per process start: apply excusing leaves no mutation re-evaluated.
+
+    Idempotent - a case is queued only while its latest evaluation still misses
+    a covering excusing leave - so every restart is safe and cheap once caught up.
+    """
+    session = SessionLocal()
+    try:
+        queued = _reconcile_leave_excusals(session, now=datetime.now(UTC))
+        session.commit()
+        if queued:
+            log.info("scheduler: requeued %d case(s) for unapplied excusing leave", queued)
+    except Exception:
+        session.rollback()
+        log.exception("scheduler: workforce leave excusal reconciliation failed")
+    finally:
+        session.close()
 
 
 def _run_workforce_retention() -> None:
@@ -1033,6 +1079,14 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: workforce punch profiles daily at 03:20 Asia/Dubai")
+            _scheduler.add_job(
+                _run_workforce_leave_excusal_reconciliation,
+                trigger="date",
+                run_date=datetime.now(UTC),
+                id=_WORKFORCE_LEAVE_EXCUSAL_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: workforce leave excusal reconciliation once at start")
             _scheduler.add_job(
                 _run_scan_drain,
                 trigger=IntervalTrigger(minutes=_SCAN_DRAIN_INTERVAL_MINUTES),

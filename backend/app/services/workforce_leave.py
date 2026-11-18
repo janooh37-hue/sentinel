@@ -9,14 +9,19 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import leave_lifecycle
 from app.db.models import Leave
+from app.db.workforce_models import (
+    AttendanceCase,
+    AttendanceEvaluation,
+    AttendanceEvaluationLeaveSource,
+)
 
 _DUBAI = ZoneInfo("Asia/Dubai")
 
@@ -228,6 +233,118 @@ def affected_reevaluation_windows(
     )
 
 
+def enqueue_unreflected_leave_excusals(
+    db: Session,
+    *,
+    since: date,
+    until: date,
+    now: datetime,
+    evaluation_start_at: datetime | None = None,
+) -> int:
+    """Requeue cases whose latest evaluation misses an excusing leave covering them.
+
+    A leave reaches attendance only through the re-evaluation its own mutation
+    enqueues.  When the excusal rule widens (Duty Leave and the other kinds),
+    leaves approved before that change never enqueued anything, so their days
+    keep a stale verdict.  This finds exactly those cases: evaluated, dated in
+    ``[since, until]`` (and starting at or after ``evaluation_start_at``, the
+    evaluator's own cutoff), and covered by an excusing leave the latest
+    evaluation does not cite.  The evaluator cites every covering excusing
+    leave, so a rerun after the queue drains enqueues nothing.  A case never
+    evaluated is left to its normal first evaluation.  Flushes, never commits;
+    returns the number of cases queued.
+    """
+    from app.services.attendance_queue_service import enqueue_evaluation
+
+    if until < since:
+        return 0
+    excusing: dict[str, list[Leave]] = defaultdict(list)
+    for leave in db.scalars(
+        select(Leave).where(
+            Leave.deleted_at.is_(None),
+            Leave.start_date <= until,
+            Leave.end_date >= since,
+        )
+    ):
+        if _excusing_reason(leave) is not None:
+            excusing[leave.employee_id].append(leave)
+    if not excusing:
+        return 0
+
+    case_query = select(AttendanceCase).where(
+        AttendanceCase.employee_id.in_(list(excusing)),
+        AttendanceCase.operational_date >= since,
+        AttendanceCase.operational_date <= until,
+    )
+    if evaluation_start_at is not None:
+        case_query = case_query.where(
+            AttendanceCase.scheduled_start_at
+            >= evaluation_start_at.astimezone(UTC).replace(tzinfo=None)
+        )
+    cases = db.scalars(
+        case_query.order_by(
+            AttendanceCase.employee_id, AttendanceCase.operational_date, AttendanceCase.id
+        )
+    ).all()
+    if not cases:
+        return 0
+
+    latest_revision = (
+        select(
+            AttendanceEvaluation.attendance_case_id,
+            func.max(AttendanceEvaluation.revision).label("revision"),
+        )
+        .where(AttendanceEvaluation.attendance_case_id.in_([case.id for case in cases]))
+        .group_by(AttendanceEvaluation.attendance_case_id)
+        .subquery()
+    )
+    latest_by_case = dict(
+        db.execute(
+            select(AttendanceEvaluation.attendance_case_id, AttendanceEvaluation.id).join(
+                latest_revision,
+                (AttendanceEvaluation.attendance_case_id == latest_revision.c.attendance_case_id)
+                & (AttendanceEvaluation.revision == latest_revision.c.revision),
+            )
+        )
+        .tuples()
+        .all()
+    )
+    cited: dict[int, set[int]] = defaultdict(set)
+    for evaluation_id, leave_id in db.execute(
+        select(
+            AttendanceEvaluationLeaveSource.evaluation_id,
+            AttendanceEvaluationLeaveSource.leave_id,
+        ).where(AttendanceEvaluationLeaveSource.evaluation_id.in_(list(latest_by_case.values())))
+    ).tuples():
+        cited[evaluation_id].add(leave_id)
+
+    queued = 0
+    for case in cases:
+        latest_id = latest_by_case.get(case.id)
+        if latest_id is None:
+            continue
+        covering = {
+            leave.id
+            for leave in excusing[case.employee_id]
+            if leave.start_date <= case.operational_date <= leave.end_date
+        }
+        if not covering or covering <= cited[latest_id]:
+            continue
+        day_start = datetime.combine(case.operational_date, time.min, tzinfo=_DUBAI)
+        enqueue_evaluation(
+            db,
+            employee_id=case.employee_id,
+            window_start_at=day_start.astimezone(UTC),
+            window_end_at=(day_start + timedelta(days=1)).astimezone(UTC),
+            # The queue only accepts its fixed reason vocabulary; these leaves
+            # are approved facts the evaluator has not yet applied.
+            reason_code="LEAVE_APPROVED",
+            now=now,
+        )
+        queued += 1
+    return queued
+
+
 __all__ = [
     "LEAVE_KIND_BY_REASON",
     "REASON_BY_LEAVE_KIND",
@@ -235,6 +352,7 @@ __all__ = [
     "LifecycleLiveLeaveSummary",
     "ReevaluationWindow",
     "affected_reevaluation_windows",
+    "enqueue_unreflected_leave_excusals",
     "resolve_excusing_leave",
     "summarize_lifecycle_live_leave",
 ]
