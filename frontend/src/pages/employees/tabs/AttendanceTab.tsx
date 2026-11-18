@@ -35,10 +35,12 @@ import { AttendanceStatusDot } from '@/pages/employees/attendance/AttendanceStat
 import { attendanceStatusLabel } from '@/pages/employees/attendance/attendanceStatusLabel'
 import {
   graceFor,
+  inAt,
   isExcused,
   isOnSiteNow,
   isUnpaired,
   minutesPastGrace,
+  outAt,
   parseInstant,
   rowState,
   siteTime,
@@ -117,12 +119,13 @@ function monthBounds(iso: string): { from: string; to: string; year: number; mon
 /** End of the current real month: navigation must never shrink the record. */
 const RECORD_TO = monthBounds(new Date().toISOString().slice(0, 10)).to
 
-/** Recorded bounds only: a lone punch never supplies an Out time. */
+/** Effective bounds: corrections override punches; a lone punch supplies no raw Out. */
 function punchBounds(day: EmployeeAttendanceDay): { inAt: string | null; outAt: string | null } {
   const punches = day.punches ?? []
+  const first_punch_at = punches[0]?.occurred_at ?? null
   return {
-    inAt: punches[0]?.occurred_at ?? null,
-    outAt: punches.length >= 2 ? punches[punches.length - 1].occurred_at : null,
+    inAt: inAt({ ...day, first_punch_at }),
+    outAt: outAt({ ...day, first_punch_at, last_punch_at: punches.length >= 2 ? punches[punches.length - 1].occurred_at : null }),
   }
 }
 
@@ -502,7 +505,7 @@ function AttendanceTabContent({
                   const onSite = isOnSiteNow({ ...day, first_punch_at: inAt, last_punch_at: outAt }, { now: judgedAt })
                   return {
                     day, state, inAt, outAt, onSite,
-                    label: attendanceStatusLabel(t, state, { onSite, hasOut: outAt !== null, leaveLabel: day.leave_label }),
+                    label: attendanceStatusLabel(t, state, { onSite, hasOut: outAt !== null, leaveLabel: day.leave_label, corrected: day.corrected }),
                   }
                 })
                 const description = details.length > 0
@@ -528,7 +531,7 @@ function AttendanceTabContent({
                   >
                     <span className="flex items-center justify-between gap-1">
                       <bdi dir="ltr" className="font-mono text-[0.72em] text-muted-foreground">{dayNumber}</bdi>
-                      {outcome !== 'seen' && <AttendanceStatusDot state={outcome} onSite={details.some((detail) => detail.state === outcome && detail.onSite)} />}
+                      {outcome !== 'seen' && <AttendanceStatusDot state={outcome} onSite={details.some((detail) => detail.state === outcome && detail.onSite)} corrected={entries.some((day) => day.corrected)} />}
                     </span>
                     {details.map(({ day, label, inAt, outAt }) => (
                       <span key={day.case_id ?? day.shift_code} className="mt-1 block text-[0.68em]">
@@ -674,7 +677,7 @@ function DayTimeline({ day, now, correctionTarget }: {
   const state = rowState(day, { now })
   const { inAt, outAt } = punchBounds(day)
   const onSite = isOnSiteNow({ ...day, first_punch_at: inAt, last_punch_at: outAt }, { now })
-  const label = attendanceStatusLabel(t, state, { onSite, hasOut: outAt !== null, leaveLabel: day.leave_label })
+  const label = attendanceStatusLabel(t, state, { onSite, hasOut: outAt !== null, leaveLabel: day.leave_label, corrected: day.corrected })
   const start = parseInstant(day.scheduled_start_at)
   const end = parseInstant(day.scheduled_end_at)
   const grace = graceFor(day)
@@ -707,7 +710,7 @@ function DayTimeline({ day, now, correctionTarget }: {
       </header>
 
       <div className="flex items-center gap-2 px-4 pt-3 text-[0.8em] font-semibold">
-        <AttendanceStatusDot state={state} onSite={onSite} />
+        <AttendanceStatusDot state={state} onSite={onSite} corrected={day.corrected} />
         <span>{label}</span>
       </div>
       <dl className="grid grid-cols-2 gap-3 px-4 py-3 text-[0.8em]">

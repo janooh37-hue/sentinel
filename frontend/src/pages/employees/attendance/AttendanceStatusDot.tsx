@@ -35,17 +35,27 @@ interface Props {
   state: DotState
   /** On site right now; ignored for any state that cannot be on site. */
   onSite?: boolean
+  /**
+   * An active human correction overlays the day: a `--primary` notch with a
+   * `--surface` ring at the top inline-end corner (mirrors in RTL). The caller
+   * names it in text ("Corrected") too; the notch is never the only signal.
+   */
+  corrected?: boolean
   /** Accessible name. Omit when visible text beside the dot already says it. */
   label?: string
   className?: string
 }
 
-export function AttendanceStatusDot({ state, onSite = false, label, className }: Props): React.JSX.Element {
+const NOTCH =
+  "relative after:absolute after:-end-[3px] after:-top-[3px] after:box-content after:h-[5px] after:w-[5px] after:rounded-[1px] after:border-[1.5px] after:border-surface after:bg-primary after:content-['']"
+
+export function AttendanceStatusDot({ state, onSite = false, corrected = false, label, className }: Props): React.JSX.Element {
   const halo = onSite ? HALO[state] : undefined
   return (
     <i
       data-state={state}
       data-on-site={halo ? 'true' : undefined}
+      data-corrected={corrected ? 'true' : undefined}
       role={label ? 'img' : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
@@ -55,6 +65,7 @@ export function AttendanceStatusDot({ state, onSite = false, label, className }:
         state === 'off' ? 'h-0.5 w-2 rounded-[1px]' : 'h-2.5 w-2.5 rounded-full',
         TONE[state],
         halo,
+        corrected && NOTCH,
         className,
       )}
     />

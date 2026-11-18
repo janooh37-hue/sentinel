@@ -23,6 +23,7 @@ import { BoardView } from './BoardView'
 const now = new Date('2026-11-18T07:40:00Z')
 function row(overrides: Partial<AttendanceRow> = {}): AttendanceRow {
   return {
+    corrected: false,
     case_id: 42, employee_id: 'G-1042', name_en: 'Ahmed Ali', name_ar: 'أحمد علي',
     duty_unit: 'First Company', duty_post: 'Main Gate', shift_code: 'morning',
     scheduled_start_at: '2026-11-18T03:00:00Z', scheduled_end_at: '2026-11-18T11:00:00Z',

@@ -7,6 +7,7 @@ import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
 import { AttendanceStatusDot } from './AttendanceStatusDot'
 import type { AttendanceRow } from './attendanceModel'
 import {
+  inAt,
   isOnSiteNow,
   minutesPastGrace,
   needsDecision,
@@ -74,7 +75,7 @@ export function AttentionQueue({
             const state = day ? rowState(day, input) : null
             const onSite = day ? isOnSiteNow(day, input) : false
             const label = state && day
-              ? attendanceStatusLabel(t, state, { onSite, hasOut: outAt(day) !== null, leaveLabel: day.leave_label })
+              ? attendanceStatusLabel(t, state, { onSite, hasOut: outAt(day) !== null, leaveLabel: day.leave_label, corrected: day.corrected })
               : null
             const detail = exception
               ? exception.missing_checkout
@@ -87,7 +88,7 @@ export function AttentionQueue({
               : state === 'late' && day
                 ? t('attendance.pastGrace', { minutes: minutesPastGrace(day, input) })
                 : state === 'unpaired' && day
-                  ? siteTime(day.first_punch_at)
+                  ? siteTime(inAt(day))
                   : null
             return (
               <li key={item.case_id} className="border-b border-hairline px-4 py-2.5 last:border-b-0">
@@ -97,7 +98,7 @@ export function AttentionQueue({
                     onClick={() => onOpenEmployee(item.employee_id)}
                     className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-md text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {state && <AttendanceStatusDot state={state} onSite={onSite} />}
+                    {state && <AttendanceStatusDot state={state} onSite={onSite} corrected={day?.corrected} />}
                     <span className="min-w-0 flex-1">
                       <span dir="auto" className="block text-[0.8em] font-semibold leading-snug">{name}</span>
                       <span className="block text-[0.72em] text-muted-foreground">

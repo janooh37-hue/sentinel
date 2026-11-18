@@ -15,6 +15,7 @@ import { AttendanceStatusDot, type DotState } from './AttendanceStatusDot'
 interface Entry {
   state: DotState
   onSite?: boolean
+  corrected?: boolean
   labelKey: string
 }
 
@@ -29,6 +30,7 @@ const ENTRIES: readonly Entry[] = [
   { state: 'off', labelKey: 'attendance.state.off' },
   { state: 'leave', labelKey: 'attendance.state.leave' },
   { state: 'national_service', labelKey: 'attendance.state.national_service' },
+  { state: 'verified', corrected: true, labelKey: 'attendance.state.corrected' },
 ]
 
 interface Props {
@@ -60,8 +62,8 @@ export function AttendanceLegend({ showOff = false, className }: Props): React.J
       </summary>
       <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 pt-1.5">
         {entries.map((entry) => (
-          <li key={`${entry.state}-${entry.onSite ? 'on' : 'off'}`} className="inline-flex items-center gap-2 whitespace-nowrap">
-            <AttendanceStatusDot state={entry.state} onSite={entry.onSite} />
+          <li key={entry.labelKey} className="inline-flex items-center gap-2 whitespace-nowrap">
+            <AttendanceStatusDot state={entry.state} onSite={entry.onSite} corrected={entry.corrected} />
             {t(entry.labelKey)}
           </li>
         ))}

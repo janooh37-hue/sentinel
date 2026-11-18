@@ -8,6 +8,7 @@ const NOW = new Date('2026-11-18T12:00:00Z')
 
 function day(overrides: Partial<EmployeeAttendanceDay> = {}): EmployeeAttendanceDay {
   return {
+    corrected: false,
     operational_date: '2026-11-17',
     shift_code: 'morning',
     presence_state: 'excused_leave',

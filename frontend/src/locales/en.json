@@ -7143,11 +7143,12 @@
       "left": "Left",
       "off": "Off",
       "leaveWith": "On leave · {{subtype}}",
-      "leaveOther": "On leave · Other"
+      "leaveOther": "On leave · Other",
+      "corrected": "Corrected"
     },
     "legend": {
       "title": "Status legend",
-      "hint": "Halo = on site now",
+      "hint": "Halo = on site now · notch = corrected",
       "details": "All approved excusing leave is blue and names its type. National Service is purple. Arriving inside the grace is not an exception."
     },
     "quickCorrection": {

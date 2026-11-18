@@ -17,6 +17,8 @@ export interface StatusLabelFacts {
   hasOut?: boolean
   /** English half of the excusing leave type, from the API's `leave_label`. */
   leaveLabel?: string | null
+  /** An active human correction overlays the day; the label says so in words. */
+  corrected?: boolean
 }
 
 /** Leave subtype in the reader's language, or null when no translation exists. */
@@ -25,6 +27,11 @@ export function leaveSubtypeLabel(t: TFunction, leaveLabel: string): string | nu
 }
 
 export function attendanceStatusLabel(t: TFunction, state: RowState, facts: StatusLabelFacts = {}): string {
+  const verdict = verdictLabel(t, state, facts)
+  return facts.corrected ? `${verdict} · ${t('attendance.state.corrected')}` : verdict
+}
+
+function verdictLabel(t: TFunction, state: RowState, facts: StatusLabelFacts): string {
   switch (state) {
     case 'national_service':
       return t('attendance.state.national_service')
