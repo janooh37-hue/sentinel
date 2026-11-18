@@ -278,6 +278,34 @@ describe('activity print setup', () => {
 })
 
 describe('attendance print setup', () => {
+  it.each([
+    ['en', 'National Service'],
+    ['ar', 'الخدمة الوطنية'],
+  ])('prints a named National Service day and legend in %s', async (lang, label) => {
+    getEmployeeAttendance.mockImplementation((_id: string, params: { from_date: string; to_date: string }) =>
+      Promise.resolve({
+        employee_id: 'G3190',
+        from_date: params.from_date,
+        to_date: params.to_date,
+        days: [{
+          operational_date: '2026-09-02',
+          shift_code: 'noon',
+          presence_state: 'excused_leave',
+          leave_kind: 'national_service',
+          punch_count: 0,
+          punches: [],
+        }],
+      }),
+    )
+    renderAt(`/employees/G3190/attendance/print?mode=month&y=2026&m=9&lang=${lang}&daily=1`)
+    await waitFor(() => expect(sheet()).toBeInTheDocument())
+    const day = within(sheet()).getAllByTestId('calendar-day').find((c) => c.querySelector('.dn')?.textContent === '2')
+    expect(day).toHaveAttribute('data-state', 'national_service')
+    expect(day?.querySelector('.t-national_service')).not.toBeNull()
+    expect(sheet().querySelector('.st-leg')).toHaveTextContent(label)
+    expect(sheet()).not.toHaveTextContent('statementPrint.paper.state.national_service')
+  })
+
   it('fetches one request per calendar month', async () => {
     renderAt('/employees/G3190/attendance/print?mode=custom&from=2026-06-15&to=2026-09-10&lang=en')
     await waitFor(() => expect(sheet()).toBeInTheDocument())
@@ -426,6 +454,7 @@ describe('fix round', () => {
         days: [
           { operational_date: '2026-09-02', shift_code: 'noon', presence_state: 'excused_leave', punch_count: 0, punches: [] },
           { operational_date: '2026-09-03', shift_code: 'noon', presence_state: 'absent', punch_count: 0, punches: [] },
+          { operational_date: '2026-09-04', shift_code: 'noon', presence_state: 'excused_leave', leave_kind: 'national_service', punch_count: 0, punches: [] },
         ],
       }),
     )
@@ -437,13 +466,14 @@ describe('fix round', () => {
         .find((c) => c.querySelector('.dn')?.textContent === day) as HTMLElement
     expect(cell('2').dataset.state).toBe('withheld')
     expect(cell('3').dataset.state).toBe('withheld')
+    expect(cell('4').dataset.state).toBe('withheld')
     // The cell is glyph + times; the legend names the withheld glyph.
     expect(within(sheet()).getByText(/Withheld: leave or absence/)).toBeInTheDocument()
     const summary = sheet().querySelector('[data-section="summary"]') as HTMLElement
     const value = (label: string): string | null | undefined =>
       Array.from(summary.querySelectorAll('td.k')).find((k) => k.textContent === label)?.nextElementSibling?.textContent
-    // 30 days, 2 withheld: 28 rest days, not 30.
-    expect(value('Rest days')).toBe('28')
+    // 30 days, 3 withheld: National Service is not a rest day either.
+    expect(value('Rest days')).toBe('27')
     expect(value('Absent')).toBe('Withheld')
     expect(value('Punctuality')).toMatch(/^Withheld/)
   })

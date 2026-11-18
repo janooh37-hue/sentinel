@@ -19,6 +19,7 @@ import { AuthContext } from '@/lib/authContext'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { siteTime } from '@/pages/employees/attendance/attendanceModel'
+import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 
 import { formatStatementMonth, formatStatementRange, monthChunks, monthPeriod, quarterPeriod } from '../statementModel'
 import { AttendancePaper } from './AttendancePaper'
@@ -58,7 +59,7 @@ export function AttendancePrintPage(): React.JSX.Element {
   // The Attendance tab's rule, verbatim.
   const isSelf = !!user?.employee_id && user.employee_id === id
   const allowed =
-    (isSelf && has('workforce.self.view')) || (has('workforce.people.view') && has('workforce.attendance.review'))
+    (isSelf && has('workforce.self.view')) || canViewAttendanceRoster(has)
   const canViewLeaveFacts = has('employees.view') && has('leaves.view')
 
   const employee = useQuery({

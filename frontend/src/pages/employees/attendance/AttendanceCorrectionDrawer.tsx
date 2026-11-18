@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import {
   buildAdjustmentPayload,
   draftFromEffective,
+  invalidateAttendanceQueries,
   type AttendanceCorrectionDraft,
   type AttendanceEffective,
   type AttendancePresenceState,
@@ -182,18 +183,6 @@ function AttendanceCorrectionDrawerContent({ caseId, onClose }: Props): React.JS
     return result.data
   }
 
-  const invalidateAttendance = async (): Promise<void> => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['attendance-case', caseId] }),
-      queryClient.invalidateQueries({ queryKey: ['attendance-exceptions'] }),
-      queryClient.invalidateQueries({ queryKey: ['attendance-day'] }),
-      queryClient.invalidateQueries({ queryKey: ['employee-attendance'] }),
-      queryClient.invalidateQueries({ queryKey: ['workforce', 'snapshot'] }),
-      queryClient.invalidateQueries({ queryKey: ['workforce', 'coverage'] }),
-      queryClient.invalidateQueries({ queryKey: ['notification-counts'] }),
-    ])
-  }
-
   const recoverConflict = async (error: unknown): Promise<void> => {
     if (error instanceof ApiError && error.code === 'ATTENDANCE_CASE_VERSION_CONFLICT') {
       const conflictedDraft = draft
@@ -218,7 +207,7 @@ function AttendanceCorrectionDrawerContent({ caseId, onClose }: Props): React.JS
     }) => api.createAttendanceAdjustment(caseId as number, mutationEtag, payload),
     retry: false,
     onSuccess: async () => {
-      await invalidateAttendance()
+      await invalidateAttendanceQueries(queryClient, caseId)
       await reloadEvidence(true)
       const message = t('attendance.review.correctionSaved')
       setLiveMessage(message)
@@ -232,7 +221,7 @@ function AttendanceCorrectionDrawerContent({ caseId, onClose }: Props): React.JS
       api.revokeAttendanceAdjustment(caseId as number, target.id, target.etag, { reason: target.reason }),
     retry: false,
     onSuccess: async () => {
-      await invalidateAttendance()
+      await invalidateAttendanceQueries(queryClient, caseId)
       await reloadEvidence(true)
       const message = t('attendance.review.correctionRevoked')
       setLiveMessage(message)

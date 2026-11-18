@@ -124,6 +124,7 @@ import { api } from '@/lib/api'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
+  ['/employees/attendance', ['workforce.people.view', 'workforce.attendance.review'], 'attendance-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
   ['/employees/G100/edit', ['employees.edit'], 'employee-edit-page'],
   ['/employees/G100/edit', ['employees.change_id'], 'employee-edit-page'],
@@ -204,6 +205,18 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText(pageText)).toBeVisible()
   })
+
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'denies /employees/attendance when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/employees/attendance')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('attendance-page')).not.toBeInTheDocument()
+    },
+  )
 
   it.each(['documents.generate', 'books.view'])(
     'denies /services when %s is the only granted capability',

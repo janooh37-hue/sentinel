@@ -29,6 +29,7 @@ DASHBOARD_WIDGET_IDS = (
     "permits",
     "store_expiring",
     "store_low_stock",
+    "punch_log",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "General Book",
@@ -70,6 +71,7 @@ DashboardWidgetId = Literal[
     "permits",
     "store_expiring",
     "store_low_stock",
+    "punch_log",
 ]
 DashboardQuickActionId = Literal[
     "General Book",
@@ -128,6 +130,7 @@ class DashboardWidgetConfig(BaseModel):
                 "upcoming_leave",
                 "pending_departures",
                 "workforce_pulse",
+                "punch_log",
                 "violation_months",
             }:
                 size = "L"

@@ -10,46 +10,42 @@
  * exceptions come first. Verified rows stay muted so they never compete.
  */
 
+import { Clock3 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { pickEmployeeName } from '@/lib/employeeName'
 
-import type { AttendanceRow, RowState, StateInput } from './attendanceModel'
+import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
+import type { AttendanceRow } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  isExcused,
+  isOnSiteNow,
   isUnpaired,
   minutesPastGrace,
   needsDecision,
   orderByAttention,
+  outAt,
   postSummary,
   rowState,
   siteTime,
   splitByShift,
 } from './attendanceModel'
+import { AttendanceStatusDot } from './AttendanceStatusDot'
+import { attendanceStatusLabel } from './attendanceStatusLabel'
 
 interface Props {
   rows: readonly AttendanceRow[]
+  operationalDate: string
   now: Date
   graceMinutes?: number
   freshThrough?: string | null
   onOpenEmployee: (employeeId: string) => void
 }
 
-// Green, yellow, amber, red: the ladder reads as escalation before a single
-// label is read. Unpaired is red too, but a different red - it is a hole in the
-// record rather than a person who did not come.
-const BEAD: Record<RowState, string> = {
-  verified: 'bg-success',
-  grace: 'bg-caution',
-  late: 'bg-warning',
-  unpaired: 'bg-destructive',
-  absent: 'bg-accent',
-  leave: 'bg-info',
-  pending: 'bg-faint',
-}
-
 export function RegisterView({
   rows,
+  operationalDate,
   now,
   graceMinutes,
   freshThrough,
@@ -72,6 +68,11 @@ export function RegisterView({
         const summary = postSummary(unitRows, input)
         const late = unitRows.filter((row) => rowState(row, input) === 'late').length
         const absent = unitRows.filter((row) => rowState(row, input) === 'absent').length
+        const nationalService = unitRows.filter((row) => rowState(row, input) === 'national_service').length
+        const leave = unitRows.filter((row) => {
+          const state = rowState(row, input)
+          return isExcused(state) && state !== 'national_service'
+        }).length
         // Counted off the pairing fact, not off the state: a person who arrived
         // late and never punched out is one late arrival AND one missing pair,
         // and the register has to be able to say both.
@@ -104,9 +105,10 @@ export function RegisterView({
                     {unit}
                   </span>
                   {' · '}
-                  <span className="font-mono">
+                  <span>{t('attendance.register.schedule')} </span>
+                  <bdi dir="ltr" className="font-mono">
                     {siteTime(unitRows[0]?.scheduled_start_at)} – {siteTime(unitRows[0]?.scheduled_end_at)}
-                  </span>
+                  </bdi>
                   {' · '}
                   {t('attendance.register.posts', { count: posts.size })}
                 </div>
@@ -121,19 +123,14 @@ export function RegisterView({
                   value={unpaired}
                   tone="text-destructive"
                 />
-                <Stat label={t('attendance.register.leave')} value={summary.leave} tone="text-info" />
+                <Stat label={t('attendance.register.leave')} value={leave} tone="text-info" />
+                <Stat label={t('attendance.register.nationalService')} value={nationalService} tone="text-smart" />
               </dl>
             </header>
 
-            {/* Column COUNT is the browser's to choose; the constraint we own is
-              * the minimum width a row needs. A real roster line is a full
-              * Emirati name plus a G-number plus a time — around 23rem — and
-              * fixed `lg:columns-3` truncated names to about 22 characters,
-              * cutting exactly the family name that distinguishes two brothers
-              * on the same post. Declaring the width instead means the register
-              * shows three columns on a wide canvas, two beside the attention
-              * rail, and one on a phone, always with the name intact. */}
-            <div className="columns-[23rem] gap-0">
+            {/* Let the available width choose the column count so full names,
+                verdict text and explicit In/Out keep their space. */}
+            <div className="columns-[29rem] gap-0">
               {ordered.map(([post, postRows]) => {
                 const postStats = postSummary(postRows, input)
                 return (
@@ -167,38 +164,60 @@ export function RegisterView({
                         { name_en: row.name_en, name_ar: row.name_ar ?? null },
                         i18n.language,
                       )
+                      const onSite = isOnSiteNow(row, input)
+                      const departure = outAt(row)
+                      const label = attendanceStatusLabel(t, state, {
+                        onSite,
+                        hasOut: departure !== null,
+                        leaveLabel: row.leave_label,
+                      })
                       return (
-                        <button
+                        <div
                           key={`${row.employee_id}-${row.shift_code}`}
-                          type="button"
-                          onClick={() => onOpenEmployee(row.employee_id)}
-                          className={`flex w-full items-center gap-1.5 py-[2.5px] text-start text-[0.76em] ${
+                          className={`flex items-center gap-2 border-b border-hairline py-2.5 text-[0.76em] last:border-0 ${
                             attention ? 'font-semibold text-foreground' : 'text-muted-foreground'
                           }`}
                         >
-                          <i aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${BEAD[state]}`} />
-                          <span className="min-w-0 flex-1 truncate" title={name}>
-                            {name}
-                          </span>
-                          {/* The identifier a supervisor reads out and types into
-                            * a report, so it never shrinks or truncates: a partial
-                            * G-number is worse than none. Real names are long, so
-                            * the name yields space first. */}
-                          <span className="shrink-0 font-mono text-[0.86em] text-faint">
-                            {row.employee_id}
-                          </span>
-                          <span
-                            className={`shrink-0 font-mono text-[0.92em] ${
-                              state === 'absent' || state === 'unpaired'
-                                ? 'font-bold text-accent'
-                                : state === 'late'
-                                  ? 'font-bold text-warning'
-                                  : 'text-faint'
-                            }`}
-                          >
-                            {timeLabel(row, state, input, t)}
-                          </span>
-                        </button>
+                          <AttendanceStatusDot state={state} onSite={onSite} />
+                          <div className="min-w-0 flex-1 min-[641px]:flex min-[641px]:items-center min-[641px]:gap-3">
+                            <div className="min-w-0 flex-1">
+                              <button
+                                type="button"
+                                onClick={() => onOpenEmployee(row.employee_id)}
+                                aria-label={t('attendance.register.openEmployee', { name, employeeId: row.employee_id })}
+                                className="min-h-11 w-full rounded-sm text-start font-semibold text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring min-[641px]:min-h-7"
+                              >
+                                <span className="block [overflow-wrap:anywhere]">{name}</span>
+                                <bdi dir="ltr" className="font-mono text-[0.86em] text-muted-foreground">{row.employee_id}</bdi>
+                              </button>
+                              <span className="block text-[0.9em] text-foreground">{label}</span>
+                            </div>
+                            <dl className="mt-1 flex shrink-0 gap-4 text-[0.92em] min-[641px]:mt-0">
+                              <div>
+                                <dt className="text-muted-foreground">{t('attendance.register.in')}</dt>
+                                <dd className="font-mono text-foreground">
+                                  <bdi dir="ltr">{siteTime(row.first_punch_at)}</bdi>
+                                  {state === 'late' && (
+                                    <span className="ms-1 text-warning">
+                                      {t('attendance.register.pastGrace', { minutes: minutesPastGrace(row, input) })}
+                                    </span>
+                                  )}
+                                </dd>
+                              </div>
+                              <div>
+                                <dt className="text-muted-foreground">{t('attendance.register.out')}</dt>
+                                <dd className="font-mono text-foreground"><bdi dir="ltr">{siteTime(departure)}</bdi></dd>
+                              </div>
+                            </dl>
+                          </div>
+                          <CorrectAttendanceButton target={{
+                            caseId: row.case_id,
+                            employeeId: row.employee_id,
+                            employeeName: name,
+                            operationalDate,
+                            shiftCode: row.shift_code,
+                          }} className="max-[640px]:h-[44px] max-[640px]:w-[44px]" />
+                        </div>
                       )
                     })}
                   </div>
@@ -206,12 +225,14 @@ export function RegisterView({
               })}
             </div>
 
-            <p className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-2 text-[0.7em] text-muted-foreground">
-              <i aria-hidden className="h-1.5 w-1.5 rounded-full bg-success shadow-[0_0_0_3px_var(--success-soft)]" />
-              {freshThrough
-                ? t('attendance.register.source', { through: siteTime(freshThrough) })
-                : t('attendance.register.sourceUnknown')}
-            </p>
+            <footer className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-2 text-[0.7em] text-muted-foreground">
+              <Clock3 aria-hidden className="h-3.5 w-3.5 shrink-0" />
+              <span className="isolate-bidi">
+                {freshThrough
+                  ? t('attendance.register.source', { through: siteTime(freshThrough) })
+                  : t('attendance.register.sourceUnknown')}
+              </span>
+            </footer>
           </section>
         )
       })}
@@ -236,23 +257,3 @@ function Stat({
   )
 }
 
-function timeLabel(
-  row: AttendanceRow,
-  state: RowState,
-  input: StateInput,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (state === 'leave') return t('attendance.register.leave')
-  if (state === 'pending') return t('attendance.register.duePunch', { time: siteTime(row.scheduled_start_at) })
-  if (state === 'absent') return t('attendance.register.noPunch')
-  if (state === 'unpaired') return t('attendance.register.onlyPunch', { time: siteTime(row.first_punch_at) })
-  if (state === 'late') {
-    // Minutes PAST THE GRACE, which is what "late" means here. The raw offset
-    // from the start would print +44m for someone the policy counts 14 late.
-    return t('attendance.register.latePunch', {
-      time: siteTime(row.first_punch_at),
-      minutes: minutesPastGrace(row, input),
-    })
-  }
-  return siteTime(row.first_punch_at)
-}

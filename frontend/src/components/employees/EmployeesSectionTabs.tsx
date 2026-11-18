@@ -24,6 +24,7 @@ import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
 import { useCapabilities } from '@/lib/useCapabilities'
+import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 
 interface Props {
   /** Rows needing a decision today; `null` or `0` renders no badge. */
@@ -52,7 +53,7 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
         {t('employees.sectionTabs.directory')}
       </NavLink>
 
-      {has('workforce.people.view') && (
+      {canViewAttendanceRoster(has) && (
         <NavLink to="/employees/attendance" className={tabClass}>
           {({ isActive }) => (
             <>
@@ -64,7 +65,7 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
                     isActive ? 'bg-accent text-white' : 'bg-white/20 text-white'
                   }`}
                 >
-                  {attentionCount}
+                  <bdi dir="ltr">{attentionCount}</bdi>
                 </span>
               )}
             </>

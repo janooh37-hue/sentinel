@@ -88,9 +88,17 @@ function selfSnapshot(): WorkforceSnapshot {
       reason_code: 'PUNCH_IN_ACTIVE',
       scheduled_start_at: '2026-08-24T08:00:00',
       scheduled_end_at: '2026-08-24T16:00:00',
+      first_punch_at: '2026-08-24T04:06:00Z',
+      last_punch_at: '2026-08-24T12:03:00Z',
+      final_out_at: '2026-08-24T12:01:00Z',
     },
     aggregate: undefined,
   })
+}
+
+function selfSnapshotWith(self: Partial<NonNullable<WorkforceSnapshot['self']>>): WorkforceSnapshot {
+  const payload = selfSnapshot()
+  return { ...payload, self: { employee_id: 'G100', ...payload.self, ...self } }
 }
 
 
@@ -148,17 +156,63 @@ describe('WorkforcePulseWidget', () => {
     expect(await screen.findByText(expected)).toBeInTheDocument()
   })
 
-  it('renders self presence, reason, and scheduled timestamps without aggregate metrics', async () => {
+  it('leads with actual punches and keeps the schedule secondary', async () => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshot())
 
     renderWidget()
 
-    expect(await screen.findByText('On duty')).toBeInTheDocument()
+    expect(await screen.findByText('Left')).toBeInTheDocument()
     expect(screen.getByText('On-duty punch')).toBeInTheDocument()
-    expect(screen.getByText('8:00 AM')).toBeInTheDocument()
-    expect(screen.getByText('4:00 PM')).toBeInTheDocument()
-    expect(screen.queryByText('Scheduled')).not.toBeInTheDocument()
+    expect(screen.getByText('Punch in')).toBeInTheDocument()
+    expect(screen.getByText('Punch out')).toBeInTheDocument()
+    expect(screen.getByText('08:06')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toBeInTheDocument()
+    expect(screen.queryByText('16:03')).not.toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'])('uses zero-padded 24-hour punches in %s', async (language) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      first_punch_at: '2026-08-24T03:02:00Z',
+    }))
+    await i18n.changeLanguage(language)
+    renderWidget()
+    expect(await screen.findByText('07:02')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it.each([
+    ['national_service', 'National Service', 'bg-smart'],
+    ['duty', 'On leave · Duty Leave', 'bg-info'],
+  ] as const)('uses the shared %s label and dot', async (leave_kind, label, tone) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      presence_state: 'excused_leave', leave_kind, reason_code: null,
+    }))
+    const { container } = renderWidget()
+    expect(await screen.findByText(label)).toBeInTheDocument()
+    expect(container.querySelector(`i.${tone}`)).toBeInTheDocument()
+  })
+
+  it.each([
+    [null, '2026-08-24T12:03:00Z', '16:03'],
+    [null, '2026-08-24T04:06:00Z', '—'],
+    [null, null, '—'],
+  ])('never replaces a missing Out with the scheduled end', async (final_out_at, last_punch_at, expected) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({ final_out_at, last_punch_at }))
+    renderWidget()
+    expect(await screen.findByText(expected)).toBeInTheDocument()
+  })
+
+  it('shows the aggregate on-site count when published', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(AGGREGATE_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(snapshot({ aggregate: { scheduled: 8, working: 7, on_site: 6 } }))
+    renderWidget()
+    expect(await screen.findByText('On site now')).toBeInTheDocument()
+    expect(screen.getByText('6')).toBeInTheDocument()
   })
 
   it('states that no Workforce scope is assigned without requesting a snapshot', async () => {
@@ -256,6 +310,8 @@ describe('WorkforcePulseWidget', () => {
     ['LEAVE_NATIONAL_SERVICE', 'National service leave'],
     ['LEAVE_SICK', 'Sick leave'],
     ['LEAVE_ANNUAL', 'Annual leave'],
+    ['LEAVE_DUTY', 'Duty leave'],
+    ['LEAVE_OTHER', 'Other leave'],
     ['SHIFT_OVERRIDE_OFF', 'Off duty by shift override'],
     ['SHIFT_OVERRIDE_WORK', 'Scheduled by shift override'],
     ['NO_CREW_MEMBERSHIP', 'No crew assignment'],

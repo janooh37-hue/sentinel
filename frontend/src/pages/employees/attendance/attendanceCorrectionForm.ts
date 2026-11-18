@@ -1,3 +1,5 @@
+import type { QueryClient } from '@tanstack/react-query'
+
 import type { AttendanceAdjustmentWrite } from '@/lib/api'
 
 export type AttendancePresenceState = NonNullable<AttendanceAdjustmentWrite['replacement_presence_state']>
@@ -37,7 +39,7 @@ function optionalMinutes(value: string): number | null {
   return value.trim() === '' ? null : Number.parseInt(value, 10)
 }
 
-function utcDate(value: string): Date {
+export function utcDate(value: string): Date {
   return new Date(/[zZ]$|[+-]\d\d:\d\d$/.test(value) ? value : `${value}Z`)
 }
 
@@ -108,4 +110,18 @@ export function buildAdjustmentPayload(
     replacement_early_exit_minutes: earlyExitMinutes,
     replacement_missing_checkout: draft.missingCheckout,
   }
+}
+
+/** Refresh every projection of effective attendance after an audited correction. */
+export async function invalidateAttendanceQueries(queryClient: QueryClient, caseId: number | null): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['attendance-case', caseId] }),
+    queryClient.invalidateQueries({ queryKey: ['attendance-exceptions'] }),
+    queryClient.invalidateQueries({ queryKey: ['attendance-day'] }),
+    queryClient.invalidateQueries({ queryKey: ['employee-attendance'] }),
+    queryClient.invalidateQueries({ queryKey: ['workforce', 'snapshot'] }),
+    queryClient.invalidateQueries({ queryKey: ['workforce', 'coverage'] }),
+    queryClient.invalidateQueries({ queryKey: ['notification-counts'] }),
+    queryClient.invalidateQueries({ queryKey: ['attendance-punches'] }),
+  ])
 }

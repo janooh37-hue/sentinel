@@ -9,10 +9,11 @@
  * `<header>`, and the print sheet hides every `header`, so the shift name and
  * its working window were deleted on the way to the printer.
  *
- * Two layouts, both A4 landscape (`.print-attendance` → `@page attendance`):
+ * Three layouts, all A4 landscape (`.print-attendance` → `@page attendance`):
  *
  *   `sheet`  one masthead, then every shift as a band over four name columns.
  *            The whole day on as little paper as possible.
+ *   `roster` one assignment per table row, including actual In and Out.
  *   `shift`  one sheet per shift: a large band naming the time of day, the
  *            window and the unit on duty, then posts as blocks carrying in and
  *            out, then a sign-off strip. The sheet a supervisor signs.
@@ -33,10 +34,12 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import type { AttendanceRow, RowState, StateInput } from './attendanceModel'
 import {
   groupByUnitAndPost,
+  isExcused,
   isUnpaired,
   minutesPastGrace,
   needsDecision,
   orderByAttention,
+  outAt,
   parseInstant,
   postSummary,
   rowState,
@@ -44,6 +47,7 @@ import {
   splitByShift,
 } from './attendanceModel'
 import { attendancePrintFilename } from './printFilename'
+import { attendanceStatusLabel } from './attendanceStatusLabel'
 
 export type PrintLayout = 'sheet' | 'roster' | 'shift'
 
@@ -83,6 +87,7 @@ const TONE: Record<RowState, string> = {
   unpaired: 'text-destructive',
   absent: 'text-accent',
   leave: 'text-info',
+  national_service: 'text-smart',
   pending: 'text-faint',
 }
 
@@ -93,6 +98,7 @@ const LEGEND_ORDER: readonly RowState[] = [
   'unpaired',
   'absent',
   'leave',
+  'national_service',
 ]
 
 function sections(rows: readonly AttendanceRow[]): Section[] {
@@ -151,36 +157,6 @@ function orderedPosts(
     const diff = postSummary(b[1], input).exceptions - postSummary(a[1], input).exceptions
     return diff !== 0 ? diff : b[1].length - a[1].length
   })
-}
-
-/**
- * The state, in words, in the time cell.
- *
- * Print carries no tooltip and may well come off a mono laser, so colour cannot
- * be the carrier — every state has to read as text. This is `RegisterView`'s
- * label plus the one case the screen leaves to the bead alone: an arrival after
- * the start but inside the grace, which would otherwise print as a bare time
- * indistinguishable from an on-time one.
- */
-function printTimeLabel(
-  row: AttendanceRow,
-  state: RowState,
-  input: StateInput,
-  t: (key: string, options?: Record<string, unknown>) => string,
-): string {
-  if (state === 'leave') return t('attendance.register.leave')
-  if (state === 'pending') return t('attendance.register.duePunch', { time: siteTime(row.scheduled_start_at) })
-  if (state === 'absent') return t('attendance.register.noPunch')
-  if (state === 'unpaired') return t('attendance.register.onlyPunch', { time: siteTime(row.first_punch_at) })
-  if (state === 'grace') return t('attendance.print.gracePunch', { time: siteTime(row.first_punch_at) })
-  if (state === 'late') {
-    // Minutes PAST THE GRACE, which is what "late" means here.
-    return t('attendance.register.latePunch', {
-      time: siteTime(row.first_punch_at),
-      minutes: minutesPastGrace(row, input),
-    })
-  }
-  return siteTime(row.first_punch_at)
 }
 
 /**
@@ -309,7 +285,7 @@ export function AttendancePrintSheet({
       {list.map((section) => (
         <section key={`${section.shiftCode}-${section.unit}`}>
           <ShiftBand section={section} input={input} />
-          <PostColumns section={section} input={input} withInOut={false} columns={4} />
+          <PostColumns section={section} input={input} columns={4} />
         </section>
       ))}
       {foot(t('attendance.print.sheetOf', { index: 1, total: 1 }))}
@@ -504,12 +480,10 @@ const COLUMNS: Record<number, string> = { 3: 'columns-3', 4: 'columns-4' }
 function PostColumns({
   section,
   input,
-  withInOut,
   columns,
 }: {
   section: Section
   input: StateInput
-  withInOut: boolean
   columns: number
 }): React.JSX.Element {
   return (
@@ -520,7 +494,6 @@ function PostColumns({
           post={post}
           rows={postRows}
           input={input}
-          withInOut={withInOut}
           columns={columns}
         />
       ))}
@@ -532,13 +505,11 @@ function PostBlock({
   post,
   rows,
   input,
-  withInOut,
   columns,
 }: {
   post: string
   rows: readonly AttendanceRow[]
   input: StateInput
-  withInOut: boolean
   columns: number
 }): React.JSX.Element {
   const wide = rows.length > WIDE_POST_ROWS
@@ -575,7 +546,6 @@ function PostBlock({
             key={`${row.employee_id}-${row.shift_code}`}
             row={row}
             input={input}
-            withInOut={withInOut}
           />
         ))}
       </div>
@@ -584,16 +554,12 @@ function PostBlock({
 }
 
 /**
- * Total time on site, from the first punch to the last.
- *
- * Punches carry no direction — the provider publishes events, not in/out pairs
- * — so the honest figure is the span between the first and the last, and a
- * single punch has no span at all rather than a zero.
+ * Total time on site, from first In to the effective Out. A corrected Out
+ * takes precedence over raw punches; a missing Out gives no duration.
  */
 function totalMinutes(row: AttendanceRow): number | null {
-  if (row.punch_count < 2) return null
   const from = parseInstant(row.first_punch_at)
-  const to = parseInstant(row.last_punch_at)
+  const to = parseInstant(outAt(row))
   if (from === null || to === null || to <= from) return null
   return Math.round((to - from) / 60_000)
 }
@@ -778,7 +744,7 @@ function RosterRow({
   const total = totalMinutes(row)
   const past = minutesPastGrace(row, input)
   const cell = (index: number): string =>
-    `truncate border-b border-hairline px-1 py-px text-[8pt] ${columns[index]?.[2] ?? ''}`
+    `${index === 10 ? 'break-words' : 'truncate'} border-b border-hairline px-1 py-px text-[8pt] ${columns[index]?.[2] ?? ''}`
   return (
     // break-inside-avoid: a printed line split across two sheets is a line that
     // belongs to neither.
@@ -787,7 +753,7 @@ function RosterRow({
       <td className={cell(1)} dir="auto">
         {name}
       </td>
-      <td className={cell(2)}>{row.employee_id}</td>
+      <td className={cell(2)}><bdi dir="ltr">{row.employee_id}</bdi></td>
       {/* Organisation data, always Arabic: isolated so the glyphs order right,
           but not `dir="auto"`, which would right-align these two columns alone
           against an otherwise left-aligned English sheet. */}
@@ -796,8 +762,8 @@ function RosterRow({
       <td className={cell(5)}>
         <ShiftChip code={row.shift_code ?? '—'} className="text-[7.8pt]" />
       </td>
-      <td className={cell(6)}>{siteTime(row.first_punch_at) || '—'}</td>
-      <td className={cell(7)}>{row.punch_count > 1 ? siteTime(row.last_punch_at) : '—'}</td>
+      <td className={cell(6)}><bdi dir="ltr">{siteTime(row.first_punch_at)}</bdi></td>
+      <td className={cell(7)}><bdi dir="ltr">{siteTime(outAt(row))}</bdi></td>
       <td className={cell(8)}>
         {total === null
           ? '—'
@@ -812,7 +778,7 @@ function RosterRow({
         {past > 0 ? `+${past}` : '—'}
       </td>
       <td className={`${cell(10)} ${TONE[state]} ${needsDecision(state) ? 'font-bold' : ''}`}>
-        {t(`attendance.state.${state}`)}
+        {attendanceStatusLabel(t, state, { leaveLabel: row.leave_label })}
       </td>
     </tr>
   )
@@ -821,50 +787,34 @@ function RosterRow({
 function PersonRow({
   row,
   input,
-  withInOut,
 }: {
   row: AttendanceRow
   input: StateInput
-  withInOut: boolean
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const state = rowState(row, input)
   const name = pickEmployeeName({ name_en: row.name_en, name_ar: row.name_ar ?? null }, i18n.language)
-  // With in and out already on the line, `printTimeLabel` would print the
-  // arrival a second time — so the last cell carries the verdict instead, which
-  // is the part in/out cannot tell you. It uses the SHORT labels: the full ones
-  // ("Late past grace") are a third of the column, and the name is what a
-  // supervisor reads a duty sheet by.
   const past = minutesPastGrace(row, input)
-  const verdict = withInOut
-    ? `${t(`attendance.print.verdict.${state}`)}${state === 'late' && past > 0 ? ` +${past}` : ''}`
-    : printTimeLabel(row, state, input, t)
+  const verdict = isExcused(state)
+    ? attendanceStatusLabel(t, state, { leaveLabel: row.leave_label })
+    : `${t(`attendance.print.verdict.${state}`)}${state === 'late' && past > 0 ? ` +${past}` : ''}`
   return (
-    <div className="flex items-center gap-1 py-px text-[8pt]">
-      <span dir="auto" className="min-w-0 flex-1 truncate">
-        {name}
-      </span>
-      {/* The identifier a supervisor reads out and types into a report, so it
-          never truncates: a partial G-number is worse than none. */}
-      <span className="shrink-0 font-mono text-[7.6pt] tabular-nums text-muted-foreground">
-        {row.employee_id}
-      </span>
-      {withInOut ? (
-        // nowrap: "12:46 · 21:09" is a hair over 21mm at this size, and without
-        // it the pair folds onto two lines and doubles every row's height.
-        <span
-          dir="ltr"
-          className="isolate-bidi w-[23mm] shrink-0 whitespace-nowrap text-end font-mono text-[7.8pt] tabular-nums"
-        >
-          {siteTime(row.first_punch_at) || '—'} · {siteTime(row.last_punch_at) || '—'}
+    <div data-testid="attendance-print-person" className="grid grid-cols-[minmax(0,1fr)_10mm_10mm] items-center gap-1 break-inside-avoid py-0.5 text-[8pt]">
+      <span className="min-w-0">
+        <span dir="auto" className="block truncate">{name}</span>
+        <span className="block text-[7.6pt]">
+          <bdi dir="ltr" className="font-mono tabular-nums text-muted-foreground">{row.employee_id}</bdi>
+          {' · '}
+          <span className={`${TONE[state]} ${needsDecision(state) ? 'font-bold' : ''}`}>{verdict}</span>
         </span>
-      ) : null}
-      <span
-        className={`shrink-0 truncate whitespace-nowrap text-end text-[7.8pt] tabular-nums ${TONE[state]} ${
-          needsDecision(state) ? 'font-bold' : ''
-        } ${withInOut ? 'w-[18mm]' : 'w-[21mm] font-mono'}`}
-      >
-        {verdict}
+      </span>
+      <span className="text-center">
+        <span className="block text-[6.4pt] text-muted-foreground">{t('attendance.print.colIn')}</span>
+        <bdi dir="ltr" className="font-mono text-[7.8pt] tabular-nums">{siteTime(row.first_punch_at)}</bdi>
+      </span>
+      <span className="text-center">
+        <span className="block text-[6.4pt] text-muted-foreground">{t('attendance.print.colOut')}</span>
+        <bdi dir="ltr" className="font-mono text-[7.8pt] tabular-nums">{siteTime(outAt(row))}</bdi>
       </span>
     </div>
   )
@@ -955,7 +905,7 @@ function ShiftSheet({
           flex item, a list too long for one sheet continues on the next with
           an extra column past the paper edge instead of the three it has. */}
       <div>
-        <PostColumns section={section} input={input} withInOut columns={3} />
+        <PostColumns section={section} input={input} columns={3} />
       </div>
 
       {/* This is the sheet a supervisor signs and hands over, which is the whole

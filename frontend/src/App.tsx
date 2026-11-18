@@ -24,6 +24,7 @@ import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { ATTENDANCE_ROSTER_CAPS } from '@/lib/workforceAttendance'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
 import { serviceHref } from '@/lib/quickActions'
@@ -335,8 +336,10 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/employees/attendance"
                 element={
-                  <RequireCapability cap="workforce.people.view">
-                    <AttendancePage />
+                  <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[0]}>
+                    <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[1]}>
+                      <AttendancePage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />

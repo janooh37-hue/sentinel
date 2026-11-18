@@ -14,10 +14,13 @@ import type { AttendanceRow } from './attendanceModel'
 import {
   arrivalOffsetMinutes,
   groupByUnitAndPost,
+  isOnSiteNow,
   isWindowOpen,
   minutesPastGrace,
   needsDecision,
+  onSiteSummary,
   orderByAttention,
+  outAt,
   postSummary,
   rowState,
   shiftCounts,
@@ -154,6 +157,17 @@ describe('rowState', () => {
       rowState(row({ presence_state: 'excused_leave', punch_count: 0 }), SETTLED),
     ).toBe('leave')
   })
+
+  it('gives National Service its own verdict and keeps every other leave kind one blue leave', () => {
+    expect(
+      rowState(row({ on_leave: true, punch_count: 0, leave_kind: 'national_service' }), SETTLED),
+    ).toBe('national_service')
+    for (const kind of ['annual', 'sick', 'duty', 'other'] as const) {
+      expect(rowState(row({ on_leave: true, punch_count: 0, leave_kind: kind }), SETTLED)).toBe('leave')
+    }
+    // A leave kind on a day that is not excused never colours it.
+    expect(rowState(row({ leave_kind: 'national_service' }), SETTLED)).toBe('verified')
+  })
   it('reads a corrected present day as verified even with no punch', () => {
     // The evaluator only rules `completed` from punches, so a completed row
     // with zero punches is a supervisor's correction: the register must show
@@ -235,6 +249,60 @@ describe('postSummary', () => {
     ]
 
     expect(postSummary(rows, SETTLED)).toMatchObject({ due: 4, exceptions: 3 })
+  })
+
+  it('takes National Service out of the denominator like any leave', () => {
+    const rows = [
+      row({ employee_id: 'A' }),
+      row({ employee_id: 'B', on_leave: true, punch_count: 0, leave_kind: 'national_service' }),
+    ]
+    expect(postSummary(rows, SETTLED)).toEqual({ due: 1, seen: 1, leave: 1, exceptions: 0 })
+  })
+})
+
+describe('outAt', () => {
+  it('prefers the evaluated departure, then a second punch, never a lone punch', () => {
+    expect(outAt(row({ final_out_at: '2026-08-19T09:10:00' }))).toBe('2026-08-19T09:10:00')
+    expect(outAt(row({ final_out_at: null }))).toBe('2026-08-19T09:06:00')
+    expect(outAt(row({ final_out_at: null, punch_count: 1, last_punch_at: '2026-08-19T00:52:00' }))).toBeNull()
+  })
+})
+
+describe('isOnSiteNow', () => {
+  const arrived = { punch_count: 1, last_punch_at: '2026-08-19T00:52:00', final_out_at: null, presence_state: 'on_duty' as const }
+
+  it('is true for an arrival with no Out while the duty runs', () => {
+    expect(isOnSiteNow(row(arrived), RUNNING)).toBe(true)
+    expect(isOnSiteNow(row({ ...arrived, late_minutes: 47 }), RUNNING)).toBe(true)
+  })
+
+  it('is false once they left, for past days, and for leave or absence', () => {
+    expect(isOnSiteNow(row(), RUNNING)).toBe(false)
+    expect(isOnSiteNow(row(arrived), SETTLED)).toBe(false)
+    expect(isOnSiteNow(row({ ...arrived, on_leave: true }), RUNNING)).toBe(false)
+    expect(isOnSiteNow(row({ punch_count: 0, first_punch_at: null, last_punch_at: null }), RUNNING)).toBe(false)
+  })
+})
+
+describe('onSiteSummary', () => {
+  it('counts people once, preferring the shift that puts them on site', () => {
+    const arrived = { punch_count: 1, last_punch_at: '2026-08-19T00:52:00', final_out_at: null }
+    const rows = [
+      row({ employee_id: 'A', ...arrived }),
+      row({ employee_id: 'A', shift_code: 'night', punch_count: 0, first_punch_at: null, last_punch_at: null }),
+      row({ employee_id: 'B' }),
+      row({ employee_id: 'C', punch_count: 0, first_punch_at: null, last_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'D', on_leave: true, punch_count: 0, leave_kind: 'annual' }),
+      row({ employee_id: 'E', on_leave: true, punch_count: 0, leave_kind: 'national_service' }),
+    ]
+    expect(onSiteSummary(rows, RUNNING)).toEqual({
+      onSite: 1,
+      left: 1,
+      notArrived: 1,
+      leave: 1,
+      nationalService: 1,
+      people: 5,
+    })
   })
 })
 

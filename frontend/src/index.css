@@ -2096,6 +2096,7 @@ body {
     --warning: #92400e;
     --caution: #ca8a04;
     --info: #1d4ed8;
+    --smart: #6b4fb0;
     --destructive: #dc2626;
     --destructive-text: #b91c1c;
     --primary-text: #0d2845;
@@ -2599,6 +2600,7 @@ body {
 .statement-sheet .st-gl.t-absent { color: #c8102e; }
 .statement-sheet .st-gl.t-unpaired { color: #1d4ed8; }
 .statement-sheet .st-gl.t-leave { color: #555; }
+.statement-sheet .st-gl.t-national_service { color: #6b4fb0; }
 .statement-sheet .st-gl.t-pending,
 .statement-sheet .st-gl.t-rest,
 .statement-sheet .st-gl.t-withheld { color: #888; }

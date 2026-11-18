@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import type { AttendanceDayRow } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 import {
   isUnpaired,
   needsDecision,
@@ -55,7 +56,7 @@ export function useAttendanceAttention(operationalDate = siteToday()): Attendanc
   // `/workforce/attendance/day` requires BOTH capabilities, and the role presets
   // give an operator only workforce.self.view — so an ungated fetch would 403 on
   // every visit to /employees.
-  const allowed = has('workforce.people.view') && has('workforce.attendance.review')
+  const allowed = canViewAttendanceRoster(has)
 
   const query = useQuery({
     queryKey: ['attendance-day', operationalDate] as const,
