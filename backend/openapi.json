@@ -37284,7 +37284,10 @@
                 "type": "string",
                 "enum": [
                   "initial_placement",
-                  "transfer"
+                  "transfer",
+                  "service_end",
+                  "transfer_out",
+                  "reinstatement"
                 ]
               },
               {
@@ -37773,7 +37776,10 @@
                 "type": "string",
                 "enum": [
                   "initial_placement",
-                  "transfer"
+                  "transfer",
+                  "service_end",
+                  "transfer_out",
+                  "reinstatement"
                 ]
               },
               {
@@ -48330,7 +48336,10 @@
                 "type": "string",
                 "enum": [
                   "initial_placement",
-                  "transfer"
+                  "transfer",
+                  "service_end",
+                  "transfer_out",
+                  "reinstatement"
                 ]
               },
               {
@@ -49731,13 +49740,18 @@
               }
             ],
             "title": "Duty Post"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
           }
         },
         "type": "object",
         "required": [
           "id",
           "name_en",
-          "name_ar"
+          "name_ar",
+          "status"
         ],
         "title": "EmployeeLookupItem",
         "description": "Service picker identity/display fields, without employee profile data."
@@ -49818,6 +49832,10 @@
             ],
             "title": "Duty Post"
           },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
           "nationality": {
             "anyOf": [
               {
@@ -49851,6 +49869,7 @@
           "id",
           "name_en",
           "name_ar",
+          "status",
           "nationality",
           "passport_no"
         ],

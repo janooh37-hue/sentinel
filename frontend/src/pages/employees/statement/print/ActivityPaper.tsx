@@ -224,13 +224,17 @@ function placementCells(item: ActivityStatementItem, lang: 'ar' | 'en', t: TFunc
     [dept, unit, post].filter(Boolean).join(', ') || '-'
   if (item.kind === 'duty_location') {
     const to = place(item.to_department, item.to_unit, item.to_post)
+    const from = place(item.from_department, item.from_unit, item.from_post)
     const event = item.event_type
       ? t(`employees.activity.dutyLocation.${item.event_type}`, { defaultValue: item.event_type })
       : '-'
-    const detail =
-      item.event_type === 'transfer'
-        ? t('statementPrint.paper.fromTo', { from: place(item.from_department, item.from_unit, item.from_post), to })
-        : to
+    let detail = to
+    if (item.event_type === 'transfer') detail = t('statementPrint.paper.fromTo', { from, to })
+    else if (item.event_type === 'service_end' || item.event_type === 'transfer_out')
+      detail = t('statementPrint.paper.leftFrom', {
+        place: item.from_unit ? from : t('employees.activity.dutyLocation.unassigned'),
+      })
+    else if (item.event_type === 'reinstatement') detail = t('statementPrint.paper.returnedTo', { place: to })
     return [
       event,
       <>

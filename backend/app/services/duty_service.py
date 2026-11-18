@@ -29,15 +29,23 @@ from __future__ import annotations
 
 import html
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Final
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
-from app.db.workforce_models import DutyAssignmentEvent
+from app.db.workforce_models import DUTY_DEPARTURE_EVENT_TYPES, DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
+from app.schemas.employee import EMPLOYEE_STATUS_TRANSFERRED, WORKING_STATUSES
 from app.services import book_service, document_service, workforce_schedule_service
+
+# Event types written when an employee's status crosses the working boundary.
+# They carry no actor when the scheduler or the 0121 backfill writes them.
+EVENT_SERVICE_END: Final = "service_end"
+EVENT_TRANSFER_OUT: Final = "transfer_out"
+EVENT_REINSTATEMENT: Final = "reinstatement"
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
@@ -80,15 +88,22 @@ def _record_assignment_event(
     to_unit: str | None,
     to_post: str | None,
     event_type: str,
-    current_user: User,
+    actor_user_id: int | None,
     effective_at: datetime,
+    reason: str | None = "Duty transfer",
 ) -> None:
-    """Append the immutable assignment snapshot before mutating ``employee``."""
+    """Append the immutable assignment snapshot before mutating ``employee``.
+
+    ``to_unit=None`` is a departure: the employee leaves the hierarchy, so the
+    destination records no department either.
+    """
 
     from_department, from_unit, from_post = _event_hierarchy(
         employee, employee.duty_unit, employee.duty_post
     )
     to_department, event_unit, event_post = _event_hierarchy(employee, to_unit, to_post)
+    if event_unit is None:
+        to_department = None
     db.add(
         DutyAssignmentEvent(
             employee_id=employee.id,
@@ -100,8 +115,8 @@ def _record_assignment_event(
             to_unit=event_unit,
             to_post=event_post,
             effective_at=effective_at,
-            actor_user_id=current_user.id,
-            reason="Duty transfer",
+            actor_user_id=actor_user_id,
+            reason=reason,
         )
     )
 
@@ -122,6 +137,91 @@ def _enqueue_assignment_reevaluation(
         reason_code="DUTY_ASSIGNMENT_CHANGED",
         now=datetime.now(UTC),
     )
+
+
+def apply_status_change(
+    db: Session,
+    *,
+    employee: Employee,
+    from_status: str,
+    actor_user_id: int | None,
+) -> None:
+    """Move ``employee`` out of, or back into, the unit structure for a status change.
+
+    Call after ``employee.status`` holds the new status, from every writer that
+    changes it. Only a crossing of the working boundary acts:
+
+    * Active/Loaned -> Resigned/Terminated/Transferred records a departure
+      (``service_end``, or ``transfer_out`` for Transferred) from the current
+      unit/post to nowhere and clears both fields. It is recorded even for an
+      unassigned employee, so a later return never restores an older post.
+    * a departed status -> Active/Loaned restores the unit/post the latest
+      departure left, with a ``reinstatement`` event. An employee already given
+      a unit by the same edit keeps it; with nothing to restore they stay
+      unassigned.
+
+    Moves between two departed statuses, or between Active and Loaned, record
+    nothing; a departed employee stays out of the structure, so a unit/post set
+    by the same edit is dropped. Stages the rows on ``db``; the caller commits.
+    """
+
+    was_working = from_status in WORKING_STATUSES
+    is_working = employee.status in WORKING_STATUSES
+    if was_working == is_working:
+        if not is_working:
+            employee.duty_unit = None
+            employee.duty_post = None
+        return
+    effective_at = datetime.now(UTC).replace(tzinfo=None)
+    if not is_working:
+        _record_assignment_event(
+            db,
+            employee=employee,
+            to_unit=None,
+            to_post=None,
+            event_type=(
+                EVENT_TRANSFER_OUT
+                if employee.status == EMPLOYEE_STATUS_TRANSFERRED
+                else EVENT_SERVICE_END
+            ),
+            actor_user_id=actor_user_id,
+            effective_at=effective_at,
+            reason=None,
+        )
+        employee.duty_unit = None
+        employee.duty_post = None
+    else:
+        if (employee.duty_unit or "").strip():
+            return
+        db.flush()
+        departure = db.scalar(
+            select(DutyAssignmentEvent)
+            .where(
+                DutyAssignmentEvent.employee_id == employee.id,
+                DutyAssignmentEvent.event_type.in_(DUTY_DEPARTURE_EVENT_TYPES),
+            )
+            .order_by(DutyAssignmentEvent.id.desc())
+            .limit(1)
+        )
+        if departure is None or departure.from_unit is None:
+            return
+        _record_assignment_event(
+            db,
+            employee=employee,
+            to_unit=departure.from_unit,
+            to_post=departure.from_post,
+            event_type=EVENT_REINSTATEMENT,
+            actor_user_id=actor_user_id,
+            effective_at=effective_at,
+            reason=None,
+        )
+        employee.duty_unit = departure.from_unit
+        employee.duty_post = departure.from_post
+        db.flush()
+        workforce_schedule_service.reconcile_duty_crew_membership(
+            db, employee_id=employee.id, effective_at=effective_at
+        )
+    _enqueue_assignment_reevaluation(db, employee_id=employee.id, effective_at=effective_at)
 
 
 def _location_label(unit: str | None, post: str | None) -> str:
@@ -183,7 +283,9 @@ def transfer(
     """Move each employee to its own ``to_unit``/``to_post`` and mint the letter.
 
     Raises ``ValidationFailedError`` (422) on an empty move list, a blank
-    ``to_unit``, a repeated employee, or an unknown employee id.
+    ``to_unit``, a repeated employee, an unknown employee id, or an employee
+    who is not working (Resigned, Terminated, Transferred): a departed employee
+    cannot be posted.
     """
     if not moves:
         raise ValidationFailedError("DUTY_NO_EMPLOYEES", "At least one employee is required")
@@ -213,6 +315,12 @@ def transfer(
                 f"Employee {move.employee_id!r} does not exist",
                 id=move.employee_id,
             )
+        if emp.status not in WORKING_STATUSES:
+            raise ValidationFailedError(
+                "DUTY_EMPLOYEE_DEPARTED",
+                f"Employee {move.employee_id!r} is not working and cannot be posted",
+                id=move.employee_id,
+            )
         rows.append((emp, to_unit, to_post))
 
     # No-book path: when EVERY selected employee is currently unassigned, this is
@@ -226,7 +334,7 @@ def transfer(
                 to_unit=to_unit,
                 to_post=to_post,
                 event_type="initial_placement",
-                current_user=current_user,
+                actor_user_id=current_user.id,
                 effective_at=effective_at,
             )
             _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)
@@ -262,7 +370,7 @@ def transfer(
             to_unit=to_unit,
             to_post=to_post,
             event_type="transfer",
-            current_user=current_user,
+            actor_user_id=current_user.id,
             effective_at=effective_at,
         )
         _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)

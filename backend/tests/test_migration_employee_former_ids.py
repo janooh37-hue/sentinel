@@ -10,14 +10,14 @@ from sqlalchemy import create_engine, inspect, text
 from app.db.session import attach_sqlite_pragmas
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0120_user_line_manager"
+REVISION = "0119_employee_former_ids"
 PARENT = "0118_drop_record_category_overreach"
 
 
 def test_single_head_roundtrip_and_foreign_keys(tmp_path: Path) -> None:
     config = Config(str(ROOT / "alembic.ini"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == [HEAD]
+    assert script.get_revision(REVISION).down_revision == PARENT
     database = tmp_path / "former_ids.db"
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database}")
     engine = create_engine(f"sqlite:///{database}")
@@ -32,7 +32,7 @@ def test_single_head_roundtrip_and_foreign_keys(tmp_path: Path) -> None:
         )
         connection.execute(text("INSERT INTO alembic_version VALUES (:v)"), {"v": PARENT})
     try:
-        command.upgrade(config, HEAD)
+        command.upgrade(config, REVISION)
         engine.dispose()
         with engine.begin() as connection:
             indexes = inspect(connection).get_indexes("employee_former_ids")
@@ -61,7 +61,7 @@ def test_single_head_roundtrip_and_foreign_keys(tmp_path: Path) -> None:
         engine.dispose()
         with engine.connect() as connection:
             assert "employee_former_ids" not in inspect(connection).get_table_names()
-        command.upgrade(config, HEAD)
+        command.upgrade(config, REVISION)
         engine.dispose()
         with engine.connect() as connection:
             assert "employee_former_ids" in inspect(connection).get_table_names()

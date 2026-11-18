@@ -325,7 +325,8 @@ def test_admin_can_create_fleet_reporter_account(fleet_env: FleetEnv) -> None:
 def test_line_manager_migration_roundtrip_and_foreign_key(tmp_path: Path) -> None:
     root = Path(__file__).resolve().parents[2]
     config = Config(str(root / "alembic.ini"))
-    assert ScriptDirectory.from_config(config).get_heads() == ["0120_user_line_manager"]
+    script = ScriptDirectory.from_config(config)
+    assert script.get_revision("0120_user_line_manager").down_revision == "0119_employee_former_ids"
     database = tmp_path / "line_manager.db"
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database.as_posix()}")
     command.upgrade(config, "0119_employee_former_ids")

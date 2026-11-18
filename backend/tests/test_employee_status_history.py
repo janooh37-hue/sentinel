@@ -664,7 +664,8 @@ def test_activity_returns_status_items_with_actor_name(db_session):
     all_kinds = employee_activity_service.list_employee_activity(
         db_session, owner_user_id=user.id, employee_id="G7002"
     )
-    assert {i.kind for i in all_kinds.items} == {"status"}
+    # The transfer also moved them out of the duty-unit structure.
+    assert {i.kind for i in all_kinds.items} == {"status", "duty_location"}
 
 
 def test_activity_status_without_actor_has_no_actor_name(db_session):

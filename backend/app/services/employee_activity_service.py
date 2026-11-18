@@ -17,6 +17,7 @@ from app.db.models import (
 )
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.employee_activity import (
+    DUTY_LOCATION_EVENT_TYPES,
     EmployeeActivityItemRead,
     EmployeeActivityKind,
     EmployeeActivityListRead,
@@ -246,7 +247,7 @@ def _duty_locations(
             func.count().over().label("source_total"),
         )
         .join(Employee, DutyAssignmentEvent.employee_id == Employee.id)
-        .where(DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer")))
+        .where(DutyAssignmentEvent.event_type.in_(DUTY_LOCATION_EVENT_TYPES))
     )
     if employee_id is not None:
         stmt = stmt.where(DutyAssignmentEvent.employee_id == employee_id)

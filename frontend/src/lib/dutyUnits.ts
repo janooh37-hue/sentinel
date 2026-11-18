@@ -1,7 +1,7 @@
 /**
  * Pure helpers for grouping employees by duty-location (unit → post).
  *
- * The roster page fetches `listEmployees({ limit: 500 })` once and groups
+ * The roster page fetches `lookupEmployees({ limit: 500 })` once and groups
  * client-side with these. No React, no I/O — unit-tested in
  * `lib/__tests__/dutyUnits.test.ts`.
  */
@@ -21,6 +21,29 @@ export const SEED_UNITS: readonly string[] = [
 
 /** Sentinel key for the bucket of employees with no `duty_unit`. */
 export const UNASSIGNED = '__unassigned__'
+
+/** Rail key for Resigned and Terminated staff, who have left the unit structure. */
+export const ENDED_SERVICE = '__ended_service__'
+/** Rail key for Transferred staff, who serve elsewhere until they return. */
+export const TRANSFERRED = '__transferred__'
+export type DepartedGroup = typeof ENDED_SERVICE | typeof TRANSFERRED
+
+/** Departed statuses, in the order the roster lists them inside their group. */
+const DEPARTED_GROUP_OF: ReadonlyMap<string, DepartedGroup> = new Map([
+  ['Resigned', ENDED_SERVICE],
+  ['Terminated', ENDED_SERVICE],
+  ['Transferred', TRANSFERRED],
+])
+
+/** The rail group of a departed employee; `null` for working (Active, Loaned) staff. */
+export function departedGroup(status: string | null | undefined): DepartedGroup | null {
+  return DEPARTED_GROUP_OF.get(status ?? '') ?? null
+}
+
+/** True for the Ended service and Transferred rail keys. Neither is a destination. */
+export function isDepartedKey(key: string | null | undefined): key is DepartedGroup {
+  return key === ENDED_SERVICE || key === TRANSFERRED
+}
 
 type DutyEmployee = Pick<EmployeeListItem, 'duty_unit' | 'duty_post'>
 
@@ -71,6 +94,53 @@ export function groupByUnit<T extends DutyEmployee>(emps: readonly T[]): Map<str
   if (unassigned) ordered.set(UNASSIGNED, unassigned)
 
   return ordered
+}
+
+/** The duty roster split into working staff (by unit) and departed staff. */
+export interface RosterGroups<T> {
+  /** Active and Loaned staff, `unit → post`, ordered as `groupByUnit` orders them. */
+  units: Map<string, Map<string, T[]>>
+  /**
+   * Departed staff, `group → status`: Ended service before Transferred, and
+   * inside a group Resigned before Terminated. A group appears only when it
+   * has someone in it.
+   */
+  departed: Map<DepartedGroup, Map<string, T[]>>
+}
+
+/**
+ * Group the duty roster. Working staff go into their units exactly as
+ * `groupByUnit` puts them; Resigned, Terminated and Transferred staff are kept
+ * out of every unit (and out of Unassigned), whatever duty location their
+ * record still holds.
+ */
+export function groupRoster<T extends DutyEmployee & { status: string }>(
+  emps: readonly T[],
+): RosterGroups<T> {
+  const working: T[] = []
+  const byStatus = new Map<string, T[]>()
+  for (const emp of emps) {
+    if (departedGroup(emp.status) === null) {
+      working.push(emp)
+      continue
+    }
+    const list = byStatus.get(emp.status)
+    if (list) list.push(emp)
+    else byStatus.set(emp.status, [emp])
+  }
+
+  const departed = new Map<DepartedGroup, Map<string, T[]>>()
+  for (const [status, group] of DEPARTED_GROUP_OF) {
+    const list = byStatus.get(status)
+    if (!list) continue
+    let statuses = departed.get(group)
+    if (!statuses) {
+      statuses = new Map<string, T[]>()
+      departed.set(group, statuses)
+    }
+    statuses.set(status, list)
+  }
+  return { units: groupByUnit(working), departed }
 }
 
 /** Distinct, first-seen posts already in use for `unit` (empty post excluded). */
@@ -147,4 +217,19 @@ export function unitTallies<T extends DutyEmployee>(
   const unassigned = countOf(UNASSIGNED)
   if (unassigned > 0) items.push({ key: UNASSIGNED, label: unassignedLabel, count: unassigned })
   return items
+}
+
+/**
+ * Rail items for the departed groups, to follow `unitTallies` (so after
+ * Unassigned). Only non-empty groups appear.
+ */
+export function departedTallies<T>(
+  departed: Map<DepartedGroup, Map<string, T[]>>,
+  labels: Readonly<Record<DepartedGroup, string>>,
+): DutyUnitTally[] {
+  return [...departed].map(([key, statuses]) => ({
+    key,
+    label: labels[key],
+    count: [...statuses.values()].reduce((total, list) => total + list.length, 0),
+  }))
 }

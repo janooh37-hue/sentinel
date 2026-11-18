@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session
 
 from app.db import models
 from app.schemas._base import DUBAI
+from app.schemas.employee_activity import DUTY_LOCATION_EVENT_TYPES
 from app.schemas.employee_statement import (
     ActivityStatementItemRead,
     ActivityStatementRead,
@@ -57,7 +58,6 @@ from app.services.employee_detail_service import (
 
 # Hard safety cap on one statement; ``truncated`` reports a cut.
 STATEMENT_CAP = 2000
-_DUTY_EVENT_TYPES = ("initial_placement", "transfer")
 # How a generated subject joins the form name to the rest (see document_service):
 # em dash, en dash, or hyphen, each with spaces.
 _SUBJECT_SEPARATORS = (" \u2014 ", " \u2013 ", " - ")
@@ -220,7 +220,7 @@ def activity_statement(
         select(models.DutyAssignmentEvent)
         .where(
             models.DutyAssignmentEvent.employee_id == emp.id,
-            models.DutyAssignmentEvent.event_type.in_(_DUTY_EVENT_TYPES),
+            models.DutyAssignmentEvent.event_type.in_(DUTY_LOCATION_EVENT_TYPES),
         )
         .where(*_instant_bounds(models.DutyAssignmentEvent.effective_at, from_date, to_date))
         .order_by(

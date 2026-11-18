@@ -8374,7 +8374,7 @@ export interface components {
             /** Ref Id */
             ref_id: number;
             /** Event Type */
-            event_type?: ("initial_placement" | "transfer") | null;
+            event_type?: ("initial_placement" | "transfer" | "service_end" | "transfer_out" | "reinstatement") | null;
             /** From Department */
             from_department?: string | null;
             /** From Unit */
@@ -8476,7 +8476,7 @@ export interface components {
             /** Note */
             note: string | null;
             /** Event Type */
-            event_type: ("initial_placement" | "transfer") | null;
+            event_type: ("initial_placement" | "transfer" | "service_end" | "transfer_out" | "reinstatement") | null;
             /** From Department */
             from_department: string | null;
             /** From Unit */
@@ -11903,7 +11903,7 @@ export interface components {
             /** Reference */
             reference: string;
             /** Event Type */
-            event_type?: ("initial_placement" | "transfer") | null;
+            event_type?: ("initial_placement" | "transfer" | "service_end" | "transfer_out" | "reinstatement") | null;
             /** From Department */
             from_department?: string | null;
             /** From Unit */
@@ -12304,6 +12304,8 @@ export interface components {
             duty_unit?: string | null;
             /** Duty Post */
             duty_post?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * EmployeeLookupRead
@@ -12326,6 +12328,8 @@ export interface components {
             duty_unit?: string | null;
             /** Duty Post */
             duty_post?: string | null;
+            /** Status */
+            status: string;
             /** Nationality */
             nationality: string | null;
             /** Passport No */
