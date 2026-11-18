@@ -13,6 +13,15 @@ describe('store dashboard layout', () => {
   })
 })
 
+describe('attendance punch log layout', () => {
+  it('offers an opt-in list-sized workforce widget without changing saved visibility', () => {
+    expect(DEFAULT_LAYOUT.widgets.find((widget) => widget.id === 'punch_log')).toMatchObject({ visible: false, size: 'L' })
+    const resolved = resolveLayout({ widgets: [{ id: 'workforce_pulse', visible: true, order: 0, size: 'M' }] })
+    expect(resolved.widgets.find((widget) => widget.id === 'punch_log')).toMatchObject({ visible: false, size: 'L' })
+    expect(resolveLayout({ widgets: [{ id: 'punch_log', visible: true, order: 0, size: 'L' }] }).widgets[0]).toMatchObject({ id: 'punch_log', visible: true, size: 'L' })
+  })
+})
+
 describe('companion quick-actions are gone', () => {
   it('QUICK_ACTION_IDS excludes companion forms', () => {
     expect(QUICK_ACTION_IDS).not.toContain('Leave Undertaking')
