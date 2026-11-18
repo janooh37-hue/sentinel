@@ -20,6 +20,21 @@ _TIME_PATTERN = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
 MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 
+class VehicleEmployeeItem(ORMBase):
+    """An employee as the vehicle dialogs name them: G number and names only."""
+
+    id: str
+    name_en: str
+    name_ar: str | None
+
+
+class VehicleEmployeeSearch(BaseModel):
+    items: list[VehicleEmployeeItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class VehicleSiteCreate(BaseModel):
     name_ar: str = Field(min_length=1)
     name_en: str = Field(min_length=1)

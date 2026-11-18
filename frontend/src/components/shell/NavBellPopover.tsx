@@ -13,21 +13,23 @@
  *     clears the caller's unseen approval decisions.
  *   - `GET /api/v1/notifications/decisions` lists approve/reject/return
  *     decisions on records the caller submitted; opening one marks it seen.
+ *     Fleet gets only these decision rows; inmate reporters have no bell.
  *
  * There is no shadcn `Popover` primitive in this project; the panel is hand-
  * rolled with the same outside-click / Escape handling used by `AccountMenu`.
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, CalendarClock, Check, ClipboardCheck, FileInput, Flag, Inbox, Paperclip, Printer, ScanLine, ShieldCheck, Stamp, Undo2, X } from 'lucide-react'
 import { toast } from '@/lib/toast'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage, type ApprovalSummaryResponse, type InmateAwaitingMonth, type UnreadRecentResponse } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useDecisionNotices } from '@/lib/useDecisionNotices'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -86,19 +88,40 @@ interface NavBellPopoverProps {
 
 export function NavBellPopover({ phone = false }: NavBellPopoverProps): React.JSX.Element | null {
   const { user } = useAuth()
-  if (user?.role === 'inmate_reporter') return null
-  return <DefaultNavBellPopover phone={phone} />
+  const role = scopedRoleOf(user)
+  if (role === 'inmate_reporter') return null
+  return role === 'fleet_reporter'
+    ? <NavBellContent phone={phone} />
+    : <DefaultNavBellPopover phone={phone} />
+}
+
+interface BellSignals {
+  canViewBooks: boolean
+  canEditBooks: boolean
+  canViewLeaves: boolean
+  canViewLedger: boolean
+  canScanDocuments: boolean
+  recentQuery: UseQueryResult<UnreadRecentResponse>
+  pendingRequests: number
+  newestViolationMonth: InmateAwaitingMonth | null
+  awaitingViolationMonths: number
+  expiryUrgent: number
+  awaitingReturn: number
+  scanInbox: number
+  followUps: number
+  scanBackCount: number
+  inboxUnread: number
+  approvalSummary: ApprovalSummaryResponse | undefined
+  awaitingApproval: number
+  approvalsAvailable: boolean
 }
 
 function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element {
-  const place = headerPopoverStyle(phone)
-  const { t, i18n } = useTranslation()
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  return <NavBellContent phone={phone} signals={useDefaultBellSignals()} />
+}
 
+/** Closed scoped-role routes are mounted only in the unrestricted bell. */
+function useDefaultBellSignals(): BellSignals {
   const { isAdmin } = useIdentity()
   const { has } = useCapabilities()
   const canViewBooks = has('books.view')
@@ -155,6 +178,31 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
   const approvalSummary = approvalSummaryQuery.data
   const awaitingApproval = approvalSummary?.actionable_count ?? 0
   const approvalsAvailable = isApprovalsSignalAvailable(approvalSummary)
+  return {
+    canViewBooks, canEditBooks, canViewLeaves, canViewLedger, canScanDocuments,
+    recentQuery, pendingRequests, newestViolationMonth, awaitingViolationMonths,
+    expiryUrgent, awaitingReturn, scanInbox, followUps, scanBackCount, inboxUnread,
+    approvalSummary, awaitingApproval, approvalsAvailable,
+  }
+}
+
+function NavBellContent({ phone, signals }: { phone: boolean; signals?: BellSignals }): React.JSX.Element {
+  const place = headerPopoverStyle(phone)
+  const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const decisionsOnly = signals === undefined
+  const {
+    canViewBooks = false, canEditBooks = false, canViewLeaves = false,
+    canViewLedger = false, canScanDocuments = false, recentQuery,
+    pendingRequests = 0, newestViolationMonth, awaitingViolationMonths = 0,
+    expiryUrgent = 0, awaitingReturn = 0, scanInbox = 0, followUps = 0,
+    scanBackCount = 0, inboxUnread = 0, approvalSummary,
+    awaitingApproval = 0, approvalsAvailable = false,
+  } = signals ?? {}
   const decisionsQuery = useDecisionNotices()
   const decisions = decisionsQuery.data?.items ?? []
   const decisionTotal = decisionsQuery.data?.total ?? 0
@@ -211,8 +259,8 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
   // Focus into the dialog on open, back to the bell on close.
   usePopoverFocus(open, rootRef, panelRef)
 
-  const items = canViewLedger ? (recentQuery.data?.items ?? []) : []
-  const totalUnread = canViewLedger ? (recentQuery.data?.total_unread ?? 0) : 0
+  const items = canViewLedger ? (recentQuery?.data?.items ?? []) : []
+  const totalUnread = canViewLedger ? (recentQuery?.data?.total_unread ?? 0) : 0
   const moreCount = Math.max(0, totalUnread - items.length)
   const hasNothing =
     items.length === 0 &&
@@ -445,7 +493,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
           )}
           {moreDecisions > 0 && (
             <Link
-              to="/books/approvals?tab=sent"
+              to={decisionsOnly ? '/books?mine=1' : '/books/approvals?tab=sent'}
               onClick={() => setOpen(false)}
               className="flex items-center gap-2 border-b border-hairline px-4 py-2.5 text-xs font-medium text-primary hover:bg-surface-tinted focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring pointer-coarse:min-h-[44px]"
             >
@@ -587,7 +635,7 @@ function DefaultNavBellPopover({ phone }: { phone: boolean }): React.JSX.Element
           )}
 
           {/* Body */}
-          {canViewLedger && recentQuery.isPending ? (
+          {canViewLedger && recentQuery?.isPending ? (
             <div className="flex flex-col gap-2 px-4 py-6">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div

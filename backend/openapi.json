@@ -1374,6 +1374,75 @@
         }
       }
     },
+    "/api/v1/auth/users/{user_id}/line-manager": {
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set Line Manager",
+        "description": "Set or clear the approving account a fleet reporter's papers route to.",
+        "operationId": "set_line_manager_api_v1_auth_users__user_id__line_manager_patch",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetLineManagerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/users/{user_id}/disable": {
       "post": {
         "tags": [
@@ -14745,6 +14814,207 @@
         }
       }
     },
+    "/api/v1/books/{book_id}/forward-to-branch": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Forward To Branch",
+        "description": "The pending line manager approves their stage unsigned and hands the\npaper to a branch manager, who finishes the chain.",
+        "operationId": "forward_to_branch_api_v1_books__book_id__forward_to_branch_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BookForwardToBranchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/rebuild-vehicle-letter": {
+      "post": {
+        "tags": [
+          "books"
+        ],
+        "summary": "Rebuild Vehicle Letter",
+        "description": "The fleet author regenerates a returned (or unsubmitted) vehicle letter from\ncurrent fleet data as a new revision, ready to submit again.",
+        "operationId": "rebuild_vehicle_letter_api_v1_books__book_id__rebuild_vehicle_letter_post",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleLetterRebuildRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/books/{book_id}/branch-candidates": {
+      "get": {
+        "tags": [
+          "books"
+        ],
+        "summary": "List Branch Candidates",
+        "description": "Accounts the pending line manager may forward to: active approvers other\nthan the author and the line manager.",
+        "operationId": "list_branch_candidates_api_v1_books__book_id__branch_candidates_get",
+        "parameters": [
+          {
+            "name": "book_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Book Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ApproverOptionRead"
+                  },
+                  "title": "Response List Branch Candidates Api V1 Books  Book Id  Branch Candidates Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/books/{book_id}/reject": {
       "post": {
         "tags": [
@@ -25208,6 +25478,153 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehiclesSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/employees": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Search Vehicle Employees",
+        "description": "The driver or responsible employee on a fine, accident or maintenance request:\nsearched by G number or name, answered with the G number and names only.",
+        "operationId": "search_vehicle_employees_api_v1_vehicles_employees_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleEmployeeSearch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/employees/{employee_id}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle Employee",
+        "operationId": "get_vehicle_employee_api_v1_vehicles_employees__employee_id__get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleEmployeeItem"
                 }
               }
             }
@@ -37663,7 +38080,8 @@
               "operator",
               "manager",
               "admin",
-              "inmate_reporter"
+              "inmate_reporter",
+              "fleet_reporter"
             ],
             "title": "Role",
             "default": "operator"
@@ -37783,6 +38201,17 @@
             "type": "boolean",
             "title": "Password Change Required",
             "default": false
+          },
+          "line_manager_user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Manager User Id"
           }
         },
         "type": "object",
@@ -41697,6 +42126,39 @@
         ],
         "title": "BookFolderUpdate"
       },
+      "BookForwardToBranchRequest": {
+        "properties": {
+          "version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Version Id"
+          },
+          "branch_approver_user_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Branch Approver User Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id",
+          "branch_approver_user_id"
+        ],
+        "title": "BookForwardToBranchRequest",
+        "description": "The line manager approves their stage and hands the paper to a branch manager."
+      },
       "BookInboxRead": {
         "properties": {
           "id": {
@@ -42071,6 +42533,16 @@
           "can_review": {
             "type": "boolean",
             "title": "Can Review",
+            "default": false
+          },
+          "can_forward_to_branch": {
+            "type": "boolean",
+            "title": "Can Forward To Branch",
+            "default": false
+          },
+          "can_rebuild_vehicle_letter": {
+            "type": "boolean",
+            "title": "Can Rebuild Vehicle Letter",
             "default": false
           },
           "classification_code": {
@@ -59563,6 +60035,17 @@
             "title": "Is Manager",
             "default": false
           },
+          "scoped_role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scoped Role"
+          },
           "has_signature": {
             "type": "boolean",
             "title": "Has Signature",
@@ -59588,6 +60071,25 @@
         ],
         "title": "SessionUser",
         "description": "The signed-in user, shaped for the frontend auth context."
+      },
+      "SetLineManagerRequest": {
+        "properties": {
+          "line_manager_user_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "exclusiveMinimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Manager User Id"
+          }
+        },
+        "type": "object",
+        "title": "SetLineManagerRequest",
+        "description": "Administrator-set line manager of a fleet reporter; null clears it."
       },
       "SetPermissionBulkRequest": {
         "properties": {
@@ -68080,6 +68582,68 @@
         ],
         "title": "VehicleCreate"
       },
+      "VehicleEmployeeItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name_en",
+          "name_ar"
+        ],
+        "title": "VehicleEmployeeItem",
+        "description": "An employee as the vehicle dialogs name them: G number and names only."
+      },
+      "VehicleEmployeeSearch": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleEmployeeItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "VehicleEmployeeSearch"
+      },
       "VehicleFileRead": {
         "properties": {
           "id": {
@@ -69288,6 +69852,21 @@
           "title"
         ],
         "title": "VehicleImportSection"
+      },
+      "VehicleLetterRebuildRequest": {
+        "properties": {
+          "version_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Version Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version_id"
+        ],
+        "title": "VehicleLetterRebuildRequest",
+        "description": "Rebuild the current revision of a returned fleet vehicle letter."
       },
       "VehicleLicenceScan": {
         "properties": {

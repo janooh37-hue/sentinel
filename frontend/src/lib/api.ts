@@ -314,6 +314,8 @@ export type VehicleUpdate = components['schemas']['VehicleUpdate']
 export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
 export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
 export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
+export type VehicleEmployeeItem = components['schemas']['VehicleEmployeeItem']
+export type VehicleEmployeeSearch = components['schemas']['VehicleEmployeeSearch']
 export type VehicleFileRead = components['schemas']['VehicleFileRead']
 export type VehicleCertificateUpdate = components['schemas']['VehicleCertificateUpdate']
 export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
@@ -505,6 +507,10 @@ export type IdentityRead = components['schemas']['IdentityRead'] & {
   email?: string | null
 }
 
+export type UserRole = 'operator' | 'manager' | 'admin' | 'inmate_reporter' | 'fleet_reporter'
+/** A role with a fixed capability ceiling and a fail-closed route set. */
+export type ScopedRoleName = 'inmate_reporter' | 'fleet_reporter'
+
 // Multi-user auth (2026-05-24). Hand-mirrored from backend/app/schemas/auth.py
 // so we don't depend on a gen:api run to ship the login screen.
 export interface SessionUser {
@@ -516,7 +522,9 @@ export interface SessionUser {
   position: string | null
   department: string | null
   photo_url: string | null
-  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
+  role: UserRole
+  /** Set for scoped roles; read it through `scopedRoleOf` (`lib/scopedRole`). */
+  scoped_role: ScopedRoleName | null
   status: 'pending' | 'active' | 'locked' | 'disabled'
   is_admin: boolean
   is_manager: boolean
@@ -542,7 +550,7 @@ export interface AdminUserRead {
   employee_id: string | null
   display_name: string | null
   name_en: string | null
-  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
+  role: UserRole
   status: 'pending' | 'active' | 'locked' | 'disabled' | 'rejected'
   failed_attempts: number
   last_login_at: string | null
@@ -553,13 +561,16 @@ export interface AdminUserRead {
   /** True until the account owner replaces an admin-issued temporary
    * password. Blocks login and Word-editing links until cleared. */
   password_change_required: boolean
+  /** The approving account for a `fleet_reporter`; null for other roles.
+   * Set via `api.setLineManager`. */
+  line_manager_user_id: number | null
 }
 
 export interface AdminUserCreateRequest {
   email: string
   employee_id: string | null
   display_name?: string | null
-  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
+  role: UserRole
 }
 
 export interface AdminUserCreateResult {
@@ -606,7 +617,7 @@ export interface CapabilityRead {
   description_ar: string | null
   sensitive: boolean
   requestable: boolean
-  default_roles: Array<'operator' | 'manager' | 'admin' | 'inmate_reporter'>
+  default_roles: UserRole[]
 }
 
 // Permission requests (Task 10 — employee permission-request UI).
@@ -624,7 +635,7 @@ export interface PermissionRequestRead {
 
 export interface UserPermissionRead {
   user_id: number
-  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
+  role: UserRole
   is_admin: boolean
   effective: string[]
   role_defaults: string[]
@@ -1138,6 +1149,27 @@ const CODE_MESSAGE_KEYS: Readonly<Record<string, string>> = {
   INCLUDED_PAPERS_CREATOR_ONLY: 'errors.forbidden.includedPapersCreatorOnly',
   WORD_SESSION_NOT_OWNER: 'errors.forbidden.wordSessionNotOwner',
   INMATE_REPORTER_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
+  SCOPED_ROLE_IDENTITY_MISMATCH: 'errors.forbidden.signerMismatch',
+  SCOPED_ROLE_ROUTE_FORBIDDEN: 'errors.fleet.routeForbidden',
+  SCOPED_ROLE_SCOPE_FIXED: 'errors.fleet.scopeFixed',
+  SCOPED_ROLE_INPUT_FORBIDDEN: 'errors.fleet.inputForbidden',
+  SCOPED_ROLE_EMPLOYEE_REQUIRED: 'errors.fleet.employeeRequired',
+  SCOPED_ROLE_IDENTITY_CHANGED: 'errors.fleet.identityChanged',
+  SCOPED_ROLE_NOT_OWNER: 'errors.fleet.notOwner',
+  SCOPED_ROLE_STATE_LOCKED: 'errors.fleet.stateLocked',
+  LINE_MANAGER_REQUIRED: 'errors.fleet.lineManagerRequired',
+  SCOPED_ROLE_SERVICE_FORBIDDEN: 'errors.fleet.serviceForbidden',
+  LINE_MANAGER_NOT_APPLICABLE: 'errors.fleet.lineManagerNotApplicable',
+  LINE_MANAGER_NOT_ELIGIBLE: 'errors.fleet.lineManagerNotEligible',
+  BRANCH_APPROVER_NOT_ELIGIBLE: 'errors.fleet.branchApproverNotEligible',
+  NOT_LINE_MANAGER_STAGE: 'errors.fleet.notLineManagerStage',
+  NOT_A_VEHICLE_LETTER: 'errors.fleet.notAVehicleLetter',
+  LETTER_SOURCE_CHANGED: 'errors.fleet.letterSourceChanged',
+  SCOPED_ROLE_CHAIN_AUTHOR_ONLY: 'errors.fleet.chainAuthorOnly',
+  SCOPED_ROLE_FOLDERS_FORBIDDEN: 'errors.fleet.foldersForbidden',
+  ACCIDENT_LETTER_NOT_VISIBLE: 'errors.fleet.accidentLetterNotVisible',
+  ACCIDENT_NOT_FOUND: 'errors.fleet.accidentNotFound',
+  ODOMETER_NO_VEHICLES: 'errors.fleet.odometerNoVehicles',
   APPROVED_IMPORT_TOKEN_FORBIDDEN: 'errors.forbidden.stagedImportOwner',
   EMPLOYEE_ID_INVALID: 'employees.idChange.invalid',
   EMPLOYEE_ID_SAME: 'employees.idChange.same',
@@ -1680,6 +1712,11 @@ export const api = {
       maintenance_contractor_id: maintenanceContractorId,
     }),
   listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
+  /** GET /vehicles/employees — G number and names only, for the vehicle dialogs. */
+  searchVehicleEmployees: (params: { q?: string; limit?: number } = {}) =>
+    request<VehicleEmployeeSearch>('GET', `/vehicles/employees${qs({ ...params })}`),
+  getVehicleEmployee: (id: string) =>
+    request<VehicleEmployeeItem>('GET', `/vehicles/employees/${encodeURIComponent(id)}`),
   createVehicleSite: (body: VehicleSiteCreate) =>
     request<VehicleSiteRead>('POST', '/vehicles/sites', body),
   updateVehicleSite: (siteId: number, body: VehicleSiteUpdate) =>
@@ -2474,6 +2511,27 @@ export const api = {
   /** DELETE /books/{id}/reviewers/{userId} — remove a reviewer from the book. */
   removeBookReviewer: (id: number, userId: number) =>
     request<BookRead>('DELETE', `/books/${id}/reviewers/${userId}`),
+  /** GET /books/{id}/branch-candidates — branch managers the pending line
+   * manager may forward to (active `books.approve` holders, minus the author
+   * and the line manager). Only the pending line-manager assignee may call it. */
+  listBranchCandidates: (bookId: number) =>
+    request<ApproverOptionRead[]>('GET', `/books/${bookId}/branch-candidates`),
+  /** POST /books/{id}/forward-to-branch — the line manager approves their
+   * stage without signing and appends a branch-manager step. Error codes:
+   * BRANCH_APPROVER_NOT_ELIGIBLE (422), NOT_LINE_MANAGER_STAGE (409). */
+  forwardToBranch: (bookId: number, versionId: number, branchApproverUserId: number, note?: string | null) =>
+    request<BookRead>('POST', `/books/${bookId}/forward-to-branch`, {
+      version_id: versionId,
+      branch_approver_user_id: branchApproverUserId,
+      note: note ?? null,
+    }),
+  /** POST /books/{id}/rebuild-vehicle-letter — regenerate the author's returned
+   * Fines, Accident or Mileage letter from current fleet data as a new
+   * revision; the paper returns to draft for a normal submit. `versionId` is
+   * the current revision. Error codes: LETTER_SOURCE_CHANGED (409, missing
+   * fine ids in details), NOT_A_VEHICLE_LETTER (422), SCOPED_ROLE_STATE_LOCKED. */
+  rebuildVehicleLetter: (bookId: number, versionId: number) =>
+    request<BookRead>('POST', `/books/${bookId}/rebuild-vehicle-letter`, { version_id: versionId }),
   /** GET version annotations (pins + highlights) for the record-screen overlay. */
   listBookAnnotations: (bookId: number, versionId: number) =>
     request<BookAnnotationRead[]>(
@@ -2953,6 +3011,13 @@ export const api = {
    * 2026-06-11 §5). Enabling on one user clears any previous holder. */
   setDefaultManager: (userId: number, enabled: boolean) =>
     request<AdminUserRead>('POST', `/auth/users/${userId}/default-manager`, { enabled }),
+  /** PATCH /auth/users/{id}/line-manager — set or clear a fleet reporter's
+   * line manager. Error codes: LINE_MANAGER_NOT_APPLICABLE,
+   * LINE_MANAGER_NOT_ELIGIBLE (422). */
+  setLineManager: (userId: number, lineManagerUserId: number | null) =>
+    request<AdminUserRead>('PATCH', `/auth/users/${userId}/line-manager`, {
+      line_manager_user_id: lineManagerUserId,
+    }),
   listAuthAudit: (limit = 50) =>
     request<AuditEntryRead[]>('GET', `/auth/audit?limit=${limit}`),
   // Secret clearance (`books.secret`) — admin or manager.

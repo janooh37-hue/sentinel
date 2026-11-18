@@ -16,7 +16,8 @@ import type { BookApprovalStepRead, BookRead, BookVersionRead } from '@/lib/api'
 import {
   canFileSignedCopy,
   canSendForApproval,
-  type InmateReporterAction,
+  isFleetLetter,
+  type ScopedReporterAction,
 } from '@/components/books/book-detail-drawer-utils'
 import { approvalStageLabel, approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
@@ -36,6 +37,7 @@ export type ActionId =
   | 'finishEditing'
   | 'discardDraft'
   | 'sign'
+  | 'forwardToBranch'
   | 'returnForChanges'
   | 'reject'
   | 'markUp'
@@ -49,6 +51,7 @@ export type ActionId =
   | 'removeSigned'
   | 'changeState'
   | 'revise'
+  | 'rebuildVehicleLetter'
 
 /** Suffix under `books.status.` — one per row of the state table. */
 export type StatusKey =
@@ -85,6 +88,7 @@ export type ReasonKey =
   | 'books.reason.reviseNoTemplate'
   | 'books.reason.reviseNotCurrent'
   | 'books.reason.reviseReporterLocked'
+  | 'books.word.needsPc'
   | 'books.reason.emailNoDoc'
 
 export type ReviseBlockReason = 'noTemplate' | 'notCurrent' | 'reporterLocked'
@@ -98,9 +102,11 @@ export interface NextStepContext {
   canGenerate: boolean
   /** Writable full access AND the live revision (BRP `canMutateCurrent`). */
   canMutateCurrent: boolean
-  isInmateReporter: boolean
-  /** `inmateReporterActionFor(book, user.id)`; `'read-only'` for everyone else. */
-  inmateAction: InmateReporterAction
+  isScopedRole: boolean
+  /** Inmate-specific REPORT- editing is kept separate from the shared role ceiling. */
+  isInmateReport?: boolean
+  /** `scopedReporterActionFor(book, user.id)`; `'read-only'` for everyone else. */
+  reporterAction: ScopedReporterAction
   /** The user holds the pending approver step of the live revision (BRP `isAssignee`). */
   isAssignee: boolean
   /** The user holds a pending advisory-reviewer step of the live revision. */
@@ -117,7 +123,7 @@ export interface NextStepContext {
 
 export type ReviseContext = Pick<
   NextStepContext,
-  'canMutateCurrent' | 'isInmateReporter' | 'inmateAction'
+  'canMutateCurrent' | 'isScopedRole' | 'reporterAction' | 'isInmateReport'
 >
 
 export interface NextStep {
@@ -145,15 +151,16 @@ function currentVersionOf(book: BookRead): BookVersionRead | undefined {
 
 /**
  * Why Revise cannot run, or `null` when it can. Splits BRP's `canRevise`:
- * no form template / not the live revision / an inmate reporter whose record
+ * no form template / not the live revision / a scoped reporter whose record
  * has not been returned to them. A user without generate permission is never
  * offered Revise, so that is not a reason here.
  */
 export function reviseBlockReason(book: BookRead, ctx: ReviseContext): ReviseBlockReason | null {
   const current = currentVersionOf(book)
-  if (!current?.template_id || !current.has_fields) return 'noTemplate'
+  const scopedWord = ctx.isScopedRole && !ctx.isInmateReport && (book.service_id === 'Report' || book.is_word_book)
+  if (!scopedWord && (!current?.template_id || !current.has_fields)) return 'noTemplate'
   if (!ctx.canMutateCurrent) return 'notCurrent'
-  if (ctx.isInmateReporter && ctx.inmateAction !== 'correct-resubmit') return 'reporterLocked'
+  if (ctx.isScopedRole && ctx.reporterAction !== 'correct-resubmit') return 'reporterLocked'
   return null
 }
 
@@ -236,14 +243,14 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const built = buildNextStep(book, ctx)
   // Change state (admin) is a Tools/More entry in every state, not only approved.
   const out =
-    !ctx.isInmateReporter &&
+    !ctx.isScopedRole &&
     ctx.canMutateCurrent &&
     book.can_write &&
     ctx.has('books.override_state') &&
     !built.overflow.includes('changeState')
       ? { ...built, overflow: [...built.overflow, 'changeState' as const] }
       : built
-  const reason = deleteBlockReason(book, { has: ctx.has, isInmateReporter: ctx.isInmateReporter })
+  const reason = deleteBlockReason(book, { has: ctx.has, isScopedRole: ctx.isScopedRole })
   if (reason === 'noCapability' || reason === 'restricted') return out
   const id: ActionId = book.approval_state === 'none' ? 'deleteDraft' : 'deleteRecord'
   if (out.overflow.includes(id)) return out
@@ -260,35 +267,42 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const current = currentVersionOf(book)
   const steps: BookApprovalStepRead[] = current?.approval_steps ?? book.approval_steps ?? []
   const wordActive = book.edit_session?.state === 'active'
-  const inmate = ctx.isInmateReporter
-  const isInmateReport =
-    inmate && book.ref_number.startsWith('REPORT-') && ctx.inmateAction !== 'read-only'
+  const scoped = ctx.isScopedRole
+  const scopedFleetLetter = scoped && isFleetLetter(book)
+  const isInmateReport = ctx.isInmateReport === true
+  const canEditScopedWord =
+    scoped && ctx.canGenerate && ctx.reporterAction !== 'read-only' &&
+    (isInmateReport || book.is_word_book || book.service_id === 'Report')
   const canApprove = ctx.has('books.approve')
   const canSubmitBook = ctx.has('books.submit') && book.can_write
   const canScan = ctx.has('documents.scan') && book.can_write
   const review = reportReviewOf(book)
+  // Rebuild from current fleet data: the author's unsubmitted or returned letter
+  // (`can_rebuild_vehicle_letter` carries the backend's state and author rule).
+  const canRebuild =
+    scopedFleetLetter && book.can_rebuild_vehicle_letter === true &&
+    ctx.canMutateCurrent && ctx.has('vehicles.edit') && ctx.has('books.submit')
 
   // Gates mirrored from BookRecordPage so the model and the page agree.
-  const canWord = book.can_write && ctx.canMutateCurrent && (!inmate || isInmateReport)
+  const canWord = book.can_write && ctx.canMutateCurrent && (!scoped || canEditScopedWord)
   const canSend =
-    book.can_write &&
+    canSubmitBook &&
     ctx.canMutateCurrent &&
-    (isInmateReport
-      ? state === 'none' && !wordActive
-      : inmate
-        ? ctx.inmateAction === 'edit-submit'
-        : canSendForApproval(state, { canSubmitBook }, review))
-  const canReroute = !inmate && ctx.canMutateCurrent && canSendForApproval('pending', { canSubmitBook })
-  // Continue = reopen the form that made the record. A Word-authored book's
-  // truth is its docx (the form would open empty) and an inmate's own report
-  // is edited in place, so neither is ever offered Continue editing.
+    !wordActive &&
+    (scoped
+      ? ctx.reporterAction === 'edit-submit' || ctx.reporterAction === 'correct-resubmit'
+      : canSendForApproval(state, { canSubmitBook }, review))
+  const canReroute = !scoped && ctx.canMutateCurrent && canSendForApproval('pending', { canSubmitBook })
+  // Form-backed drafts reopen their template. Fleet Word papers reopen in
+  // place; inmate Reports keep their existing dedicated Word action.
   const canContinue =
     book.can_write &&
-    !book.is_word_book &&
+    (!book.is_word_book || canEditScopedWord) &&
     !isInmateReport &&
+    !scopedFleetLetter &&
     ctx.canGenerate &&
     ctx.canMutateCurrent &&
-    (inmate ? ctx.inmateAction === 'edit-submit' : ctx.canEdit)
+    (scoped ? ctx.reporterAction === 'edit-submit' : ctx.canEdit)
   // The same template reason as Revise; "reporter locked" is moot here —
   // `canContinue` already requires the reporter's edit rights.
   const continueBlock = reviseBlockReason(book, ctx)
@@ -296,15 +310,15 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const continueDisabled: Partial<Record<ActionId, ReasonKey>> =
     canContinue && continueKey ? { continueEditing: continueKey } : {}
   const canFileSigned =
-    !inmate && ctx.canMutateCurrent && canFileSignedCopy(state, { canEdit: ctx.canEdit, canScan })
+    !scoped && ctx.canMutateCurrent && canFileSignedCopy(state, { canEdit: ctx.canEdit, canScan })
   const hasSignedCopy = state === 'approved' && Boolean(current?.signed_pdf_url)
-  const canManageSignedPaper = book.can_write && hasSignedCopy && ctx.canEdit && ctx.canMutateCurrent && !inmate
-  const canEmail = !inmate
+  const canManageSignedPaper = book.can_write && hasSignedCopy && ctx.canEdit && ctx.canMutateCurrent && !scoped
+  const canEmail = !scoped
 
   const emailDisabled: Partial<Record<ActionId, ReasonKey>> =
     canEmail && !ctx.hasDocument ? { email: 'books.reason.emailNoDoc' } : {}
 
-  const deleteReason = deleteBlockReason(book, { has: ctx.has, isInmateReporter: inmate })
+  const deleteReason = deleteBlockReason(book, { has: ctx.has, isScopedRole: scoped })
   const deleteVisible = deleteReason !== 'noCapability' && deleteReason !== 'restricted'
   const deleteDisabledKey = deleteReasonKey(deleteReason)
   const deleteDisabled = (id: ActionId): Partial<Record<ActionId, ReasonKey>> =>
@@ -358,7 +372,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         { key: 'draft', vars: {} },
         {
           primary: canSend ? 'sendForApproval' : canContinue ? 'continueEditing' : undefined,
-          secondary: pick([['continueEditing', canSend && canContinue]]),
+          secondary: pick([
+            ['rebuildVehicleLetter', canRebuild],
+            ['continueEditing', canSend && canContinue],
+          ]),
           overflow: pick([
             ['print', true],
             ['email', canEmail],
@@ -380,7 +397,11 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           {
             primary: 'sign',
             decide: true,
-            secondary: ['returnForChanges', 'reject'],
+            secondary: pick([
+              ['forwardToBranch', book.can_forward_to_branch === true],
+              ['returnForChanges', true],
+              ['reject', true],
+            ]),
             overflow: pick([
               ['markUp', true],
               ['reroute', canReroute],
@@ -436,10 +457,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           overflow: pick([
             ['email', canEmail],
             ['print', true],
-            ['adjustSignature', !inmate && book.can_write && ctx.canMutateCurrent && current?.document_id != null],
+            ['adjustSignature', !scoped && book.can_write && ctx.canMutateCurrent && current?.document_id != null],
             ['replaceSigned', canManageSignedPaper],
             ['removeSigned', canManageSignedPaper],
-            ['changeState', !inmate && book.can_write && ctx.canMutateCurrent && ctx.has('books.override_state')],
+            ['changeState', !scoped && book.can_write && ctx.canMutateCurrent && ctx.has('books.override_state')],
           ]),
           disabled: emailDisabled,
         },
@@ -450,17 +471,23 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     case 'rejected': {
       const decider = decisionStep(steps, [state])
       const reviseKey = reviseReasonKey(reviseBlockReason(book, ctx))
+      const canRebuildReturned = state === 'returned' && canRebuild
+      const canRevise = !scopedFleetLetter && book.can_write && ctx.canGenerate &&
+        (scoped ? ctx.reporterAction === 'correct-resubmit' : ctx.canEdit)
+      const canResubmit = state === 'returned' && scoped && !scopedFleetLetter && !isInmateReport && canSend &&
+        (book.service_id === 'General Book' || book.service_id === 'Report')
       return step(
         { key: state, vars: { name: name(decider) } },
         {
           quote: decider?.note?.trim() ? decider.note : undefined,
-          primary: book.can_write && ctx.canGenerate && (inmate || ctx.canEdit) ? 'revise' : undefined,
+          primary: canRebuildReturned ? 'rebuildVehicleLetter' : canRevise ? 'revise' : canResubmit ? 'sendForApproval' : undefined,
+          secondary: pick([['sendForApproval', canRevise && canResubmit]]),
           overflow: pick([
             ['print', true],
             ['deleteRecord', deleteVisible],
           ]),
           disabled: {
-            ...(book.can_write && ctx.canGenerate && reviseKey && (inmate || ctx.canEdit) ? { revise: reviseKey } : {}),
+            ...(canRevise && reviseKey ? { revise: reviseKey } : {}),
             ...deleteDisabled('deleteRecord'),
           },
         },

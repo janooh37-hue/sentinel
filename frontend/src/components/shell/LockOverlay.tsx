@@ -29,6 +29,7 @@ import { useAuth } from '@/lib/authContext'
 import { loadLockWeather, weatherCategory, type LockWeather } from '@/lib/lockWeather'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIdentity } from '@/lib/useIdentity'
+import { scopedRoleOf } from '@/lib/scopedRole'
 import { DEFAULT_IDLE_LOCK_SECONDS, LOCK_LAYOUTS } from '@/lib/useLockState'
 import type { LockLayout } from '@/lib/useLockState'
 
@@ -350,12 +351,13 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
   const queryClient = useQueryClient()
 
   const { user } = useAuth()
+  const fleet = scopedRoleOf(user) === 'fleet_reporter'
   const layout: LockLayout = LOCK_LAYOUTS.includes(user?.lock_layout as LockLayout)
     ? (user?.lock_layout as LockLayout)
     : 'band'
   const { identity } = useIdentity()
   const { has } = useCapabilities()
-  const canViewWorkforce = has('workforce.self.view') || has('workforce.dashboard.view')
+  const canViewWorkforce = !fleet && (has('workforce.self.view') || has('workforce.dashboard.view'))
 
   const workforceQuery = useQuery({
     queryKey: ['workforce', 'snapshot'],
@@ -367,6 +369,7 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
   const activityQuery = useQuery({
     queryKey: ['lock-screen', 'doc-activity'],
     queryFn: api.getMyDocumentActivity,
+    enabled: !fleet,
     staleTime: 60_000,
     retry: false,
   })
@@ -441,6 +444,7 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
     : email
 
   const digest = useMemo(() => {
+    if (fleet) return []
     const items: Array<{ key: 'approvals' | 'inbox' | 'expiry'; count: number }> = []
     // #31 — the assignment-aware approvals summary replaced the old
     // `['books','awaiting']` signing-only query; cache key includes the
@@ -454,10 +458,10 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
     if (unread) items.push({ key: 'inbox', count: unread.total_unread })
     if (expiry) items.push({ key: 'expiry', count: expiry.urgent })
     return items
-  }, [queryClient, user?.id])
+  }, [fleet, queryClient, user?.id])
 
-  const documentsToday = activityQuery.data?.documents_today
-  const documentsWeek = activityQuery.data?.documents_week
+  const documentsToday = fleet ? undefined : activityQuery.data?.documents_today
+  const documentsWeek = fleet ? undefined : activityQuery.data?.documents_week
   const cheerText =
     documentsToday !== undefined && documentsToday > 0
       ? t('lockScreen.cheer.docsToday', { count: documentsToday })
@@ -587,7 +591,7 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
         </form>
 
         <OperationsBlock
-          snapshot={workforceQuery.data ?? null}
+          snapshot={canViewWorkforce ? (workforceQuery.data ?? null) : null}
           weather={weatherQuery.data ?? null}
           digest={layout === 'console' ? [] : digest}
           isAr={isAr}

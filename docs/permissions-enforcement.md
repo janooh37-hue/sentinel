@@ -1,6 +1,6 @@
 # Permissions — how enforcement actually works
 
-**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7) · 2026-11-09 for the single record-category axis (§8)
+**Date:** 2026-08-12 · updated 2026-08-24 for the granular capability split (§7) · 2026-11-09 for the single record-category axis (§8) · 2026-11-16 for scoped roles (§9)
 **Scope:** how a capability check reaches a request, and which routes are gated by what.
 **Audit tool:** `backend/scripts/audit_capability_gates.py` (re-run any time; it reads the
 tree, so it can't go stale).
@@ -48,6 +48,9 @@ audited as `set_permission`). Holders can open, create, and receive Secret recor
 
 `default_caps_for_role()` falls back to the **operator** preset for an unknown role —
 fail-soft, not fail-closed. Worth remembering if a new role is ever added.
+
+Two further presets, `inmate_reporter` and `fleet_reporter`, are **scoped roles**: their
+preset is a fixed ceiling that no override can widen, and their routes fail closed. See §9.
 
 Roles themselves come from `backend/app/core/roles.py`: `derive_role()` maps an
 employee's `position` text to `manager`, with the configured admin employee id
@@ -122,7 +125,8 @@ be edited (the deleted letter is left as is) or deleted.
 
 **Tier 1 — baseline session.** `auth_gate = [Depends(get_current_user)]` (`main.py:167`)
 is passed as `dependencies=` on every other `include_router` call. This means "logged in",
-never "authorized". Note two independent status checks behind it: `login` rejects
+never "authorized" — except for a scoped role, whose route policy `get_current_user`
+applies before any handler runs (§9). Note two independent status checks behind it: `login` rejects
 `status == "pending"` with 403 `ACCOUNT_PENDING` (`auth_service.py:390`), and
 `resolve_session` returns `None` unless `status == "active"` (`auth_service.py:468`). A
 self-registered account is `pending` until an admin approves it, so registration alone
@@ -383,3 +387,133 @@ categories are the only category capabilities.
 - **Drift, fail-closed only.** Where exactness was impossible the migration hides more:
   the Other-service deny covers unclaimed and stray records from every category, and an
   old-only deny covers its whole merged category.
+
+## 9. Scoped roles (2026-11-16)
+
+A **scoped role** is a built-in, admin-assigned role with a fixed capability ceiling. The
+registry is `backend/app/core/scoped_roles.py::SCOPED_ROLES`; each `ScopedRole` holds its
+`ceiling`, an error-code prefix, a route policy, and the `routes_to_line_manager` flag.
+Today there are two: `inmate_reporter` (`core.permissions.INMATE_REPORTER_CAPS`) and
+`fleet_reporter` (`core.permissions.FLEET_REPORTER_CAPS`).
+
+**Ceiling.** `perm_service` gives a scoped role only the dynamic service ids its ceiling
+names, intersects role defaults and the override-adjusted set with the ceiling (a stale
+`role_permissions` row cannot widen it), and refuses a grant override outside it with
+403 `<prefix>_SCOPE_FIXED` (`INMATE_REPORTER_SCOPE_FIXED`, `SCOPED_ROLE_SCOPE_FIXED`). A
+deny override still narrows it.
+
+**Route policy** (`api/deps.get_current_user`, fail closed; missing route metadata is a
+denial):
+
+- `inmate_reporter` keeps its exact explicit allowlist,
+  `scoped_roles.INMATE_REPORTER_ALLOWED_ROUTES` (403 `INMATE_REPORTER_ROUTE_FORBIDDEN`).
+- `fleet_reporter` is capability-derived: a route is allowed when it carries at least one
+  `require_capability` dependency (router- or route-level, read from the matched route's
+  dependency tree; `require_capability` tags its dependency with `required_capability`)
+  and the user holds every one of them. A route with no capability dependency is allowed
+  only when it is in `scoped_roles.SCOPED_SHARED_ROUTES`. Everything else is 403
+  `SCOPED_ROLE_ROUTE_FORBIDDEN`. `require_admin` routes carry no capability, so they are
+  closed.
+
+`SCOPED_SHARED_ROUTES` — the authenticated-only routes a capability-derived scoped role
+may call, each self-service or gated inside its handler:
+
+| Routes | Reason |
+| --- | --- |
+| `GET /auth/me`, `POST /auth/verify-password`, `PATCH /auth/me/lock-timer`, `PATCH /auth/me/lock-layout`, `GET /auth/me/capabilities`, `GET /identity/me`, `GET /employees/{employee_id}/photo` | Session, lock screen, UI capability gates and own identity; the photo route checks ownership in the handler. |
+| `GET /signatures/me`, `POST /auth/me/signature` | Own signature: a Report is signed by its author. |
+| `GET /templates`, `GET /templates/{template_id}/fields`, `GET /general-book/recipients` | Rich-editor form metadata and the General Book addressee picker. |
+| `POST /documents/generate` | Publication; `authorize_interactive_generation` checks `documents.generate`, `books.view` and the service and category capabilities. |
+| `GET /documents/{document_id}/download` | Record-owned document download; in-handler record access, PDF only for a scoped role. |
+| `POST /books/word-sessions`, `GET /books/{book_id}/word-sessions`, `.../status`, `.../preview`, `POST .../finish`, `DELETE /books/{book_id}/word-sessions`, `POST /books/{book_id}/word-sessions` | Word authoring of the reporter's own Reports (`book_service.require_scoped_word_access`). |
+| `GET /books/by-ref/{ref}`, `GET /books/{book_id}`, `GET .../versions/{version_id}/fields`, `.../annotations`, `.../signed-document`, `GET /books/{book_id}/imported-document` | Record reads; `resolve_book_read_access` and the role's visibility matrix decide in the handler. A scoped role is never a send recipient, so without `books.view` it reads no record. |
+| `GET /notifications/decisions`, `POST /notifications/decisions/seen`, `GET /push/vapid-public-key`, `POST /push/subscribe`, `DELETE /push/subscribe` | The author is told when a paper is returned, rejected or finished. |
+| `POST /books/{book_id}/seen` | Opening one decision marks it seen; writes only the caller's own markers, after `resolve_book_read_access`. |
+
+**Shared restrictions** (`scoped_roles.is_scoped_role`): no Direct send or forward via
+`/send`; never a send recipient, in the user directory or in folder sharing; no folders at
+all (`book_folder_service.require_folder_access`: list, create, file, rename, delete,
+share, and the register's `folder_id` filter answer 403 `SCOPED_ROLE_FOLDERS_FORBIDDEN`); no Level
+change; no derive; PDF-only downloads and own generation jobs only; current revision
+only; confidentiality limited to General plus own Personal/Directed. Rules about Inmate
+Conduct Violations forms, the global inmate manager and inmate Report-only writes stay
+behind the inmate role.
+
+**Record visibility.** Each scoped role has its own SQL matrix and Python mirror in
+`book_service` (`_inmate_reporter_visibility_clause` / `_inmate_reporter_book_visible`,
+`_fleet_reporter_visibility_clause` / `_fleet_reporter_book_visible`), dispatched by
+`_scoped_visibility_clause` / `_scoped_book_visible`; change each pair together. A fleet
+reporter sees their own papers in every state, and filed, final vehicle papers (Vehicle
+Fines, Vehicle Accident Report, Vehicle Mileage Log) by anyone: pending or approved, or an
+unsubmitted `auto` letter by an author outside the line-manager chain. Never another
+user's General Book or Report.
+
+**Category-exempt services.** A `ScopedRole` may name services authorised by their
+service capabilities alone (`category_exempt_services`). For `fleet_reporter` that is
+`Report`: a Report's record category (13/1) stays out of the ceiling, so creating, opening,
+listing, revising and submitting it answer only to `books.service.Report` /
+`books.servicerecords.Report`. The SQL side is `book_service._category_gate_hidden_clause`
+(also used by `document_visibility_clause`); the Python side is `assert_record_type_visible`
+and `require_record_type_access`. A General Book under 13/1 is still refused.
+
+**Writes without `books.create`/`books.edit`.** A fleet reporter authors through
+`book_service.require_fleet_write_access` (own General Book, Report or vehicle paper in
+`none`/`returned`, and only while it can still read it; a Report must stay signed by the
+linked employee) and `require_fleet_word_access` (Word and DAV, own Reports only: its
+General Books are rendered from fields, which approval re-renders for the final signer).
+Papers it creates start `approval_state="none"`
+with no signing manager. It cannot choose an approver, reviewers, priority or manager (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`).
+
+**Line manager.** `users.line_manager_user_id` (migration `0120_user_line_manager`) is set
+by an admin with `PATCH /api/v1/auth/users/{user_id}/line-manager` (`require_admin`,
+audited as `set_line_manager`). Line and branch managers must be active, hold
+`books.approve` and be linked to exactly one active `Manager` (signer) row
+(`manager_service.sole_active_manager_id`); that row becomes the paper's
+`doc_manager_id`, so the signer printed is always the account that finishes the chain. The chain follows the paper's original author: a paper whose author's role routes to a
+line manager is submitted only by that author (anyone else gets 403
+`SCOPED_ROLE_CHAIN_AUTHOR_ONLY`), and the step is built from the author's own
+`line_manager_user_id`. Submitting builds one `line_manager` step; the line
+manager either signs to finish, or forwards with `POST /books/{book_id}/forward-to-branch`
+(gate `books.approve` plus the pending-assignee check) to an optional `branch_manager`
+stage. Both stages are keyed on the step's `stage_label`, separate from
+`form_policy.BRANCH_MANAGER_STAGE_FORMS`. `GET /books/{book_id}/branch-candidates` uses the
+same gate.
+
+**General Books and the addressee.** A fleet reporter starts no General Book of its own:
+`POST /documents/generate` (without `revise_of_book_id`) and the Word create answer 403
+`SCOPED_ROLE_SERVICE_FORBIDDEN`; `POST /documents/generate` accepts from it only a revision of
+its own General Book (its Report is the Word Report, its vehicle letters come from the
+vehicle services). The revision's preview (`commit=false`) carries the same
+`revise_of_book_id` as an authorization context only: the route runs
+`book_service.require_revise_access` for that book, then renders the preview without it,
+so nothing is revised, filed or numbered (every other role still gets
+`REVISE_REQUIRES_COMMIT` for a revise preview). The Services form revises it through the
+editor path (preview, then save), never the Word create. Its General Books come from the vehicle services (the
+maintenance request, 11/1, addressed to the contractor), which is why the role keeps
+`books.service.General Book`; it may revise its own returned ones. Its Report is always
+addressed to its line manager: the server writes the name after «السيد»
+(`book_service.line_manager_addressee`: the line manager's signer-row title, else its
+Arabic or English name, else the account name) and refuses a `recipient_id` (403
+`SCOPED_ROLE_INPUT_FORBIDDEN`).
+
+**Vehicle employees.** The fine, accident and maintenance-request dialogs search
+`GET /vehicles/employees` and resolve `GET /vehicles/employees/{employee_id}`
+(`vehicles.edit`): G number and names only, matched by G number, former ID or name,
+never by passport or Emirates ID. A fleet reporter reaches them through its capabilities;
+`GET /employees/lookup` stays closed to it.
+
+**Rebuilding a vehicle letter.** `POST /books/{book_id}/rebuild-vehicle-letter`
+(`vehicles.edit` and `books.submit`) lets the fleet author regenerate an unsubmitted or
+returned vehicle letter from current fleet data through the ordinary revise path: same
+reference and paper date, a new revision, earlier steps kept as history, state `none`.
+`book_service.vehicle_letter_rebuild_refusal` is the one rule behind the route and
+`BookRead.can_rebuild_vehicle_letter`. Fines letters keep their source selection in the
+version's `_letter_source` field (older letters fall back to the `letter.generated` audit).
+The record pane, record page and mobile dock and More sheet offer Rebuild on the
+author's returned letter (primary) and on its unsubmitted letter (beside Send for approval).
+
+**Tests:** `backend/tests/test_fleet_reporter_scope.py` (route policy, allowlist parity,
+shared routes exist, ceiling, line-manager admin route, migration),
+`test_fleet_reporter_authoring.py` (authoring and visibility) and
+`test_fleet_reporter_chain.py` (the approval chain).

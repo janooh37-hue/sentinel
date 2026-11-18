@@ -251,6 +251,24 @@ including self and assigned organization, department, duty-unit, or duty-post
 populations; request filters may only narrow it.
 _Avoid_: Capability, role, filter
 
+**Scoped role**:
+A built-in role with a fixed ceiling of Capabilities that no per-user grant can
+widen; everything outside the ceiling is absent for its users. The inmate reporter
+and the Fleet reporter are scoped roles.
+_Avoid_: Restricted user, limited operator, custom role
+
+**Line manager**:
+The approving account an administrator assigns to one Fleet reporter account; that
+reporter's papers go to it first. It is chosen by the administrator, never by the
+reporter, and is separate from the employee's supervisor in the org tree.
+_Avoid_: Supervisor, direct manager when meaning the org tree, approver
+
+**Branch stage**:
+The optional second approval stage a Line manager may forward a Fleet reporter's
+paper into, choosing the branch manager. Whoever finishes the chain is the final
+approver and, on a General Book, its signer.
+_Avoid_: Escalation, second approval when it is mandatory
+
 ### Correspondence and intake
 
 **Mailbox**:
@@ -296,6 +314,13 @@ _Avoid_: Reminder, maintenance schedule
 The replacement of a vehicle's current license validity period with a new period,
 while retaining the ended period, renewal cost, and prior license scan in its history.
 _Avoid_: License edit, expiry reminder
+
+**Fleet reporter**:
+A scoped-role user who runs the fleet hub and authors vehicle papers (Fines and
+Accident letters, Reports, and General Books under Financial affairs or Maintenance
+works) under their own name, sending each to their Line manager. They see their own
+papers and the fleet's vehicle letters, never other people's General Books or Reports.
+_Avoid_: Vehicle user, fleet operator, driver
 
 ### Assets and store
 

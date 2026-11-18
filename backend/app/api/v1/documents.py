@@ -39,7 +39,8 @@ from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
+from app.core.roles import ADMIN_ROLE
+from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
 from app.db.models import Book, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -271,12 +272,10 @@ def _run_generation(
         # now-closed request session; re-fetch so a role/link change made
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
-        # inmate_reporter's private saves never notify regardless of the request
-        # flag (server-enforced, not just a UI default), and log no skipped row.
+        # A scoped role's saves never notify regardless of the request flag
+        # (server-enforced, not just a UI default), and log no skipped row.
         notify_employee: nf.NotifyChoice = (
-            "silent"
-            if actor is not None and actor.role == INMATE_REPORTER_ROLE
-            else request.notify_employee
+            "silent" if actor is not None and is_scoped_role(actor) else request.notify_employee
         )
         result = document_service.generate_document(
             db,
@@ -366,12 +365,39 @@ def generate_document(
     document_service.authorize_interactive_generation(
         db, user, payload.template_id, classification_code=payload.classification_code
     )
+    if routes_to_line_manager(user) and (
+        payload.template_id != "General Book" or payload.revise_of_book_id is None
+    ):
+        # Its only generic generation is revising its own returned General Book.
+        # The vehicle services write its General Books and vehicle letters, and
+        # its Report is the Word Report (author-signed, addressed to its line
+        # manager); none of them starts here.
+        raise AppError(
+            "SCOPED_ROLE_SERVICE_FORBIDDEN",
+            "This role revises only its own General Books here.",
+            http_status=403,
+        )
     revise_book: Book | None = None
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
-        book_service.require_revise_access(db, user, revise_book)
+        previous_version = book_service.require_revise_access(db, user, revise_book)
+        if routes_to_line_manager(user) and (
+            previous_version is None or previous_version.template_id != "General Book"
+        ):
+            # Its vehicle letters are rebuilt and its Report reopens in Word;
+            # free General Book content never replaces either.
+            raise AppError(
+                "SCOPED_ROLE_SERVICE_FORBIDDEN",
+                "This role revises only its own General Books here.",
+                http_status=403,
+            )
+        if not payload.commit and routes_to_line_manager(user):
+            # Its revision's preview: the book only authorizes the render. The
+            # preview itself revises, files and allocates nothing.
+            payload = payload.model_copy(update={"revise_of_book_id": None})
+            revise_book = None
     else:
         book_service.require_confidentiality_clearance(db, user, payload.confidentiality)
     # Refuse a duplicate of a live record's leave now, with its reference number,
@@ -446,6 +472,10 @@ def stage_attachment_from_record(
 async def inspect_approved_violation(
     upload: Annotated[UploadFile, File(alias="file")],
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    # Same service gate the commit route checks; keeps other scoped roles out.
+    _service: Annotated[
+        User, Depends(require_capability("books.service.Inmate Conduct Violations"))
+    ],
 ) -> ApprovedViolationInspectionRead:
     data = await upload.read(book_service.MAX_ATTACHMENT_BYTES + 1)
     inspected = await anyio.to_thread.run_sync(
@@ -508,7 +538,7 @@ def get_job_status(
     user: Annotated[User, Depends(require_capability("documents.generate"))],
 ) -> JobStatusResponse:
     job = get_job(job_id)
-    if job is None or (user.role == INMATE_REPORTER_ROLE and job.owner_user_id != user.id):
+    if job is None or (is_scoped_role(user) and job.owner_user_id != user.id):
         raise NotFoundError("JOB_NOT_FOUND", f"Job {job_id!r} not found", job_id=job_id)
     pydantic_docs: list[JobDocumentItem] | None = None
     if job.documents:
@@ -518,7 +548,7 @@ def get_job_status(
                 template_id=d.template_id,
                 role=d.role,
                 ref_number=d.ref_number,
-                docx_url=("" if user.role == INMATE_REPORTER_ROLE else d.docx_url),
+                docx_url=("" if is_scoped_role(user) else d.docx_url),
                 pdf_url=d.pdf_url,
             )
             for d in job.documents
@@ -615,7 +645,7 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
-    if user.role == INMATE_REPORTER_ROLE and (format != "pdf" or original):
+    if is_scoped_role(user) and (format != "pdf" or original):
         raise AppError(
             "FORBIDDEN",
             "This role can only download the current PDF.",
@@ -628,7 +658,7 @@ def download_document(
     artifact = document_service.resolve_document_artifact(
         db, document_id, format=format, original=original, version=version
     )
-    if user.role == INMATE_REPORTER_ROLE and artifact.ext != ".pdf":
+    if is_scoped_role(user) and artifact.ext != ".pdf":
         # The signed-lock resolver falls back to the retained DOCX when PDF
         # conversion failed at sign time (existing behavior other roles rely
         # on) — this role must never receive Word bytes, so treat that

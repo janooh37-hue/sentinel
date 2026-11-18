@@ -51,6 +51,23 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage(refusal)).toBe(ar)
   })
 
+  it.each([
+    [409, 'LINE_MANAGER_REQUIRED', 'Ask an administrator to set your line manager.', 'اطلب من المسؤول تعيين مديرك المباشر.'],
+    [409, 'NOT_LINE_MANAGER_STAGE', 'This record is no longer waiting for your approval as line manager. Reload to see its current stage.', 'لم تعد هذه المعاملة بانتظار اعتمادك بصفتك المدير المباشر. أعد التحميل لمعرفة مرحلتها الحالية.'],
+    [422, 'BRANCH_APPROVER_NOT_ELIGIBLE', 'Choose an active approver other than the author and the line manager.', 'اختر معتمِدًا نشطًا غير كاتب المعاملة والمدير المباشر.'],
+    [422, 'LINE_MANAGER_NOT_APPLICABLE', 'Only fleet reporter accounts have a line manager.', 'لا يُعيَّن المدير المباشر إلا لحسابات موظفي النقليات.'],
+    [422, 'NOT_A_VEHICLE_LETTER', 'Only Fines, Accident and Odometer letters can be rebuilt.', 'لا يمكن إعادة إنشاء إلا خطابات المخالفات والحوادث وعداد المسافة.'],
+    [422, 'LINE_MANAGER_NOT_ELIGIBLE', 'Choose another active account that can approve records.', 'اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.'],
+    [403, 'SCOPED_ROLE_INPUT_FORBIDDEN', "Your role can't set this option. Your approval route and signatures are set for you.", 'لا يمكن لدورك تحديد هذا الخيار؛ يُحدَّد مسار الاعتماد والتوقيعات تلقائيًا.'],
+    [409, 'SCOPED_ROLE_STATE_LOCKED', 'This paper can no longer be edited. Reload to see its current state.', 'لم يعد بالإمكان تعديل هذه المعاملة. أعد التحميل لمعرفة حالتها الحالية.'],
+    [409, 'SCOPED_ROLE_EMPLOYEE_REQUIRED', 'Ask an administrator to link your employee record.', 'اطلب من المسؤول ربط حسابك بسجلك الوظيفي.'],
+  ])('maps the fleet chain refusal %i %s in both languages', async (status, code, en, ar) => {
+    const refusal = new ApiError(status, code, 'server detail')
+    expect(apiErrorMessage(refusal)).toBe(en)
+    await i18n.changeLanguage('ar')
+    expect(apiErrorMessage(refusal)).toBe(ar)
+  })
+
   it('keeps server detail in English', () => {
     expect(apiErrorMessage(new ApiError(401, 'UNAUTHENTICATED', 'Sign in again.'))).toBe('Sign in again.')
     expect(apiErrorMessage(new ApiError(409, 'LEAVE_STATE_FORBIDDEN', 'Leave is already approved.'))).toBe(

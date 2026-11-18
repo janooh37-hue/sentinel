@@ -92,6 +92,8 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     confidentiality: 'general',
     can_send: false,
     can_change_confidentiality: false,
+    can_forward_to_branch: false,
+    can_rebuild_vehicle_letter: false,
     ...overrides,
   }
 }
@@ -106,7 +108,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 
@@ -131,7 +133,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 
@@ -148,7 +150,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         nav: () => NAV,
         onSelect: () => undefined,
-        isInmateReporter: false,
+        isScopedRole: false,
       }),
     )
 

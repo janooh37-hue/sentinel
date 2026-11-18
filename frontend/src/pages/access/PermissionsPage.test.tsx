@@ -62,6 +62,7 @@ const operator: AdminUserRead = {
   created_at: null,
   is_default_manager: false,
   password_change_required: false,
+  line_manager_user_id: null,
 }
 
 const admin: AdminUserRead = {
