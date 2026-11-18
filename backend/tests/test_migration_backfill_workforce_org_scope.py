@@ -1,4 +1,4 @@
-"""0120 backfills only unscoped attendance reviewers and reverses its own grants."""
+"""0123 backfills only unscoped attendance reviewers and reverses its own grants."""
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -9,8 +9,8 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, DateTime, bindparam, create_engine, text
 
 ROOT = Path(__file__).resolve().parents[2]
-REVISION = "0120_backfill_workforce_org_scope"
-PARENT = "0119_employee_former_ids"
+REVISION = "0123_backfill_workforce_org_scope"
+PARENT = "0122_accident_insurance"
 BACKFILL_AT = datetime(2026, 11, 18)
 PEOPLE = "workforce.people.view"
 REVIEW = "workforce.attendance.review"

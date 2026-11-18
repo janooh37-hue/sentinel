@@ -1,7 +1,7 @@
 """Backfill organization scope for existing, unscoped attendance reviewers.
 
-Revision ID: 0120_backfill_workforce_org_scope
-Revises: 0119_employee_former_ids
+Revision ID: 0123_backfill_workforce_org_scope
+Revises: 0122_accident_insurance
 
 Capabilities authorize actions, but attendance also requires employee scope.
 Give active or locked non-admin holders of both workforce.people.view and
@@ -29,8 +29,8 @@ from datetime import datetime
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0120_backfill_workforce_org_scope"
-down_revision: str | None = "0119_employee_former_ids"
+revision: str = "0123_backfill_workforce_org_scope"
+down_revision: str | None = "0122_accident_insurance"
 branch_labels: str | None = None
 depends_on: str | None = None
 
