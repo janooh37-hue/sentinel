@@ -19,12 +19,15 @@
  */
 import { act, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
 
 import type { SessionUser } from '@/lib/api'
 import { AuthContext } from '@/lib/authContext'
+import ar from '@/locales/ar.json'
 
 import { AttendancePrintSheet } from './AttendancePrintSheet'
 import type { AttendanceRow } from './attendanceModel'
+import { EMPTY_FILTER } from './attendanceModel'
 
 // 19 Aug 2026 is the rotation's double day: one company works the morning and
 // another the night, which is the case a printed register must never collapse.
@@ -151,6 +154,9 @@ function sheet(props: Partial<React.ComponentProps<typeof AttendancePrintSheet>>
         operationalDate="2026-08-19"
         shiftCode={null}
         search=""
+        filter={EMPTY_FILTER}
+        company={null}
+        totalRows={ROWS.length}
         {...props}
       />
     </AuthContext.Provider>
@@ -167,7 +173,8 @@ beforeEach(() => {
   vi.setSystemTime(new Date('2026-08-19T12:00:00Z'))
 })
 
-afterEach(() => {
+afterEach(async () => {
+  await act(() => i18n.changeLanguage('en'))
   vi.useRealTimers()
 })
 
@@ -229,6 +236,9 @@ describe('AttendancePrintSheet', () => {
         operationalDate="2026-08-19"
         shiftCode={null}
         search=""
+        filter={EMPTY_FILTER}
+        company={null}
+        totalRows={ROWS.length}
       />,
     )
 
@@ -249,11 +259,69 @@ describe('AttendancePrintSheet', () => {
     expect(screen.getByTestId('attendance-print-stamp')).toHaveTextContent('19:30')
   })
 
-  it('declares the active filter and puts it in the source link', () => {
-    renderSheet({ shiftCode: 'night', search: 'rashid', rows: ROWS.filter((r) => r.shift_code === 'night') })
+  it.each(['sheet', 'roster', 'shift'] as const)(
+    'declares both tiers, scopes, row coverage and the snapshot time in the %s layout',
+    (layout) => {
+      renderSheet({
+        layout,
+        filter: { who: 'left', states: ['late', 'unpaired'], corrected: true },
+        company: 'Alpha',
+        shiftCode: 'morning',
+        search: 'rashid',
+        rows: [row({ late_minutes: 47, corrected: true, final_out_at: MORNING_END })],
+      })
+      const declaration = screen.getByTestId('attendance-print-declaration')
+      expect(declaration).toHaveTextContent('Who: Left')
+      expect(declaration).toHaveTextContent('Row status: Late past grace, Single punch')
+      expect(declaration).toHaveTextContent('Corrected · Company: Alpha · Morning · search "rashid"')
+      expect(declaration).toHaveTextContent('1 of 6 rows · as of 16:00')
+      expect(declaration.querySelectorAll('bdi[dir="ltr"]')).toHaveLength(3)
+      expect(within(declaration).getByText('rashid')).toHaveAttribute('dir', 'auto')
+      const source = screen.getByText(/\/employees\/attendance\?date=/)
+      expect(source).toHaveTextContent('who=left')
+      expect(source).toHaveTextContent('state=late%2Cunpaired')
+      expect(source).toHaveTextContent('corrected=1')
+      expect(source).toHaveTextContent('company=Alpha')
+      expect(source).toHaveTextContent('shift=morning')
+    },
+  )
 
-    expect(screen.getByText(/Night · search "rashid"/)).toBeInTheDocument()
-    expect(screen.getByText(/shift=night/)).toBeInTheDocument()
+  it.each(['sheet', 'roster', 'shift'] as const)('declares All rows when the %s is unfiltered', (layout) => {
+    renderSheet({ layout })
+
+    const declarations = screen.getAllByTestId('attendance-print-declaration')
+    expect(declarations).toHaveLength(layout === 'shift' ? 2 : 1)
+    for (const declaration of declarations) expect(declaration).toHaveTextContent(/^All rows$/)
+  })
+
+  it('declares scope-only filters and localizes the Unassigned company', () => {
+    renderSheet({ company: '__unassigned__', rows: [row({ duty_unit: null })] })
+
+    const declaration = screen.getByTestId('attendance-print-declaration')
+    expect(declaration).toHaveTextContent('Company: Unassigned · 1 of 6 rows · as of 16:00')
+    expect(declaration).not.toHaveTextContent('All rows')
+    expect(declaration).not.toHaveTextContent('Who:')
+    expect(declaration).not.toHaveTextContent('Row status:')
+  })
+
+  it('isolates Arabic declaration counts, time and the search query without English fallbacks', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await act(() => i18n.changeLanguage('ar'))
+    renderSheet({
+      filter: { who: 'left', states: ['late'], corrected: false },
+      company: 'السرية الثانية',
+      search: 'Salem',
+      rows: [row()],
+    })
+
+    const declaration = screen.getByTestId('attendance-print-declaration')
+    expect(declaration).toHaveTextContent('الموظفون: غادروا')
+    expect(declaration).toHaveTextContent('حالة الصف: تأخر بعد السماح')
+    expect(declaration).toHaveTextContent('السرية: السرية الثانية')
+    expect(declaration).toHaveTextContent('الصفوف: 1 من 6')
+    expect(declaration).toHaveTextContent('حتى 16:00')
+    expect(Array.from(declaration.querySelectorAll('bdi[dir="ltr"]'), (value) => value.textContent)).toEqual(['1', '6', '16:00'])
+    expect(within(declaration).getByText('Salem')).toHaveAttribute('dir', 'auto')
   })
 
   it('emits one sheet per shift in the shift layout and one for the day otherwise', () => {
