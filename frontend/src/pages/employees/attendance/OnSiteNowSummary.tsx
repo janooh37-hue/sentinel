@@ -24,7 +24,7 @@ const PAST_BUCKETS: readonly OnSiteBucket[] = ON_SITE_BUCKETS.filter((bucket) =>
 /** Tier-one marks share the bar's tokens, not a second row-status palette. */
 const BUCKET_MARK: Record<OnSiteBucket, string> = {
   onSite: 'bg-success shadow-[0_0_0_2px_var(--success-soft)]',
-  left: 'border border-primary bg-primary-soft',
+  left: 'border bg-primary-soft',
   notArrived: 'bg-accent',
   leave: 'bg-info',
   nationalService: 'bg-smart',
@@ -130,7 +130,7 @@ export function OnSiteNowSummary({
     <section aria-labelledby={`${id}-title`} className="my-3 grid gap-0 rounded-2xl border border-border bg-surface lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
       <div className="grid min-w-0 gap-5 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:p-5">
         <div className="min-w-0 self-center">
-          <h2 id={`${id}-title`} className="mb-1.5 text-[0.85em] font-semibold">{title}</h2>
+          <h2 id={`${id}-title`} className="mb-1.5 text-[14px] font-semibold sm:text-[15px]">{title}</h2>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>
               <Trans
@@ -179,7 +179,7 @@ export function OnSiteNowSummary({
                   bucket === 'notArrived' && 'bg-surface',
                   who !== null && who !== bucket && 'opacity-[0.22]',
                 )}
-                style={{ flexGrow: summary[bucket] }}
+                style={{ flexGrow: summary[bucket], borderColor: bucket === 'left' ? 'var(--primary)' : undefined }}
               >
                 {bucket === 'notArrived' && (
                   <>
@@ -232,21 +232,23 @@ export function OnSiteNowSummary({
                 onClick={() => {
                   if (summary[bucket] > 0) onWhoChange(who === bucket ? null : bucket)
                 }}
-                className="flex min-h-[58px] min-w-0 flex-col items-start gap-1 rounded-sm border border-transparent px-2 py-1.5 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:border-primary aria-pressed:bg-surface-raised aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
+                className="flex min-h-[58px] min-w-0 flex-col items-start gap-1 rounded-sm border px-[7px] py-1.5 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-surface-raised aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
+                style={{ borderColor: who === bucket ? 'var(--primary)' : 'transparent' }}
               >
                 <span className="flex items-center gap-2.5">
                   <span
                     ref={(node) => { swatchRefs.current[bucket] = node }}
                     aria-hidden="true"
                     className={cn('size-2 shrink-0 rounded-[2px]', BUCKET_MARK[bucket])}
+                    style={{ borderColor: bucket === 'left' ? 'var(--primary)' : undefined }}
                   />
                   <bdi dir="ltr" className="font-mono text-[22px] font-medium leading-tight tabular-nums">{summary[bucket]}</bdi>
                 </span>
-                <span className="text-xs leading-relaxed text-muted-foreground">{t(`attendance.onSiteNow.${bucket}`)}</span>
+                <span className="text-[11px] leading-relaxed text-muted-foreground rtl:text-[12px]">{t(`attendance.onSiteNow.${bucket}`)}</span>
                 {bucket === 'notArrived' && (summary.absent > 0 || summary.awaited > 0) && (
-                  <span className="flex flex-wrap gap-x-1 text-xs leading-relaxed text-muted-foreground">
+                  <span className="whitespace-nowrap text-[11px] leading-relaxed text-muted-foreground rtl:text-[12px]">
                     {summary.absent > 0 && <span>{t('attendance.onSiteNow.splitAbsent')} <bdi dir="ltr" className="font-mono tabular-nums">{summary.absent}</bdi></span>}
-                    {summary.absent > 0 && summary.awaited > 0 && <span aria-hidden="true">·</span>}
+                    {summary.absent > 0 && summary.awaited > 0 && <>{' '}<span aria-hidden="true">·</span>{' '}</>}
                     {summary.awaited > 0 && <span>{t('attendance.onSiteNow.splitAwaited')} <bdi dir="ltr" className="font-mono tabular-nums">{summary.awaited}</bdi></span>}
                   </span>
                 )}

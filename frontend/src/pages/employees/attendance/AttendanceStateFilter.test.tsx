@@ -148,6 +148,14 @@ describe('AttendanceStateFilter', () => {
     expect(props.onCorrectedChange).toHaveBeenLastCalledWith(false)
   })
 
+  it('shows the mobile count only when a row-state filter or modifier is active', () => {
+    const { props, rerender } = renderFilter()
+    const opener = screen.getByRole('button', { name: i18n.t('attendance.filter.button') })
+    expect(opener.querySelector('bdi')).toBeNull()
+    rerender(<AttendanceStateFilter {...props} corrected />)
+    expect(opener).toHaveAccessibleName(`${i18n.t('attendance.filter.button')} (1)`)
+  })
+
   it('opens a labelled mobile sheet, traps and returns focus, and keeps picks on Escape', async () => {
     const user = userEvent.setup()
     const onClear = vi.fn()
@@ -186,7 +194,7 @@ describe('AttendanceStateFilter', () => {
     const { props } = renderFilter({ states: ['late'] })
     await user.click(screen.getByRole('button', { name: `${i18n.t('attendance.filter.button')} (1)` }))
     const dialog = await screen.findByRole('dialog')
-    await user.click(within(dialog).getByRole('button', { name: i18n.t('attendance.filter.clear', { defaultValue: 'Clear filters' }) }))
+    await user.click(within(dialog).getByRole('button', { name: i18n.t('attendance.filter.clear') }))
     expect(props.onClear).toHaveBeenCalledOnce()
     expect(props.onStatesChange).not.toHaveBeenCalled()
     expect(props.onCorrectedChange).not.toHaveBeenCalled()

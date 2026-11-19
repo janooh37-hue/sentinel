@@ -23,8 +23,9 @@ type ChipKey = RowState | 'corrected'
 
 const CHIP_KEYS: readonly ChipKey[] = [...STATE_CHIP_ORDER, 'corrected']
 const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--primary))] focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-const CHIP = 'inline-flex items-center gap-2 rounded-sm border px-2.5 py-1.5 text-start text-[0.75em]'
-const SELECTED = 'border-primary bg-primary-soft text-primary-text'
+const CHIP = 'inline-flex items-center gap-[7px] rounded-sm border px-[9px] py-[5px] text-start text-[11px] rtl:text-[12px]'
+const SELECTED = 'bg-primary-soft text-primary-text'
+const PRIMARY_BORDER = { borderColor: 'var(--primary)' }
 const UNSELECTED = 'border-border bg-surface text-foreground hover:border-border-strong hover:bg-surface-raised'
 const DISABLED = 'cursor-default border-dashed text-muted-foreground opacity-55 hover:border-border hover:bg-surface'
 
@@ -92,8 +93,9 @@ function StateChips({
               )))
             }}
             className={cn(chipClass, selected ? SELECTED : UNSELECTED, !available && DISABLED)}
+            style={selected ? PRIMARY_BORDER : undefined}
           >
-            <AttendanceStatusDot state={state} />
+            <AttendanceStatusDot state={state} className="h-[9px] w-[9px]" />
             <span>{attendanceStatusLabel(t, state)}</span>{' '}
             <bdi dir="ltr" className={countClass}>{counts[state]}</bdi>
           </button>
@@ -111,12 +113,13 @@ function StateChips({
           onFocus={() => setFocusKey('corrected')}
           onClick={() => { if (enabled('corrected')) onCorrectedChange(!corrected) }}
           className={cn(chipClass, corrected ? SELECTED : UNSELECTED, !enabled('corrected') && DISABLED)}
+          style={corrected ? PRIMARY_BORDER : undefined}
         >
-          <AttendanceStatusDot state="pending" corrected />
+          <AttendanceStatusDot state="pending" corrected className="h-[9px] w-[9px]" />
           <span>{t('attendance.state.corrected')}</span>{' '}
           <bdi dir="ltr" className={countClass}>{counts.corrected}</bdi>
         </button>
-        <p className="text-[0.75em] text-muted-foreground">{t('attendance.legend.hint')}</p>
+        <p className="text-[11px] text-muted-foreground rtl:text-[12px]">{t('attendance.legend.hint')}</p>
       </div>
     </div>
   )
@@ -152,7 +155,7 @@ export function AttendanceStateFilter({ counts, states, corrected, onStatesChang
               className={cn('inline-flex min-h-[44px] items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[0.75em] font-semibold text-foreground hover:bg-surface-tinted lg:hidden', FOCUS)}
             >
               <SlidersHorizontal className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-              <span>{t('attendance.filter.button')} <bdi dir="ltr" className="font-mono tabular-nums">({activeCount})</bdi></span>
+              <span>{t('attendance.filter.button')}{activeCount > 0 && <> <bdi dir="ltr" className="font-mono tabular-nums">({activeCount})</bdi></>}</span>
             </button>
           </DialogTrigger>
         </div>
@@ -166,8 +169,9 @@ export function AttendanceStateFilter({ counts, states, corrected, onStatesChang
                 aria-label={t('attendance.filter.remove', { label: attendanceStatusLabel(t, state) })}
                 onClick={() => removeState(state)}
                 className={cn(CHIP, SELECTED, FOCUS, 'min-h-[44px]')}
+                style={PRIMARY_BORDER}
               >
-                <AttendanceStatusDot state={state} />
+                <AttendanceStatusDot state={state} className="h-[9px] w-[9px]" />
                 <span>{attendanceStatusLabel(t, state)}</span>
                 <X className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
               </button>
@@ -178,8 +182,9 @@ export function AttendanceStateFilter({ counts, states, corrected, onStatesChang
                 aria-label={t('attendance.filter.remove', { label: t('attendance.state.corrected') })}
                 onClick={() => { onCorrectedChange(false); triggerRef.current?.focus() }}
                 className={cn(CHIP, SELECTED, FOCUS, 'min-h-[44px]')}
+                style={PRIMARY_BORDER}
               >
-                <AttendanceStatusDot state="pending" corrected />
+                <AttendanceStatusDot state="pending" corrected className="h-[9px] w-[9px]" />
                 <span>{t('attendance.state.corrected')}</span>
                 <X className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
               </button>
@@ -209,7 +214,7 @@ export function AttendanceStateFilter({ counts, states, corrected, onStatesChang
         <div className="min-h-0 overflow-y-auto overscroll-contain px-5 py-4"><StateChips {...chipProps} mobile /></div>
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border px-5 pt-3 pb-[max(1rem,var(--safe-bottom))]">
           <button type="button" onClick={onClear} className={cn('min-h-[44px] rounded-sm text-[0.75em] text-primary-text underline underline-offset-4', FOCUS)}>
-            {t('attendance.filter.clear', { defaultValue: 'Clear filters' })}
+            {t('attendance.filter.clear')}
           </button>
           <DialogClose asChild>
             <button type="button" className={cn('inline-flex min-h-[44px] items-center rounded-md bg-primary px-3 text-[0.75em] font-semibold text-primary-foreground hover:bg-primary-hover', FOCUS)}>
