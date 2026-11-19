@@ -53,6 +53,7 @@ function employeeNames(html: string): string[][] {
 }
 
 const SECOND_EMPLOYEE = item({ bookId: 2, employeeId: 'G4072', nameAr: 'سالم علي', nameEn: 'Salem Ali' })
+const SECOND_LEAVE = item({ bookId: 2, startDate: '2026-09-01', endDate: '2026-09-15' })
 
 afterEach(() => localStorage.clear())
 
@@ -238,7 +239,7 @@ describe('compose prefill', () => {
     expect(employeeNames(result.html)).toEqual([['G4072', 'Salem Ali']])
   })
 
-  it('matches repeated employee IDs by occurrence', () => {
+  it('matches repeated employee IDs after moving a different employee', () => {
     const { ar, en } = bilingualVariants([
       item(), SECOND_EMPLOYEE, item({ bookId: 3, nameAr: 'عبدالله أباه الثاني', nameEn: 'Abdellahi Abah II' }),
     ])
@@ -252,6 +253,75 @@ describe('compose prefill', () => {
       ['G3085', 'Abdellahi Abah'],
       ['G3085', 'Abdellahi Abah II'],
     ])
+  })
+
+  it('keeps a correction on the remaining leave after deleting another row for the same employee', () => {
+    const { ar, en } = bilingualVariants([item(), SECOND_LEAVE])
+    const table = letterTable(ar)
+    table.tBodies[0].rows[1].cells[3].textContent = 'Abdellahi Abah'
+    const english = swapLetterTable(table.outerHTML, ar, en)
+
+    const editedTable = letterTable(english.html)
+    editedTable.tBodies[0].deleteRow(0)
+    const arabic = swapLetterTable(editedTable.outerHTML, en, ar, english.edited)
+
+    expect(employeeNames(arabic.html)).toEqual([['G3085', 'Abdellahi Abah']])
+    expect(cells(arabic.html).slice(7, 9)).toEqual(['1/9/2026', '15/9/2026'])
+  })
+
+  it('keeps dates and corrections with their own leave when the same employee’s rows are reordered', () => {
+    const { ar, en } = bilingualVariants([item(), SECOND_LEAVE])
+    const table = letterTable(ar)
+    const second = table.tBodies[0].rows[1]
+    second.cells[3].textContent = 'Abdellahi Abah'
+    second.cells[7].textContent = '3/9/2026'
+    const english = swapLetterTable(table.outerHTML, ar, en)
+
+    const editedTable = letterTable(english.html)
+    const body = editedTable.tBodies[0]
+    body.prepend(body.rows[1])
+    const arabic = swapLetterTable(editedTable.outerHTML, en, ar, english.edited)
+
+    expect(Array.from(letterTable(arabic.html).tBodies[0].rows, (row) =>
+      [row.cells[3].textContent, row.cells[7].textContent, row.cells[8].textContent],
+    )).toEqual([
+      ['Abdellahi Abah', '3/9/2026', '15/9/2026'],
+      ['عبدالله أباه', '1/8/2026', '31/8/2026'],
+    ])
+  })
+
+  it('translates the original row when an inserted row copies its attributes but has empty cells', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    const body = table.tBodies[0]
+    body.prepend(body.rows[0].cloneNode(true))
+    for (const cell of body.rows[0].cells) cell.replaceChildren()
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(cells(html).slice(0, 11)).toEqual(Array(11).fill(''))
+    expect(employeeNames(html)).toEqual([['', ''], ['G3085', 'Abdellahi Abah']])
+  })
+
+  it('leaves both rows unchanged when a pasted row duplicates the original identity', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    const body = table.tBodies[0]
+    body.append(body.rows[0].cloneNode(true))
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(employeeNames(html)).toEqual([['G3085', 'عبدالله أباه'], ['G3085', 'عبدالله أباه']])
+    expect(headers(html)[3]).toBe('NAME')
+  })
+
+  it('leaves an untagged row untouched even when the employee ID is known', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    const body = table.tBodies[0]
+    const row = body.insertRow(0)
+    row.innerHTML = body.rows[1].innerHTML
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(employeeNames(html)).toEqual([['G3085', 'عبدالله أباه'], ['G3085', 'Abdellahi Abah']])
   })
 
   it('leaves an added unknown employee row untouched', () => {

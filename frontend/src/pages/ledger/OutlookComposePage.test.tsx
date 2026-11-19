@@ -132,7 +132,7 @@ describe('OutlookComposePage prefill', () => {
   it('keeps a corrected name when the table language is switched twice', async () => {
     const table = (header: string, name: string) =>
       `<table><thead><tr><th>#</th><th>ID</th><th>${header}</th></tr></thead>` +
-      `<tbody><tr><td>1</td><td>G3085</td><td>${name}</td></tr></tbody></table>`
+      `<tbody><tr data-basket-row="0"><td>1</td><td>G3085</td><td>${name}</td></tr></tbody></table>`
     const ar = table('الاسم', 'عبدالله أباه')
     const en = table('Name', 'Abdellahi Abah')
     renderDialog({ prefill: { bodyHtml: ar, tableLanguage: 'ar', tableVariants: { ar, en } } })

@@ -138,12 +138,15 @@ export function p(html: string): string {
  *  (already-escaped bullet lists), right-aligned so the bullets line up. */
 type Cell = string | { html: string }
 
+const BASKET_ROW_ATTR = 'data-basket-row'
+
 function tableHtml(
   dir: 'ltr' | 'rtl',
   headerBg: string,
   cols: string[],
   rows: Cell[][],
   colStyles: string[] = [],
+  markBasketRows = false,
 ): string {
   const head = `<tr>${cols.map((c) => `<th style="${thStyle(headerBg)}">${esc(c)}</th>`).join('')}</tr>`
   const td = (c: Cell, col: number): string => {
@@ -152,7 +155,10 @@ function tableHtml(
       ? `<td style="${TD_STYLE}${extra}">${esc(c)}</td>`
       : `<td style="${TD_LIST_STYLE}${extra}">${c.html}</td>`
   }
-  const body = rows.map((r) => `<tr>${r.map(td).join('')}</tr>`).join('')
+  const body = rows.map((r, index) => {
+    const rowAttr = markBasketRows ? ` ${BASKET_ROW_ATTR}="${index}"` : ''
+    return `<tr${rowAttr}>${r.map(td).join('')}</tr>`
+  }).join('')
   return (
     `<table dir="${dir}" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">` +
     `<thead>${head}</thead><tbody>${body}</tbody></table>`
@@ -459,30 +465,26 @@ function bilingualTable(items: EmailBasketItem[], cols: Column[], lang: TableLan
     cols.map((c) => c[lang]),
     items.map((item, idx) => cols.map((c) => c.cell(item, idx, lang))),
     cols.map((c) => c.style ?? ''),
+    true, // Stable row identity in both language variants.
   )
 }
 
-/** Match each employee ID's occurrences in table order, independently of other employees. */
 function* letterRowsByKey(table: HTMLTableElement): Generator<[string, HTMLTableRowElement]> {
-  const occurrences = new Map<string, number>()
   for (const row of table.rows) {
     if (row.querySelector(':scope > th')) {
       yield ['head', row]
       continue
     }
-    const employeeId = row.cells[1]?.textContent?.trim()
-    if (!employeeId) continue
-    const occurrence = occurrences.get(employeeId) ?? 0
-    occurrences.set(employeeId, occurrence + 1)
-    yield [`${employeeId}#${occurrence}`, row]
+    const key = row.getAttribute(BASKET_ROW_ATTR)
+    if (key !== null) yield [key, row]
   }
 }
 
 /**
- * Translate generated cells in the header and matching employee rows. A cell
- * with matching text is still edited if it contains markup other than the
- * editor's <br> placeholders. Carry those edits and text corrections into the
- * next switch, and leave unmatched rows alone.
+ * Match data rows by their generated identity and unchanged employee ID.
+ * Leave unmatched or ambiguous rows alone. Translate only generated cells:
+ * keep text corrections and markup other than the editor's <br> placeholders,
+ * and carry those edit keys into the next switch.
  */
 export function swapLetterTable(
   bodyHtml: string,
@@ -501,7 +503,20 @@ export function swapLetterTable(
   current.setAttribute('dir', target.getAttribute('dir') ?? 'rtl')
   const sourceRows = new Map(letterRowsByKey(source))
   const targetRows = new Map(letterRowsByKey(target))
+  const currentRows = new Map<string, HTMLTableRowElement | null>()
   for (const [rowKey, row] of letterRowsByKey(current)) {
+    const sourceRow = sourceRows.get(rowKey)
+    if (!sourceRow) continue
+    if (rowKey !== 'head') {
+      const employeeId = row.cells[1]?.textContent?.trim()
+      if (!employeeId || employeeId !== sourceRow.cells[1]?.textContent?.trim()) continue
+    }
+    // An inserted row may inherit the attribute. Only matching IDs count
+    // toward ambiguity, so an empty inserted row doesn't block the original.
+    currentRows.set(rowKey, currentRows.has(rowKey) ? null : row)
+  }
+  for (const [rowKey, row] of currentRows) {
+    if (!row) continue
     const sourceRow = sourceRows.get(rowKey)
     const targetRow = targetRows.get(rowKey)
     if (!sourceRow || !targetRow) continue
