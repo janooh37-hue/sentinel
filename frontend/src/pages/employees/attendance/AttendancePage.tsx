@@ -9,7 +9,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query'
-import { useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Trans, useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -91,13 +91,20 @@ function AttendancePageBody(): React.JSX.Element | null {
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
   const canReview = canViewAttendanceRoster(has)
-  const setParam = useCallback(
-    (key: string, value: string | null) => {
+  // The router commits search-param updates in a transition, so its updater
+  // receives the params of the last render: a second change made before that
+  // render lands (Absent, then a company) would overwrite the first. Chain
+  // updates on the newest params until the router has committed them.
+  const pendingParams = useRef<URLSearchParams | null>(null)
+  useEffect(() => {
+    pendingParams.current = null
+  }, [params])
+  const updateParams = useCallback(
+    (update: (base: URLSearchParams) => URLSearchParams) => {
       setParams(
         (previous) => {
-          const next = new URLSearchParams(previous)
-          if (value === null) next.delete(key)
-          else next.set(key, value)
+          const next = update(new URLSearchParams(pendingParams.current ?? previous))
+          pendingParams.current = next
           return next
         },
         { replace: true },
@@ -105,10 +112,25 @@ function AttendancePageBody(): React.JSX.Element | null {
     },
     [setParams],
   )
-  const setFilter = useCallback((next: AttendanceFilter) => {
-    setParams((previous) => writeAttendanceFilter(previous, next), { replace: true })
-  }, [setParams])
-  const clearFilters = useCallback(() => setFilter(EMPTY_FILTER), [setFilter])
+  const setParam = useCallback(
+    (key: string, value: string | null) => {
+      updateParams((next) => {
+        if (value === null) next.delete(key)
+        else next.set(key, value)
+        return next
+      })
+    },
+    [updateParams],
+  )
+  // A patch, not a whole filter: merged onto the newest params, a tier change
+  // cannot resurrect another tier's previous value.
+  const patchFilter = useCallback((patch: Partial<AttendanceFilter>) => {
+    updateParams((base) => writeAttendanceFilter(base, {
+      ...parseAttendanceFilter(base, { isToday: operationalDate === today }),
+      ...patch,
+    }))
+  }, [operationalDate, today, updateParams])
+  const clearFilters = useCallback(() => patchFilter(EMPTY_FILTER), [patchFilter])
 
   // Drop unsupported URL values, including today's on-site bucket on a past day.
   useEffect(() => {
@@ -366,7 +388,7 @@ function AttendancePageBody(): React.JSX.Element | null {
             now={now}
             operationalDate={operationalDate}
             who={filter.who}
-            onWhoChange={(who) => setFilter({ ...filter, who })}
+            onWhoChange={(who) => patchFilter({ who })}
             attentionCount={attention}
             attentionAnchorId={attentionAnchorId}
             attentionTargetId={attentionTargetId}
@@ -379,8 +401,8 @@ function AttendancePageBody(): React.JSX.Element | null {
               counts={counts}
               states={filter.states}
               corrected={filter.corrected}
-              onStatesChange={(states) => setFilter({ ...filter, states })}
-              onCorrectedChange={(corrected) => setFilter({ ...filter, corrected })}
+              onStatesChange={(states) => patchFilter({ states })}
+              onCorrectedChange={(corrected) => patchFilter({ corrected })}
               onClear={clearFilters}
             />
             <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground">
