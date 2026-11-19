@@ -17,6 +17,7 @@
  */
 
 import type { AttendanceDayRow } from '@/lib/api'
+import { UNASSIGNED } from '@/lib/dutyUnits'
 
 export type AttendanceRow = AttendanceDayRow
 
@@ -240,8 +241,8 @@ const BUCKET_RANK: readonly OnSiteBucket[] = ['onSite', 'left', 'nationalService
 
 export type OnSiteSummary = Record<OnSiteBucket, number> & { people: number }
 
-/** Counts PEOPLE, not rows or punches: the "On site now" strip above every view. */
-export function onSiteSummary(rows: readonly AttendanceRow[], input: StateInput): OnSiteSummary {
+/** Best bucket per person; an on-site shift wins over their other duties. */
+export function personBuckets(rows: readonly AttendanceRow[], input: StateInput): Map<string, OnSiteBucket | null> {
   const best = new Map<string, OnSiteBucket | null>()
   for (const row of rows) {
     const bucket = onSiteBucket(row, input)
@@ -250,9 +251,131 @@ export function onSiteSummary(rows: readonly AttendanceRow[], input: StateInput)
       best.set(row.employee_id, bucket)
     }
   }
+  return best
+}
+
+/** Counts PEOPLE, not rows or punches: the "On site now" strip above every view. */
+export function onSiteSummary(rows: readonly AttendanceRow[], input: StateInput): OnSiteSummary {
+  return summarizeBuckets(personBuckets(rows, input))
+}
+
+function summarizeBuckets(best: ReadonlyMap<string, OnSiteBucket | null>): OnSiteSummary {
   const summary: OnSiteSummary = { onSite: 0, left: 0, notArrived: 0, leave: 0, nationalService: 0, people: best.size }
   for (const bucket of best.values()) if (bucket !== null) summary[bucket] += 1
   return summary
+}
+
+export interface DaySummary extends OnSiteSummary {
+  absent: number
+  awaited: number
+  residual: number
+}
+
+/** Day totals stay at scope level, independent of the attendance filter. */
+export function daySummary(rows: readonly AttendanceRow[], input: StateInput): DaySummary {
+  const best = personBuckets(rows, input)
+  const summary = summarizeBuckets(best)
+  const absentPeople = new Set<string>()
+  for (const row of rows) {
+    if (best.get(row.employee_id) === 'notArrived' && rowState(row, input) === 'absent') {
+      absentPeople.add(row.employee_id)
+    }
+  }
+  return {
+    ...summary,
+    absent: absentPeople.size,
+    awaited: summary.notArrived - absentPeople.size,
+    residual: summary.people - summary.onSite - summary.left - summary.notArrived - summary.leave - summary.nationalService,
+  }
+}
+
+export interface AttendanceFilter {
+  who: OnSiteBucket | null
+  states: RowState[]
+  corrected: boolean
+}
+
+/** Display order of the people buckets and the row-state chips. */
+export const ON_SITE_BUCKETS: readonly OnSiteBucket[] = ['onSite', 'left', 'notArrived', 'leave', 'nationalService']
+export const STATE_CHIP_ORDER: readonly RowState[] = [
+  'verified', 'grace', 'late', 'unpaired', 'absent', 'pending', 'leave', 'national_service',
+]
+
+export const EMPTY_FILTER: AttendanceFilter = { who: null, states: [], corrected: false }
+
+export function isFilterActive(filter: AttendanceFilter): boolean {
+  return filter.who !== null || filter.states.length > 0 || filter.corrected
+}
+
+/** Tier 1 selects people; tier 2 ORs row states; corrected intersects both. */
+export function applyAttendanceFilter(
+  rows: readonly AttendanceRow[],
+  filter: AttendanceFilter,
+  input: StateInput,
+): AttendanceRow[] {
+  const best = filter.who === null ? null : personBuckets(rows, input)
+  return rows.filter((row) =>
+    (best === null || best.get(row.employee_id) === filter.who)
+    && (filter.states.length === 0 || filter.states.includes(rowState(row, input)))
+    && (!filter.corrected || row.corrected === true),
+  )
+}
+
+export type StateCounts = Record<RowState, number> & { corrected: number }
+
+/** Chips count rows in the who-scope; only the corrected count follows states. */
+export function stateCounts(
+  rows: readonly AttendanceRow[],
+  filter: AttendanceFilter,
+  input: StateInput,
+): StateCounts {
+  const counts: StateCounts = {
+    verified: 0, grace: 0, late: 0, unpaired: 0, absent: 0, pending: 0,
+    leave: 0, national_service: 0, corrected: 0,
+  }
+  const best = filter.who === null ? null : personBuckets(rows, input)
+  for (const row of rows) {
+    if (best !== null && best.get(row.employee_id) !== filter.who) continue
+    const state = rowState(row, input)
+    counts[state] += 1
+    if (row.corrected === true && (filter.states.length === 0 || filter.states.includes(state))) {
+      counts.corrected += 1
+    }
+  }
+  return counts
+}
+
+/** Company is a scope filter, applied before people totals and attendance filters. */
+export function matchesCompany(row: AttendanceRow, company: string | null): boolean {
+  if (company === null) return true
+  return company === UNASSIGNED ? !row.duty_unit?.trim() : row.duty_unit === company
+}
+
+/** Restore only supported filters, keeping chip order stable and states unique. */
+export function parseAttendanceFilter(params: URLSearchParams, opts: { isToday: boolean }): AttendanceFilter {
+  const who = ON_SITE_BUCKETS.find((bucket) => bucket === params.get('who')) ?? null
+  const states = (params.get('state') ?? '').split(',')
+  return {
+    who: who === 'onSite' && !opts.isToday ? null : who,
+    states: STATE_CHIP_ORDER.filter((state) => states.includes(state)),
+    corrected: params.get('corrected') === '1',
+  }
+}
+
+export function parseCompany(params: URLSearchParams): string | null {
+  return params.get('company')?.trim() || null
+}
+
+/** Preserve scope and view parameters; default attendance filters have no URL keys. */
+export function writeAttendanceFilter(params: URLSearchParams, filter: AttendanceFilter): URLSearchParams {
+  const next = new URLSearchParams(params)
+  if (filter.who === null) next.delete('who')
+  else next.set('who', filter.who)
+  if (filter.states.length === 0) next.delete('state')
+  else next.set('state', filter.states.join(','))
+  if (filter.corrected) next.set('corrected', '1')
+  else next.delete('corrected')
+  return next
 }
 
 /** Worst first: absent, then unpaired, then late by descending minutes. */
@@ -266,7 +389,7 @@ export function orderByAttention(rows: readonly AttendanceRow[], input: StateInp
   })
 }
 
-const UNASSIGNED = '—'
+const UNASSIGNED_LABEL = '—'
 
 /** `unit → post → rows`, insertion-ordered by first appearance. */
 export function groupByUnitAndPost(
@@ -274,8 +397,8 @@ export function groupByUnitAndPost(
 ): Map<string, Map<string, AttendanceRow[]>> {
   const units = new Map<string, Map<string, AttendanceRow[]>>()
   for (const row of rows) {
-    const unit = row.duty_unit?.trim() || UNASSIGNED
-    const post = row.duty_post?.trim() || UNASSIGNED
+    const unit = row.duty_unit?.trim() || UNASSIGNED_LABEL
+    const post = row.duty_post?.trim() || UNASSIGNED_LABEL
     const posts = units.get(unit) ?? new Map<string, AttendanceRow[]>()
     units.set(unit, posts)
     posts.set(post, [...(posts.get(post) ?? []), row])
@@ -294,7 +417,7 @@ export function groupByUnitAndPost(
 export function splitByShift(rows: readonly AttendanceRow[]): Array<[string, AttendanceRow[]]> {
   const shifts = new Map<string, AttendanceRow[]>()
   for (const row of rows) {
-    const code = row.shift_code ?? UNASSIGNED
+    const code = row.shift_code ?? UNASSIGNED_LABEL
     shifts.set(code, [...(shifts.get(code) ?? []), row])
   }
   return [...shifts.entries()].sort(([, a], [, b]) => {
@@ -337,7 +460,7 @@ export interface ShiftCount {
 export function shiftCounts(rows: readonly AttendanceRow[], input: StateInput): Record<string, ShiftCount> {
   const counts: Record<string, ShiftCount> = {}
   for (const row of rows) {
-    const code = row.shift_code ?? UNASSIGNED
+    const code = row.shift_code ?? UNASSIGNED_LABEL
     const entry = counts[code] ?? { seen: 0, due: 0 }
     if (isExcused(rowState(row, input))) {
       counts[code] = entry
