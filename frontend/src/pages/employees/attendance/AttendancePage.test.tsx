@@ -14,6 +14,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18n from 'i18next'
 import { createMemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -210,6 +211,25 @@ describe('AttendancePage', () => {
     expect(within(morning).getAllByTestId('attendance-register-post')).toHaveLength(2)
     // Morning and night are separate register sections for the same unit.
     expect(screen.getAllByTestId('attendance-register-unit')).toHaveLength(2)
+  })
+
+  it('names the page once in Arabic and keeps the Arabic subtitle in English', async () => {
+    const heading = async (): Promise<HTMLElement> => screen.findByRole('heading', { level: 1 })
+    const { unmount } = renderPage()
+    expect(within(await heading()).getByText('الحضور')).toBeInTheDocument()
+    unmount()
+
+    await i18n.changeLanguage('ar')
+    try {
+      renderPage()
+      // The test setup loads EN resources only, so the title falls back to
+      // English; what matters is that the Arabic echo is gone.
+      const title = await heading()
+      expect(title).toHaveTextContent(/^Attendance$/)
+      expect(within(title).queryByText('الحضور')).not.toBeInTheDocument()
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 
   it('prints the G-number beside every name it lists', async () => {

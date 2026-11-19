@@ -350,9 +350,13 @@ function AttendancePageBody(): React.JSX.Element | null {
           </div>
           <h1 className="mt-1.5 flex items-baseline gap-2.5 text-[1.45em] font-bold tracking-[-0.01em]">
             {t('attendance.title')}
-            <span dir="rtl" className="isolate-bidi text-[0.74em] font-normal opacity-[.72]">
-              {t('attendance.titleAr')}
-            </span>
+            {/* The Arabic echo serves English readers; in Arabic it would
+                repeat the title word for word. */}
+            {i18n.language.startsWith('ar') ? null : (
+              <span dir="rtl" className="isolate-bidi text-[0.74em] font-normal opacity-[.72]">
+                {t('attendance.titleAr')}
+              </span>
+            )}
           </h1>
           <p className="mt-1 text-[0.8em] opacity-[.76]">
             {t('attendance.subtitle', { date: operationalDate })}
