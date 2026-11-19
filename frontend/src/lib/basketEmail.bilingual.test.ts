@@ -54,6 +54,8 @@ function employeeNames(html: string): string[][] {
 
 const SECOND_EMPLOYEE = item({ bookId: 2, employeeId: 'G4072', nameAr: 'سالم علي', nameEn: 'Salem Ali' })
 const SECOND_LEAVE = item({ bookId: 2, startDate: '2026-09-01', endDate: '2026-09-15' })
+const PASTED_TABLE = '<table dir="rtl"><thead><tr><th>م</th><th>المشروع</th></tr></thead>' +
+  '<tbody><tr><td>1</td><td>المراجعة</td></tr></tbody></table>'
 
 afterEach(() => localStorage.clear())
 
@@ -130,6 +132,31 @@ describe('compose prefill', () => {
   it('offers no language choice for letters with a fixed table', () => {
     const prefill = buildBasketPrefill([item({ leaveType: 'Sick' })], [])
     expect(prefill.tableVariants).toBeUndefined()
+  })
+
+  it('translates the letter table without changing an unrelated table pasted above it', () => {
+    const { ar, en } = bilingualVariants([item()])
+
+    const { html } = swapLetterTable(PASTED_TABLE + ar, ar, en)
+    expect(html).toBe(PASTED_TABLE + en)
+  })
+
+  it('returns the body unchanged when it contains only an unrelated table', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const body = "<p class='note'>Edited letter</p>" + PASTED_TABLE
+
+    const { html } = swapLetterTable(body, ar, en)
+    expect(html).toBe(body)
+  })
+
+  it('translates the letter header after all data rows are removed', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    table.tBodies[0].remove()
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(headers(html)).toEqual(headers(en))
+    expect(cells(html)).toEqual([])
   })
 
   it('translates the table but keeps the operator’s edits', () => {

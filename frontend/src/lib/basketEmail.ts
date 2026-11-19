@@ -138,6 +138,7 @@ export function p(html: string): string {
  *  (already-escaped bullet lists), right-aligned so the bullets line up. */
 type Cell = string | { html: string }
 
+const BASKET_TABLE_ATTR = 'data-basket-table'
 const BASKET_ROW_ATTR = 'data-basket-row'
 
 function tableHtml(
@@ -146,7 +147,7 @@ function tableHtml(
   cols: string[],
   rows: Cell[][],
   colStyles: string[] = [],
-  markBasketRows = false,
+  markBasketTable = false,
 ): string {
   const head = `<tr>${cols.map((c) => `<th style="${thStyle(headerBg)}">${esc(c)}</th>`).join('')}</tr>`
   const td = (c: Cell, col: number): string => {
@@ -156,11 +157,12 @@ function tableHtml(
       : `<td style="${TD_LIST_STYLE}${extra}">${c.html}</td>`
   }
   const body = rows.map((r, index) => {
-    const rowAttr = markBasketRows ? ` ${BASKET_ROW_ATTR}="${index}"` : ''
+    const rowAttr = markBasketTable ? ` ${BASKET_ROW_ATTR}="${index}"` : ''
     return `<tr${rowAttr}>${r.map(td).join('')}</tr>`
   }).join('')
+  const tableAttr = markBasketTable ? ` ${BASKET_TABLE_ATTR}="true"` : ''
   return (
-    `<table dir="${dir}" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">` +
+    `<table dir="${dir}"${tableAttr} style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11pt">` +
     `<thead>${head}</thead><tbody>${body}</tbody></table>`
   )
 }
@@ -481,8 +483,9 @@ function* letterRowsByKey(table: HTMLTableElement): Generator<[string, HTMLTable
 }
 
 /**
- * Match data rows by their generated identity and unchanged employee ID.
- * Leave unmatched or ambiguous rows alone. Translate only generated cells:
+ * Translate only generated cells in the marked bilingual table. Match data
+ * rows by generated identity and unchanged employee ID, leaving unmatched or
+ * ambiguous rows alone. For matched cells,
  * keep text corrections and markup other than the editor's <br> placeholders,
  * and carry those edit keys into the next switch.
  */
@@ -495,10 +498,12 @@ export function swapLetterTable(
   const nextEdited = new Set(edited)
   const parser = new DOMParser()
   const doc = parser.parseFromString(bodyHtml, 'text/html')
-  const current = doc.querySelector('table')
+  const current = doc.querySelector<HTMLTableElement>(`table[${BASKET_TABLE_ATTR}]`)
+  if (!current) return { html: bodyHtml, edited: nextEdited }
+
   const source = parser.parseFromString(from, 'text/html').querySelector('table')
   const target = parser.parseFromString(to, 'text/html').querySelector('table')
-  if (!current || !source || !target) return { html: bodyHtml, edited: nextEdited }
+  if (!source || !target) return { html: bodyHtml, edited: nextEdited }
 
   current.setAttribute('dir', target.getAttribute('dir') ?? 'rtl')
   const sourceRows = new Map(letterRowsByKey(source))
