@@ -95,7 +95,7 @@ export function AttendanceToolbar({
   return (
     <div data-print-hide>
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2.5 rounded-2xl border border-hairline bg-surface p-2.5 shadow-[0_10px_26px_-22px_rgba(13,40,69,.4)]">
-        <div className="flex items-center overflow-hidden rounded-xl border border-border">
+        <div className="flex items-stretch overflow-hidden rounded-xl border border-border">
           <button
             type="button"
             aria-label={t('attendance.toolbar.previousDay')}
@@ -104,9 +104,21 @@ export function AttendanceToolbar({
           >
             ‹
           </button>
-          <span className="border-x border-border px-3 py-1.5 font-mono text-[0.82em] font-bold tabular-nums">
-            {operationalDate}
-          </span>
+          {/* The native control: WebView2 draws its calendar, and it already
+              speaks to the keyboard and screen readers. No min: any recorded
+              day is fair game. Max today: there is no register for tomorrow. */}
+          <input
+            type="date"
+            dir="ltr"
+            value={operationalDate}
+            max={today}
+            aria-label={t('attendance.toolbar.chooseDay')}
+            onChange={(event) => {
+              const picked = event.target.value
+              if (picked && picked <= today) onDateChange(picked)
+            }}
+            className="min-h-[44px] border-x border-border bg-transparent px-3 py-1.5 font-mono text-[0.82em] font-bold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:min-h-0"
+          />
           <button
             type="button"
             aria-label={t('attendance.toolbar.nextDay')}

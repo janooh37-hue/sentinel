@@ -511,6 +511,32 @@ describe('AttendancePage', () => {
     expect(routeParams().get('view')).toBe('board')
   })
 
+  it('jumps straight to a picked day, keeping filters, and drops the date param for today', async () => {
+    listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
+    renderPage('/employees/attendance?who=left&state=late&company=Alpha&shift=morning')
+    await screen.findAllByTestId('attendance-register-unit')
+    const picker = screen.getByLabelText('Choose day')
+    expect(picker).toHaveValue('2026-08-19')
+    expect(picker).toHaveAttribute('max', '2026-08-19')
+    expect(picker).not.toHaveAttribute('min')
+
+    fireEvent.change(picker, { target: { value: '2026-07-03' } })
+
+    await waitFor(() => expect(routeParams().get('date')).toBe('2026-07-03'))
+    expect(routeParams().get('who')).toBe('left')
+    expect(routeParams().get('state')).toBe('late')
+    expect(routeParams().get('company')).toBe('Alpha')
+    expect(routeParams().get('shift')).toBe('morning')
+    expect(screen.getByLabelText('Choose day')).toHaveValue('2026-07-03')
+
+    fireEvent.change(screen.getByLabelText('Choose day'), { target: { value: '2026-08-19' } })
+
+    await waitFor(() => expect(routeParams().has('date')).toBe(false))
+    expect(routeParams().get('who')).toBe('left')
+    expect(routeParams().get('state')).toBe('late')
+    expect(routeParams().get('company')).toBe('Alpha')
+  })
+
   it('offers Clear filters for an empty intersection, restoring the scoped rows', async () => {
     const user = userEvent.setup()
     listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
