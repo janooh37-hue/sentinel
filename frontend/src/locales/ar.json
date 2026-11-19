@@ -8073,7 +8073,6 @@
       "subtitleSheet": "{{date}} · سجل الحضور حسب الوردية والسرية والموقع",
       "subtitleShift": "{{date}} · صفحة لكل وردية · صفحة {{index}} من {{total}}",
       "filtered": "مُرشَّح: {{filter}}",
-      "searchFilter": "بحث «{{term}}»",
       "date": "التاريخ",
       "shifts": "الورديات",
       "assigned": "المكلَّفون",

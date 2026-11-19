@@ -385,7 +385,7 @@ function AttendancePageBody(): React.JSX.Element | null {
             />
             <div className="flex flex-wrap items-center justify-between gap-x-3 text-xs text-muted-foreground">
               <div role="status" aria-label={t('attendance.results.label')} aria-live="polite" aria-atomic="true">
-                {filterActive && dayQuery.isSuccess && (
+                {dayQuery.isSuccess && (
                   <>
                     <Trans
                       i18nKey="attendance.results.people"

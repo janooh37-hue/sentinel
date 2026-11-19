@@ -271,7 +271,7 @@ describe('AttendancePrintSheet', () => {
         rows: [row({ late_minutes: 47, corrected: true, final_out_at: MORNING_END })],
       })
       const declaration = screen.getByTestId('attendance-print-declaration')
-      expect(declaration).toHaveTextContent('Who: Left')
+      expect(declaration).toHaveTextContent('Filtered: Who: Left')
       expect(declaration).toHaveTextContent('Row status: Late past grace, Single punch')
       expect(declaration).toHaveTextContent('Corrected · Company: Alpha · Morning · search "rashid"')
       expect(declaration).toHaveTextContent('1 of 6 rows · as of 16:00')
@@ -291,15 +291,22 @@ describe('AttendancePrintSheet', () => {
 
     const declarations = screen.getAllByTestId('attendance-print-declaration')
     expect(declarations).toHaveLength(layout === 'shift' ? 2 : 1)
-    for (const declaration of declarations) expect(declaration).toHaveTextContent(/^All rows$/)
+    for (const declaration of declarations) {
+      expect(declaration).toHaveTextContent('All rows · Company: All companies · 6 of 6 rows · as of 16:00')
+      expect(declaration.querySelectorAll('bdi[dir="ltr"]')).toHaveLength(3)
+      expect(declaration).not.toHaveTextContent('Filtered:')
+    }
   })
 
-  it('declares scope-only filters and localizes the Unassigned company', () => {
-    renderSheet({ company: '__unassigned__', rows: [row({ duty_unit: null })] })
+  it.each([
+    ['Alpha', 'Alpha'],
+    ['__unassigned__', 'Unassigned'],
+  ])('declares company-only scope %s without claiming a tier filter', (company, label) => {
+    renderSheet({ company, rows: [row({ duty_unit: company === '__unassigned__' ? null : company })] })
 
     const declaration = screen.getByTestId('attendance-print-declaration')
-    expect(declaration).toHaveTextContent('Company: Unassigned · 1 of 6 rows · as of 16:00')
-    expect(declaration).not.toHaveTextContent('All rows')
+    expect(declaration).toHaveTextContent(`All rows · Company: ${label} · 1 of 6 rows · as of 16:00`)
+    expect(declaration).not.toHaveTextContent('Filtered:')
     expect(declaration).not.toHaveTextContent('Who:')
     expect(declaration).not.toHaveTextContent('Row status:')
   })
@@ -315,7 +322,7 @@ describe('AttendancePrintSheet', () => {
     })
 
     const declaration = screen.getByTestId('attendance-print-declaration')
-    expect(declaration).toHaveTextContent('الموظفون: غادروا')
+    expect(declaration).toHaveTextContent('مُرشَّح: الموظفون: غادروا')
     expect(declaration).toHaveTextContent('حالة الصف: تأخر بعد السماح')
     expect(declaration).toHaveTextContent('السرية: السرية الثانية')
     expect(declaration).toHaveTextContent('الصفوف: 1 من 6')

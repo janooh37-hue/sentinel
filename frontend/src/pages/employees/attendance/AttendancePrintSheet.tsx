@@ -234,26 +234,26 @@ export function AttendancePrintSheet({
   const printLink = `${window.location.origin}/employees/attendance?${writeAttendanceFilter(params, filter).toString()}`
 
   // A filtered register must never look like the whole day.
-  const filters: React.ReactNode[] = []
-  if (filter.who) filters.push(t('attendance.print.whoFilter', { who: t(`attendance.onSiteNow.${filter.who}`) }))
+  const tiers: string[] = []
+  if (filter.who) tiers.push(t('attendance.print.whoFilter', { who: t(`attendance.onSiteNow.${filter.who}`) }))
   if (filter.states.length > 0) {
-    filters.push(t('attendance.print.statesFilter', {
+    tiers.push(t('attendance.print.statesFilter', {
       states: filter.states.map((state) => attendanceStatusLabel(t, state)).join(i18n.language.startsWith('ar') ? '، ' : ', '),
     }))
   }
-  if (filter.corrected) filters.push(t('attendance.state.corrected'))
-  if (company) {
-    filters.push(
-      <Trans
-        i18nKey="attendance.print.companyFilter"
-        values={{ company: company === UNASSIGNED ? t('dutyLocations.unassigned') : company }}
-        components={[<bdi dir="auto" key="company" />]}
-      />,
-    )
-  }
-  if (shiftCode) filters.push(t(`attendance.shift.${shiftCode}`, shiftCode))
+  if (filter.corrected) tiers.push(t('attendance.state.corrected'))
+  const clauses: React.ReactNode[] = [
+    tiers.length > 0 ? t('attendance.print.filtered', { filter: tiers.join(' · ') }) : t('attendance.print.allRows'),
+    <Trans
+      key="company"
+      i18nKey="attendance.print.companyFilter"
+      values={{ company: company === UNASSIGNED ? t('dutyLocations.unassigned') : company ?? t('leaves.report.allCompanies') }}
+      components={[<bdi dir="auto" key="company" />]}
+    />,
+  ]
+  if (shiftCode) clauses.push(t(`attendance.shift.${shiftCode}`, shiftCode))
   if (search.trim()) {
-    filters.push(
+    clauses.push(
       <Trans
         i18nKey="attendance.print.searchDeclaration"
         values={{ term: search.trim() }}
@@ -261,9 +261,9 @@ export function AttendancePrintSheet({
       />,
     )
   }
-  const filterNote = filters.length > 0 ? (
+  const filterNote = (
     <>
-      {filters.map((part, index) => <Fragment key={index}>{index > 0 && ' · '}{part}</Fragment>)}
+      {clauses.map((part, index) => <Fragment key={index}>{index > 0 && ' · '}{part}</Fragment>)}
       {' · '}
       <Trans
         i18nKey="attendance.print.rowsShown"
@@ -281,7 +281,7 @@ export function AttendancePrintSheet({
         components={[<bdi dir="ltr" key="as-of" className="font-mono tabular-nums" />]}
       />
     </>
-  ) : t('attendance.print.allRows')
+  )
 
   const foot = (tail: string): React.JSX.Element => (
     <Foot printLink={printLink} printedAt={printedAt} operator={operator} tail={tail} />

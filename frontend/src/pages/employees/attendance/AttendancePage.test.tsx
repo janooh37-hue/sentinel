@@ -403,6 +403,15 @@ describe('AttendancePage', () => {
     expect(routeParams().get('state')).toBe('late')
   })
 
+  it('shows people and row totals for the unfiltered day without a Clear filters action', async () => {
+    listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
+    renderPage()
+    await screen.findAllByTestId('attendance-register-unit')
+
+    expect(screen.getByRole('status', { name: 'Filter results' })).toHaveTextContent('4 people · 5 rows shown')
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
+  })
+
   it('clears only attendance filters, preserving company, shift, search and the live region', async () => {
     const user = userEvent.setup()
     listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
@@ -422,7 +431,7 @@ describe('AttendancePage', () => {
     expect(registerText()).toContain('Salem Obaid')
     expect(registerText()).not.toContain('Ahmed Ali')
     expect(screen.getByRole('status', { name: 'Filter results' })).toBe(live)
-    expect(live).toBeEmptyDOMElement()
+    expect(live).toHaveTextContent('1 person · 1 row shown')
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument()
   })
 
@@ -571,7 +580,7 @@ describe('AttendancePage', () => {
     expect(registerText()).toContain('Night Person')
     expect(registerText()).not.toContain('Salem Obaid')
     expect(screen.getByRole('region', { name: 'On site now' })).toHaveTextContent('1 person')
-    expect(screen.getByRole('status', { name: 'Filter results' })).toBeEmptyDOMElement()
+    expect(screen.getByRole('status', { name: 'Filter results' })).toHaveTextContent('1 person · 1 row shown')
   })
 
   it('deep-links a name to that employee attendance tab', async () => {
