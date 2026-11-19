@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ConflictError, ValidationFailedError
 from app.config import get_settings
+from app.core import clock
 from app.db.models import User
 from app.db.session import get_db
 from app.db.workforce_models import (
@@ -29,6 +30,7 @@ from app.schemas.workforce import (
     AttendanceExceptionRead,
     AttendancePolicyWrite,
     AttendancePunchLogRead,
+    CompanyStatsRead,
     ConfigurationPatch,
     CoverageRowRead,
     CrewMembershipEndWrite,
@@ -72,6 +74,7 @@ from app.services import (
     settings_service,
     workforce_access_service,
     workforce_admin_service,
+    workforce_company_stats_service,
     workforce_dashboard_service,
     workforce_read_service,
     workforce_schedule_service,
@@ -438,6 +441,28 @@ def get_attendance_day(
         cursor=cursor,
     )
     return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/attendance/company-stats", response_model=CompanyStatsRead)
+def get_company_attendance_stats(
+    from_date: date,
+    to_date: date,
+    user: Annotated[User, Depends(require_capability("workforce.attendance.review"))],
+    people_user: Annotated[User, Depends(require_capability("workforce.people.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    duty_unit: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> dict[str, Any]:
+    """Compare scoped attendance and leave over closed Dubai calendar days."""
+    return workforce_company_stats_service.company_attendance_stats(
+        db,
+        scope=_scope(db, user),
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        limit=limit,
+        now=clock.utcnow(),
+    )
 
 
 @router.get("/attendance/punches", response_model=CursorPage[AttendancePunchLogRead])

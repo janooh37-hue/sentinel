@@ -417,6 +417,174 @@ class AttendanceDayRowRead(RosterRowRead):
     corrected: bool = False
 
 
+class StatsPeriod(BaseModel):
+    from_date: date
+    to_date: date
+    requested_to_date: date
+    days: int
+    clamped: bool
+
+
+class StatsLeaveKind(BaseModel):
+    days: int
+    count: int
+
+
+class StatsExitPermits(BaseModel):
+    count: int
+    hours: float | None
+    with_hours: int
+
+
+class StatsLeaves(BaseModel):
+    annual: StatsLeaveKind
+    administrative: StatsLeaveKind
+    sick: StatsLeaveKind
+    duty: StatsLeaveKind
+    national_service: StatsLeaveKind
+    other: StatsLeaveKind
+    exit_permits: StatsExitPermits
+
+
+class StatsAbsence(BaseModel):
+    days: int
+    episodes: int
+
+
+class StatsLate(BaseModel):
+    count: int
+    minutes: int
+
+
+class StatsTotals(BaseModel):
+    strength: int
+    duties_scheduled: int
+    duties_excused: int
+    duties_due: int
+    duties_pending: int
+    absence: StatsAbsence
+    single_punch: int
+    late: StatsLate
+    absence_rate: float | None
+    leaves: StatsLeaves
+
+
+class StatsSummary(BaseModel):
+    current: StatsTotals
+    previous: StatsTotals
+
+
+class StatsCompanyRatio(BaseModel):
+    absence: float | None
+    single_punch: float | None
+    late: float | None
+
+
+StatsStatus = Literal["good", "normal", "warn", "bad"]
+
+
+class StatsCompanyStatus(BaseModel):
+    absence: StatsStatus | None
+    single_punch: StatsStatus | None
+    late: StatsStatus | None
+    overall: StatsStatus | None
+
+
+class CompanyStatsRow(BaseModel):
+    key: str
+    duty_unit: str | None
+    shift_codes: list[str]
+    totals: StatsTotals
+    ratio: StatsCompanyRatio
+    status: StatsCompanyStatus
+
+
+class StatsBucket(BaseModel):
+    start: date
+    end: date
+    absence_days: int
+    absence_episodes: int
+    single_punch: int
+    late_count: int
+    late_minutes: int
+    sick_days: int
+    sick_count: int
+
+
+class StatsTransfer(BaseModel):
+    from_unit: str | None
+    to_unit: str | None
+    on_date: date
+
+
+class StatsEmployeeRow(BaseModel):
+    employee_id: str
+    name_en: str
+    name_ar: str | None
+    position: str | None
+    position_ar: str | None
+    duty_unit: str | None
+    shift_code: str | None
+    absence_days: int
+    absence_episodes: int
+    single_punch: int
+    late_count: int
+    late_minutes: int
+    sick_days: int
+    leave_days: int
+    leave_count: int
+    score: int
+    tier: Literal["needs_intervention", "above_average"] | None
+    transfer: StatsTransfer | None
+
+
+class StatsRankingOrder(BaseModel):
+    score: list[str]
+    absence: list[str]
+    late: list[str]
+    single_punch: list[str]
+
+
+class StatsRanking(BaseModel):
+    total: int
+    average_score: float
+    rows: list[StatsEmployeeRow]
+    order: StatsRankingOrder
+
+
+class StatsEnrolledEmployee(BaseModel):
+    employee_id: str
+    name_en: str
+    name_ar: str | None
+    duty_unit: str | None
+    start_date: date
+    end_date: date
+    return_date: date
+    days_remaining: int
+    progress: float
+
+
+class StatsNationalService(BaseModel):
+    enrolled: list[StatsEnrolledEmployee]
+    absence_days: int
+
+
+class CompanyStatsRead(BaseModel):
+    """Closed attendance periods, scoped company comparison, and live NS enrolment."""
+
+    period: StatsPeriod
+    previous_period: StatsPeriod
+    closed_through: date
+    duty_unit: str | None
+    granularity: Literal["month", "week"]
+    summary: StatsSummary
+    companies: list[CompanyStatsRow]
+    overall: StatsTotals
+    series: list[StatsBucket]
+    ranking: StatsRanking
+    national_service: StatsNationalService
+
+
 class AttendancePunchLogRead(ORMBase):
     """One provider punch from a scoped, mapped employee, for the day's punch log.
 
