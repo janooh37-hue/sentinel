@@ -5673,7 +5673,7 @@
           "leaves"
         ],
         "summary": "Amend Leave",
-        "description": "Post-approval amendment (Annual Leave): change the end date with a\nrequired reason; the employee is notified with old vs new duration.",
+        "description": "Post-approval amendment (request kinds): change the start and/or end\ndate with a required reason; the employee is notified with the new dates.",
         "operationId": "amend_leave_api_v1_leaves__leave_id__amend_post",
         "parameters": [
           {
@@ -53162,6 +53162,18 @@
       },
       "LeaveAmend": {
         "properties": {
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
           "end_date": {
             "type": "string",
             "format": "date",
@@ -53179,7 +53191,7 @@
           "reason"
         ],
         "title": "LeaveAmend",
-        "description": "POST /leaves/{id}/amend — post-approval end-date change (Annual only).\n\nThe reason is required: it is sent to the employee in the notification."
+        "description": "POST /leaves/{id}/amend — post-approval date change (request kinds).\n\n``start_date`` omitted keeps the current start. The reason is required: it\nis sent to the employee in the notification."
       },
       "LeaveAwaitingReturnCount": {
         "properties": {

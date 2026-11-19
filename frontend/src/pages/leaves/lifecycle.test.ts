@@ -57,9 +57,9 @@ describe('non-returnable Approved leaves are terminal', () => {
     }
   })
 
-  it('offers only cancel, never return', () => {
+  it('offers amend and cancel, never return', () => {
     for (const lt of NOT_RETURNABLE) {
-      expect(actionsFor(lt, 'Approved', OVERDUE, TODAY), lt).toEqual(['cancel'])
+      expect(actionsFor(lt, 'Approved', OVERDUE, TODAY), lt).toEqual(['amend', 'cancel'])
     }
   })
 
@@ -79,7 +79,7 @@ describe('non-returnable Approved leaves are terminal', () => {
 describe('Annual Leave still returns', () => {
   it('awaits return once overdue', () => {
     expect(displayState('Annual Leave', 'Approved', OVERDUE, TODAY)).toBe('AwaitingReturn')
-    // amend is now prepended for Annual Approved rows (including overdue ones)
+    // amend is prepended for every Approved request-kind row (including overdue ones)
     expect(actionsFor('Annual Leave', 'Approved', OVERDUE, TODAY)).toEqual(['amend', 'return', 'cancel'])
     expect(needsAction('Annual Leave', 'Approved', OVERDUE, TODAY)).toBe(true)
   })
@@ -113,13 +113,14 @@ describe('actionsFor edit', () => {
 })
 
 describe('actionsFor amend', () => {
-  it('offers amend only on approved annual leaves', () => {
+  it('offers amend on every approved request-kind leave only', () => {
     expect(actionsFor('Annual Leave', 'Approved', '2026-08-25', '2026-07-15')).toContain('amend')
     // legacy 'Generated' aliases to Approved
     expect(actionsFor('Annual Leave - إجازة سنوية', 'Generated', '2026-08-25', '2026-07-15')).toContain('amend')
+    expect(actionsFor('Emergency Leave', 'Approved', '2026-08-25', '2026-07-15')).toContain('amend')
     expect(actionsFor('Annual Leave', 'Pending', '2026-08-25', '2026-07-15')).not.toContain('amend')
-    expect(actionsFor('Emergency Leave', 'Approved', '2026-08-25', '2026-07-15')).not.toContain('amend')
     expect(actionsFor('Sick Leave', 'Approved', '2026-08-25', '2026-07-15')).not.toContain('amend')
+    expect(actionsFor('National Service', 'Pending', '2026-08-25', '2026-07-15')).not.toContain('amend')
   })
 })
 
