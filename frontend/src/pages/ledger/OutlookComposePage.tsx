@@ -337,11 +337,14 @@ export function OutlookComposePage({
   // ── letter table language (basket letters that offer Arabic / English) ────
   const tableVariants = prefill?.tableVariants
   const [tableLanguage, setTableLanguage] = useState<TableLanguage>(prefill?.tableLanguage ?? 'ar')
+  const editedTableCells = useRef<Set<string>>(new Set())
   const switchTableLanguage = (lang: TableLanguage): void => {
     if (!tableVariants || lang === tableLanguage) return
-    // Translate only untouched table cells so the operator's edits survive.
-    const body = swapLetterTable(getValues('body') ?? '', tableVariants[tableLanguage], tableVariants[lang])
-    setValue('body', body, { shouldDirty: true })
+    const result = swapLetterTable(
+      getValues('body') ?? '', tableVariants[tableLanguage], tableVariants[lang], editedTableCells.current,
+    )
+    editedTableCells.current = result.edited
+    setValue('body', result.html, { shouldDirty: true })
     setTableLanguage(lang)
     saveTableLanguage(lang)
   }

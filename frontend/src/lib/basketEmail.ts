@@ -462,32 +462,62 @@ function bilingualTable(items: EmailBasketItem[], cols: Column[], lang: TableLan
   )
 }
 
+/** Match each employee ID's occurrences in table order, independently of other employees. */
+function* letterRowsByKey(table: HTMLTableElement): Generator<[string, HTMLTableRowElement]> {
+  const occurrences = new Map<string, number>()
+  for (const row of table.rows) {
+    if (row.querySelector(':scope > th')) {
+      yield ['head', row]
+      continue
+    }
+    const employeeId = row.cells[1]?.textContent?.trim()
+    if (!employeeId) continue
+    const occurrence = occurrences.get(employeeId) ?? 0
+    occurrences.set(employeeId, occurrence + 1)
+    yield [`${employeeId}#${occurrence}`, row]
+  }
+}
+
 /**
- * Translate the letter's table inside an (operator-edited) body from one
- * prebuilt language variant to the other. Only cells still holding the
- * generated text are translated; typed COMMENTS, corrected cells and added
- * rows stay as the operator left them.
+ * Translate generated cells in the header and matching employee rows. Keep
+ * unmatched rows and operator edits intact, and carry the returned edit keys
+ * into the next switch even when an edit matches that language's generated text.
  */
-export function swapLetterTable(bodyHtml: string, from: string, to: string): string {
-  const doc = new DOMParser().parseFromString(bodyHtml, 'text/html')
+export function swapLetterTable(
+  bodyHtml: string,
+  from: string,
+  to: string,
+  edited: ReadonlySet<string> = new Set(),
+): { html: string; edited: Set<string> } {
+  const nextEdited = new Set(edited)
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(bodyHtml, 'text/html')
   const current = doc.querySelector('table')
-  const source = new DOMParser().parseFromString(from, 'text/html').querySelector('table')
-  const target = new DOMParser().parseFromString(to, 'text/html').querySelector('table')
-  if (!current || !source || !target) return bodyHtml
+  const source = parser.parseFromString(from, 'text/html').querySelector('table')
+  const target = parser.parseFromString(to, 'text/html').querySelector('table')
+  if (!current || !source || !target) return { html: bodyHtml, edited: nextEdited }
+
   current.setAttribute('dir', target.getAttribute('dir') ?? 'rtl')
-  const sourceRows = source.querySelectorAll('tr')
-  const targetRows = target.querySelectorAll('tr')
-  current.querySelectorAll('tr').forEach((row, r) => {
-    if (r >= sourceRows.length) return
-    const sourceCells = sourceRows[r].querySelectorAll('th, td')
-    const targetCells = targetRows[r].querySelectorAll('th, td')
-    row.querySelectorAll('th, td').forEach((cell, c) => {
-      if (c >= sourceCells.length) return
-      if (cell.textContent?.trim() !== sourceCells[c].textContent?.trim()) return
-      cell.innerHTML = targetCells[c].innerHTML
-    })
-  })
-  return doc.body.innerHTML
+  const sourceRows = new Map(letterRowsByKey(source))
+  const targetRows = new Map(letterRowsByKey(target))
+  for (const [rowKey, row] of letterRowsByKey(current)) {
+    const sourceRow = sourceRows.get(rowKey)
+    const targetRow = targetRows.get(rowKey)
+    if (!sourceRow || !targetRow) continue
+    const cells = row.cells
+    const sourceCells = sourceRow.cells
+    const targetCells = targetRow.cells
+    for (let c = 0; c < cells.length && c < sourceCells.length && c < targetCells.length; c++) {
+      const cellKey = `${rowKey}:${c}`
+      if (nextEdited.has(cellKey)) continue
+      if (cells[c].textContent?.trim() === sourceCells[c].textContent?.trim()) {
+        cells[c].innerHTML = targetCells[c].innerHTML
+      } else {
+        nextEdited.add(cellKey)
+      }
+    }
+  }
+  return { html: doc.body.innerHTML, edited: nextEdited }
 }
 
 // ── Salary Deduction Form ─────────────────────────────────────────────────────
