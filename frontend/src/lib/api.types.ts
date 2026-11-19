@@ -7615,6 +7615,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/attendance/company-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Company Attendance Stats
+         * @description Compare scoped attendance and leave over closed Dubai calendar days.
+         */
+        get: operations["get_company_attendance_stats_api_v1_workforce_attendance_company_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/attendance/punches": {
         parameters: {
             query?: never;
@@ -10582,6 +10602,46 @@ export interface components {
              * @default error
              */
             kind: string;
+        };
+        /**
+         * CompanyStatsRead
+         * @description Closed attendance periods, scoped company comparison, and live NS enrolment.
+         */
+        CompanyStatsRead: {
+            period: components["schemas"]["StatsPeriod"];
+            previous_period: components["schemas"]["StatsPeriod"];
+            /**
+             * Closed Through
+             * Format: date
+             */
+            closed_through: string;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /**
+             * Granularity
+             * @enum {string}
+             */
+            granularity: "month" | "week";
+            summary: components["schemas"]["StatsSummary"];
+            /** Companies */
+            companies: components["schemas"]["CompanyStatsRow"][];
+            overall: components["schemas"]["StatsTotals"];
+            /** Series */
+            series: components["schemas"]["StatsBucket"][];
+            ranking: components["schemas"]["StatsRanking"];
+            national_service: components["schemas"]["StatsNationalService"];
+        };
+        /** CompanyStatsRow */
+        CompanyStatsRow: {
+            /** Key */
+            key: string;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /** Shift Codes */
+            shift_codes: string[];
+            totals: components["schemas"]["StatsTotals"];
+            ratio: components["schemas"]["StatsCompanyRatio"];
+            status: components["schemas"]["StatsCompanyStatus"];
         };
         /**
          * CompletePasswordSetupRequest
@@ -16246,6 +16306,248 @@ export interface components {
             printed_at: string;
             /** Printed By Name */
             printed_by_name: string | null;
+        };
+        /** StatsAbsence */
+        StatsAbsence: {
+            /** Days */
+            days: number;
+            /** Episodes */
+            episodes: number;
+        };
+        /** StatsBucket */
+        StatsBucket: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Absence Days */
+            absence_days: number;
+            /** Absence Episodes */
+            absence_episodes: number;
+            /** Single Punch */
+            single_punch: number;
+            /** Late Count */
+            late_count: number;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Sick Days */
+            sick_days: number;
+            /** Sick Count */
+            sick_count: number;
+        };
+        /** StatsCompanyRatio */
+        StatsCompanyRatio: {
+            /** Absence */
+            absence: number | null;
+            /** Single Punch */
+            single_punch: number | null;
+            /** Late */
+            late: number | null;
+        };
+        /** StatsCompanyStatus */
+        StatsCompanyStatus: {
+            /** Absence */
+            absence: ("good" | "normal" | "warn" | "bad") | null;
+            /** Single Punch */
+            single_punch: ("good" | "normal" | "warn" | "bad") | null;
+            /** Late */
+            late: ("good" | "normal" | "warn" | "bad") | null;
+            /** Overall */
+            overall: ("good" | "normal" | "warn" | "bad") | null;
+        };
+        /** StatsEmployeeRow */
+        StatsEmployeeRow: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Position */
+            position: string | null;
+            /** Position Ar */
+            position_ar: string | null;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /** Shift Code */
+            shift_code: string | null;
+            /** Absence Days */
+            absence_days: number;
+            /** Absence Episodes */
+            absence_episodes: number;
+            /** Single Punch */
+            single_punch: number;
+            /** Late Count */
+            late_count: number;
+            /** Late Minutes */
+            late_minutes: number;
+            /** Sick Days */
+            sick_days: number;
+            /** Leave Days */
+            leave_days: number;
+            /** Leave Count */
+            leave_count: number;
+            /** Score */
+            score: number;
+            /** Tier */
+            tier: ("needs_intervention" | "above_average") | null;
+            transfer: components["schemas"]["StatsTransfer"] | null;
+        };
+        /** StatsEnrolledEmployee */
+        StatsEnrolledEmployee: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Duty Unit */
+            duty_unit: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Return Date
+             * Format: date
+             */
+            return_date: string;
+            /** Days Remaining */
+            days_remaining: number;
+            /** Progress */
+            progress: number;
+        };
+        /** StatsExitPermits */
+        StatsExitPermits: {
+            /** Count */
+            count: number;
+            /** Hours */
+            hours: number | null;
+            /** With Hours */
+            with_hours: number;
+        };
+        /** StatsLate */
+        StatsLate: {
+            /** Count */
+            count: number;
+            /** Minutes */
+            minutes: number;
+        };
+        /** StatsLeaveKind */
+        StatsLeaveKind: {
+            /** Days */
+            days: number;
+            /** Count */
+            count: number;
+        };
+        /** StatsLeaves */
+        StatsLeaves: {
+            annual: components["schemas"]["StatsLeaveKind"];
+            administrative: components["schemas"]["StatsLeaveKind"];
+            sick: components["schemas"]["StatsLeaveKind"];
+            duty: components["schemas"]["StatsLeaveKind"];
+            national_service: components["schemas"]["StatsLeaveKind"];
+            other: components["schemas"]["StatsLeaveKind"];
+            exit_permits: components["schemas"]["StatsExitPermits"];
+        };
+        /** StatsNationalService */
+        StatsNationalService: {
+            /** Enrolled */
+            enrolled: components["schemas"]["StatsEnrolledEmployee"][];
+            /** Absence Days */
+            absence_days: number;
+        };
+        /** StatsPeriod */
+        StatsPeriod: {
+            /**
+             * From Date
+             * Format: date
+             */
+            from_date: string;
+            /**
+             * To Date
+             * Format: date
+             */
+            to_date: string;
+            /**
+             * Requested To Date
+             * Format: date
+             */
+            requested_to_date: string;
+            /** Days */
+            days: number;
+            /** Clamped */
+            clamped: boolean;
+        };
+        /** StatsRanking */
+        StatsRanking: {
+            /** Total */
+            total: number;
+            /** Average Score */
+            average_score: number;
+            /** Rows */
+            rows: components["schemas"]["StatsEmployeeRow"][];
+            order: components["schemas"]["StatsRankingOrder"];
+        };
+        /** StatsRankingOrder */
+        StatsRankingOrder: {
+            /** Score */
+            score: string[];
+            /** Absence */
+            absence: string[];
+            /** Late */
+            late: string[];
+            /** Single Punch */
+            single_punch: string[];
+        };
+        /** StatsSummary */
+        StatsSummary: {
+            current: components["schemas"]["StatsTotals"];
+            previous: components["schemas"]["StatsTotals"];
+        };
+        /** StatsTotals */
+        StatsTotals: {
+            /** Strength */
+            strength: number;
+            /** Duties Scheduled */
+            duties_scheduled: number;
+            /** Duties Excused */
+            duties_excused: number;
+            /** Duties Due */
+            duties_due: number;
+            /** Duties Pending */
+            duties_pending: number;
+            absence: components["schemas"]["StatsAbsence"];
+            /** Single Punch */
+            single_punch: number;
+            late: components["schemas"]["StatsLate"];
+            /** Absence Rate */
+            absence_rate: number | null;
+            leaves: components["schemas"]["StatsLeaves"];
+        };
+        /** StatsTransfer */
+        StatsTransfer: {
+            /** From Unit */
+            from_unit: string | null;
+            /** To Unit */
+            to_unit: string | null;
+            /**
+             * On Date
+             * Format: date
+             */
+            on_date: string;
         };
         /** StoreBatchRead */
         StoreBatchRead: {
@@ -37692,6 +37994,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CursorPage_AttendanceDayRowRead_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_company_attendance_stats_api_v1_workforce_attendance_company_stats_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+                duty_unit?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyStatsRead"];
                 };
             };
             /** @description Validation Error */
