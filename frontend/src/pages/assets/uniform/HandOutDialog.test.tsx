@@ -26,7 +26,7 @@ const POLO: UniformItemRead = { ...SUIT, id: 2, name_en: 'Polo shirt', name_ar: 
   { id: 22, item_id: 2, label: 'L', on_hand: 1, min_qty: 2, is_low: true, held_qty: 0, archived_at: null, sort_order: 1 },
   { id: 23, item_id: 2, label: 'XL', on_hand: 0, min_qty: null, is_low: false, held_qty: 0, archived_at: null, sort_order: 2 },
 ] }
-const EMPLOYEE = { id: 'G3194', name_en: 'Ali Hassan', name_ar: 'علي حسن', department: null, position: null, position_ar: null, duty_unit: null, duty_post: null }
+const EMPLOYEE = { id: 'G3194', name_en: 'Ali Hassan', name_ar: 'علي حسن', department: null, position: null, position_ar: null, duty_unit: null, duty_post: null, status: 'Active' }
 
 function mount(page: boolean | 'receipt' = false, itemId?: number) {
   const onOpenChange = vi.fn()

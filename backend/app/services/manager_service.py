@@ -24,6 +24,15 @@ def list_managers(db: Session, *, include_inactive: bool = False) -> list[Manage
     return list(db.execute(stmt).scalars().all())
 
 
+def sole_active_manager_id(db: Session, user_id: int) -> int | None:
+    """The account's signer row: its one active ``Manager``, else ``None``
+    (none, or ambiguous because several are linked)."""
+    ids = list(
+        db.scalars(select(Manager.id).where(Manager.user_id == user_id, Manager.active.is_(True)))
+    )
+    return ids[0] if len(ids) == 1 else None
+
+
 def _get_or_404(db: Session, manager_id: int) -> Manager:
     mgr = db.get(Manager, manager_id)
     if mgr is None:

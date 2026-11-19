@@ -1,4 +1,5 @@
 """RED contracts for append-only workforce attendance evaluation."""
+
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
@@ -134,9 +135,13 @@ def _seed_case(
     return case
 
 
-def _punch(db_session, case: AttendanceCase, *, event_id: str, at: datetime, direction: str) -> AttendancePunch:
+def _punch(
+    db_session, case: AttendanceCase, *, event_id: str, at: datetime, direction: str
+) -> AttendancePunch:
     person = db_session.scalar(
-        select(AttendanceProviderPerson).where(AttendanceProviderPerson.employee_id == case.employee_id)
+        select(AttendanceProviderPerson).where(
+            AttendanceProviderPerson.employee_id == case.employee_id
+        )
     )
     assert person is not None
     punch = AttendancePunch(
@@ -158,7 +163,13 @@ def test_evaluator_keeps_presence_precedence_grace_boundaries_and_exception_fact
     db_session, status
 ):
     case = _seed_case(db_session, status=status)
-    _punch(db_session, case, event_id="in-at-grace", at=SHIFT_START + timedelta(minutes=10), direction="in")
+    _punch(
+        db_session,
+        case,
+        event_id="in-at-grace",
+        at=SHIFT_START + timedelta(minutes=10),
+        direction="in",
+    )
 
     active = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=20))
     assert active.presence_state == "on_duty"
@@ -167,7 +178,13 @@ def test_evaluator_keeps_presence_precedence_grace_boundaries_and_exception_fact
     assert active.early_exit_minutes is None
     assert active.missing_checkout is False
 
-    _punch(db_session, case, event_id="out-early", at=SHIFT_END - timedelta(minutes=11), direction="out")
+    _punch(
+        db_session,
+        case,
+        event_id="out-early",
+        at=SHIFT_END - timedelta(minutes=11),
+        direction="out",
+    )
     completed = evaluate_case(db_session, case.id, evaluated_at=SHIFT_END + timedelta(minutes=31))
     assert completed.presence_state == "completed"
     assert completed.reason_code == "PUNCH_OUT_RECORDED"
@@ -209,7 +226,12 @@ def test_evaluation_start_cutoff_leaves_pre_go_live_occurrence_without_case_or_r
         evaluation_start_at=SHIFT_START,
     )
     assert skipped is None
-    assert db_session.scalar(select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)) is None
+    assert (
+        db_session.scalar(
+            select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)
+        )
+        is None
+    )
 
 
 @pytest.mark.parametrize("status", ["Active", "Loaned"])
@@ -244,7 +266,9 @@ def test_working_employee_materializes_attendance_case(db_session, status):
     assert (evaluation.presence_state, evaluation.reason_code) == ("on_duty", "PUNCH_IN_ACTIVE")
 
 
-def test_started_assignment_materialization_omits_future_occurrences_and_preserves_prior_snapshot(db_session):
+def test_started_assignment_materialization_omits_future_occurrences_and_preserves_prior_snapshot(
+    db_session,
+):
     case = _seed_case(db_session)
     source = db_session.get(WorkShiftOccurrence, case.shift_occurrence_id)
     assert source is not None
@@ -263,7 +287,9 @@ def test_started_assignment_materialization_omits_future_occurrences_and_preserv
     db_session.flush()
 
     materialize_scheduled_cases(db_session, employee_id=case.employee_id, horizon=UTC_NOW)
-    cases = db_session.scalars(select(AttendanceCase).where(AttendanceCase.employee_id == case.employee_id)).all()
+    cases = db_session.scalars(
+        select(AttendanceCase).where(AttendanceCase.employee_id == case.employee_id)
+    ).all()
     assert [row.shift_occurrence_id for row in cases] == [case.shift_occurrence_id]
 
     employee = db_session.get(Employee, case.employee_id)
@@ -274,12 +300,20 @@ def test_started_assignment_materialization_omits_future_occurrences_and_preserv
     db_session.flush()
     materialize_scheduled_cases(db_session, employee_id=case.employee_id, horizon=UTC_NOW)
     preserved = db_session.get(AttendanceCase, case.id)
-    assert (preserved.crew_name_snapshot, preserved.department_snapshot, preserved.duty_unit_snapshot) == original_snapshot
+    assert (
+        preserved.crew_name_snapshot,
+        preserved.department_snapshot,
+        preserved.duty_unit_snapshot,
+    ) == original_snapshot
 
 
-def test_unchanged_fingerprint_returns_existing_revision_and_changed_source_appends_never_rewrites(db_session):
+def test_unchanged_fingerprint_returns_existing_revision_and_changed_source_appends_never_rewrites(
+    db_session,
+):
     case = _seed_case(db_session)
-    first_punch = _punch(db_session, case, event_id="in-1", at=SHIFT_START + timedelta(minutes=11), direction="in")
+    first_punch = _punch(
+        db_session, case, event_id="in-1", at=SHIFT_START + timedelta(minutes=11), direction="in"
+    )
 
     first = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=40))
     same = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=40))
@@ -292,16 +326,30 @@ def test_unchanged_fingerprint_returns_existing_revision_and_changed_source_appe
     assert db_session.get(AttendanceEvaluation, first.id).presence_state == "on_duty"
     assert db_session.get(AttendancePunch, first_punch.id).direction == "in"
     assert db_session.scalars(
-        select(AttendanceEvaluationPunchSource).where(AttendanceEvaluationPunchSource.evaluation_id == first.id)
+        select(AttendanceEvaluationPunchSource).where(
+            AttendanceEvaluationPunchSource.evaluation_id == first.id
+        )
     ).all()
 
 
-def test_approved_leave_wins_precedence_and_stores_canonical_source_links(db_session):
+@pytest.mark.parametrize(
+    ("leave_type", "reason_code"),
+    [("Annual Leave", "LEAVE_ANNUAL"), ("Duty Leave", "LEAVE_DUTY")],
+)
+def test_approved_leave_wins_precedence_and_stores_canonical_source_links(
+    db_session, leave_type, reason_code
+):
     case = _seed_case(db_session)
-    punch = _punch(db_session, case, event_id="source-in", at=SHIFT_START + timedelta(minutes=1), direction="in")
+    punch = _punch(
+        db_session,
+        case,
+        event_id="source-in",
+        at=SHIFT_START + timedelta(minutes=1),
+        direction="in",
+    )
     leave = Leave(
         employee_id=case.employee_id,
-        leave_type="Annual Leave",
+        leave_type=leave_type,
         start_date=date(2026, 8, 17),
         end_date=date(2026, 8, 17),
         days=1,
@@ -312,12 +360,66 @@ def test_approved_leave_wins_precedence_and_stores_canonical_source_links(db_ses
 
     evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
     assert evaluated.presence_state == "excused_leave"
-    assert evaluated.reason_code == "LEAVE_ANNUAL"
+    assert evaluated.reason_code == reason_code
     assert [(link.punch_id, link.ordinal) for link in evaluated.punch_sources] == [(punch.id, 1)]
-    assert [(link.leave_id, link.is_primary) for link in evaluated.leave_sources] == [(leave.id, True)]
+    assert [(link.leave_id, link.is_primary) for link in evaluated.leave_sources] == [
+        (leave.id, True)
+    ]
 
 
-def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_raw_evidence(db_session):
+def test_overlapping_annual_and_duty_leave_keep_annual_as_primary_source(db_session):
+    case = _seed_case(db_session)
+    duty, annual = [
+        Leave(
+            employee_id=case.employee_id,
+            leave_type=leave_type,
+            start_date=case.operational_date,
+            end_date=case.operational_date,
+            days=1,
+            status="Approved",
+        )
+        for leave_type in ("Duty Leave", "Annual Leave")
+    ]
+    db_session.add_all((duty, annual))
+    db_session.flush()
+
+    evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+
+    assert (evaluated.presence_state, evaluated.reason_code) == ("excused_leave", "LEAVE_ANNUAL")
+    assert {(link.leave_id, link.is_primary) for link in evaluated.leave_sources} == {
+        (duty.id, False),
+        (annual.id, True),
+    }
+
+
+def test_approved_leave_permit_does_not_change_attendance_verdict(db_session):
+    case = _seed_case(db_session)
+    baseline = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+    assert baseline.presence_state == "absent"
+    db_session.add(
+        Leave(
+            employee_id=case.employee_id,
+            leave_type="Leave Permit",
+            start_date=case.operational_date,
+            end_date=case.operational_date,
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.flush()
+
+    evaluated = evaluate_case(db_session, case.id, evaluated_at=UTC_NOW)
+
+    assert (evaluated.presence_state, evaluated.reason_code) == (
+        baseline.presence_state,
+        baseline.reason_code,
+    )
+    assert evaluated.leave_sources == []
+
+
+def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_raw_evidence(
+    db_session,
+):
     case = _seed_case(db_session)
     actor = db_session.scalar(select(User))
     assert actor is not None

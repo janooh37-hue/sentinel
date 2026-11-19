@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation, useNavigate } from 'react-router-dom'
 
 import { AppToaster } from '@/components/shell/AppToaster'
 import { BottomTabBar } from '@/components/shell/BottomTabBar'
@@ -24,10 +24,11 @@ import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { ATTENDANCE_ROSTER_CAPS } from '@/lib/workforceAttendance'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
 import { serviceHref } from '@/lib/quickActions'
-import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
+import { scopedRoleOf, scopedRouteAllowed } from '@/lib/scopedRole'
 import {
   loadAccessRequestsPage,
   loadActivityPrintPage,
@@ -66,6 +67,7 @@ import {
   loadVehicleFinesPage,
   loadVehicleFinesReportPage,
   loadVehicleMaintenancePage,
+  loadVehicleRenewalsPage,
   loadVehiclesHubPage,
   loadScanBackPage,
   loadScanInboxPage,
@@ -104,6 +106,7 @@ const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
 const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
+const VehicleRenewalsPage = lazy(loadVehicleRenewalsPage)
 const StoreDashboardPage = lazy(loadStoreDashboardPage)
 const StoreItemsPage = lazy(loadStoreItemsPage)
 const StoreDeliveriesPage = lazy(loadStoreDeliveriesPage)
@@ -221,18 +224,18 @@ function Shell(): React.JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false)
   // The phone bar's menu button: the drawer hands focus back to it on close (see NavDrawer.returnFocusRef).
   const menuButtonRef = useRef<HTMLButtonElement>(null)
-  const isInmateReporter = user?.role === 'inmate_reporter'
+  const role = scopedRoleOf(user)
+  const scoped = role !== null
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
-  const inmateReporterRouteAllowed =
-    INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(normalizedPath as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]) ||
-    /^\/books\/\d+$/.test(normalizedPath) ||
-    normalizedPath === serviceHref('inmate_conduct_violations') ||
-    normalizedPath === '/application'
+  const waitingForScopedCapabilities = role === 'fleet_reporter' && capabilitiesLoading
+  const routeAllowed = role === null || scopedRouteAllowed(role, normalizedPath, has)
 
-  // Phase 4 LAN — SSE notification stream. Enabled only when the session is
-  // resolved so it doesn't open a connection that 401s immediately.
-  useNotificationStream(status === 'authed' && !isInmateReporter)
-  useReportClientErrors(status === 'authed' && !isInmateReporter)
+  // Fleet receives decision push without opening the closed counts/SSE routes.
+  useNotificationStream(status === 'authed' && !scoped, {
+    pushEnabled: status === 'authed' && role !== 'inmate_reporter',
+  })
+  useReportClientErrors(status === 'authed' && !scoped)
 
   // Web Push deep-link: the service worker postMessages the target path when a
   // notification is clicked; route client-side (React Router) so an already-open
@@ -307,7 +310,7 @@ function Shell(): React.JSX.Element {
                 (reduced-motion guarded in index.css). /services/* shares one key
                 so the catalog stays mounted under its forms. */}
             <main id="main-content" tabIndex={-1} key={normalizedPath.startsWith('/services/') ? '/services' : location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
-            {isInmateReporter && !inmateReporterRouteAllowed ? (
+            {waitingForScopedCapabilities ? <PageSuspenseFallback /> : !routeAllowed ? (
               <Navigate to="/" replace />
             ) : (
               <Routes>
@@ -335,8 +338,10 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/employees/attendance"
                 element={
-                  <RequireCapability cap="workforce.people.view">
-                    <AttendancePage />
+                  <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[0]}>
+                    <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[1]}>
+                      <AttendancePage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />
@@ -504,6 +509,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="vehicles.view">
                     <VehicleMaintenancePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/renewals"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleRenewalsPage />
                   </RequireCapability>
                 }
               />
@@ -732,7 +745,7 @@ function Shell(): React.JSX.Element {
         </div>
         {isMobile && <BottomTabBar />}
       </div>
-      {!isInmateReporter ? (
+      {!scoped ? (
         <>
           <ScanBackDock />
           <ScanBackGate />
@@ -754,22 +767,26 @@ function Shell(): React.JSX.Element {
 }
 
 function App(): React.JSX.Element {
+  const [router] = useState(() => createBrowserRouter([{
+    path: '*',
+    element: (
+      <KeyboardShortcutsProvider>
+        <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+          <RecordDeleteProvider>
+            <MigrationGate>
+              <Shell />
+            </MigrationGate>
+          </RecordDeleteProvider>
+        </TooltipProvider>
+      </KeyboardShortcutsProvider>
+    ),
+  }]))
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <RefreshShellHost />
         <AuthProvider>
-          <BrowserRouter>
-            <KeyboardShortcutsProvider>
-              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
-                <RecordDeleteProvider>
-                  <MigrationGate>
-                    <Shell />
-                  </MigrationGate>
-                </RecordDeleteProvider>
-              </TooltipProvider>
-            </KeyboardShortcutsProvider>
-          </BrowserRouter>
+          <RouterProvider router={router} />
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>

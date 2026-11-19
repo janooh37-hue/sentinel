@@ -14,6 +14,18 @@ import { buildVehicleTable, vehicleTableClipboard } from './vehicleTable'
 import { VehiclesHubPage } from './VehiclesHubPage'
 
 const mobileViewport = vi.hoisted(() => ({ value: false }))
+const capabilities = vi.hoisted(() => ({ edit: true }))
+const requests = vi.hoisted(() => ({
+  fine: vi.fn<(props: { open: boolean; vehicle?: unknown }) => null>(() => null),
+  renew: vi.fn<(props: { open: boolean; vehicle?: unknown }) => null>(() => null),
+  accident: vi.fn<(props: { open: boolean; vehicle?: unknown }) => null>(() => null),
+  maintenance: vi.fn<(props: { open: boolean; vehicle?: unknown }) => null>(() => null),
+}))
+
+vi.mock('./components/FineDialog', () => ({ FineDialog: requests.fine }))
+vi.mock('./components/RenewLicenseDialog', () => ({ RenewLicenseDialog: requests.renew }))
+vi.mock('./components/AccidentDialog', () => ({ AccidentDialog: requests.accident }))
+vi.mock('./components/MaintenanceDialog', () => ({ MaintenanceDialog: requests.maintenance }))
 const outputState = vi.hoisted(() => ({
   print: vi.fn(),
   toastSuccess: vi.fn(),
@@ -29,7 +41,7 @@ vi.mock('@/lib/useCapabilities', () => ({
     isLoading: false,
     has: (capability: string) =>
       capability === 'vehicles.view' ||
-      capability === 'vehicles.edit' ||
+      (capability === 'vehicles.edit' && capabilities.edit) ||
       capability === 'vehicles.delete',
   }),
 }))
@@ -215,6 +227,7 @@ function vehicleRowCheckbox(plate: string): HTMLInputElement {
 beforeEach(async () => {
   vi.clearAllMocks()
   mobileViewport.value = false
+  capabilities.edit = true
   outputState.print.mockReset()
   Object.defineProperty(window, 'print', {
     configurable: true,
@@ -281,32 +294,50 @@ describe('VehiclesHubPage', () => {
     )
   })
 
-  it('renders metric service cards and keeps import as a count-free secondary action', async () => {
+  it('renders four service doors with live counts, request buttons and link-style administration', async () => {
     renderPage()
+    const fines = await screen.findByRole('link', { name: /Fines/ })
+    await waitFor(() => expect(fines).toHaveTextContent(/7\s*Unpaid/))
+    expect(screen.getByRole('link', { name: /Renew License/ })).toHaveAttribute('href', '/vehicles/renewals')
+    expect(screen.getByRole('link', { name: /Accident Report/ })).toHaveTextContent(/1\s*Open/)
+    expect(screen.getByRole('link', { name: /Maintenance/ })).toHaveTextContent(/2\s*Due soon/)
+    expect(screen.getByRole('button', { name: i18n.t('vehicles.addFine') })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: i18n.t('vehicles.renew') })).toBeInTheDocument()
+    const admin = screen.getByRole('navigation', { name: i18n.t('vehicles.manageFleet') })
+    expect(within(admin).getByRole('button', { name: 'Add Vehicle' })).toBeInTheDocument()
+    expect(within(admin).getByRole('link', { name: 'Edit Vehicle' })).toHaveAttribute('href', '/vehicles/edit')
+    expect(within(admin).getByRole('link', { name: i18n.t('vehicles.importService') })).toHaveAttribute('href', '/vehicles/import')
+    expect(screen.queryByText(i18n.t('vehicles.importServiceDesc'))).not.toBeInTheDocument()
+    expect(fines.compareDocumentPosition(screen.getByRole('heading', { name: i18n.t('vehicles.fleet') })) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0)
+  })
 
-    await screen.findByRole('heading', { name: 'Vehicle Services' })
+  it.each([
+    ['fine', 'vehicles.addFine'],
+    ['renew', 'vehicles.renew'],
+    ['accident', 'vehicles.newReport'],
+    ['maintenance', 'vehicles.addMaintenance'],
+  ] as const)('starts the %s request from its door without fixing a vehicle', async (action, label) => {
+    const user = userEvent.setup()
+    let current = ''
+    renderPage('/vehicles', (location) => { current = location })
+    await user.click(await screen.findByRole('button', { name: i18n.t(label) }))
+    await waitFor(() => expect(current).toBe(`/vehicles?action=${action}`))
+    expect(requests[action].mock.calls.at(-1)?.[0]).toEqual(expect.objectContaining({ open: true }))
+    expect(requests[action].mock.calls.at(-1)?.[0]).not.toEqual(expect.objectContaining({ vehicle: expect.anything() }))
+  })
 
-    const fines = screen.getByRole('link', { name: /Fines/ })
-    await waitFor(() => expect(fines).toHaveTextContent(/7\s*·\s*3,400 AED/))
-
-    const renew = screen.getByRole('button', { name: /Renew License/ })
-    const accidents = screen.getByRole('link', { name: /Accident Report/ })
-    const maintenance = screen.getByRole('link', { name: /Maintenance/ })
-    const editVehicle = screen.getByRole('link', { name: /Edit Vehicle/ })
-    const addVehicle = screen.getByRole('button', { name: /Add Vehicle/ })
-    const sites = screen.getByRole('button', { name: /Sites/ })
-    expect(within(renew).getByText('2')).toBeInTheDocument()
-    expect(within(accidents).getByText('1')).toBeInTheDocument()
-    expect(within(maintenance).getByText('2')).toBeInTheDocument()
-    expect(within(editVehicle).getByText('3')).toBeInTheDocument()
-    expect(within(addVehicle).getByText('3')).toBeInTheDocument()
-    expect(within(sites).getByText('2')).toBeInTheDocument()
-    const importAction = screen.getByRole('link', {
-      name: i18n.t('vehicles.importService'),
-    })
-    expect(importAction).toHaveAttribute('href', '/vehicles/import')
-    expect(importAction).not.toHaveTextContent('3')
-    expect(screen.getByText(i18n.t('vehicles.importServiceDesc'))).toBeInTheDocument()
+  it.each(['fine', 'renew', 'accident', 'maintenance', 'add', 'sites', 'evg'])('hides edit controls and closes denied action=%s deep links', async (action) => {
+    capabilities.edit = false
+    let current = ''
+    renderPage(`/vehicles?action=${action}`, (location) => { current = location })
+    await waitFor(() => expect(current).toBe('/vehicles'))
+    expect(screen.queryByRole('navigation', { name: i18n.t('vehicles.manageFleet') })).not.toBeInTheDocument()
+    for (const label of ['vehicles.addFine', 'vehicles.renew', 'vehicles.newReport', 'vehicles.addMaintenance', 'vehicles.importFines']) {
+      expect(screen.queryByRole('button', { name: i18n.t(label) })).not.toBeInTheDocument()
+    }
+    expect(screen.queryByRole('spinbutton', { name: i18n.t('vehicles.notifyBefore') })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Renew License/ })).toHaveAttribute('href', '/vehicles/renewals')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 
   it('filters the grouped fleet ledger with a site chip', async () => {

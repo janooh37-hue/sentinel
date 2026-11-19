@@ -36,8 +36,8 @@ from app.schemas.employee import (
     validate_status_end_date,
     validate_transfer_fields,
 )
+from app.services import duty_service, workforce_schedule_service
 from app.services import employee_status_history as history
-from app.services import workforce_schedule_service
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
@@ -89,12 +89,14 @@ def list_employees(
     present: bool = False,
     working: bool = False,
     on_leave: bool = False,
+    identity_only: bool = False,
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
-    ``q`` also matches former IDs and ``uae_id_no``/``passport_no``. When the exact/ILIKE pass
+    ``q`` also matches former IDs and ``uae_id_no``/``passport_no``; ``identity_only``
+    keeps it to the G number, former IDs and names. When the exact/ILIKE pass
     returns zero rows and ``q`` isn't pure digits, falls back to rapidfuzz
     name matching (``token_sort_ratio`` >= ``extraction_service._MATCH_THRESHOLD``),
     ordered by score then name (or by ``end_date`` when ``pending=True``, to
@@ -118,12 +120,18 @@ def list_employees(
 
     if q:
         needle = f"%{stripped}%"
-        clause = or_(
+        identity_clauses = [
             Employee.id.ilike(needle),
             Employee.name_en.ilike(needle),
             Employee.name_ar.ilike(needle),
-            Employee.uae_id_no.ilike(needle),
-            Employee.passport_no.ilike(needle),
+        ]
+        if not identity_only:
+            identity_clauses += [
+                Employee.uae_id_no.ilike(needle),
+                Employee.passport_no.ilike(needle),
+            ]
+        clause = or_(
+            *identity_clauses,
             select(EmployeeFormerId.id)
             .where(
                 EmployeeFormerId.employee_id == Employee.id,
@@ -286,6 +294,10 @@ def create_employee(
         data["status"] = EMPLOYEE_STATUS_ACTIVE
     row = Employee(**data)
     db.add(row)
+    # A record created already departed leaves the unit structure at once.
+    duty_service.apply_status_change(
+        db, employee=row, from_status=EMPLOYEE_STATUS_ACTIVE, actor_user_id=actor_user_id
+    )
     if target not in WORKING_STATUSES:
         history.record_status_event(
             db,
@@ -529,6 +541,10 @@ def update_employee(
 
     for k, v in data.items():
         setattr(row, k, v)
+    # After the patch so a re-sent duty_unit cannot undo the departure's clear.
+    duty_service.apply_status_change(
+        db, employee=row, from_status=old_status, actor_user_id=actor_user_id
+    )
     if "duty_unit" in data:
         # A raw duty-unit edit changes only this row; the crew that actually
         # generates shifts is `WorkCrewMembership`, which never moved on its
@@ -581,10 +597,11 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
         # targets, never NULL — but `pending_status` is `str | None`, so it is
         # what narrows the type for the assignment. Not a real fallback.
         target = row.pending_status or EMPLOYEE_STATUS_ACTIVE
+        from_status = row.status
         history.record_status_event(
             db,
             row.id,
-            from_status=row.status,
+            from_status=from_status,
             to_status=target,
             effective_date=row.end_date,
             kind=history.KIND_APPLIED,
@@ -594,6 +611,9 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
         )
         row.status = target
         row.pending_status = None
+        duty_service.apply_status_change(
+            db, employee=row, from_status=from_status, actor_user_id=None
+        )
     if rows:
         db.commit()
     return rows
@@ -636,6 +656,12 @@ def apply_due_transfer_returns(
             site=site,
         )
         row.status = EMPLOYEE_STATUS_ACTIVE
+        duty_service.apply_status_change(
+            db,
+            employee=row,
+            from_status=EMPLOYEE_STATUS_TRANSFERRED,
+            actor_user_id=None,
+        )
         row.end_date = None
         row.pending_status = None
         row.transfer_site = None

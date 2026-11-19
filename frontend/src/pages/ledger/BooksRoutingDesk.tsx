@@ -413,7 +413,7 @@ function BookRow({ book, asSent, showScope, inFolder, current, draggable, onOpen
   const toNames = toRows.map((row) => name(row.user_name, row.user_name_ar))
   const toTitles = toRows.map((row) => title(row.user_title, row.user_title_ar))
   const listSep = i18n.language.startsWith('ar') ? '، ' : ', '
-  const papers = paperCountOf(book, { inmateReporter: false })
+  const papers = paperCountOf(book, { isScopedRole: false })
   const category = book.category ? (i18n.language.startsWith('ar') ? book.category.name_ar : book.category.name_en) || book.category.name_en : null
   const signer = book.signer_name || book.signer_name_ar ? name(book.signer_name, book.signer_name_ar) : null
   const opened = mine.filter((row) => row.read_at).length
@@ -580,7 +580,7 @@ function BookDossier({ book, loading, reader, isMobile, onBack, onToggleReader, 
   const { t, i18n } = useTranslation()
   const [sendOpen, setSendOpen] = useState(false)
   const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
-  const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
+  const papers = useMemo(() => papersOf(book, { isScopedRole: false }), [book])
   const selectedPaper = pickedPaper && papers.some((paper) => paperKey(paper) === pickedPaper)
     ? pickedPaper : defaultPaperKey(book, papers)
   const inboxActions = useInboxActions(loading ? null : book, onInboxUpdated)

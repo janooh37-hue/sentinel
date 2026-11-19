@@ -128,16 +128,42 @@ def test_can_edit_dates_pending_request_and_national_service_only(leave_type, st
         ("National Service", "Pending", False, "national_service"),
         ("National Service", "Completed", False, "national_service"),
         ("Leave Permit", "Approved", False, None),
+        ("Passport Release", "Approved", False, None),
+        ("Duty Resumption مباشرة عمل", "Approved", False, None),
         ("Sick Leave", "Approved", True, None),
         ("Sick Leave - الإجازة المرضية", "Approved", False, "sick"),
         ("Unknown", "Approved", False, None),
-        ("Compassionate Leave", "Approved", False, None),
+        ("Duty Leave", "Approved", False, "duty"),
+        ("Duty Leave - إجازة مهمة رسمية", "Approved", False, "duty"),
+        ("Duty Leave", "Pending", False, None),
+        ("Duty Leave", "Cancelled", False, None),
+        ("Compassionate Leave", "Approved", False, "other"),
+        ("Emergency Leave", "Approved", False, "other"),
+        ("Hajj Leave", "Approved", False, "other"),
+        ("Others", "Approved", False, "other"),
+        ("Administrative Leave", "Approved", False, "other"),
+        ("Administrative Leave", "Pending", False, None),
+        ("Compassionate Leave", "Rejected", False, None),
+        ("Hajj Leave", "Approved", True, None),
     ],
 )
-def test_live_kind_follows_kind_specific_status_and_deletion_rules(
+def test_excusing_kind_follows_kind_specific_status_and_deletion_rules(
     leave_type: str,
     status: str,
     deleted: bool,
     expected: str | None,
 ):
-    assert ll.live_kind(leave_type, status, deleted=deleted) == expected
+    assert ll.excusing_kind(leave_type, status, deleted=deleted) == expected
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "expected"),
+    [
+        ("Duty Leave - إجازة مهمة رسمية", "Duty Leave"),
+        ("Duty Resumption مباشرة عمل", "Duty Resumption"),
+        ("Annual Leave", "Annual Leave"),
+        ("", None),
+    ],
+)
+def test_leave_label_is_the_english_half(leave_type: str, expected: str | None):
+    assert ll.leave_label(leave_type) == expected

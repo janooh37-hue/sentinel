@@ -60,3 +60,20 @@ export function FineAmount({ fils, size = 'md', className }: Props): React.JSX.E
     </bdi>
   )
 }
+
+/**
+ * AedAmount — any other Vehicle Services money (maintenance and renewal cost):
+ * whole dirhams, Latin digits, the same dirham mark. Only fines carry fils.
+ */
+export function AedAmount({
+  value,
+  size = 'md',
+  className,
+}: {
+  /** Whole dirhams. */
+  value: number
+  size?: keyof typeof SIZES
+  className?: string
+}): React.JSX.Element {
+  return <FineAmount fils={Math.round(value) * 100} size={size} className={className} />
+}

@@ -678,6 +678,12 @@
         "label": "موقع العمل",
         "initial_placement": "التعيين الأولي",
         "transfer": "تم النقل",
+        "service_end": "انتهاء الخدمة",
+        "transfer_out": "نقل إلى جهة أخرى",
+        "reinstatement": "إعادة إلى موقع العمل",
+        "toEndedService": "منتهي الخدمة",
+        "toTransferred": "منقول",
+        "returnedTo": "العودة إلى",
         "unassigned": "غير محدد",
         "openEmployeeActivity": "فتح نشاط الموظف",
         "historyBegins": "يبدأ السجل من"
@@ -1237,6 +1243,64 @@
     }
   },
   "vehicles": {
+    "damageCoverLine": "يغطيها التأمين. يقدّر الفني التكلفة.",
+    "insurance": {
+      "title": "التأمين",
+      "optional": "اختياري. يُستكمل عند توفر البيانات.",
+      "none": "لم تُضف بيانات التأمين بعد",
+      "add": "إضافة بيانات التأمين",
+      "edit": "تعديل بيانات التأمين",
+      "claimNo": "رقم المطالبة",
+      "insurer": "شركة التأمين",
+      "repairGarage": "ورشة الإصلاح",
+      "claimStatus": "حالة المطالبة",
+      "payer": "الجهة المتحملة للتكلفة",
+      "notSet": "غير محدد",
+      "saved": "تم حفظ بيانات التأمين.",
+      "claimStatuses": {
+        "not_submitted": "لم تُقدَّم",
+        "submitted": "مقدَّمة",
+        "under_repair": "قيد الإصلاح",
+        "settled": "مُسوّاة"
+      },
+      "payers": {
+        "insurer": "التأمين بالكامل",
+        "company": "نسبة تحمّل على الشركة",
+        "driver": "نسبة تحمّل على السائق"
+      }
+    },
+    "request": {
+      "incident": "الحادث",
+      "photos": "الصور",
+      "damageInsurance": "الضرر والتأمين",
+      "licenceInsurance": "الترخيص والتأمين",
+      "notes": "الملاحظات",
+      "fine": "المخالفة",
+      "driverDetails": "السائق والتفاصيل"
+    },
+    "start": {
+      "accident": "تسجيل بلاغ حادث",
+      "maintenance": "تسجيل عملية صيانة",
+      "fine": "تسجيل مخالفة",
+      "renewal": "تجديد ترخيص مركبة"
+    },
+    "driver": "السائق",
+    "photosHint": "بصيغة JPG أو PNG. تُحفظ الصور مع البلاغ.",
+    "arabicForLetter": "النص العربي للخطاب الرسمي",
+    "arabicForLetterDesc": "يصدر الخطاب باللغة العربية. كُتب هذا البلاغ بالإنجليزية، لذا أضف الصياغة العربية هنا مرة واحدة.",
+    "locationAr": "الموقع بالعربية",
+    "descriptionAr": "الوصف بالعربية",
+    "arabicRequired": "أضف الموقع والوصف بالعربية قبل إصدار الخطاب.",
+    "paperPending": "تُضاف الصياغة العربية عند إصدار الخطاب",
+    "manageFleet": "إدارة الأسطول",
+    "siteName": "اسم الموقع",
+    "newForVehicle": "طلب جديد لهذه المركبة",
+    "vehicle": "المركبة",
+    "finesOnVehicle": "مخالفات هذه المركبة",
+    "allStatuses": "الكل",
+    "liveLetter": "الخطاب الرسمي كما سيصدر",
+    "lastService": "آخر صيانة",
+    "reminder": "يظهر تنبيه عند اقتراب موعد الصيانة القادمة.",
     "title": "مركبات المنشأة — GSSG Manager",
     "heroEyebrow": "وحدة العمليات",
     "heroTitle": "خدمات المركبات",
@@ -1386,6 +1450,8 @@
     "assignEmployee": "تعيين موظف",
     "renewTitle": "تجديد ترخيص المركبة",
     "renewDesc": "يُؤرشف الترخيص الحالي تلقائياً في السجل.",
+    "noRenewalAttention": "لا توجد تراخيص تحتاج إلى تجديد.",
+    "noValidLicences": "لا توجد مركبات بترخيص ساري.",
     "newStart": "البداية الجديدة",
     "newExpiry": "الانتهاء الجديد",
     "renewalCost": "تكلفة التجديد",
@@ -1483,6 +1549,7 @@
     "finesReportDesc": "نسخة أسطول قابلة للتصفية والتحقيق دون أسماء.",
     "finesLedgerTitle": "المخالفات",
     "finesLedgerDesc": "كل مخالفة مسجّلة على مستوى الأسطول — سجّل السداد وأرفق الإيصالات وأرشِف المسدّد منها.",
+    "fineOpenTotal": "إجمالي المخالفات غير المسددة",
     "fromDate": "من تاريخ",
     "toDate": "إلى تاريخ",
     "print": "طباعة",
@@ -3378,6 +3445,22 @@
     "addError": "تعذّر الإضافة إلى السلة — السجل غير موجود"
   },
   "books": {
+    "fleetReporter": {
+      "approveFinish": "اعتماد وإنهاء",
+      "forward": "إحالة إلى مدير الفرع",
+      "forwardHint": "اختر مدير الفرع لمتابعة سلسلة اعتماد المعاملة.",
+      "note": "ملاحظة (اختيارية)",
+      "noCandidatesTitle": "لا يوجد مدير فرع مؤهل",
+      "noCandidatesBody": "اطلب من المسؤول منح صلاحية اعتماد المعاملات لحساب نشط آخر.",
+      "forwarded": "أُحيلت المعاملة إلى مدير الفرع",
+      "lineManager": "المدير المباشر",
+      "stale": "تغيّرت بيانات المعاملة أو سجل الموظف. أعد تحميل الصفحة قبل المتابعة.",
+      "resubmit": "إعادة الإرسال",
+      "rebuild": "إعادة إنشاء الخطاب",
+      "rebuildHint": "صحّح المخالفة أو الحادث في سجل الأسطول أولًا، ثم أعد إنشاء الخطاب.",
+      "rebuilding": "جارٍ إعادة إنشاء الخطاب…",
+      "rebuilt": "أُعيد إنشاء الخطاب. أرسله للاعتماد عندما يصبح جاهزًا."
+    },
     "thread": {
       "reply": "رد",
       "createFrom": "إنشاء من",
@@ -5150,6 +5233,29 @@
       "signerMismatch": "يجب أن يكون الموقّع هو الموظف المرتبط بحسابك.",
       "stagedImportOwner": "ملف الاستيراد المؤقت تابع لمستخدم آخر."
     },
+    "fleet": {
+      "lineManagerRequired": "اطلب من المسؤول تعيين مديرك المباشر.",
+      "serviceForbidden": "تكتب حسابات النقليات الكتب العامة من صفحات المركبات فقط.",
+      "lineManagerNotApplicable": "لا يُعيَّن المدير المباشر إلا لحسابات موظفي النقليات.",
+      "lineManagerNotEligible": "اختر حسابًا نشطًا آخر يملك صلاحية اعتماد المعاملات.",
+      "branchApproverNotEligible": "اختر معتمِدًا نشطًا غير كاتب المعاملة والمدير المباشر.",
+      "notLineManagerStage": "لم تعد هذه المعاملة بانتظار اعتمادك بصفتك المدير المباشر. أعد التحميل لمعرفة مرحلتها الحالية.",
+      "routeForbidden": "هذه الصفحة غير متاحة لحسابك.",
+      "scopeFixed": "صلاحيات هذا الدور ثابتة، ولا يمكن توسيعها لمستخدم واحد.",
+      "inputForbidden": "لا يمكن لدورك تحديد هذا الخيار؛ يُحدَّد مسار الاعتماد والتوقيعات تلقائيًا.",
+      "employeeRequired": "اطلب من المسؤول ربط حسابك بسجلك الوظيفي.",
+      "identityChanged": "تغيّر سجل الموظف منذ توقيع هذه المعاملة. أعد التحميل قبل المتابعة.",
+      "notOwner": "لا يمكنك تعديل إلا معاملاتك.",
+      "stateLocked": "لم يعد بالإمكان تعديل هذه المعاملة. أعد التحميل لمعرفة حالتها الحالية.",
+      "notAVehicleLetter": "لا يمكن إعادة إنشاء إلا خطابات المخالفات والحوادث وعداد المسافة.",
+      "letterSourceChanged": "حُذفت بعض المخالفات في هذا الخطاب أو أُرشفت أو نُقلت إلى مركبة أخرى. أنشئ خطابًا جديدًا من سجل الأسطول.",
+      "letterSourceChangedFines": "هذه المخالفات حُذفت أو أُرشفت أو نُقلت إلى مركبة أخرى: {{fines}}. أنشئ خطابًا جديدًا من سجل الأسطول.",
+      "chainAuthorOnly": "لا يرسل هذه المعاملة أو يعيد إنشاءها إلا كاتبها، وتذهب إلى مديره المباشر.",
+      "foldersForbidden": "المجلدات غير متاحة لحسابك.",
+      "accidentLetterNotVisible": "لهذا الحادث خطاب لا يمكنك فتحه.",
+      "accidentNotFound": "لم يعد حادث هذا الخطاب موجودًا.",
+      "odometerNoVehicles": "اختر مركبة نشطة واحدة على الأقل لسجل عداد المسافة الشهري."
+    },
     "boundary": {
       "bodyLead": "فقدت هذه الشاشة اتصالها.",
       "bodyReassure": "لن يضيع أي عمل قمت به",
@@ -5499,6 +5605,9 @@
       "other": "أخرى"
     },
     "nsCategory": "سجل",
+    "fleetReporter": {
+      "reportDescription": "أنشئ تقريرًا في Word وأرسله إلى مديرك المباشر."
+    },
     "inmateReporter": {
       "title": "المخالفات المسلكية للنزلاء",
       "description": "احفظ التقرير غير المكتمل، ثم أرسله إلى مدير الاعتماد المحدد.",
@@ -5841,6 +5950,22 @@
   "dashboard": {
     "title": "لوحة المعلومات",
     "subtitle": "نظرة سريعة على اليوم",
+    "fleetReporter": {
+      "eyebrow": "الأسطول",
+      "title": "مساحة عمل الأوراق",
+      "subtitle": "أنشئ الكتب العامة والتقارير وخطابات المركبات، وتابع سيرها مع مديرك المباشر.",
+      "newReport": "ورقة جديدة",
+      "yourReports": "أوراقك",
+      "yourReportsHint": "واصل المسودات وراجع الأوراق المعادة أو المرفوضة من مديرك المباشر.",
+      "pending": "بانتظار الاعتماد",
+      "pendingHint": "أوراق بانتظار الاعتماد.",
+      "pendingEmpty": "لا توجد أوراق بانتظار الاعتماد.",
+      "approved": "المعتمدة",
+      "approvedHint": "أوراق جاهزة للقراءة أو الطباعة.",
+      "approvedEmpty": "لا توجد أوراق معتمدة بعد.",
+      "untitled": "ورقة بلا عنوان",
+      "loadError": "تعذر تحميل الأوراق."
+    },
     "inmateReporter": {
       "eyebrow": "مخالفات سلوك النزلاء",
       "title": "مساحة عمل التقارير",
@@ -5880,7 +6005,7 @@
       "peopleCount": "{{n}} موظفين",
       "reviewLeave": "مراجعة سجلات الإجازات",
       "seeAll": "عرض الكل",
-      "calm": "يوم هادئ. {{n}} في الموقع، لا عودة من الإجازات اليوم.",
+      "calm": "يوم هادئ. الموظفون خارج الإجازة: {{n}}، ولا عودة من الإجازات اليوم.",
       "calmUpcoming": "{{n}} يعودون لاحقًا هذا الأسبوع."
     },
     "myWidgets": "أدواتي",
@@ -5944,10 +6069,15 @@
     "workforcePulse": {
       "title": "نبض القوى العاملة",
       "openCoverage": "فتح التغطية",
+      "reasons": {
+        "leave_duty": "إجازة مهمة رسمية",
+        "leave_other": "إجازة أخرى"
+      },
       "self": {
         "heading": "ورديتي",
-        "start": "تبدأ",
-        "end": "تنتهي",
+        "punchIn": "دخول",
+        "punchOut": "خروج",
+        "schedule": "الوردية المجدولة",
         "presence": {
           "scheduled": "مجدولة",
           "on_duty": "على رأس العمل",
@@ -5959,6 +6089,7 @@
         }
       },
       "metrics": {
+        "onSite": "الموجودون في الموقع الآن",
         "scheduled": "المجدول",
         "working": "على رأس العمل",
         "coverage": "التغطية"
@@ -6072,6 +6203,22 @@
       "onLeave": "في إجازة"
     },
     "widgets": {
+      "punch_log": {
+        "title": "سجل البصمات",
+        "subtitle": "اليوم · الأحدث أولًا · بصمات BioTime الأصلية",
+        "empty": "لم تُسجَّل بصمات اليوم.",
+        "footer": "التصحيحات لا تغيّر هذا السجل.",
+        "time": "الوقت",
+        "employee": "الموظف",
+        "post": "الموقع",
+        "device": "الجهاز",
+        "directionLabel": "الاتجاه",
+        "direction": {
+          "in": "دخول",
+          "out": "خروج",
+          "unknown": "بصمة"
+        }
+      },
       "store_expiring": {
         "title": "صلاحية مواد المخزن",
         "window": "الدفعات المنتهية الصلاحية أو التي تنتهي خلال {{days}} يومًا",
@@ -6604,6 +6751,8 @@
       "unassignedCount_other": "غير محدد: {{count}}"
     },
     "unassigned": "غير محدد",
+    "endedService": "منتهي الخدمة",
+    "transferred": "منقول",
     "column": {
       "id": "الرقم",
       "name": "الاسم",
@@ -6614,7 +6763,16 @@
       "searchPlaceholder": "بحث بالاسم أو الرقم…",
       "noPost": "بدون نقطة محددة",
       "empty": "لا يوجد موظفون في هذه الوحدة.",
-      "selectRow": "اختيار {{name}}"
+      "selectRow": "اختيار {{name}}",
+      "departedSummary_zero": "لا يوجد موظفون",
+      "departedSummary_one": "موظف واحد",
+      "departedSummary_two": "موظفان",
+      "departedSummary_few": "{{count}} موظفين",
+      "departedSummary_many": "{{count}} موظفًا",
+      "departedSummary_other": "{{count}} موظف",
+      "noMatch": "لا يوجد موظفون مطابقون.",
+      "endedServiceNote": "الموظفون المستقيلون والمفصولون. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم.",
+      "transferredNote": "يعملون في جهة أخرى. لا يُحتسبون ضمن الوحدات ولا يمكن توزيعهم، ويعودون إلى آخر موقع عمل لهم عند انتهاء النقل."
     },
     "field": {
       "unit": "الوحدة",
@@ -6675,7 +6833,8 @@
       "movedNoBook_two": "تم نقل موظفين اثنين",
       "movedNoBook_few": "تم نقل {{count}} موظفين",
       "movedNoBook_many": "تم نقل {{count}} موظفًا",
-      "movedNoBook_other": "تم نقل {{count}} موظف"
+      "movedNoBook_other": "تم نقل {{count}} موظف",
+      "departedError": "لا يمكن تحديد مكان عمل لموظف مستقيل أو مفصول أو منقول."
     },
     "completion": {
       "detail_zero": "لم يتم نقل أي موظف",
@@ -6890,7 +7049,9 @@
         "operator": "موظف",
         "operatorHint": "الوصول اليومي القياسي",
         "inmate_reporter": "مقدم تقارير مخالفات النزلاء",
-        "inmate_reporterHint": "إنشاء تقارير مخالفات النزلاء ومتابعتها"
+        "inmate_reporterHint": "إنشاء تقارير مخالفات النزلاء ومتابعتها",
+        "fleet_reporter": "موظف النقليات",
+        "fleet_reporterHint": "إدارة سجلات الأسطول وتقديم معاملات المركبات للاعتماد"
       }
     },
     "active": {
@@ -6942,7 +7103,8 @@
         "create_user": "تم إنشاء الحساب",
         "disable": "تم التعطيل",
         "reactivate": "أعيد التفعيل",
-        "password_setup": "تم إعداد كلمة المرور"
+        "password_setup": "تم إعداد كلمة المرور",
+        "set_line_manager": "تغيّر المدير المباشر"
       }
     },
     "reject": {
@@ -6993,7 +7155,12 @@
       "admin": "مسؤول",
       "manager": "مدير",
       "operator": "موظف",
-      "inmate_reporter": "مقدم تقارير مخالفات النزلاء"
+      "inmate_reporter": "مقدم تقارير مخالفات النزلاء",
+      "fleet_reporter": "موظف النقليات"
+    },
+    "lineManager": {
+      "label": "المدير المباشر",
+      "notSet": "غير محدد"
     },
     "permissions": {
       "loadError": "تعذّر تحميل الصلاحيات.",
@@ -7012,6 +7179,41 @@
       "noResultsHint": "البحث يشمل الأسماء والأوصاف والمعرّفات.",
       "clearSearch": "مسح",
       "bulkApply": "تطبيق على الجميع",
+      "scope": {
+        "title": "نطاق الحضور",
+        "selfHint": "يستطيع المستخدم دائمًا رؤية سجله الشخصي. عند عدم إضافة نطاقات، لا يظهر له سوى سجله الشخصي.",
+        "selected": "السجل الشخصي والمواقع المحددة",
+        "organization": "المؤسسة بأكملها",
+        "save": "حفظ النطاق",
+        "saving": "جارٍ الحفظ…",
+        "saved": "تم حفظ نطاق الحضور.",
+        "loadError": "تعذّر تحميل نطاق الحضور.",
+        "retry": "إعادة المحاولة",
+        "type": "نوع النطاق",
+        "kinds": {
+          "department": "القسم",
+          "duty_unit": "السرية",
+          "duty_post": "نقطة العمل"
+        },
+        "departmentOptional": "القسم (اختياري)",
+        "chooseDepartment": "اختر قسمًا",
+        "allDepartments": "جميع الأقسام",
+        "chooseUnit": "اختر سرية",
+        "choosePost": "اختر نقطة عمل",
+        "add": "إضافة نطاق",
+        "removeEntry": "إزالة",
+        "remove": "إزالة {{name}}",
+        "entries": "المواقع المشمولة",
+        "duplicate": "هذا النطاق مشمول بالفعل.",
+        "selfOnly": "السجل الشخصي فقط",
+        "locationsLoading": "جارٍ تحميل المواقع…",
+        "locationsError": "تعذّر تحميل المواقع. أعد المحاولة لإضافة نطاق.",
+        "conflict": "تغيّر نطاق الحضور من جلسة أخرى. لم تُفقد اختياراتك غير المحفوظة. قارنها بأحدث نطاق محفوظ قبل الحفظ مجددًا، أو تجاهل تغييراتك لاعتماد النطاق المحفوظ.",
+        "latestLoading": "جارٍ تحميل أحدث نطاق محفوظ…",
+        "serverScope": "أحدث نطاق محفوظ",
+        "refreshError": "تعذّر تحميل أحدث نطاق محفوظ. لم تُفقد اختياراتك غير المحفوظة. أعد المحاولة قبل حفظ التغييرات أو تجاهلها.",
+        "discard": "تجاهل التغييرات غير المحفوظة"
+      },
       "mirror": {
         "title": "استوديو الصلاحيات",
         "help": "حدّد ما يمكن لكل مستخدم رؤيته. تُحدَّث معاينة الجهاز من مخطط الصلاحيات نفسه.",
@@ -7686,7 +7888,121 @@
       "unpaired": "بصمة واحدة",
       "absent": "غائب",
       "leave": "في إجازة",
-      "pending": "لم تبدأ"
+      "pending": "لم يحن موعده",
+      "national_service": "الخدمة الوطنية",
+      "onSite": "في الموقع",
+      "left": "غادر",
+      "off": "راحة",
+      "leaveWith": "في {{subtype}}",
+      "leaveOther": "في إجازة أخرى",
+      "corrected": "مُصحَّح"
+    },
+    "legend": {
+      "title": "دليل الحالات",
+      "hint": "الهالة = في الموقع الآن · العلامة = مُصحَّح",
+      "details": "كل إجازة معتمدة تعفي من الدوام تظهر بالأزرق مع اسم نوعها. الخدمة الوطنية بالبنفسجي. الحضور داخل مدة السماح ليس مخالفة."
+    },
+    "quickCorrection": {
+      "title": "تصحيح سريع",
+      "subtitle": "اختر النتيجة النهائية لليوم",
+      "result": "تصحيح الحضور",
+      "present": "حاضر",
+      "absent": "غائب",
+      "leave": "في إجازة",
+      "clear": "إلغاء التصحيح",
+      "clearSave": "تأكيد إلغاء التصحيح",
+      "clearHint": "إلغاء التصحيح الساري. قد يصبح تصحيح سابق غير ملغى ساريًا؛ وإلا تعود النتيجة التلقائية. يجب تسجيل سبب الإلغاء.",
+      "inTime": "وقت الدخول (24 ساعة)",
+      "outTime": "وقت الخروج (24 ساعة)",
+      "inDate": "تاريخ الدخول",
+      "outDate": "تاريخ الخروج",
+      "chooseDate": "اختر تاريخًا",
+      "changeDates": "تغيير التواريخ",
+      "optional": "اختياري",
+      "timeHint": "بتوقيت دبي · HH:MM (24 ساعة). الخروج اختياري ويجب أن يكون بعد الدخول.",
+      "overnightHint": "وردية ليلية: اختر تاريخ كل وقت دخول أو خروج جديد.",
+      "datesHint": "اختر تاريخ كل وقت دخول أو خروج.",
+      "subtype": "نوع الإجازة",
+      "leaveHint": "يُحفظ نوع الإجازة ضمن السبب، وليس كسجل إجازة مستقل.",
+      "reason": "السبب",
+      "chooseReason": "اختر سببًا",
+      "reasonText": "تفاصيل السبب",
+      "reasonPlaceholder": "وضّح سبب تصحيح هذا اليوم",
+      "reasonHint": "اختر السبب وأضف التفاصيل لتفعيل الحفظ.",
+      "reasonReady": "سيُحفظ السبب في سجل التدقيق.",
+      "audit": "ملاحظة للتدقيق",
+      "auditPlaceholder": "مرجع أو تفاصيل داعمة",
+      "save": "حفظ التصحيح",
+      "cancel": "تراجع",
+      "close": "إغلاق التصحيح",
+      "viewEvidence": "عرض الأدلة",
+      "overlayFooter": "بصمات BioTime تبقى دون تغيير؛ التصحيح يُطبَّق على نتيجة اليوم",
+      "lastCorrection": "آخر تصحيح: {{name}} · <at>{{at}}</at>",
+      "noPrevious": "لا يوجد تصحيح سابق",
+      "unknownActor": "مستخدم غير معروف",
+      "saved": "حُفظ التصحيح وحُدّثت نتيجة اليوم.",
+      "cleared": "أُلغي التصحيح وحُدّثت نتيجة اليوم.",
+      "currentEvidence": "الأدلة الحالية",
+      "currentResult": "النتيجة النهائية الحالية",
+      "automatic": "تلقائي · تقييم النظام",
+      "corrected": "مُصحَّح · تصحيح بشري",
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الوردية المجدولة · بتوقيت دبي",
+      "loadFailed": "تعذّر تحميل حالة الحضور.",
+      "refreshFailed": "تعذّر تحديث الأدلة الحالية. أعد المحاولة قبل الحفظ.",
+      "conflictWarning": "تغيّرت حالة الحضور هذه. قارن الأدلة المحدّثة قبل إرسال المسودة المحفوظة.",
+      "discardTitle": "تجاهل التغييرات غير المحفوظة؟",
+      "discardDescription": "لم يُحفظ هذا التصحيح. واصل التعديل أو تجاهل المسودة.",
+      "keepEditing": "متابعة التعديل",
+      "discard": "تجاهل",
+      "errors": {
+        "reasonRequired": "اختر السبب وأضف التفاصيل قبل الحفظ.",
+        "inRequired": "أدخل وقت الدخول.",
+        "dateRequired": "اختر تاريخًا لكل وقت دخول أو خروج مسجّل.",
+        "invalidTime": "استخدم صيغة 24 ساعة مثل 07:02.",
+        "outBeforeIn": "يجب أن يكون وقت الخروج بعد وقت الدخول.",
+        "futureTime": "لا يمكن أن يكون وقت الدخول أو الخروج في المستقبل.",
+        "clearUnavailable": "لا يوجد تصحيح سارٍ لإلغائه."
+      },
+      "reasons": {
+        "device": "الجهاز / بصمة مفقودة",
+        "supervisor": "تأكيد المشرف",
+        "leave": "مرجع إجازة معتمدة",
+        "roster": "تصحيح جدول الدوام",
+        "other": "أخرى"
+      },
+      "leaves": {
+        "annual": "إجازة سنوية",
+        "sick": "إجازة مرضية",
+        "duty": "إجازة مهمة رسمية",
+        "compassionate": "إجازة تعزية",
+        "emergency": "إجازة طارئة",
+        "hajj": "إجازة حج",
+        "administrative": "إجازة إدارية",
+        "other": "أخرى"
+      }
+    },
+    "onSiteNow": {
+      "title": "الموجودون في الموقع الآن",
+      "daySummary": "ملخص اليوم",
+      "asOf": "حتى <0>{{time}}</0>",
+      "people_zero": "الموظفون: <0>{{count}}</0>",
+      "people_one": "الموظفون: <0>{{count}}</0>",
+      "people_two": "الموظفون: <0>{{count}}</0>",
+      "people_few": "الموظفون: <0>{{count}}</0>",
+      "people_many": "الموظفون: <0>{{count}}</0>",
+      "people_other": "الموظفون: <0>{{count}}</0>",
+      "onSite": "في الموقع",
+      "left": "غادروا",
+      "notArrived": "لم يصلوا",
+      "leave": "في إجازة",
+      "nationalService": "الخدمة الوطنية"
+    },
+    "correct": {
+      "action": "تصحيح الحضور",
+      "actionFor": "تصحيح حضور {{name}}، {{date}}",
+      "actionForShift": "تصحيح حضور {{name}}، {{date}}، {{shift}}"
     },
     "toolbar": {
       "today": "اليوم",
@@ -7707,14 +8023,21 @@
       "late": "متأخر",
       "unpaired": "غير مكتمل",
       "leave": "إجازة",
-      "posts": "{{count}} مواقع",
+      "posts_zero": "المواقع: {{count}}",
+      "posts_one": "المواقع: {{count}}",
+      "posts_two": "المواقع: {{count}}",
+      "posts_few": "المواقع: {{count}}",
+      "posts_many": "المواقع: {{count}}",
+      "posts_other": "المواقع: {{count}}",
       "source": "المصدر: مرآة BioTime · قراءة فقط · محدث حتى {{through}}",
       "sourceUnknown": "المصدر: مرآة BioTime · قراءة فقط · التحديث غير معروف",
-      "noPunch": "لا بصمة",
       "absent": "غائب",
-      "onlyPunch": "{{time}} فقط",
-      "latePunch": "{{time}} +{{minutes}} د",
-      "duePunch": "الموعد {{time}}"
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الوردية المجدولة",
+      "pastGrace": "+{{minutes}} د",
+      "nationalService": "الخدمة الوطنية",
+      "openEmployee": "فتح ملف الموظف · {{name}} · {{employeeId}}"
     },
     "print": {
       "title": "سجل الحضور اليومي",
@@ -7749,7 +8072,6 @@
       "postCount": "{{count}} مواقع",
       "layoutSheet": "كشف البصمة العام",
       "layoutShift": "كشف الحضور الوظيفي",
-      "gracePunch": "{{time}} (سماح)",
       "printedBy": "بواسطة",
       "layoutRoster": "كشف تدقيق الحضور",
       "colLine": "#",
@@ -7778,15 +8100,30 @@
     },
     "board": {
       "seenOf": "{{seen}}/{{due}}",
-      "legend": "اللون للمشكلات فقط"
+      "personDetails": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · دخول {{in}} · خروج {{out}}",
+      "openEmployee": "فتح ملف الموظف · {{details}}",
+      "leaveCount_zero": "في إجازة: {{count}}",
+      "leaveCount_one": "في إجازة: {{count}}",
+      "leaveCount_two": "في إجازة: {{count}}",
+      "leaveCount_few": "في إجازة: {{count}}",
+      "leaveCount_many": "في إجازة: {{count}}",
+      "leaveCount_other": "في إجازة: {{count}}",
+      "nationalServiceCount_zero": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_one": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_two": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_few": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_many": "الخدمة الوطنية: {{count}}",
+      "nationalServiceCount_other": "الخدمة الوطنية: {{count}}"
     },
     "timeline": {
-      "grace": "السماح {{time}}",
-      "start": "البداية {{time}}",
-      "closes": "الانتهاء {{time}}",
-      "missingGutter": "−{{count}}",
       "median": "وسيط الحضور",
-      "glance": "نظرة واحدة: هل التجمع يسار الخط؟"
+      "medianOffset": "{{sign}}{{minutes}} د",
+      "glance": "تمتد الأشرطة من الدخول إلى الخروج، أو إلى الوقت الحالي لمن لا يزال في الموقع.",
+      "schedule": "الوردية المجدولة",
+      "employee": "الموظف",
+      "in": "دخول",
+      "out": "خروج",
+      "rowLabel": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · دخول {{in}} · خروج {{out}}"
     },
     "attention": {
       "title": "يحتاج قراراً",
@@ -7824,7 +8161,7 @@
         "completed": "مكتمل",
         "absent": "غائب",
         "excused_leave": "إجازة معتمدة",
-        "off": "إجازة",
+        "off": "راحة",
         "unknown": "غير معروف",
         "late": "متأخر"
       },
@@ -7849,7 +8186,9 @@
         "attendance_adjustment_changed": "تغير تصحيح الحضور",
         "leave_national_service": "إجازة خدمة وطنية",
         "leave_sick": "إجازة مرضية",
-        "leave_annual": "إجازة سنوية"
+        "leave_annual": "إجازة سنوية",
+        "leave_duty": "إجازة مهمة رسمية",
+        "leave_other": "إجازة معتمدة أخرى"
       },
       "auditActions": {
         "created": "تم إنشاء التصحيح",
@@ -7889,10 +8228,8 @@
       "shiftsWorked": "ورديات العمل",
       "absentDays": "أيام الغياب",
       "monthOf": "{{month}}",
-      "restDay": "راحة",
       "dayDetail": "{{date}} · {{shift}} {{window}}",
       "noSchedule": "لا حضور مجدول في هذا الشهر.",
-      "punchesUnknownDirection": "{{count}} بصمات · الاتجاه غير معروف",
       "grace": "السماح {{minutes}} د",
       "seenCount": "{{count}} بصمة",
       "seenOnly": "دون جدول",
@@ -7900,6 +8237,11 @@
       "firstSeen": "أول ظهور",
       "lastSeen": "آخر ظهور",
       "punchCount": "عدد البصمات",
+      "in": "دخول",
+      "out": "خروج",
+      "schedule": "الجدول",
+      "previousMonth": "الشهر السابق",
+      "nextMonth": "الشهر التالي",
       "devices": "الجهاز",
       "unenrolled": "غير مسجَّل على أي جهاز حضور.",
       "wholeRecord": "السجل الكامل",
@@ -8001,6 +8343,8 @@
       "system": "النظام",
       "deduction": "الخصم (أيام): {{count}}",
       "fromTo": "من {{from}} إلى {{to}}",
+      "returnedTo": "العودة إلى {{place}}",
+      "leftFrom": "مغادرة {{place}}",
       "statusChange": "تغيير الحالة",
       "statusScheduled": "تغيير مجدول في الحالة",
       "statusCancelled": "إلغاء تغيير مجدول",
@@ -8073,6 +8417,7 @@
         "absent": "غياب",
         "unpaired": "بصمة واحدة",
         "leave": "في إجازة",
+        "national_service": "الخدمة الوطنية",
         "pending": "لم يُقيَّم بعد",
         "rest": "يوم راحة أو غير مجدول",
         "withheld": "محجوب: إجازة أو غياب لا يطّلع عليه هذا الحساب"

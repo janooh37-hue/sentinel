@@ -64,6 +64,12 @@ const GLYPH: Record<PaperState, ReactNode> = {
       <path d="M2 10 10 2M2 6l4-4M6 10l4-4" />
     </>
   ),
+  national_service: (
+    <>
+      <path d="m6 1 5 5-5 5-5-5z" />
+      <path d="M4 6h4" />
+    </>
+  ),
   pending: <circle cx="6" cy="6" r="4.6" strokeDasharray="1.6 1.6" />,
   rest: <path d="M3 6h6" />,
   withheld: (

@@ -66,7 +66,7 @@ function snapshot(overrides: Partial<WorkforceSnapshot> = {}): WorkforceSnapshot
     leave_today: { annual: 1, sick: 0, national_service: 0, other: 0 },
     mapping_completeness: {},
     schedule_completeness: {},
-    self: { employee_id: 'G100', presence_state: 'on_duty' },
+    self: { employee_id: 'G100', presence_state: 'on_duty', corrected: false },
     aggregate: null,
     ...overrides,
   }
@@ -86,11 +86,20 @@ function selfSnapshot(): WorkforceSnapshot {
       employee_id: 'G100',
       presence_state: 'on_duty',
       reason_code: 'PUNCH_IN_ACTIVE',
-      scheduled_start_at: '2026-08-24T08:00:00',
-      scheduled_end_at: '2026-08-24T16:00:00',
+      scheduled_start_at: '2026-08-24T04:00:00',
+      scheduled_end_at: '2026-08-24T12:00:00',
+      first_punch_at: '2026-08-24T04:06:00',
+      last_punch_at: '2026-08-24T12:03:00',
+      final_out_at: '2026-08-24T12:01:00',
+      corrected: false,
     },
     aggregate: undefined,
   })
+}
+
+function selfSnapshotWith(self: Partial<NonNullable<WorkforceSnapshot['self']>>): WorkforceSnapshot {
+  const payload = selfSnapshot()
+  return { ...payload, self: { employee_id: 'G100', corrected: false, ...payload.self, ...self } }
 }
 
 
@@ -139,6 +148,7 @@ describe('WorkforcePulseWidget', () => {
     ],
     ['stale', AGGREGATE_ACCESS, snapshot({ sync_health: { punches: { state: 'stale' } } }), /Attendance source is stale/],
     ['withheld', AGGREGATE_ACCESS, snapshot({ current_shift: { scheduled: 8, excused: 0, evaluated_count: 0, pending_or_error_excluded_count: 8, working: null } }), /Pending verification/],
+    ['on-site withheld', AGGREGATE_ACCESS, snapshot({ aggregate: { on_site: null } }), /Pending verification/],
   ])('renders %s truthfully', async (_name, access, payload, expected) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(access)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(payload)
@@ -148,17 +158,140 @@ describe('WorkforcePulseWidget', () => {
     expect(await screen.findByText(expected)).toBeInTheDocument()
   })
 
-  it('renders self presence, reason, and scheduled timestamps without aggregate metrics', async () => {
+  it('leads with actual punches and keeps the schedule secondary', async () => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshot())
 
     renderWidget()
 
-    expect(await screen.findByText('On duty')).toBeInTheDocument()
+    expect(await screen.findByText('Left')).toBeInTheDocument()
     expect(screen.getByText('On-duty punch')).toBeInTheDocument()
-    expect(screen.getByText('8:00 AM')).toBeInTheDocument()
-    expect(screen.getByText('4:00 PM')).toBeInTheDocument()
-    expect(screen.queryByText('Scheduled')).not.toBeInTheDocument()
+    expect(screen.getByText('In')).toBeInTheDocument()
+    expect(screen.getByText('Out')).toBeInTheDocument()
+    expect(screen.getByText('08:06')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toBeInTheDocument()
+    expect(screen.queryByText('16:03')).not.toBeInTheDocument()
+  })
+
+  it.each(['en', 'ar'])('uses zero-padded 24-hour punches and schedule with explicit offsets in %s', async (language) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      first_punch_at: '2026-08-24T03:02:00Z',
+      scheduled_start_at: '2026-08-24T04:00:00+00:00',
+      scheduled_end_at: '2026-08-24T16:00:00+04:00',
+      final_out_at: '2026-08-24T16:01:00+04:00',
+    }))
+    await i18n.changeLanguage(language)
+    renderWidget()
+    expect(await screen.findByText('07:02')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('08:00 – 16:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it.each(['en', 'ar'])('renders naive UTC punches and schedule in site time in %s', async (language) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      scheduled_start_at: '2026-11-18T03:00:00',
+      scheduled_end_at: '2026-11-18T11:00:00',
+      first_punch_at: '2026-11-18T03:10:00',
+      last_punch_at: '2026-11-18T12:03:00',
+      final_out_at: '2026-11-18T12:01:00',
+    }))
+    await i18n.changeLanguage(language)
+
+    renderWidget()
+
+    expect(await screen.findByText('07:10')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('16:01')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('07:00 – 15:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.queryByText('16:03')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['en', 'In', 'Out'],
+    ['ar', 'دخول', 'خروج'],
+  ])('uses the corrected arrival and cleared Out from the self snapshot in %s', async (language, inLabel, outLabel) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      scheduled_start_at: '2026-11-18T03:00:00',
+      scheduled_end_at: '2026-11-18T11:00:00',
+      first_punch_at: '2026-11-18T03:10:00',
+      last_punch_at: '2026-11-18T11:00:00',
+      first_in_at: '2026-11-18T03:00:00',
+      final_out_at: null,
+      corrected: true,
+    }))
+    await i18n.changeLanguage(language)
+
+    const { container } = renderWidget()
+
+    expect(await screen.findByText('07:00')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText(inLabel)).toBeInTheDocument()
+    expect(screen.getByText(outLabel)).toBeInTheDocument()
+    expect(screen.queryByText('07:10')).not.toBeInTheDocument()
+    expect(screen.queryByText('15:00')).not.toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(i18n.t('attendance.state.left')))).not.toBeInTheDocument()
+    expect(screen.getByText(new RegExp(i18n.t('attendance.state.corrected')))).toBeInTheDocument()
+    expect(container.querySelector('[data-corrected="true"]')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['en', 'on_duty', 'verified'],
+    ['en', 'absent', 'absent'],
+    ['ar', 'on_duty', 'verified'],
+    ['ar', 'absent', 'absent'],
+  ] as const)('uses effective %s %s presence despite residual leave metadata', async (language, presence_state, state) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      presence_state,
+      reason_code: 'LEAVE_NATIONAL_SERVICE',
+      leave_kind: 'national_service',
+      first_punch_at: null,
+      last_punch_at: null,
+      first_in_at: null,
+      final_out_at: null,
+      corrected: true,
+    }))
+    await i18n.changeLanguage(language)
+
+    renderWidget()
+
+    expect(await screen.findByText(`${i18n.t(`attendance.state.${state}`)} · ${i18n.t('attendance.state.corrected')}`)).toBeInTheDocument()
+    expect(screen.queryByText(`${i18n.t('attendance.state.national_service')} · ${i18n.t('attendance.state.corrected')}`)).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['national_service', 'National Service', 'bg-smart'],
+    ['duty', 'On leave · Duty Leave', 'bg-info'],
+  ] as const)('uses the shared %s label and dot', async (leave_kind, label, tone) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({
+      presence_state: 'excused_leave', leave_kind, reason_code: null,
+    }))
+    const { container } = renderWidget()
+    expect(await screen.findByText(label)).toBeInTheDocument()
+    expect(container.querySelector(`i.${tone}`)).toBeInTheDocument()
+  })
+
+  it.each([
+    [null, '2026-08-24T12:03:00Z', '—'],
+    [null, '2026-08-24T04:06:00', '—'],
+    [null, null, '—'],
+  ])('never replaces a missing Out with a raw punch or the scheduled end', async (final_out_at, last_punch_at, expected) => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(selfSnapshotWith({ final_out_at, last_punch_at }))
+    renderWidget()
+    expect(await screen.findByText(expected)).toBeInTheDocument()
+  })
+
+  it('shows the aggregate on-site count when published', async () => {
+    vi.mocked(api.getWorkforceAccess).mockResolvedValue(AGGREGATE_ACCESS)
+    vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(snapshot({ aggregate: { scheduled: 8, working: 7, on_site: 6 } }))
+    renderWidget()
+    expect(await screen.findByText('On site now')).toBeInTheDocument()
+    expect(screen.getByText('6')).toBeInTheDocument()
   })
 
   it('states that no Workforce scope is assigned without requesting a snapshot', async () => {
@@ -256,6 +389,8 @@ describe('WorkforcePulseWidget', () => {
     ['LEAVE_NATIONAL_SERVICE', 'National service leave'],
     ['LEAVE_SICK', 'Sick leave'],
     ['LEAVE_ANNUAL', 'Annual leave'],
+    ['LEAVE_DUTY', 'Duty leave'],
+    ['LEAVE_OTHER', 'Other leave'],
     ['SHIFT_OVERRIDE_OFF', 'Off duty by shift override'],
     ['SHIFT_OVERRIDE_WORK', 'Scheduled by shift override'],
     ['NO_CREW_MEMBERSHIP', 'No crew assignment'],
@@ -268,7 +403,7 @@ describe('WorkforcePulseWidget', () => {
   ])('translates self reason %s without leaking raw codes', async (reason, label) => {
     vi.mocked(api.getWorkforceAccess).mockResolvedValue(SELF_ACCESS)
     vi.mocked(api.getWorkforceSnapshot).mockResolvedValue(
-      snapshot({ ...selfSnapshot(), self: { employee_id: 'G100', presence_state: 'on_duty', reason_code: reason } }),
+      snapshot({ ...selfSnapshot(), self: { employee_id: 'G100', presence_state: 'on_duty', reason_code: reason, corrected: false } }),
     )
     renderWidget(vi.fn(), { tier: 'glance', rows: 0 })
 

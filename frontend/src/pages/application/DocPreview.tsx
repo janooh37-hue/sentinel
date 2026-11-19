@@ -20,6 +20,7 @@ import { FileText, ChevronLeft, ChevronRight, Loader2, Download } from 'lucide-r
 import type { JobDocumentItem } from '@/lib/api'
 import { AdjustSignatureAction } from '@/components/signature/AdjustSignatureAction'
 import { AuthContext } from '@/lib/authContext'
+import { scopedRoleOf } from '@/lib/scopedRole'
 
 const DocPdfCanvas = lazy(() => import('./DocPdfCanvas'))
 
@@ -29,7 +30,7 @@ interface DocPreviewProps {
 
 export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
   const { t } = useTranslation()
-  const isInmateReporter = useContext(AuthContext)?.user?.role === 'inmate_reporter'
+  const scoped = scopedRoleOf(useContext(AuthContext)?.user) !== null
   const [index, setIndex] = useState(0)
 
   if (documents.length === 0) {
@@ -53,7 +54,7 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
   }
 
   const pdfUrl = doc.pdf_url ?? null
-  const docxUrl = isInmateReporter ? undefined : doc.docx_url
+  const docxUrl = scoped ? undefined : doc.docx_url
 
   return (
     <div className="flex h-full flex-col">
@@ -110,7 +111,7 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
           <FileText className="h-10 w-10 text-muted-foreground/40" strokeWidth={1.2} />
           <div className="max-w-xs">
-            <p className="text-sm font-medium text-foreground">{t(isInmateReporter ? 'application.pdfUnavailableNoDocx' : 'application.pdfUnavailable')}</p>
+            <p className="text-sm font-medium text-foreground">{t(scoped ? 'application.pdfUnavailableNoDocx' : 'application.pdfUnavailable')}</p>
             <p className="mt-1 font-mono text-xs text-muted-foreground">{doc.ref_number}</p>
           </div>
           {docxUrl && (
@@ -147,7 +148,7 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
               {t('application.downloadDocx')}
             </a>
           )}
-          {!isInmateReporter && (
+          {!scoped && (
             <AdjustSignatureAction
               documentId={doc.document_id}
               className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"

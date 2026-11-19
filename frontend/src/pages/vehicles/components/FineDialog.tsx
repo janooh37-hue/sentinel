@@ -18,7 +18,7 @@
  * silently overwriting a concurrent change.
  */
 
-import { useId, useState } from 'react'
+import { useId, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
@@ -41,6 +41,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import type { VehicleFineRead, VehicleListItem, VehicleRead } from '@/lib/api'
 import { localized } from '@/lib/language'
+import dirhamMark from '../../../assets/dirham-symbol.png'
 
 import {
   VEHICLE_QUERY_KEYS,
@@ -48,19 +49,21 @@ import {
   invalidateVehicleQueries,
   parseAmountToFils,
   plateLabel,
+  formatCount,
+  formatIsoDate,
   todayIso,
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  DialogBody,
-  DialogFooter,
-  DialogShell,
   Field,
   FieldGrid,
   FormAlert,
 } from '@/components/forms/DialogShell'
 import { VehicleEmployeeField } from './VehicleEmployeeField'
+import { RequestBody, RequestFooter, RequestNote, RequestSection, RequestShell } from './RequestShell'
+import { FineAmount } from './FineAmount'
+import { VehicleStatusBadge } from './VehicleStatusBadge'
 
 /** A first fine is almost always the AED 300 speeding ticket. */
 const DEFAULT_AMOUNT = '300'
@@ -93,6 +96,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   /** Fixed vehicle (vehicle file), or `null` to let the operator choose. */
   vehicle?: FineDialogVehicle | null
+  initialVehicleId?: number | null
   /** Omit to add; pass a row to edit it. */
   fine?: VehicleFineRead | null
   /** Fires only for a new fine, with the created row (for post-save highlight). */
@@ -103,6 +107,7 @@ export function FineDialog({
   open,
   onOpenChange,
   vehicle = null,
+  initialVehicleId = null,
   fine = null,
   onSaved,
 }: Props): React.JSX.Element {
@@ -120,18 +125,18 @@ export function FineDialog({
   const ready = Boolean(vehicle) || Boolean(fine) || vehiclesQuery.isSuccess
 
   return (
-    <DialogShell
+    <RequestShell
       open={open}
       onOpenChange={onOpenChange}
       title={fine ? t('vehicles.editFine') : t('vehicles.addFineTitle')}
       description={t('vehicles.addFineDesc')}
-      size="lg"
       busy={busy}
     >
       {ready ? (
         <FineForm
           locked={vehicle ?? (fine ? { id: fine.vehicle_id, plate_number: '', plate_code: null } : null)}
           lockedLabel={fine?.vehicle_plate_label}
+          initialVehicleId={initialVehicleId}
           options={options}
           fine={fine}
           onSaved={onSaved}
@@ -139,18 +144,21 @@ export function FineDialog({
           onBusyChange={setBusy}
         />
       ) : (
-        <DialogBody>
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-2/3" />
-        </DialogBody>
+        <RequestBody>
+          {vehiclesQuery.isError ? <p role="alert">{t('common.loadError')} <Button type="button" variant="secondary" onClick={() => void vehiclesQuery.refetch()}>{t('common.retry')}</Button></p> : <>
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-2/3" />
+          </>}
+        </RequestBody>
       )}
-    </DialogShell>
+    </RequestShell>
   )
 }
 
 function FineForm({
   locked,
   lockedLabel,
+  initialVehicleId,
   options,
   fine,
   onSaved,
@@ -160,6 +168,7 @@ function FineForm({
   locked: FineDialogVehicle | null
   /** A pre-built plate label for an edited fine, which carries no live vehicle object. */
   lockedLabel?: string
+  initialVehicleId: number | null
   options: readonly VehicleListItem[]
   fine: VehicleFineRead | null
   onSaved?: (fine: VehicleFineRead) => void
@@ -181,7 +190,7 @@ function FineForm({
   } = useForm<z.input<typeof schema>, unknown, Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      vehicle_id: String(locked?.id ?? options[0]?.id ?? ''),
+      vehicle_id: String(locked?.id ?? initialVehicleId ?? options[0]?.id ?? ''),
       employee_id: fine?.employee_id ?? '',
       date: fine?.date?.slice(0, 10) ?? todayIso(),
       time: fine?.time?.slice(0, 5) ?? '',
@@ -234,6 +243,18 @@ function FineForm({
   const selectedId = watch('vehicle_id')
   const noVehicles = !locked && options.length === 0
   const editingLocked = Boolean(fine)
+  const historyQuery = useQuery({
+    queryKey: VEHICLE_QUERY_KEYS.detail(Number(selectedId)),
+    queryFn: () => api.getVehicle(Number(selectedId)),
+    enabled: Boolean(selectedId),
+  })
+  const history = useMemo(
+    () => [...(historyQuery.data?.fines ?? [])].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id),
+    [historyQuery.data?.fines],
+  )
+  const outstanding = useMemo(() => history.filter((record) => record.payment_status !== 'paid'), [history])
+  const selectedVehicle = locked ?? options.find((option) => String(option.id) === selectedId)
+  const selectedPlate = lockedLabel || (selectedVehicle ? plateLabel(selectedVehicle) : '')
 
   return (
     <form
@@ -243,9 +264,28 @@ function FineForm({
         mutation.mutate(values)
       })}
     >
-      <DialogBody>
+      <RequestBody asideLabel={t('vehicles.finesOnVehicle')} aside={
+        <RequestNote title={<>{t('vehicles.finesOnVehicle')}{selectedPlate && <PlateChip plate={selectedPlate} size="sm" />}</>}>
+          {historyQuery.isPending && selectedId ? <Skeleton className="h-24 w-full" /> : historyQuery.isError ? (
+            <p role="alert">{t('common.loadError')} <Button type="button" variant="ghost" size="sm" onClick={() => void historyQuery.refetch()}>{t('common.retry')}</Button></p>
+          ) : history.length ? <>
+            <ul className="divide-y divide-border">
+              {history.slice(0, 5).map((record) => <li key={record.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <bdi dir="ltr" className="font-mono text-xs">{formatIsoDate(record.date)}</bdi>
+                <FineAmount fils={record.amount_fils} />
+                <VehicleStatusBadge family="payment" status={record.payment_status} />
+              </li>)}
+            </ul>
+            <dl className="mt-4 grid gap-3">
+              <div><dt className="text-muted-foreground">{t('vehicles.fineOpenTotal')}</dt><dd className="flex flex-wrap items-center gap-2"><bdi dir="ltr">{formatCount(outstanding.length)}</bdi> · <FineAmount fils={outstanding.reduce((sum, record) => sum + record.amount_fils, 0)} /></dd></div>
+              <div><dt className="text-muted-foreground">{t('vehicles.blackPoints')}</dt><dd><bdi dir="ltr">{formatCount(outstanding.reduce((sum, record) => sum + record.black_points, 0))}</bdi></dd></div>
+            </dl>
+          </> : <p className="text-muted-foreground">{t('vehicles.noFines')}</p>}
+        </RequestNote>
+      }>
         <FormAlert id={alertId} message={alert} />
 
+        <RequestSection index={1} title={t('vehicles.request.fine')}>
         {locked ? (
           <div className="flex flex-col gap-1.5">
             <Label id={`${fieldId}-vehicle-label`}>{t('vehicles.selectedVehicle')}</Label>
@@ -290,6 +330,7 @@ function FineForm({
             <Input
               id={`${fieldId}-date`}
               type="date"
+              dir="ltr"
               className="font-mono"
               autoFocus={editingLocked}
               {...register('date')}
@@ -300,21 +341,25 @@ function FineForm({
             <Input
               id={`${fieldId}-time`}
               type="time"
+              dir="ltr"
               className="font-mono"
               {...register('time')}
               {...flag('time')}
             />
           </Field>
           <Field id={`${fieldId}-amount`} label={t('vehicles.amount')} required>
-            <Input
-              id={`${fieldId}-amount`}
-              type="text"
-              inputMode="decimal"
-              className="font-mono"
-              dir="ltr"
-              {...register('amount')}
-              {...flag('amount')}
-            />
+            <div className="relative" dir="ltr">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 bg-current text-muted-foreground" style={{ mask: `url(${dirhamMark}) center / contain no-repeat`, WebkitMask: `url(${dirhamMark}) center / contain no-repeat` }} />
+              <Input
+                id={`${fieldId}-amount`}
+                type="text"
+                inputMode="decimal"
+                className="ps-9 font-mono"
+                dir="ltr"
+                {...register('amount')}
+                {...flag('amount')}
+              />
+            </div>
           </Field>
           <Field id={`${fieldId}-points`} label={t('vehicles.blackPoints')} required>
             <Input
@@ -323,11 +368,16 @@ function FineForm({
               min={0}
               step={1}
               inputMode="numeric"
+              dir="ltr"
               className="font-mono"
               {...register('black_points')}
               {...flag('black_points')}
             />
           </Field>
+        </FieldGrid>
+        </RequestSection>
+        <RequestSection index={2} title={t('vehicles.request.driverDetails')}>
+        <FieldGrid>
           <Controller
             control={control}
             name="employee_id"
@@ -352,21 +402,14 @@ function FineForm({
             />
           </Field>
         </FieldGrid>
-      </DialogBody>
+        </RequestSection>
+      </RequestBody>
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={mutation.isPending}
-          onClick={() => onOpenChange(false)}
-        >
-          {t('vehicles.cancel')}
-        </Button>
-        <Button type="submit" disabled={mutation.isPending || !selectedId}>
+      <RequestFooter busy={mutation.isPending}>
+        <Button type="submit" size="lg" className="sm:min-w-[11rem]" disabled={mutation.isPending || !selectedId}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </DialogFooter>
+      </RequestFooter>
     </form>
   )
 }

@@ -22,6 +22,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { TransferEmployeeDialog } from '../TransferEmployeeDialog'
+import { isWorkingStatus } from '@/components/employees/schema'
 
 // ── Module-level constants ───────────────────────────────────────────────────
 
@@ -402,7 +403,8 @@ export function ProfileTab({
   const missingSet = new Set(missing)
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
-  const transferFooter = canEdit && has('documents.duty_transfer') ? (
+  // A departed (Resigned, Terminated, Transferred) employee cannot be posted.
+  const transferFooter = canEdit && has('documents.duty_transfer') && isWorkingStatus(employee.status) ? (
     <div className="mt-3 flex justify-end">
       <Button
         type="button"

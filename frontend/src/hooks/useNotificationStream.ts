@@ -7,8 +7,8 @@
  * behind the changed counts are refetched, and a browser Notification fires
  * for any count that ROSE. The first counts seen are a baseline.
  *
- * Only active when `enabled` is true — pass `status === 'authed'` from Shell
- * to avoid opening the stream before the session resolves.
+ * Counts and streaming are active only when `enabled` is true. Push can be
+ * enabled independently for scoped roles whose ceiling does not open counts.
  *
  * Mirrors the invalidation half of pages/ledger/outlook/useSyncStatus.ts, but
  * shell-level and event-driven instead of polled.
@@ -40,7 +40,7 @@ const QUERIES_BY_COUNT: Record<Key, readonly (readonly string[])[]> = {
   inbox: [['books', 'inbox-summary']],
 }
 
-export function useNotificationStream(enabled = true): void {
+export function useNotificationStream(enabled = true, { pushEnabled = enabled }: { pushEnabled?: boolean } = {}): void {
   const qc = useQueryClient()
   const { t } = useTranslation()
   const prevRef = useRef<NotificationCounts | null>(null)
@@ -53,7 +53,7 @@ export function useNotificationStream(enabled = true): void {
   // user, locale or endpoint changed. Only active under HTTPS
   // (window.isSecureContext). Errors are logged and never propagated.
   useEffect(() => {
-    if (!enabled || userId === undefined) return
+    if (!pushEnabled || userId === undefined) return
     if (typeof Notification === 'undefined') return
     const swAvailable = 'serviceWorker' in navigator && navigator.serviceWorker != null
     const subscribe = (): void => {
@@ -68,7 +68,7 @@ export function useNotificationStream(enabled = true): void {
     void Notification.requestPermission().then((perm) => {
       if (perm === 'granted' && window.isSecureContext && swAvailable) subscribe()
     })
-  }, [enabled, userId])
+  }, [pushEnabled, userId])
 
   // Safety poll — low frequency; stream does the real-time work.
   const { data: counts } = useQuery({

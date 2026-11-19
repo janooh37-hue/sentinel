@@ -113,13 +113,13 @@ export function currentVersionOf<V extends VersionLike>(book: { versions?: V[] |
 }
 
 /**
- * @param opts.inmateReporter required, so every caller decides. For inmate
- *   reporters: every scan is dropped (the server does not hide attachments from
- *   this role), the generated original is dropped once a signed copy exists, and
- *   `original=true` is never emitted (the server answers 403 to it).
+ * @param opts.isScopedRole required, so every caller decides. For scoped
+ *   reporters: scans and pre-signature originals are not exposed; the generated
+ *   paper is dropped once a signed copy exists and `original=true` is never
+ *   emitted (the server answers 403 to it).
  */
-export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Paper[] {
-  const { inmateReporter } = opts
+export function papersOf(book: BookLike, opts: { isScopedRole: boolean }): Paper[] {
+  const { isScopedRole } = opts
   const signedPapers: Paper[] = []
   const generatedPapers: Paper[] = []
   const importedPapers: Paper[] = []
@@ -142,11 +142,11 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
   }
 
   const docId = currentBookDocId(book)
-  if (docId !== undefined && !(inmateReporter && signedPapers.length > 0)) {
+  if (docId !== undefined && !(isScopedRole && signedPapers.length > 0)) {
     // Staff always request the pre-signature original: once a signed copy is
     // filed the plain download URL swaps to serving the signed artifact, which
     // would hide the original form. The signed copy has its own paper.
-    const url = paperUrl({ documentId: docId, original: !inmateReporter, revision })
+    const url = paperUrl({ documentId: docId, original: !isScopedRole, revision })
     generatedPapers.push({
       kind: 'generated',
       url,
@@ -173,7 +173,7 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
     })
   }
 
-  if (!inmateReporter) {
+  if (!isScopedRole) {
     ;(book.attachment_paths ?? []).forEach((path, index) => {
       const filename = path.split('/').pop() ?? `scan-${index}`
       // The stored path is unique per upload, so replacing the file at this
@@ -211,12 +211,12 @@ export function defaultPaperKey(
 /**
  * Papers for the approvals-log dialog, which works on a log item pinned to a
  * version rather than a `BookRead`. Approved: the version's signed artifact plus
- * the pre-signature original (never for inmate reporters). Otherwise: the
+ * the pre-signature original (never for scoped reporters). Otherwise: the
  * generated paper pinned to the version.
  */
 export function approvalItemPapers(
   item: ApprovalLogItem,
-  opts: { inmateReporter: boolean },
+  opts: { isScopedRole: boolean },
 ): Paper[] {
   const papers: Paper[] = []
   if (item.status === 'approved' && item.version_id != null) {
@@ -228,7 +228,7 @@ export function approvalItemPapers(
       filename: `${item.ref_number}-signed.pdf`,
       isPdf: true,
     })
-    if (item.document_id != null && !opts.inmateReporter) {
+    if (item.document_id != null && !opts.isScopedRole) {
       const url = paperUrl({
         documentId: item.document_id,
         versionId: item.version_id,
@@ -274,15 +274,15 @@ export function downloadPaper(paper: Paper): void {
 
 /**
  * Count papers without building URL strings — for per-row chips in long lists.
- * Mirrors `papersOf`, including its `inmateReporter` rules, so every surface
+ * Mirrors `papersOf`, including its `isScopedRole` rules, so every surface
  * shows the number of papers the record pane will list.
  */
-export function paperCountOf(book: BookLike, opts: { inmateReporter: boolean }): number {
+export function paperCountOf(book: BookLike, opts: { isScopedRole: boolean }): number {
   const current = currentVersionOf(book)
   const signed = current?.status === 'approved' && current.signed_pdf_url ? 1 : 0
   const generated =
-    currentBookDocId(book) !== undefined && !(opts.inmateReporter && signed > 0) ? 1 : 0
+    currentBookDocId(book) !== undefined && !(opts.isScopedRole && signed > 0) ? 1 : 0
   const imported = book.imported_doc?.pdf_url ? 1 : 0
-  const scans = opts.inmateReporter ? 0 : (book.attachment_paths?.length ?? 0)
+  const scans = opts.isScopedRole ? 0 : (book.attachment_paths?.length ?? 0)
   return generated + signed + imported + scans
 }

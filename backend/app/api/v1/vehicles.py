@@ -19,6 +19,7 @@ from app.db.models import User, VehicleFile
 from app.db.session import get_db
 from app.schemas.vehicle import (
     MONTH_PATTERN,
+    AccidentLetterRequest,
     EvgConfirmRequest,
     EvgConfirmResult,
     EvgPreviewJobCreated,
@@ -34,10 +35,13 @@ from app.schemas.vehicle import (
     OdometerRowRead,
     OdometerUpsert,
     VehicleAccidentCreate,
+    VehicleAccidentInsurance,
     VehicleAccidentRead,
     VehicleAccidentStatusUpdate,
     VehicleCertificateUpdate,
     VehicleCreate,
+    VehicleEmployeeItem,
+    VehicleEmployeeSearch,
     VehicleFileRead,
     VehicleFineBatchRequest,
     VehicleFineBatchResult,
@@ -65,6 +69,7 @@ from app.schemas.vehicle import (
     VehicleUpdate,
 )
 from app.services import (
+    employee_service,
     settings_service,
     vehicle_evg_jobs,
     vehicle_evg_service,
@@ -131,6 +136,38 @@ def update_maintenance_contractor(
 ) -> VehiclesSummary:
     settings_service.set_vehicle_maintenance_contractor_id(db, payload.maintenance_contractor_id)
     return vehicle_service.summary(db)
+
+
+@router.get("/employees", response_model=VehicleEmployeeSearch)
+def search_vehicle_employees(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    q: str | None = None,
+    limit: int = Query(
+        employee_service.LIST_DEFAULT_LIMIT, ge=1, le=employee_service.LIST_MAX_LIMIT
+    ),
+    offset: int = Query(0, ge=0),
+) -> VehicleEmployeeSearch:
+    """The driver or responsible employee on a fine, accident or maintenance request:
+    searched by G number or name, answered with the G number and names only."""
+    rows, total = employee_service.list_employees(
+        db, q=q, identity_only=True, limit=limit, offset=offset
+    )
+    return VehicleEmployeeSearch(
+        items=[VehicleEmployeeItem.model_validate(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/employees/{employee_id}", response_model=VehicleEmployeeItem)
+def get_vehicle_employee(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleEmployeeItem:
+    return VehicleEmployeeItem.model_validate(employee_service.get_employee(db, employee_id))
 
 
 @router.get("/sites", response_model=list[VehicleSiteRead])
@@ -799,12 +836,14 @@ def generate_vehicle_accident_letter(
     accident_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    payload: AccidentLetterRequest | None = None,
 ) -> LetterResult:
     return vehicle_letter_service.generate_accident_letter(
         db,
         vehicle_id,
         accident_id,
         user=user,
+        arabic=payload or AccidentLetterRequest(),
     )
 
 
@@ -824,6 +863,27 @@ def update_vehicle_accident_status(
         vehicle_id,
         accident_id,
         payload.status,
+        actor=user.email,
+    )
+    return vehicle_service.accident_read(row)
+
+
+@router.put(
+    "/{vehicle_id}/accidents/{accident_id}/insurance",
+    response_model=VehicleAccidentRead,
+)
+def update_vehicle_accident_insurance(
+    vehicle_id: int,
+    accident_id: int,
+    payload: VehicleAccidentInsurance,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleAccidentRead:
+    row = vehicle_service.set_accident_insurance(
+        db,
+        vehicle_id,
+        accident_id,
+        payload,
         actor=user.email,
     )
     return vehicle_service.accident_read(row)

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, delete, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
@@ -16,6 +16,7 @@ from app.db.models import (
     BookVersion,
     Document,
     Employee,
+    RolePermission,
     User,
     UserPermission,
 )
@@ -218,6 +219,7 @@ def test_service_employee_lookup_does_not_grant_profile_access(
         "position_ar",
         "duty_unit",
         "duty_post",
+        "status",
     }
     assert body["items"][0]["id"] == "G100"
 
@@ -263,7 +265,7 @@ def test_employee_lookup_forbids_user_without_picker_capabilities(api_db: Sessio
     api_db.add_all(
         [
             UserPermission(user_id=user.id, capability=cap, effect="deny")
-            for cap in ("employees.view", "documents.generate", "uniform.edit")
+            for cap in ("employees.view", "documents.generate", "uniform.edit", "users.manage")
         ]
     )
     api_db.commit()
@@ -302,6 +304,30 @@ def test_uniform_editor_can_lookup_without_employee_profile_access(api_db: Sessi
     assert "passport_no" not in response.json()["items"][0]
     assert client.get("/api/v1/employees/lookup/G100").status_code == 200
     assert client.get("/api/v1/employees/G100").status_code == 403
+
+
+@pytest.mark.parametrize("can_manage_users", [False, True], ids=["no-picker-cap", "users-manage"])
+def test_user_management_capability_allows_employee_scope_lookup(
+    api_db: Session, can_manage_users: bool
+) -> None:
+    api_db.execute(delete(RolePermission).where(RolePermission.role == "operator"))
+    # Keep a role row in the deny case so the resolver does not restore the fallback preset.
+    api_db.add(
+        RolePermission(
+            role="operator", capability="users.manage" if can_manage_users else "app.access"
+        )
+    )
+    user = User(email="scope-picker@x.ae", password_hash="x", role="operator", status="active")
+    api_db.add(user)
+    api_db.commit()
+    client = _client(api_db, user)
+    expected_status = 200 if can_manage_users else 403
+    response = client.get("/api/v1/employees/lookup", params={"q": "G100"})
+    assert response.status_code == expected_status, response.text
+    assert client.get("/api/v1/employees/lookup/G100").status_code == expected_status
+    if can_manage_users:
+        assert response.json()["items"][0]["id"] == "G100"
+        assert client.get("/api/v1/employees/G100").status_code == 403
 
 
 def _seed_linked_documents(

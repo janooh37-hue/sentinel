@@ -34,6 +34,7 @@ export type RowState =
   | 'unpaired'
   | 'absent'
   | 'leave'
+  | 'national_service'
   | 'pending'
 
 export const ROW_STATE_ORDER: readonly RowState[] = [
@@ -43,8 +44,12 @@ export const ROW_STATE_ORDER: readonly RowState[] = [
   'grace',
   'verified',
   'leave',
+  'national_service',
   'pending',
 ]
+
+/** Leave kinds the API publishes for an excused day. */
+export type LeaveKind = NonNullable<AttendanceDayRow['leave_kind']>
 
 /**
  * Grace for a row that carries no policy of its own.
@@ -71,6 +76,8 @@ export interface JudgedDay {
   absence_due_at?: string | null
   judgment_due_at?: string | null
   on_leave?: boolean
+  /** Which excusing record covers the day; only National Service changes the state. */
+  leave_kind?: LeaveKind | null
 }
 
 export interface StateInput {
@@ -111,7 +118,11 @@ export function isUnpaired(row: JudgedDay, { now }: StateInput): boolean {
 }
 
 export function rowState(row: JudgedDay, input: StateInput): RowState {
-  if (row.on_leave || row.presence_state === 'excused_leave') return 'leave'
+  if (row.on_leave || row.presence_state === 'excused_leave') {
+    // National Service is its own verdict (purple), every other excusing leave
+    // is one blue `leave` whose subtype travels as text, never as a colour.
+    return row.leave_kind === 'national_service' ? 'national_service' : 'leave'
+  }
   // A human correction outranks the punches. The evaluator only ever rules
   // `absent` with zero punches, so `absent` beside punches is a correction;
   // and `completed`/`on_duty` without punches can only be one, because every
@@ -145,6 +156,103 @@ export function rowState(row: JudgedDay, input: StateInput): RowState {
 /** True when a row needs a human decision. Arriving inside the grace is not one. */
 export function needsDecision(state: RowState): boolean {
   return state === 'absent' || state === 'unpaired' || state === 'late'
+}
+
+/** Approved excusing leave of any kind, National Service included: out of the denominator. */
+export function isExcused(state: RowState): boolean {
+  return state === 'leave' || state === 'national_service'
+}
+
+/** The day's punch bounds and departure, as far as a row publishes them. */
+export interface PunchedDay {
+  punch_count: number
+  first_punch_at?: string | null
+  last_punch_at?: string | null
+  /** Effective arrival: the evaluated first in, or an active correction's. */
+  first_in_at?: string | null
+  final_out_at?: string | null
+  /** An active human correction overlays the day (BioTime punches untouched). */
+  corrected?: boolean
+  judgment_due_at?: string | null
+  scheduled_end_at?: string | null
+}
+
+/**
+ * The arrival to show as "In".
+ *
+ * A correction is a full overlay: its first in wins, and a correction that
+ * cleared it reads "—" rather than resurrecting the raw punch it overruled.
+ * Without one, the evaluated first in, else the first punch.
+ */
+export function inAt(row: PunchedDay): string | null {
+  if (row.corrected) return row.first_in_at ?? null
+  return row.first_in_at ?? row.first_punch_at ?? null
+}
+
+/**
+ * The departure to show as "Out".
+ *
+ * Only the evaluated (or corrected) `final_out_at` establishes a departure.
+ * Raw punches usually have no direction and must not be paired into a span.
+ * A missing Out stays null and renders "—", never the scheduled end.
+ */
+export function outAt(row: PunchedDay): string | null {
+  return row.final_out_at ?? null
+}
+
+/**
+ * On site right now: the effective arrival has occurred, no Out is known, and
+ * neither the scheduled end nor judgment boundary has passed. Past dates never
+ * qualify. Drives the halo and the "On site now" count.
+ */
+export function isOnSiteNow(row: JudgedDay & PunchedDay, input: StateInput): boolean {
+  const state = rowState(row, input)
+  if (state !== 'verified' && state !== 'grace' && state !== 'late') return false
+  const now = input.now.getTime()
+  const arrivedAt = parseInstant(inAt(row))
+  if (arrivedAt === null || arrivedAt > now || outAt(row) !== null) return false
+  const until = Math.min(
+    parseInstant(row.scheduled_end_at) ?? Infinity,
+    parseInstant(row.judgment_due_at) ?? Infinity,
+  )
+  return Number.isFinite(until) && now < until
+}
+
+export type OnSiteBucket = 'onSite' | 'left' | 'notArrived' | 'leave' | 'nationalService'
+
+/** Where one row puts its person in the "On site now" summary; null when it says nothing. */
+export function onSiteBucket(row: AttendanceRow, input: StateInput): OnSiteBucket | null {
+  const state = rowState(row, input)
+  if (state === 'national_service') return 'nationalService'
+  if (state === 'leave') return 'leave'
+  const noArrival = row.corrected ? inAt(row) === null : row.punch_count === 0
+  if (state === 'absent' || (noArrival && state !== 'verified')) {
+    const start = parseInstant(row.scheduled_start_at)
+    return start !== null && start <= input.now.getTime() ? 'notArrived' : null
+  }
+  if (isOnSiteNow(row, input)) return 'onSite'
+  if (inAt(row) !== null && outAt(row) !== null) return 'left'
+  return null
+}
+
+// One person, one bucket: on a double day the shift that puts them on site wins.
+const BUCKET_RANK: readonly OnSiteBucket[] = ['onSite', 'left', 'nationalService', 'leave', 'notArrived']
+
+export type OnSiteSummary = Record<OnSiteBucket, number> & { people: number }
+
+/** Counts PEOPLE, not rows or punches: the "On site now" strip above every view. */
+export function onSiteSummary(rows: readonly AttendanceRow[], input: StateInput): OnSiteSummary {
+  const best = new Map<string, OnSiteBucket | null>()
+  for (const row of rows) {
+    const bucket = onSiteBucket(row, input)
+    const previous = best.get(row.employee_id)
+    if (previous === undefined || (bucket !== null && (previous === null || BUCKET_RANK.indexOf(bucket) < BUCKET_RANK.indexOf(previous)))) {
+      best.set(row.employee_id, bucket)
+    }
+  }
+  const summary: OnSiteSummary = { onSite: 0, left: 0, notArrived: 0, leave: 0, nationalService: 0, people: best.size }
+  for (const bucket of best.values()) if (bucket !== null) summary[bucket] += 1
+  return summary
 }
 
 /** Worst first: absent, then unpaired, then late by descending minutes. */
@@ -210,7 +318,7 @@ export function postSummary(rows: readonly AttendanceRow[], input: StateInput): 
   let exceptions = 0
   for (const row of rows) {
     const state = rowState(row, input)
-    if (state === 'leave') {
+    if (isExcused(state)) {
       leave += 1
       continue
     }
@@ -231,7 +339,7 @@ export function shiftCounts(rows: readonly AttendanceRow[], input: StateInput): 
   for (const row of rows) {
     const code = row.shift_code ?? UNASSIGNED
     const entry = counts[code] ?? { seen: 0, due: 0 }
-    if (rowState(row, input) === 'leave') {
+    if (isExcused(rowState(row, input))) {
       counts[code] = entry
       continue
     }

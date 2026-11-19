@@ -130,24 +130,57 @@ def is_annual(leave_type: str) -> bool:
     return english_part(leave_type).lower() in _ANNUAL
 
 
-def live_kind(
-    leave_type: str,
-    status: str,
-    *,
-    deleted: bool,
-) -> Literal["national_service", "sick", "annual"] | None:
-    """Classify a lifecycle-live leave kind used by workforce attendance."""
+#: Workforce attendance classes, strongest first: National Service > Sick >
+#: Annual > Duty Leave (official mission) > every other excusing kind.
+LeaveKind = Literal["national_service", "sick", "annual", "duty", "other"]
+
+_DUTY = frozenset({"duty leave", "duty"})
+# Approved kinds that excuse attendance without a class of their own. Leave
+# Permit, Passport Release and Duty Resumption are deliberately absent: the
+# person is still expected at work.
+_OTHER_EXCUSING = frozenset(
+    {
+        "compassionate leave",
+        "compassionate",
+        "emergency leave",
+        "emergency",
+        "hajj leave",
+        "hajj",
+        "others",
+        "administrative leave",
+    }
+)
+
+
+def excusing_kind(leave_type: str, status: str, *, deleted: bool) -> LeaveKind | None:
+    """Classify a leave row that excuses workforce attendance, or None.
+
+    National Service counts while Pending (scheduled) or Completed; every
+    other excusing kind counts only once Approved.
+    """
     if deleted:
         return None
     group = classify_group(leave_type)
     current_status = canonical_status(status)
-    if group == "national_service" and current_status in {"Pending", "Completed"}:
-        return "national_service"
-    if group == "sick" and current_status == "Approved":
+    if group == "national_service":
+        return "national_service" if current_status in {"Pending", "Completed"} else None
+    if current_status != "Approved":
+        return None
+    if group == "sick":
         return "sick"
-    if is_annual(leave_type) and current_status == "Approved":
+    english = english_part(leave_type).lower()
+    if english in _ANNUAL:
         return "annual"
+    if english in _DUTY:
+        return "duty"
+    if english in _OTHER_EXCUSING:
+        return "other"
     return None
+
+
+def leave_label(leave_type: str) -> str | None:
+    """English half of a stored leave type, for display; None when blank."""
+    return english_part(leave_type) or None
 
 
 def is_returnable(leave_type: str) -> bool:
@@ -226,6 +259,7 @@ def ending_soon(leave_type: str, status: str, end_date: str, today_iso: str) -> 
 
 __all__ = [
     "ENDING_SOON_DAYS",
+    "LeaveKind",
     "LifecycleGroup",
     "accepts_certificate",
     "allowed_transitions",
@@ -237,8 +271,9 @@ __all__ = [
     "classify_group",
     "ending_soon",
     "english_part",
+    "excusing_kind",
     "is_annual",
     "is_returnable",
-    "live_kind",
+    "leave_label",
     "needs_action",
 ]

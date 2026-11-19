@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QUICK_ACTION_IDS } from '@/lib/dashboardLayout'
+import type * as ApiModule from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof ApiModule>()),
   api: {
     listAuthUsers: vi.fn(),
     listCapabilities: vi.fn(),
@@ -15,6 +17,9 @@ vi.mock('@/lib/api', () => ({
     setUserPermission: vi.fn(),
     setUserPermissionsBulk: vi.fn(),
     decidePermissionRequest: vi.fn(),
+    getUserWorkforceScopes: vi.fn(),
+    replaceUserWorkforceScopes: vi.fn(),
+    lookupEmployees: vi.fn(),
   },
 }))
 
@@ -62,6 +67,7 @@ const operator: AdminUserRead = {
   created_at: null,
   is_default_manager: false,
   password_change_required: false,
+  line_manager_user_id: null,
 }
 
 const admin: AdminUserRead = {
@@ -242,6 +248,8 @@ function configure(
   vi.mocked(api.listPermissionRequests).mockResolvedValue(options.requests ?? [pendingRequest])
   vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(perms)
   vi.mocked(api.decidePermissionRequest).mockResolvedValue(undefined)
+  vi.mocked(api.getUserWorkforceScopes).mockResolvedValue({ data: { scopes: [] }, etag: '"scope-1"' })
+  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [], total: 0, limit: 500, offset: 0 })
 }
 
 function renderPage(
@@ -341,6 +349,31 @@ function hiddenTotal(): number {
 describe('PermissionsPage Mirror editor', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.restoreAllMocks())
+
+  it.each([false, true])('shows attendance scope for the edited user on mobile=%s and hides it when people-view is denied', async (mobile) => {
+    vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: mobile && query === '(max-width: 759px)',
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }))
+    const base = permissionFixture()
+    const withPeople = { ...base, effective: [...base.effective, 'workforce.people.view'] }
+    renderPage(withPeople, {
+      capabilities: [...capabilities, catalogEntry('workforce.people.view', 'workforce', 'View workforce people', 'View other employees’ attendance.')],
+    })
+    expect(await screen.findByRole('heading', { name: 'Attendance scope' })).toBeVisible()
+    const controls = await screen.findByRole('group', { name: 'View workforce people' })
+    vi.mocked(api.setUserPermission).mockResolvedValue({
+      ...base, overrides: { ...base.overrides, 'workforce.people.view': 'deny' },
+    })
+    await userEvent.click(within(controls).getByRole('button', { name: 'Deny' }))
+    await waitFor(() => expect(screen.queryByRole('heading', { name: 'Attendance scope' })).not.toBeInTheDocument())
+  })
 
   it('announces truthful blueprint and chip state on the approved paper/device surfaces', async () => {
     renderPage()

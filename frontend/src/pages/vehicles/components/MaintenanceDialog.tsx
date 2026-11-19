@@ -11,7 +11,7 @@
  * it is chosen here.
  */
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useForm } from 'react-hook-form'
@@ -32,7 +32,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { VehicleListItem, VehicleMaintenanceRead, VehicleMaintenanceRequestRead } from '@/lib/api'
-import { localized } from '@/lib/language'
+import { isArabic, localized } from '@/lib/language'
+import dirhamMark from '../../../assets/dirham-symbol.png'
 
 import {
   DOCUMENT_ACCEPT,
@@ -40,19 +41,20 @@ import {
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
   plateLabel,
+  formatCount,
+  formatIsoDate,
   todayIso,
   vehicleErrorMessage,
 } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 import {
-  DialogBody,
-  DialogFooter,
-  DialogShell,
   Field,
   FieldGrid,
   FormAlert,
   UploadSlot,
 } from '@/components/forms/DialogShell'
+import { RequestBody, RequestFooter, RequestNote, RequestShell } from './RequestShell'
+import { AedAmount } from './FineAmount'
 
 const schema = z.object({
   vehicle_id: z.string().min(1),
@@ -61,8 +63,7 @@ const schema = z.object({
   /** Blank is allowed — not every garage records the odometer. */
   odometer_km: z.string().regex(/^\d{0,9}$/),
   cost: z.string().regex(/^\d{1,9}$/),
-  vendor_ar: z.string().trim().max(128),
-  vendor_en: z.string().trim().max(128),
+  vendor: z.string().trim().max(128),
   next_due: z.string(),
 })
 
@@ -80,6 +81,7 @@ interface Props {
   onOpenChange: (open: boolean) => void
   /** Fixed vehicle (vehicle file), or `null` to let the operator choose. */
   vehicle?: MaintenanceDialogVehicle | null
+  initialVehicleId?: number | null
   request?: VehicleMaintenanceRequestRead | null
   onSaved?: (record: VehicleMaintenanceRead) => void
 }
@@ -88,6 +90,7 @@ export function MaintenanceDialog({
   open,
   onOpenChange,
   vehicle = null,
+  initialVehicleId = null,
   request = null,
   onSaved,
 }: Props): React.JSX.Element {
@@ -104,17 +107,17 @@ export function MaintenanceDialog({
   const options = vehicle ? [] : vehiclesQuery.data
 
   return (
-    <DialogShell
+    <RequestShell
       open={open}
       onOpenChange={onOpenChange}
       title={t('vehicles.addMaintenance')}
       description={t('vehicles.addMaintenanceDesc')}
-      size="lg"
       busy={busy}
     >
       {options ? (
         <MaintenanceForm
           locked={vehicle}
+          initialVehicleId={initialVehicleId}
           request={request}
           options={options}
           onSaved={onSaved}
@@ -122,17 +125,20 @@ export function MaintenanceDialog({
           onBusyChange={setBusy}
         />
       ) : (
-        <DialogBody>
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-2/3" />
-        </DialogBody>
+        <RequestBody>
+          {vehiclesQuery.isError ? <p role="alert">{t('common.loadError')} <Button type="button" variant="secondary" onClick={() => void vehiclesQuery.refetch()}>{t('common.retry')}</Button></p> : <>
+            <Skeleton className="h-9 w-full" />
+            <Skeleton className="h-9 w-2/3" />
+          </>}
+        </RequestBody>
       )}
-    </DialogShell>
+    </RequestShell>
   )
 }
 
 function MaintenanceForm({
   locked,
+  initialVehicleId,
   request,
   options,
   onSaved,
@@ -140,6 +146,7 @@ function MaintenanceForm({
   onBusyChange,
 }: {
   locked: MaintenanceDialogVehicle | null
+  initialVehicleId: number | null
   request: VehicleMaintenanceRequestRead | null
   options: readonly VehicleListItem[]
   onSaved?: (record: VehicleMaintenanceRead) => void
@@ -158,18 +165,20 @@ function MaintenanceForm({
     register,
     control,
     handleSubmit,
+    setValue,
+    resetField,
+    getFieldState,
     watch,
     formState: { errors },
   } = useForm<z.input<typeof schema>, unknown, Values>({
     resolver: zodResolver(schema),
     defaultValues: {
-      vehicle_id: String(locked?.id ?? options[0]?.id ?? ''),
+      vehicle_id: String(locked?.id ?? initialVehicleId ?? options[0]?.id ?? ''),
       date: todayIso(),
       type: request?.type ?? 'service',
       odometer_km: request?.odometer_km == null ? '' : String(request.odometer_km),
-      cost: '0',
-      vendor_ar: '',
-      vendor_en: '',
+      cost: '',
+      vendor: '',
       next_due: '',
     },
   })
@@ -188,8 +197,8 @@ function MaintenanceForm({
         type: values.type,
         odometer_km: values.odometer_km ? Number(values.odometer_km) : null,
         cost: Number(values.cost),
-        vendor_ar: values.vendor_ar || null,
-        vendor_en: values.vendor_en || null,
+        vendor_ar: isArabic(i18n.language) ? values.vendor || null : null,
+        vendor_en: isArabic(i18n.language) ? null : values.vendor || null,
         next_due: values.next_due || null,
         receipt_file_id: receiptFileId,
         ...(request ? { request_id: request.id } : {}),
@@ -220,6 +229,24 @@ function MaintenanceForm({
 
   const selectedId = watch('vehicle_id')
   const noVehicles = !locked && options.length === 0
+  const historyQuery = useQuery({
+    queryKey: VEHICLE_QUERY_KEYS.detail(Number(selectedId)),
+    queryFn: () => api.getVehicle(Number(selectedId)),
+    enabled: Boolean(selectedId),
+  })
+  const last = historyQuery.data?.maintenance?.reduce<VehicleMaintenanceRead | null>(
+    (latest, record) => !latest || record.date > latest.date || (record.date === latest.date && record.id > latest.id) ? record : latest,
+    null,
+  )
+  // The reading belongs to the chosen vehicle: it is filled from that
+  // vehicle's file until the operator types one, and choosing another vehicle
+  // clears it (see the picker) so a reading never moves to a different plate.
+  useEffect(() => {
+    if (request || !historyQuery.data || String(historyQuery.data.id) !== selectedId) return
+    if (getFieldState('odometer_km').isDirty) return
+    const odometer = historyQuery.data.current_odometer_km
+    setValue('odometer_km', odometer == null ? '' : String(odometer))
+  }, [historyQuery.data, selectedId, request, getFieldState, setValue])
 
   return (
     <form
@@ -229,7 +256,21 @@ function MaintenanceForm({
         mutation.mutate(values)
       })}
     >
-      <DialogBody>
+      <RequestBody asideLabel={t('vehicles.lastService')} aside={
+        <RequestNote title={t('vehicles.lastService')}>
+          {historyQuery.isPending && selectedId ? <Skeleton className="h-24 w-full" /> : historyQuery.isError ? (
+            <p role="alert">{t('common.loadError')} <Button type="button" variant="ghost" size="sm" onClick={() => void historyQuery.refetch()}>{t('common.retry')}</Button></p>
+          ) : last ? (
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <div><dt className="text-muted-foreground">{t('vehicles.date')}</dt><dd><bdi dir="ltr">{formatIsoDate(last.date)}</bdi></dd></div>
+              <div><dt className="text-muted-foreground">{t('vehicles.maintenanceType')}</dt><dd>{t(`vehicles.${last.type}`)}</dd></div>
+              <div><dt className="text-muted-foreground">{t('vehicles.odometer')}</dt><dd><bdi dir="ltr">{last.odometer_km == null ? '—' : formatCount(last.odometer_km)}</bdi> {t('vehicles.km')}</dd></div>
+              <div><dt className="text-muted-foreground">{t('vehicles.cost')}</dt><dd><AedAmount value={last.cost} /></dd></div>
+            </dl>
+          ) : <p className="text-muted-foreground">{t('vehicles.noPreviousMaintenance')}</p>}
+          <p className="mt-4 text-muted-foreground">{t('vehicles.reminder')}</p>
+        </RequestNote>
+      }>
         <FormAlert id={alertId} message={alert} />
 
         {locked ? (
@@ -250,7 +291,14 @@ function MaintenanceForm({
               control={control}
               name="vehicle_id"
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange} disabled={noVehicles}>
+                <Select
+                  value={field.value}
+                  onValueChange={(next) => {
+                    if (next !== field.value && !request) resetField('odometer_km', { defaultValue: '' })
+                    field.onChange(next)
+                  }}
+                  disabled={noVehicles}
+                >
                   <SelectTrigger id={`${fieldId}-vehicle`} {...flag('vehicle_id')}>
                     <SelectValue />
                   </SelectTrigger>
@@ -276,6 +324,7 @@ function MaintenanceForm({
             <Input
               id={`${fieldId}-date`}
               type="date"
+              dir="ltr"
               className="font-mono"
               {...register('date')}
               {...flag('date')}
@@ -308,28 +357,28 @@ function MaintenanceForm({
               min={0}
               step={1}
               inputMode="numeric"
+              dir="ltr"
               className="font-mono"
               {...register('odometer_km')}
               {...flag('odometer_km')}
             />
           </Field>
           <Field id={`${fieldId}-cost`} label={t('vehicles.cost')} required>
-            <Input
-              id={`${fieldId}-cost`}
-              type="number"
-              min={0}
-              step={1}
-              inputMode="numeric"
-              className="font-mono"
-              {...register('cost')}
-              {...flag('cost')}
-            />
+            <div className="relative" dir="ltr">
+              <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-3 my-auto h-4 w-4 bg-current text-muted-foreground" style={{ mask: `url(${dirhamMark}) center / contain no-repeat`, WebkitMask: `url(${dirhamMark}) center / contain no-repeat` }} />
+              <Input
+                id={`${fieldId}-cost`}
+                type="text"
+                inputMode="numeric"
+                dir="ltr"
+                className="ps-9 font-mono"
+                {...register('cost')}
+                {...flag('cost')}
+              />
+            </div>
           </Field>
-          <Field id={`${fieldId}-vendor-ar`} label={`${t('vehicles.garage')} · AR`}>
-            <Input id={`${fieldId}-vendor-ar`} dir="rtl" {...register('vendor_ar')} />
-          </Field>
-          <Field id={`${fieldId}-vendor-en`} label={`${t('vehicles.garage')} · EN`}>
-            <Input id={`${fieldId}-vendor-en`} dir="ltr" {...register('vendor_en')} />
+          <Field id={`${fieldId}-vendor`} label={t('vehicles.garage')} full>
+            <Input id={`${fieldId}-vendor`} dir="auto" {...register('vendor')} {...flag('vendor')} />
           </Field>
           <Field
             id={`${fieldId}-next-due`}
@@ -340,6 +389,7 @@ function MaintenanceForm({
             <Input
               id={`${fieldId}-next-due`}
               type="date"
+              dir="ltr"
               className="font-mono"
               {...register('next_due')}
             />
@@ -355,21 +405,13 @@ function MaintenanceForm({
           clearLabel={t('common.remove')}
           disabled={mutation.isPending}
         />
-      </DialogBody>
+      </RequestBody>
 
-      <DialogFooter>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={mutation.isPending}
-          onClick={() => onOpenChange(false)}
-        >
-          {t('vehicles.cancel')}
-        </Button>
-        <Button type="submit" disabled={mutation.isPending || !selectedId}>
+      <RequestFooter busy={mutation.isPending}>
+        <Button type="submit" size="lg" className="sm:min-w-[11rem]" disabled={mutation.isPending || !selectedId}>
           {mutation.isPending ? t('common.saving') : t('vehicles.save')}
         </Button>
-      </DialogFooter>
+      </RequestFooter>
     </form>
   )
 }

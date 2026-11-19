@@ -97,7 +97,8 @@ function renderList(
     rows: [book(1), book(2), book(3, { approval_state: 'approved' })],
     hasFilters: false,
     isAr: true,
-    isInmateReporter: false,
+    isScopedRole: false,
+    newRecordPath: '/services',
     canSubmit: false,
     userId: 1,
     highlightedId: null,
@@ -177,6 +178,17 @@ describe('BooksMobileList cards', () => {
     await userEvent.click(screen.getByRole('button', { name: 'books.filters.clear' }))
     expect(props.onClearFilters).toHaveBeenCalledTimes(1)
   })
+
+  it('offers the fleet own-papers filter without bulk selection', async () => {
+    const onToggle = vi.fn()
+    renderList({ isScopedRole: true, mine: { pressed: true, count: 4, onToggle } })
+    const chip = screen.getByRole('button', { name: /books.list.createdByMe/ })
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    expect(chip).toHaveTextContent('4')
+    expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
+    await userEvent.click(chip)
+    expect(onToggle).toHaveBeenCalledOnce()
+  })
 })
 
 describe('BooksMobileList select mode', () => {
@@ -249,7 +261,7 @@ describe('BooksMobileList select mode', () => {
   })
 
   it('is unavailable to inmate reporters', () => {
-    renderList({ isInmateReporter: true })
+    renderList({ isScopedRole: true })
     expect(screen.queryByRole('button', { name: 'books.list.select' })).not.toBeInTheDocument()
   })
 })

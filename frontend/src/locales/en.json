@@ -641,6 +641,12 @@
         "label": "Duty location",
         "initial_placement": "Initial placement",
         "transfer": "Transferred",
+        "service_end": "Service ended",
+        "transfer_out": "Transferred out",
+        "reinstatement": "Returned to post",
+        "toEndedService": "Ended service",
+        "toTransferred": "Transferred",
+        "returnedTo": "Returned to",
         "unassigned": "Unassigned",
         "openEmployeeActivity": "Open employee activity",
         "historyBegins": "History begins at"
@@ -1140,6 +1146,64 @@
     }
   },
   "vehicles": {
+    "damageCoverLine": "Covered by insurance. The technician estimates the cost.",
+    "insurance": {
+      "title": "Insurance",
+      "optional": "Optional. Fill in when available.",
+      "none": "No insurance details yet",
+      "add": "Add insurance details",
+      "edit": "Edit insurance details",
+      "claimNo": "Claim number",
+      "insurer": "Insurance company",
+      "repairGarage": "Repair garage",
+      "claimStatus": "Claim status",
+      "payer": "Cost borne by",
+      "notSet": "Not set",
+      "saved": "Insurance details saved.",
+      "claimStatuses": {
+        "not_submitted": "Not submitted",
+        "submitted": "Submitted",
+        "under_repair": "Under repair",
+        "settled": "Settled"
+      },
+      "payers": {
+        "insurer": "Insurance in full",
+        "company": "Excess paid by the company",
+        "driver": "Excess paid by the driver"
+      }
+    },
+    "request": {
+      "incident": "Incident",
+      "photos": "Photos",
+      "damageInsurance": "Damage and insurance",
+      "licenceInsurance": "Licence and insurance",
+      "notes": "Notes",
+      "fine": "Fine",
+      "driverDetails": "Driver and details"
+    },
+    "start": {
+      "accident": "File an accident report",
+      "maintenance": "Log a maintenance job",
+      "fine": "Record a fine",
+      "renewal": "Renew a vehicle licence"
+    },
+    "driver": "Driver",
+    "photosHint": "JPG or PNG. Photos are kept with the report.",
+    "arabicForLetter": "Arabic text for the official letter",
+    "arabicForLetterDesc": "The letter is issued in Arabic. This report was written in English, so add the Arabic wording once here.",
+    "locationAr": "Location in Arabic",
+    "descriptionAr": "Description in Arabic",
+    "arabicRequired": "Add the Arabic location and description before issuing the letter.",
+    "paperPending": "Arabic wording is added when the letter is issued",
+    "manageFleet": "Fleet administration",
+    "siteName": "Site name",
+    "newForVehicle": "New for this vehicle",
+    "vehicle": "Vehicle",
+    "finesOnVehicle": "Fines on this vehicle",
+    "allStatuses": "All",
+    "liveLetter": "Official letter, as it will be issued",
+    "lastService": "Last service",
+    "reminder": "A reminder appears when the next service date approaches.",
     "title": "Vehicles — GSSG Manager",
     "heroEyebrow": "Operations module",
     "heroTitle": "Vehicle Services",
@@ -1278,6 +1342,8 @@
     "assignEmployee": "Assign employee",
     "renewTitle": "Renew vehicle license",
     "renewDesc": "The current license is automatically archived in history.",
+    "noRenewalAttention": "No licences need renewal.",
+    "noValidLicences": "No vehicles have a valid licence.",
     "newStart": "New start date",
     "newExpiry": "New expiry date",
     "renewalCost": "Renewal cost",
@@ -1371,6 +1437,7 @@
     "finesReportDesc": "Filterable fleet copy for investigations, without employee names.",
     "finesLedgerTitle": "Fines",
     "finesLedgerDesc": "Every fine on record, across the fleet — record payments, attach receipts, and archive settled ones.",
+    "fineOpenTotal": "Open total",
     "fromDate": "From date",
     "toDate": "To date",
     "print": "Print",
@@ -3136,6 +3203,22 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "fleetReporter": {
+      "approveFinish": "Approve and finish",
+      "forward": "Forward to branch manager",
+      "forwardHint": "Choose a branch manager to continue the approval chain.",
+      "note": "Note (optional)",
+      "noCandidatesTitle": "No eligible branch managers",
+      "noCandidatesBody": "Ask an administrator to grant approval access to another active account.",
+      "forwarded": "Forwarded to branch manager",
+      "lineManager": "Line manager",
+      "stale": "Record or employee data changed. Reload before continuing.",
+      "resubmit": "Resubmit",
+      "rebuild": "Rebuild letter",
+      "rebuildHint": "Correct the fine or accident in the fleet hub first, then rebuild.",
+      "rebuilding": "Rebuilding letter…",
+      "rebuilt": "Letter rebuilt. Submit it when it's ready."
+    },
     "thread": {
       "reply": "Reply",
       "createFrom": "Create from",
@@ -4761,6 +4844,29 @@
       "signerMismatch": "The signer must be the employee linked to your account.",
       "stagedImportOwner": "This staged import belongs to another user."
     },
+    "fleet": {
+      "lineManagerRequired": "Ask an administrator to set your line manager.",
+      "serviceForbidden": "Fleet accounts write General Books only from the vehicle pages.",
+      "lineManagerNotApplicable": "Only fleet reporter accounts have a line manager.",
+      "lineManagerNotEligible": "Choose another active account that can approve records.",
+      "branchApproverNotEligible": "Choose an active approver other than the author and the line manager.",
+      "notLineManagerStage": "This record is no longer waiting for your approval as line manager. Reload to see its current stage.",
+      "routeForbidden": "This page isn't available for your account.",
+      "scopeFixed": "This account's role has a fixed set of permissions. It can't be widened for one user.",
+      "inputForbidden": "Your role can't set this option. Your approval route and signatures are set for you.",
+      "employeeRequired": "Ask an administrator to link your employee record.",
+      "identityChanged": "Your employee record changed since this paper was signed. Reload before continuing.",
+      "notOwner": "You can only change your own papers.",
+      "stateLocked": "This paper can no longer be edited. Reload to see its current state.",
+      "notAVehicleLetter": "Only Fines, Accident and Odometer letters can be rebuilt.",
+      "letterSourceChanged": "Some fines on this letter were removed, archived or moved to another vehicle. Create a new letter from the fleet hub.",
+      "letterSourceChangedFines": "These fines were removed, archived or moved to another vehicle: {{fines}}. Create a new letter from the fleet hub.",
+      "chainAuthorOnly": "Only the author can submit or rebuild this paper; it goes to their line manager.",
+      "foldersForbidden": "Folders aren't available for your account.",
+      "accidentLetterNotVisible": "This accident already has a letter you can't open.",
+      "accidentNotFound": "This letter's accident no longer exists.",
+      "odometerNoVehicles": "Select at least one active vehicle for the monthly mileage log."
+    },
     "boundary": {
       "bodyLead": "This screen lost its connection.",
       "bodyReassure": "Nothing you did is lost",
@@ -5066,6 +5172,9 @@
       "other": "Other"
     },
     "nsCategory": "Record",
+    "fleetReporter": {
+      "reportDescription": "Create a report in Word and send it to your line manager."
+    },
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
       "description": "Save an unfinished report, then send it to the configured approval manager.",
@@ -5408,6 +5517,22 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Today at a glance",
+    "fleetReporter": {
+      "eyebrow": "Fleet",
+      "title": "Paper workspace",
+      "subtitle": "Create General Books, Reports, and vehicle letters, and follow their progress with your line manager.",
+      "newReport": "New paper",
+      "yourReports": "Your papers",
+      "yourReportsHint": "Continue drafts and review papers returned or rejected by your line manager.",
+      "pending": "Pending approval",
+      "pendingHint": "Papers waiting for approval.",
+      "pendingEmpty": "No papers are pending approval.",
+      "approved": "Approved",
+      "approvedHint": "Papers ready to read or print.",
+      "approvedEmpty": "No approved papers yet.",
+      "untitled": "Untitled paper",
+      "loadError": "Papers couldn't be loaded."
+    },
     "inmateReporter": {
       "eyebrow": "Inmate conduct violations",
       "title": "Report workspace",
@@ -5447,7 +5572,7 @@
       "peopleCount": "{{n}} people",
       "reviewLeave": "Review leave records",
       "seeAll": "See all",
-      "calm": "Quiet day. {{n}} on site, nothing returning today.",
+      "calm": "Quiet day. {{n}} staff not on leave, nothing returning today.",
       "calmUpcoming": "{{n}} returning later this week."
     },
     "myWidgets": "My Widgets",
@@ -5511,10 +5636,15 @@
     "workforcePulse": {
       "title": "Workforce Pulse",
       "openCoverage": "Open coverage",
+      "reasons": {
+        "leave_duty": "Duty leave",
+        "leave_other": "Other leave"
+      },
       "self": {
         "heading": "My shift",
-        "start": "Starts",
-        "end": "Ends",
+        "punchIn": "In",
+        "punchOut": "Out",
+        "schedule": "Scheduled shift",
         "presence": {
           "scheduled": "Scheduled",
           "on_duty": "On duty",
@@ -5526,6 +5656,7 @@
         }
       },
       "metrics": {
+        "onSite": "On site now",
         "scheduled": "Scheduled",
         "working": "On duty",
         "coverage": "Coverage"
@@ -5635,6 +5766,22 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "punch_log": {
+        "title": "Punch log",
+        "subtitle": "Today · newest first · original BioTime punches",
+        "empty": "No punches recorded today.",
+        "footer": "Corrections never rewrite this log.",
+        "time": "Time",
+        "employee": "Employee",
+        "post": "Post",
+        "device": "Device",
+        "directionLabel": "Direction",
+        "direction": {
+          "in": "In",
+          "out": "Out",
+          "unknown": "Punch"
+        }
+      },
       "store_expiring": {
         "title": "Store expiry",
         "window": "Batches expired or expiring within {{days}} days",
@@ -6080,6 +6227,8 @@
       "unassignedCount_other": "Unassigned: {{count}}"
     },
     "unassigned": "Unassigned",
+    "endedService": "Ended service",
+    "transferred": "Transferred",
     "column": {
       "id": "No.",
       "name": "Name",
@@ -6090,7 +6239,12 @@
       "searchPlaceholder": "Search by name or number…",
       "noPost": "No post set",
       "empty": "No employees in this unit.",
-      "selectRow": "Select {{name}}"
+      "selectRow": "Select {{name}}",
+      "departedSummary_one": "1 employee",
+      "departedSummary_other": "{{count}} employees",
+      "noMatch": "No matching employees.",
+      "endedServiceNote": "Resigned and terminated staff. Not counted in the units and cannot be posted.",
+      "transferredNote": "Serving at another site. Not counted in the units and cannot be posted; on return they go back to their last post."
     },
     "field": {
       "unit": "Unit",
@@ -6137,7 +6291,8 @@
       "generating": "Generating the transfer letter…",
       "viewRecord": "View record",
       "movedNoBook_one": "Moved 1 employee",
-      "movedNoBook_other": "Moved {{count}} employees"
+      "movedNoBook_other": "Moved {{count}} employees",
+      "departedError": "A resigned, terminated or transferred employee cannot be given a duty location."
     },
     "completion": {
       "detail_one": "1 employee transferred",
@@ -6328,7 +6483,9 @@
         "operator": "Operator",
         "operatorHint": "Standard day-to-day access",
         "inmate_reporter": "Inmate violation reporter",
-        "inmate_reporterHint": "Create and track inmate violation reports"
+        "inmate_reporterHint": "Create and track inmate violation reports",
+        "fleet_reporter": "Fleet reporter",
+        "fleet_reporterHint": "Manage fleet records and submit vehicle papers for approval"
       }
     },
     "active": {
@@ -6380,7 +6537,8 @@
         "create_user": "Account created",
         "disable": "Disabled",
         "reactivate": "Restored",
-        "password_setup": "Password set up"
+        "password_setup": "Password set up",
+        "set_line_manager": "Line manager changed"
       }
     },
     "reject": {
@@ -6431,7 +6589,12 @@
       "admin": "Admin",
       "manager": "Manager",
       "operator": "Operator",
-      "inmate_reporter": "Inmate violation reporter"
+      "inmate_reporter": "Inmate violation reporter",
+      "fleet_reporter": "Fleet reporter"
+    },
+    "lineManager": {
+      "label": "Line manager",
+      "notSet": "Not set"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",
@@ -6450,6 +6613,41 @@
       "noResultsHint": "Search checks names, descriptions and IDs.",
       "clearSearch": "Clear",
       "bulkApply": "Apply to all",
+      "scope": {
+        "title": "Attendance scope",
+        "selfHint": "The user always sees their own record. With no entries, only their own record is visible.",
+        "selected": "Self and selected locations",
+        "organization": "Whole organization",
+        "save": "Save scope",
+        "saving": "Saving…",
+        "saved": "Attendance scope saved.",
+        "loadError": "Could not load attendance scope.",
+        "retry": "Retry",
+        "type": "Scope type",
+        "kinds": {
+          "department": "Department",
+          "duty_unit": "Duty unit",
+          "duty_post": "Duty post"
+        },
+        "departmentOptional": "Department (optional)",
+        "chooseDepartment": "Choose a department",
+        "allDepartments": "All departments",
+        "chooseUnit": "Choose a duty unit",
+        "choosePost": "Choose a duty post",
+        "add": "Add scope",
+        "removeEntry": "Remove",
+        "remove": "Remove {{name}}",
+        "entries": "Included locations",
+        "duplicate": "This scope is already included.",
+        "selfOnly": "Self only",
+        "locationsLoading": "Loading locations…",
+        "locationsError": "Could not load locations. Retry to add a scope.",
+        "conflict": "Attendance scope changed elsewhere. Your unsaved selections are kept. Compare them with the latest saved scope before saving again, or discard your changes to use the saved scope.",
+        "latestLoading": "Loading the latest saved scope…",
+        "serverScope": "Latest saved scope",
+        "refreshError": "The latest saved scope could not be loaded. Your unsaved selections are kept. Retry loading before saving or discarding.",
+        "discard": "Discard unsaved changes"
+      },
       "mirror": {
         "title": "Permissions studio",
         "help": "Shape what each person can see. The device mirror updates from the same permission blueprint.",
@@ -7085,7 +7283,117 @@
       "unpaired": "Single punch",
       "absent": "Absent",
       "leave": "On leave",
-      "pending": "Not started"
+      "pending": "Not due yet",
+      "national_service": "National Service",
+      "onSite": "On site",
+      "left": "Left",
+      "off": "Off",
+      "leaveWith": "On leave · {{subtype}}",
+      "leaveOther": "On leave · Other",
+      "corrected": "Corrected"
+    },
+    "legend": {
+      "title": "Status legend",
+      "hint": "Halo = on site now · notch = corrected",
+      "details": "All approved excusing leave is blue and names its type. National Service is purple. Arriving inside the grace is not an exception."
+    },
+    "quickCorrection": {
+      "title": "Quick correction",
+      "subtitle": "Choose the day’s effective result",
+      "result": "Correct attendance",
+      "present": "Present",
+      "absent": "Absent",
+      "leave": "On leave",
+      "clear": "Clear correction",
+      "clearSave": "Confirm clear correction",
+      "clearHint": "Remove the active correction. An earlier unrevoked correction may become effective; otherwise the automatic result returns. A reason is still required.",
+      "inTime": "In time (24h)",
+      "outTime": "Out time (24h)",
+      "inDate": "In date",
+      "outDate": "Out date",
+      "chooseDate": "Choose a date",
+      "changeDates": "Change dates",
+      "optional": "optional",
+      "timeHint": "Asia/Dubai · HH:MM (24h). Out is optional and must follow In.",
+      "overnightHint": "Overnight shift: choose the date for each new In or Out time.",
+      "datesHint": "Choose the date for each In or Out time.",
+      "subtype": "Leave subtype",
+      "leaveHint": "The subtype is saved in the reason, not as a structured leave record.",
+      "reason": "Reason",
+      "chooseReason": "Select a reason",
+      "reasonText": "Reason details",
+      "reasonPlaceholder": "Explain why this day needs a correction",
+      "reasonHint": "Choose a reason and add details to enable Save.",
+      "reasonReady": "The reason will be saved in the audit history.",
+      "audit": "Audit note",
+      "auditPlaceholder": "Reference or supporting detail",
+      "save": "Save correction",
+      "cancel": "Cancel",
+      "close": "Close correction",
+      "viewEvidence": "View evidence",
+      "overlayFooter": "BioTime punches stay untouched; this overlays the day",
+      "lastCorrection": "Last correction: {{name}} · <at>{{at}}</at>",
+      "noPrevious": "No previous correction",
+      "unknownActor": "Unknown user",
+      "saved": "Correction saved. The day has been updated.",
+      "cleared": "Correction cleared. The day has been updated.",
+      "currentEvidence": "Current evidence",
+      "currentResult": "Current effective result",
+      "automatic": "Automatic · system evaluation",
+      "corrected": "Corrected · human correction",
+      "in": "In",
+      "out": "Out",
+      "schedule": "Scheduled shift · Asia/Dubai",
+      "loadFailed": "Attendance case could not be loaded.",
+      "refreshFailed": "Current evidence could not be refreshed. Retry before saving.",
+      "conflictWarning": "This attendance case changed. Compare the refreshed evidence before submitting your preserved draft.",
+      "discardTitle": "Discard unsaved changes?",
+      "discardDescription": "This correction has not been saved. Keep editing or discard the draft.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard",
+      "errors": {
+        "reasonRequired": "Choose a reason and add details before saving.",
+        "inRequired": "Enter the In time.",
+        "dateRequired": "Choose a date for each recorded In or Out time.",
+        "invalidTime": "Use 24h times in HH:MM format, for example 07:02.",
+        "outBeforeIn": "Out must follow In.",
+        "futureTime": "Recorded times cannot be in the future.",
+        "clearUnavailable": "There is no active correction to clear."
+      },
+      "reasons": {
+        "device": "Device / missing punch",
+        "supervisor": "Supervisor confirmation",
+        "leave": "Approved leave reference",
+        "roster": "Roster correction",
+        "other": "Other"
+      },
+      "leaves": {
+        "annual": "Annual",
+        "sick": "Sick",
+        "duty": "Duty Leave (official mission)",
+        "compassionate": "Compassionate",
+        "emergency": "Emergency",
+        "hajj": "Hajj",
+        "administrative": "Administrative",
+        "other": "Others"
+      }
+    },
+    "onSiteNow": {
+      "title": "On site now",
+      "daySummary": "Day summary",
+      "asOf": "As of <0>{{time}}</0>",
+      "people_one": "<0>{{count}}</0> person",
+      "people_other": "<0>{{count}}</0> people",
+      "onSite": "On site",
+      "left": "Left",
+      "notArrived": "Not arrived",
+      "leave": "On leave",
+      "nationalService": "National Service"
+    },
+    "correct": {
+      "action": "Correct attendance",
+      "actionFor": "Correct attendance: {{name}}, {{date}}",
+      "actionForShift": "Correct attendance: {{name}}, {{date}}, {{shift}}"
     },
     "toolbar": {
       "today": "Today",
@@ -7106,14 +7414,17 @@
       "late": "late",
       "unpaired": "unpaired",
       "leave": "leave",
-      "posts": "{{count}} posts",
+      "posts_one": "{{count}} post",
+      "posts_other": "{{count}} posts",
       "source": "Source: BioTime mirror · read-only · fresh through {{through}}",
       "sourceUnknown": "Source: BioTime mirror · read-only · freshness unknown",
-      "noPunch": "no punch",
       "absent": "absent",
-      "onlyPunch": "{{time}} only",
-      "latePunch": "{{time}} +{{minutes}}m",
-      "duePunch": "due {{time}}"
+      "in": "In",
+      "out": "Out",
+      "schedule": "Scheduled shift",
+      "pastGrace": "+{{minutes}} min",
+      "nationalService": "National Service",
+      "openEmployee": "Open employee file · {{name}} · {{employeeId}}"
     },
     "print": {
       "title": "Daily Duty Register",
@@ -7148,7 +7459,6 @@
       "postCount": "{{count}} posts",
       "layoutSheet": "Biometric register",
       "layoutShift": "Duty attendance",
-      "gracePunch": "{{time}} (grace)",
       "printedBy": "By",
       "layoutRoster": "Attendance audit",
       "colLine": "#",
@@ -7177,15 +7487,22 @@
     },
     "board": {
       "seenOf": "{{seen}}/{{due}}",
-      "legend": "Colour marks only trouble"
+      "personDetails": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · In {{in}} · Out {{out}}",
+      "openEmployee": "Open employee file · {{details}}",
+      "leaveCount_one": "On leave: {{count}}",
+      "leaveCount_other": "On leave: {{count}}",
+      "nationalServiceCount_one": "National Service: {{count}}",
+      "nationalServiceCount_other": "National Service: {{count}}"
     },
     "timeline": {
-      "grace": "grace {{time}}",
-      "start": "start {{time}}",
-      "closes": "closes {{time}}",
-      "missingGutter": "−{{count}}",
       "median": "median arrival",
-      "glance": "One glance: is the cloud left of the amber line?"
+      "medianOffset": "{{sign}}{{minutes}}m",
+      "glance": "Bars show In to Out, or now while on site.",
+      "schedule": "Scheduled shift",
+      "employee": "Employee",
+      "in": "In",
+      "out": "Out",
+      "rowLabel": "{{name}} · {{employeeId}} · {{date}} · {{shift}} · {{state}} · In {{in}} · Out {{out}}"
     },
     "attention": {
       "title": "Needs a decision",
@@ -7248,7 +7565,9 @@
         "attendance_adjustment_changed": "Attendance adjustment changed",
         "leave_national_service": "National service leave",
         "leave_sick": "Sick leave",
-        "leave_annual": "Annual leave"
+        "leave_annual": "Annual leave",
+        "leave_duty": "Duty leave (official mission)",
+        "leave_other": "Other approved leave"
       },
       "auditActions": {
         "created": "Correction created",
@@ -7288,10 +7607,8 @@
       "shiftsWorked": "Shifts worked",
       "absentDays": "Absent days",
       "monthOf": "{{month}}",
-      "restDay": "off",
       "dayDetail": "{{date}} · {{shift}} {{window}}",
       "noSchedule": "No scheduled attendance in this month.",
-      "punchesUnknownDirection": "{{count}} punches · direction unknown",
       "grace": "grace {{minutes}}m",
       "seenCount": "{{count}} seen",
       "seenOnly": "Not rostered",
@@ -7299,6 +7616,11 @@
       "firstSeen": "First seen",
       "lastSeen": "Last seen",
       "punchCount": "Punches",
+      "in": "In",
+      "out": "Out",
+      "schedule": "Schedule",
+      "previousMonth": "Previous month",
+      "nextMonth": "Next month",
       "devices": "Device",
       "unenrolled": "Not enrolled on any attendance device.",
       "wholeRecord": "Whole record",
@@ -7403,6 +7725,8 @@
       "deduction_one": "Deduction: {{count}} day",
       "deduction_other": "Deduction: {{count}} days",
       "fromTo": "{{from}} to {{to}}",
+      "returnedTo": "Returned to {{place}}",
+      "leftFrom": "Left {{place}}",
       "statusChange": "Status change",
       "statusScheduled": "Scheduled status change",
       "statusCancelled": "Scheduled change cancelled",
@@ -7476,6 +7800,7 @@
         "absent": "Absent",
         "unpaired": "Single punch",
         "leave": "On leave",
+        "national_service": "National Service",
         "pending": "Not judged yet",
         "rest": "Rest day or not rostered",
         "withheld": "Withheld: leave or absence not visible to this account"

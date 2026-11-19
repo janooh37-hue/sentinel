@@ -14,7 +14,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { createMemoryRouter, Route, RouterProvider, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { listAttendanceDay, listAttendanceExceptions, getAttendanceCase, hasCapability } = vi.hoisted(() => ({
@@ -62,6 +62,7 @@ function row(overrides: Record<string, unknown> = {}) {
     scheduled_start_at: MORNING_START,
     scheduled_end_at: MORNING_END,
     first_punch_at: '2026-08-19T00:52:00',
+    punch_count: 2,
     last_punch_at: '2026-08-19T09:06:00',
     case_id: 42,
     late_minutes: 0,
@@ -100,16 +101,26 @@ const DAY_ROWS = [
   }),
 ]
 
+function RouteLocation(): React.JSX.Element {
+  const location = useLocation()
+  return <output data-testid="attendance-route">{location.pathname}{location.search}</output>
+}
+
 function renderPage(initialEntry = '/employees/attendance') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const router = createMemoryRouter([{
+    path: '*',
+    element: <>
+      <RouteLocation />
+      <Routes>
+        <Route path="/employees/attendance" element={<AttendancePage />} />
+        <Route path="/employees/:id" element={<div>employee file</div>} />
+      </Routes>
+    </>,
+  }], { initialEntries: [initialEntry] })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[initialEntry]}>
-        <Routes>
-          <Route path="/employees/attendance" element={<AttendancePage />} />
-          <Route path="/employees/:id" element={<div>employee file</div>} />
-        </Routes>
-      </MemoryRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   )
 }
@@ -253,6 +264,49 @@ describe('AttendancePage', () => {
     expect(new Date(secondDate).getTime()).toBeLessThan(new Date(firstDate).getTime())
   })
 
+  it('suspends all page shortcuts while the correction evidence overlay is open', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await user.click(await screen.findByRole('button', { name: /Review Ahmed Ali/i }))
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledWith(42))
+
+    await user.keyboard('{ArrowLeft}{ArrowRight}1/')
+
+    expect(listAttendanceDay).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('searchbox', { hidden: true })).not.toHaveFocus()
+    await user.click(screen.getByRole('button', { name: /close/i }))
+    await user.keyboard('{ArrowLeft}')
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledTimes(2))
+  })
+
+  it('suspends shortcuts under another open dialog', async () => {
+    const user = userEvent.setup()
+    render(
+      <div role="dialog" aria-label="Other workflow">
+        Other workflow
+      </div>,
+    )
+    renderPage()
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledTimes(1))
+
+    await user.keyboard('{ArrowLeft}{ArrowRight}2/')
+
+    expect(listAttendanceDay).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('searchbox')).not.toHaveFocus()
+  })
+
+  it('summarizes only the shift and search results on screen', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    const summary = await screen.findByRole('region', { name: 'On site now' })
+    expect(summary).toHaveTextContent('4 people')
+
+    await user.click(screen.getByRole('button', { name: /^Morning/ }))
+    expect(summary).toHaveTextContent('3 people')
+    await user.type(screen.getByRole('searchbox'), 'Ahmed')
+    expect(summary).toHaveTextContent('1 person')
+  })
+
   it('deep-links a name to that employee attendance tab', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -264,8 +318,45 @@ describe('AttendancePage', () => {
     expect(await screen.findByText('employee file')).toBeInTheDocument()
   })
 
-  it('shows the attention queue ordered worst first', async () => {
-    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
+  it.each(['register', 'board', 'timeline'] as const)('guards employee navigation from a dirty %s correction until Discard', async (view) => {
+    getAttendanceCase.mockResolvedValue({
+      data: {
+        id: 42,
+        employee_id: 'G-9001',
+        name_en: 'Ahmed Ali',
+        operational_date: '2026-08-19',
+        scheduled_start_at: MORNING_START,
+        scheduled_end_at: MORNING_END,
+        shift_code_snapshot: 'morning',
+        organization_snapshot_state: 'assigned',
+        effective: { presence_state: 'completed', first_in_at: '2026-08-19T01:10:00Z' },
+      },
+      etag: 'case-v1',
+    })
+    const user = userEvent.setup()
+    const route = `/employees/attendance?view=${view}`
+    renderPage(route)
+    const [surface] = await screen.findAllByTestId(view === 'board' ? 'attendance-board'
+      : view === 'timeline' ? 'attendance-timeline-unit' : 'attendance-register-unit')
+    await user.click(within(surface).getByRole('button', { name: /Correct attendance: Ahmed Ali/ }))
+    await screen.findByLabelText('In time (24h)')
+    await user.type(screen.getByLabelText('Reason details'), 'Confirmed against gate register')
+    await user.click(within(surface).getByText('Ahmed Ali'))
+    const confirmation = await screen.findByRole('alertdialog')
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent(route)
+    expect(screen.queryByText('employee file')).not.toBeInTheDocument()
+    await user.click(within(confirmation).getByRole('button', { name: 'Keep editing' }))
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent(route)
+    expect(screen.getByLabelText('Reason details')).toHaveValue('Confirmed against gate register')
+    await user.click(within(surface).getByText('Ahmed Ali'))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }))
+    expect(await screen.findByText('employee file')).toBeInTheDocument()
+    expect(screen.getByTestId('attendance-route')).toHaveTextContent('/employees/G-9001?tab=attendance')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows the derived attention queue ordered worst first', async () => {
+    listAttendanceExceptions.mockRejectedValue(new Error('network unavailable'))
     renderPage()
 
     const queue = await screen.findByTestId('attendance-attention-queue')
@@ -302,14 +393,19 @@ describe('AttendancePage', () => {
     expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
   })
 
-  it('does not request review exceptions for non-reviewers', async () => {
-    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
-    renderPage()
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'does not render the roster or request day data without %s',
+    async (denied) => {
+      hasCapability.mockImplementation((cap) => cap !== denied)
+      renderPage()
 
-    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledOnce())
-    expect(listAttendanceExceptions).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
-  })
+      expect(screen.queryByTestId('attendance-register-unit')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('attendance-attention-badge')).not.toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: /Attendance/i })).not.toBeInTheDocument()
+      expect(listAttendanceDay).not.toHaveBeenCalled()
+      expect(listAttendanceExceptions).not.toHaveBeenCalled()
+    },
+  )
 
   it('renders the empty state for a day with no rows', async () => {
     listAttendanceDay.mockResolvedValue({ items: [], next_cursor: null })

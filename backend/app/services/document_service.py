@@ -55,6 +55,7 @@ from app.core.html_text import html_to_text
 from app.core.inmate_wings import normalize_wing
 from app.core.nationalities import resolve_nationality
 from app.core.roles import INMATE_REPORTER_ROLE
+from app.core.scoped_roles import is_scoped_role, routes_to_line_manager
 from app.core.vault_manager import Vault
 from app.db.models import (
     AuditLog,
@@ -777,8 +778,14 @@ def _record_pending_resignation(
     if scheduled:
         employee.pending_status = EMPLOYEE_STATUS_RESIGNED
     else:
+        # Imported here: duty_service imports this module.
+        from app.services import duty_service
+
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
+        duty_service.apply_status_change(
+            db, employee=employee, from_status=from_status, actor_user_id=actor_user_id
+        )
     # A working employee carries no transfer fields, but a pending Transferred
     # being superseded by the letter must not leave its site behind.
     employee.transfer_site = None
@@ -897,9 +904,7 @@ def require_document_record_access(
             db, user, owning_version.book, version_id=owning_version.id
         )
         return owning_version
-    if user.role == INMATE_REPORTER_ROLE or not perm_service.has_capability(
-        db, user, "documents.generate"
-    ):
+    if is_scoped_role(user) or not perm_service.has_capability(db, user, "documents.generate"):
         raise AppError(
             "FORBIDDEN", "You don't have permission to access this document", http_status=403
         )
@@ -1028,7 +1033,7 @@ def live_record_document_clause(db: Session, user: User | None) -> ColumnElement
     )
 
     def readable(version: Any) -> ColumnElement[bool]:
-        if user.role == INMATE_REPORTER_ROLE:
+        if is_scoped_role(user):
             allowed = and_(full_access, version.id == current_version_id)
         else:
             retained = exists(
@@ -1547,18 +1552,12 @@ def _build_template_data(
             id=manager_id,
         )
 
-    # inmate_reporter never resolves a manager at save time (drafts keep a
-    # blank manager slot; the manager is assigned only at submit) — even
+    # A scoped role never resolves a manager at save time (drafts keep a
+    # blank manager slot; the approver is assigned only at submit) — even
     # explicit_manager_id=None would otherwise fall through to the legacy
     # linked-mailbox/default-manager chain.
-    is_inmate_reporter_generator = (
-        current_user is not None and current_user.role == INMATE_REPORTER_ROLE
-    )
-    manager = (
-        None
-        if is_inmate_reporter_generator
-        else resolve_manager(db, explicit_manager_id=manager_id)
-    )
+    is_scoped_generator = current_user is not None and is_scoped_role(current_user)
+    manager = None if is_scoped_generator else resolve_manager(db, explicit_manager_id=manager_id)
     if manager is not None:
         manager_record = {
             "name_en": manager.name_en,
@@ -2174,6 +2173,29 @@ def generate_document(
         fields["reporter_id"] = current_user.employee_id
         fields["submitter_g"] = current_user.employee_id
 
+    # ------------------------------------------------------------------
+    # 1a-line-manager chain (fleet_reporter). The author never picks the
+    # signing manager or embeds a signature: the paper is saved unsubmitted
+    # and the line manager is assigned at submit.
+    # ------------------------------------------------------------------
+    is_chain_author = current_user is not None and routes_to_line_manager(current_user)
+    if is_chain_author:
+        assert current_user is not None  # implied by is_chain_author
+        if manager_id is not None or _raw_manager_embed_requested:
+            raise AppError(
+                "SCOPED_ROLE_INPUT_FORBIDDEN",
+                "This role cannot choose the signing manager; it is assigned at submit.",
+                http_status=403,
+            )
+        embed_signature["manager"] = False
+        if commit and current_user.employee_id is None:
+            raise AppError(
+                "SCOPED_ROLE_EMPLOYEE_REQUIRED",
+                "Your account has no linked employee record yet.",
+                http_status=409,
+            )
+    is_scoped_author = is_inmate_reporter or is_chain_author
+
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 
     employee: Employee | None = None
@@ -2657,18 +2679,13 @@ def generate_document(
     # and so does an ``in_app`` book when no default manager is set (the
     # Submit dialog takes over, preselecting the default).
     # ------------------------------------------------------------------
-    if commit and _logged_book is not None and _state_version is not None and is_inmate_reporter:
-        # Fixed-scope role: no approval steps, no signature, no default-
-        # manager resolution — Book/version stay "none" (their creation
-        # default). Manager identity is assigned only at submit time.
+    if commit and _logged_book is not None and _state_version is not None and is_scoped_author:
+        # Scoped role: no approval steps, no signature, no default-manager
+        # resolution — Book/version stay "none" (their creation default),
+        # including a revision. The approver is assigned only at submit time.
         _logged_book.doc_manager_id = None
         db.flush()
-    if (
-        commit
-        and _logged_book is not None
-        and _state_version is not None
-        and not is_inmate_reporter
-    ):
+    if commit and _logged_book is not None and _state_version is not None and not is_scoped_author:
         _doc_mgr = resolve_manager(db, explicit_manager_id=manager_id)
         _logged_book.doc_manager_id = _doc_mgr.id if _doc_mgr is not None else None
         if signing_path == "auto" and embed_mgr:

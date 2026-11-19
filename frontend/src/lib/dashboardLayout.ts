@@ -14,7 +14,7 @@ export type WidgetSize = (typeof WIDGET_SIZES)[number]
 export const WIDGET_IDS = [
   'waiting_approvals', 'pending', 'sent_approvals', 'inbox', 'ledger', 'workspace',
   'quick_actions', 'on_leave_today', 'upcoming_leave', 'drafts', 'expiring_soon',
-  'violation_months', 'violations', 'pending_departures', 'workforce_pulse', 'permits',
+  'violation_months', 'violations', 'pending_departures', 'workforce_pulse', 'punch_log', 'permits',
   'store_expiring', 'store_low_stock',
 ] as const
 export type WidgetId = (typeof WIDGET_IDS)[number]
@@ -54,7 +54,7 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   waiting_approvals: 'L', pending: 'M', sent_approvals: 'S', inbox: 'S', ledger: 'M',
   workspace: 'M', quick_actions: 'W', on_leave_today: 'L', upcoming_leave: 'S',
   drafts: 'S', expiring_soon: 'S', violation_months: 'S', violations: 'S',
-  pending_departures: 'L', workforce_pulse: 'M', permits: 'XL',
+  pending_departures: 'L', workforce_pulse: 'M', punch_log: 'L', permits: 'XL',
   store_expiring: 'L', store_low_stock: 'L',
 }
 export const DEFAULT_LAYOUT: ResolvedDashboardLayout = {
@@ -67,7 +67,7 @@ const WIDGET_ID_LOOKUP: Record<string, true> = Object.fromEntries(WIDGET_IDS.map
 const QUICK_ACTION_ID_LOOKUP: Record<string, true> = Object.fromEntries(QUICK_ACTION_IDS.map((id) => [id, true]))
 const LEGACY_PANELS: Record<string, true> = {
   waiting_approvals: true, expiring_soon: true, on_leave_today: true, upcoming_leave: true,
-  pending_departures: true, workforce_pulse: true, violation_months: true,
+  pending_departures: true, workforce_pulse: true, punch_log: true, violation_months: true,
 }
 type SavedWidget = { id: string; visible: boolean; order: number; size?: string; zone?: string | null }
 type SavedLayout = { widgets?: SavedWidget[]; quick_actions?: { id: string; visible: boolean; order: number }[]; canvas_width?: string | null }

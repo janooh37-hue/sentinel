@@ -11,7 +11,7 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
@@ -21,6 +21,7 @@ import {
   DocumentViewerDialog,
 } from '@/components/ui/document-viewer-dialog'
 import { ApiError, api } from '@/lib/api'
+import { AuthContext } from '@/lib/authContext'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { recordRecentEmployee } from '@/lib/employeeRecents'
@@ -68,6 +69,8 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const [searchParams, setSearchParams] = useSearchParams()
   const { i18n, t } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const user = useContext(AuthContext)?.user ?? null
+  const isSelf = !!user?.employee_id && user.employee_id === id
   const action = searchParams.get('action')
   const editOverlay = useUrlOverlay('action')
   const docOverlay = useUrlOverlay('doc')
@@ -346,7 +349,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 onOpenTab={handleTabChange}
               />
             )}
-            {tab === 'attendance' && id && <AttendanceTab employeeId={id} />}
+            {tab === 'attendance' && id && <AttendanceTab employeeId={id} employeeName={name} isSelf={isSelf} />}
             {tab === 'uniform' && <UniformTab employeeId={data.employee.id} />}
             {tab === 'messages' && (
               <MessagesTab
