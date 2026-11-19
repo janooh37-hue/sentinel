@@ -479,9 +479,10 @@ function* letterRowsByKey(table: HTMLTableElement): Generator<[string, HTMLTable
 }
 
 /**
- * Translate generated cells in the header and matching employee rows. Keep
- * unmatched rows and operator edits intact, and carry the returned edit keys
- * into the next switch even when an edit matches that language's generated text.
+ * Translate generated cells in the header and matching employee rows. A cell
+ * with matching text is still edited if it contains markup other than the
+ * editor's <br> placeholders. Carry those edits and text corrections into the
+ * next switch, and leave unmatched rows alone.
  */
 export function swapLetterTable(
   bodyHtml: string,
@@ -510,8 +511,9 @@ export function swapLetterTable(
     for (let c = 0; c < cells.length && c < sourceCells.length && c < targetCells.length; c++) {
       const cellKey = `${rowKey}:${c}`
       if (nextEdited.has(cellKey)) continue
-      if (cells[c].textContent?.trim() === sourceCells[c].textContent?.trim()) {
-        cells[c].innerHTML = targetCells[c].innerHTML
+      const cell = cells[c]
+      if (cell.textContent?.trim() === sourceCells[c].textContent?.trim() && !cell.querySelector(':not(br)')) {
+        cell.innerHTML = targetCells[c].innerHTML
       } else {
         nextEdited.add(cellKey)
       }

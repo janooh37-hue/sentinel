@@ -151,6 +151,44 @@ describe('compose prefill', () => {
     ])
   })
 
+  it('keeps an image pasted into an otherwise empty comments cell', () => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    const image = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'
+    table.tBodies[0].rows[0].cells[10].innerHTML = `<img src="${image}" alt="Supporting image">`
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    const comments = letterTable(html).tBodies[0].rows[0].cells[10]
+    expect(comments.querySelector('img')?.getAttribute('src')).toBe(image)
+    expect(cells(html)[3]).toBe('Abdellahi Abah')
+  })
+
+  it.each([
+    ['bold', '<strong>عبدالله أباه</strong>'],
+    ['linked', '<a href="https://example.com/employee">عبدالله أباه</a>'],
+  ])('keeps a %s name even when its visible text is unchanged', (_format, markup) => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    table.tBodies[0].rows[0].cells[3].innerHTML = markup
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(letterTable(html).tBodies[0].rows[0].cells[3].innerHTML).toBe(markup)
+    expect(cells(html)[4]).toBe('Oman')
+  })
+
+  it.each([
+    ['no markup', ''],
+    ['an editor line break', '<br>'],
+  ])('translates the table with an empty comments cell containing %s', (_content, markup) => {
+    const { ar, en } = bilingualVariants([item()])
+    const table = letterTable(ar)
+    table.tBodies[0].rows[0].cells[10].innerHTML = markup
+
+    const { html } = swapLetterTable(table.outerHTML, ar, en)
+    expect(letterTable(html).tBodies[0].rows[0].cells[10].innerHTML).toBe('')
+    expect(cells(html)[3]).toBe('Abdellahi Abah')
+  })
+
   it.each([
     ['ar', 'en', 'عبدالله أباه', 'Abdellahi Abah', 'Oman', 'سلطنة عُمان'],
     ['en', 'ar', 'Abdellahi Abah', 'عبدالله أباه', 'سلطنة عُمان', 'Oman'],
