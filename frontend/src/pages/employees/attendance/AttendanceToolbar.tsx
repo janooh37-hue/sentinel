@@ -7,7 +7,12 @@
  * `seen/due`, so switching is a decision, not a probe.
  */
 
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { UNASSIGNED } from '@/lib/dutyUnits'
+import { cn } from '@/lib/utils'
+import { NATIVE_SELECT } from '@/pages/leaves/report/controls'
 
 import type { PrintLayout } from './AttendancePrintSheet'
 import type { AttendanceRow, ShiftCount } from './attendanceModel'
@@ -32,10 +37,13 @@ interface Props {
   rows: readonly AttendanceRow[]
   now: Date
   shiftCode: string | null
+  company: string | null
+  companies: readonly string[]
   view: AttendanceView
   search: string
   onDateChange: (iso: string) => void
   onShiftChange: (shiftCode: string | null) => void
+  onCompanyChange: (company: string | null) => void
   onViewChange: (view: AttendanceView) => void
   onSearchChange: (value: string) => void
   onPrint: (layout: PrintLayout) => void
@@ -64,18 +72,25 @@ export function AttendanceToolbar({
   rows,
   now,
   shiftCode,
+  company,
+  companies,
   view,
   search,
   onDateChange,
   onShiftChange,
+  onCompanyChange,
   onViewChange,
   onSearchChange,
   onPrint,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
+  const companyId = useId()
   const counts = shiftCounts(rows, { now })
   const shifts = orderedShifts(counts)
   const today = dayStrip.at(-1)?.iso ?? operationalDate
+  const companyOptions = company && company !== UNASSIGNED && !companies.includes(company)
+    ? [...companies, company]
+    : companies
 
   return (
     <div data-print-hide>
@@ -131,6 +146,24 @@ export function AttendanceToolbar({
               </button>
             )
           })}
+        </div>
+
+        <div className="flex w-full min-w-0 flex-col gap-1.5 lg:w-auto lg:flex-row lg:items-center lg:gap-2">
+          <label htmlFor={companyId} className="text-[0.75em] text-muted-foreground">
+            {t('attendance.toolbar.company')}
+          </label>
+          <select
+            id={companyId}
+            value={company ?? ''}
+            onChange={(event) => onCompanyChange(event.target.value || null)}
+            className={cn(NATIVE_SELECT, 'min-h-[44px] w-full lg:min-h-9 lg:w-auto lg:max-w-[200px]')}
+          >
+            <option value="">{t('leaves.report.allCompanies')}</option>
+            {companyOptions.filter((candidate) => candidate !== UNASSIGNED).map((candidate) => (
+              <option key={candidate} value={candidate}>{candidate}</option>
+            ))}
+            <option value={UNASSIGNED}>{t('dutyLocations.unassigned')}</option>
+          </select>
         </div>
 
         <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 md:max-w-[280px]">
