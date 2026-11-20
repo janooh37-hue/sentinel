@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from bisect import bisect_left, bisect_right
+from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
@@ -11,7 +12,7 @@ from math import floor
 from typing import Any, NamedTuple, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import ColumnElement, Select, and_, or_, select
+from sqlalchemy import ColumnElement, Select, and_, null, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -566,9 +567,14 @@ def _sqlite_register_rows(db: Session, query: Select[*tuple[Any, ...]]) -> list[
         return cast(list[tuple[Any, ...]], cursor.fetchall())
 
 
-def _compact_register_cases(db: Session, query: Select[*tuple[Any, ...]]) -> list[_RegisterCase]:
+def _compact_register_cases(
+    db: Session, query: Select[*tuple[Any, ...]], *, grouped: bool
+) -> list[_RegisterCase]:
     cases: list[_RegisterCase] = []
     slots: dict[tuple[str, str, str], tuple[date, datetime, datetime]] = {}
+    by_slot: defaultdict[tuple[str, str, str], list[_RegisterCase]] | None = (
+        defaultdict(list) if grouped else None
+    )
     for (
         case_id,
         employee,
@@ -593,21 +599,28 @@ def _compact_register_cases(db: Session, query: Select[*tuple[Any, ...]]) -> lis
                 datetime.fromisoformat(begins),
                 datetime.fromisoformat(ends),
             )
-        cases.append(
-            _RegisterCase(
-                case_id,
-                employee,
-                *slot,
-                occurrence,
-                shift,
-                department,
-                unit,
-                post,
-                evaluation,
-                state,
-                reason,
-            )
+        case = _RegisterCase(
+            case_id,
+            employee,
+            *slot,
+            occurrence,
+            shift,
+            department,
+            unit,
+            post,
+            evaluation,
+            state,
+            reason,
         )
+        if by_slot is not None:
+            by_slot[key].append(case)
+        else:
+            cases.append(case)
+    # Totals need chronological duties per employee, not a name/ID tie-break
+    # across the entire roster. Sort the shift slots, not every case in SQLite.
+    if by_slot is not None:
+        for key in sorted(by_slot):
+            cases.extend(by_slot[key])
     return cases
 
 
@@ -620,7 +633,18 @@ def _register_cases(
     shift_code: str | None,
     duty_unit: str | None,
     include_day_fields: bool,
+    totals_only: bool = False,
+    unassigned_only: bool = False,
 ) -> list[_RegisterCase]:
+    unrestricted = (
+        scope.is_organization
+        and scope.requested_department is None
+        and scope.requested_duty_unit is None
+        and scope.requested_duty_post is None
+    )
+    # A totals-only request never displays this hierarchy. Keep the snapshots
+    # when they are needed for scope enforcement or the Unassigned filter.
+    omit_hierarchy = totals_only and unrestricted
     revision = aliased(AttendanceEvaluation)
     latest_id = (
         select(revision.id)
@@ -639,9 +663,9 @@ def _register_cases(
             AttendanceCase.scheduled_end_at,
             AttendanceCase.shift_occurrence_id,
             AttendanceCase.shift_code_snapshot,
-            AttendanceCase.department_snapshot,
-            AttendanceCase.duty_unit_snapshot,
-            AttendanceCase.duty_post_snapshot,
+            null() if omit_hierarchy else AttendanceCase.department_snapshot,
+            null() if omit_hierarchy and not unassigned_only else AttendanceCase.duty_unit_snapshot,
+            null() if omit_hierarchy else AttendanceCase.duty_post_snapshot,
             AttendanceEvaluation.id,
             AttendanceEvaluation.presence_state,
             AttendanceEvaluation.reason_code,
@@ -649,13 +673,14 @@ def _register_cases(
         .select_from(AttendanceCase)
         .outerjoin(AttendanceEvaluation, AttendanceEvaluation.id == latest_id)
         .where(AttendanceCase.operational_date.between(from_date, to_date))
-        .order_by(
-            AttendanceCase.operational_date,
+        .order_by(AttendanceCase.operational_date)
+    )
+    if not totals_only:
+        query = query.order_by(
             AttendanceCase.scheduled_start_at,
             AttendanceCase.employee_id,
             AttendanceCase.id,
         )
-    )
     if shift_code is not None:
         query = query.where(AttendanceCase.shift_code_snapshot == shift_code)
     if duty_unit is not None:
@@ -680,14 +705,11 @@ def _register_cases(
     cases = (
         [_RegisterCase._make(row) for row in db.connection().execute(query).all()]
         if include_day_fields
-        else _compact_register_cases(db, query)
+        else _compact_register_cases(db, query, grouped=totals_only)
     )
-    if (
-        scope.is_organization
-        and scope.requested_department is None
-        and scope.requested_duty_unit is None
-        and scope.requested_duty_post is None
-    ):
+    if unassigned_only:
+        cases = [case for case in cases if not (case.duty_unit_snapshot or "").strip()]
+    if unrestricted:
         # Organization scope allows any captured hierarchy, but not a blank ID.
         return [case for case in cases if case.employee_id.strip()]
     allowed: dict[tuple[str, str | None, str | None, str | None], bool] = {}
@@ -988,6 +1010,51 @@ def iter_effective_attendance_rows(
     include_day_fields: bool = False,
 ) -> Iterator[EffectiveAttendanceRow]:
     """Scoped register facts in date and shift order, with optional exact snapshot filters."""
+    return _iter_register_rows(
+        db,
+        scope=scope,
+        from_date=from_date,
+        to_date=to_date,
+        shift_code=shift_code,
+        duty_unit=duty_unit,
+        include_day_fields=include_day_fields,
+    )
+
+
+def iter_effective_attendance_totals_rows(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    duty_unit: str | None = None,
+    unassigned_only: bool = False,
+) -> Iterator[tuple[str, JudgedRow]]:
+    """The same judgment inputs, in duty order per person, without display fields."""
+    for case, judgment, _ in _iter_register_rows(
+        db,
+        scope=scope,
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        totals_only=True,
+        unassigned_only=unassigned_only,
+    ):
+        yield case.employee_id, judgment
+
+
+def _iter_register_rows(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    shift_code: str | None = None,
+    duty_unit: str | None = None,
+    include_day_fields: bool = False,
+    totals_only: bool = False,
+    unassigned_only: bool = False,
+) -> Iterator[EffectiveAttendanceRow]:
     start = from_date
     while start <= to_date:
         # Bound memory and the punch time span, even for a year-over-year read.
@@ -1000,6 +1067,8 @@ def iter_effective_attendance_rows(
             shift_code=shift_code,
             duty_unit=duty_unit,
             include_day_fields=include_day_fields,
+            totals_only=totals_only,
+            unassigned_only=unassigned_only,
         )
         yield from _project_register(
             db, cases, start=start, end=end, include_day_fields=include_day_fields
