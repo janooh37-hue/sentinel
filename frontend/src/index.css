@@ -2116,6 +2116,34 @@ body {
   .print-attendance tfoot {
     display: table-footer-group;
   }
+
+  @page company-stats {
+    size: A4 landscape;
+    margin: 10mm 0;
+  }
+  /* Keep the mobile shell's padding and closing flex fragments off the
+     named report pages. Every visible sibling is already print-hidden. */
+  body:has(.print-company-stats) {
+    page: company-stats;
+  }
+  body:has(.print-company-stats) #root *:has(.print-company-stats) {
+    display: contents !important;
+  }
+  .print-company-stats {
+    page: company-stats;
+    min-inline-size: 100%;
+    padding-inline: 10mm;
+    contain: inline-size;
+    --text-muted: #5a6068;
+    --border: #e6e4dd;
+  }
+  .print-company-stats thead {
+    display: table-header-group;
+  }
+  .print-company-stats tr {
+    break-inside: avoid;
+  }
+
   /* The desk that hosts the sheet pads the document on screen (px-6); on paper
      that padding is another ~13mm off the width. */
   :has(> .print-paper) {

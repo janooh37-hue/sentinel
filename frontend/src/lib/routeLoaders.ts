@@ -89,6 +89,10 @@ export const loadAttendancePage = () =>
   import('@/pages/employees/attendance/AttendancePage').then((m) => ({
     default: m.AttendancePage,
   }))
+export const loadCompanyStatsPage = () =>
+  import('@/pages/employees/companyStats/CompanyStatsPage').then((m) => ({
+    default: m.CompanyStatsPage,
+  }))
 export const loadEmployeesOrgTreePage = () =>
   import('@/pages/employees/orgTree/EmployeesOrgTreePage').then((m) => ({
     default: m.EmployeesOrgTreePage,

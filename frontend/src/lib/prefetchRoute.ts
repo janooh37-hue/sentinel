@@ -12,6 +12,7 @@ import {
   loadAttendancePage,
   loadBookRecordPage,
   loadBooksPage,
+  loadCompanyStatsPage,
   loadDashboardPage,
   loadDutyLocationsPage,
   loadEmployeeDetailPage,
@@ -52,6 +53,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [string, () => Promise<unknown>]> = 
   ['/employees/attendance', loadAttendancePage],
   ['/employees/org-tree', loadEmployeesOrgTreePage],
   ['/employees/timesheet', loadTimesheetPage],
+  ['/employees/company-stats', loadCompanyStatsPage],
   ['/employees/', loadEmployeeDetailPage],
   // /employees itself is eagerly bundled (EmployeeLookupPage) — no prefetch.
   ['/services', loadApplicationPage],
