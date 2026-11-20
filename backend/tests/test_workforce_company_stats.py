@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import date, time, timedelta
+from io import BytesIO
 from typing import Any
+from urllib.parse import unquote
 from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,16 +24,19 @@ from app.db.workforce_models import (
     AttendancePunchAssignment,
     AttendancePunchProfile,
     DutyAssignmentEvent,
+    WorkAttendancePolicy,
     WorkShiftOccurrence,
 )
-from app.services import perm_service
+from app.services import perm_service, workforce_read_service
 from app.services.attendance_evaluation_service import evaluate_case
+from app.services.workforce_access_service import organization_scope
 from tests.factories.attendance import build_attendance_day, local, utc_naive
 from tests.test_attendance_evaluation_service import _punch, _seed_case
 from tests.test_workforce_api_permissions import _client, _scope, _user
 from tests.test_workforce_leave_precedence import _employee, _leave
 
 PATH = "/api/v1/workforce/attendance/company-stats"
+EXPORT_PATH = f"{PATH}/export"
 START, END, TODAY = date(2026, 8, 17), date(2026, 8, 19), date(2026, 8, 20)
 REVIEW_CAPS = ("workforce.attendance.review", "workforce.people.view")
 
@@ -113,6 +120,7 @@ def _leave_span(
 
 def test_dubai_yesterday_clamps_and_previous_period_is_adjacent(admin_client: TestClient) -> None:
     data = _stats(admin_client, end=TODAY)
+    assert (data["coverage_from"], data["previous_comparable"]) == (None, False)
     assert data["closed_through"] == "2026-08-19"
     assert data["period"] == {
         "from_date": "2026-08-17",
@@ -142,8 +150,9 @@ def test_accepts_exactly_366_days_after_clamping(admin_client: TestClient) -> No
     assert _stats(admin_client, END - timedelta(days=365), TODAY)["period"]["days"] == 366
 
 
+@pytest.mark.parametrize("path", [PATH, EXPORT_PATH], ids=["stats", "export"])
 @pytest.mark.parametrize("denied", REVIEW_CAPS)
-def test_both_register_capabilities_are_required(api_db: Session, denied: str) -> None:
+def test_both_register_capabilities_are_required(api_db: Session, denied: str, path: str) -> None:
     user = _user(api_db, email="stats-reviewer@test.ae")
     for capability in REVIEW_CAPS:
         perm_service.set_user_override(
@@ -151,7 +160,7 @@ def test_both_register_capabilities_are_required(api_db: Session, denied: str) -
         )
     _scope(api_db, user, kind="organization")
     response = _client(api_db, user).get(
-        PATH, params={"from_date": str(START), "to_date": str(END)}
+        path, params={"from_date": str(START), "to_date": str(END)}
     )
     assert response.status_code == 403, response.text
 
@@ -200,6 +209,8 @@ def test_filter_uses_snapshot_and_keeps_comparison_and_transfer(
     unassigned = _employee(api_db, "G-UNASSIGNED")
     _case(api_db, first, unassigned.id, START, None)
     _case(api_db, first, unassigned.id, END, "  ")
+    _case(api_db, first, unassigned.id, date(2026, 8, 14), None)
+    _case(api_db, first, unassigned.id, date(2026, 8, 15), "  ")
     api_db.commit()
 
     data = _stats(admin_client, duty_unit="Beta")
@@ -214,21 +225,20 @@ def test_filter_uses_snapshot_and_keeps_comparison_and_transfer(
     assert data["overall"]["absence"] == {"days": 5, "episodes": 2}
     assert alpha["ratio"]["absence"] == pytest.approx(0.6)
     assert beta["ratio"]["absence"] == pytest.approx(1.2)
-    assert beta["status"] == {
-        "absence": "warn",
-        "single_punch": None,
-        "late": None,
-        "overall": "warn",
-    }
+    assert beta["small_sample"] is True
+    assert beta["status"] == dict.fromkeys(("absence", "single_punch", "late", "overall"))
     assert data["summary"]["current"]["absence"] == {"days": 2, "episodes": 1}
     assert data["ranking"]["total"] == 1
     row = data["ranking"]["rows"][0]
     assert (row["employee_id"], row["duty_unit"], row["score"]) == (first.employee_id, "Beta", 6)
+    assert (row["events"], row["small_sample"], row["tier"]) == (2, True, None)
     assert row["transfer"] == {"from_unit": "Alpha", "to_unit": "Beta", "on_date": "2026-08-18"}
 
     unassigned_data = _stats(admin_client, duty_unit="__unassigned__")
     assert unassigned_data["companies"] == data["companies"]
     assert unassigned_data["summary"]["current"]["duties_scheduled"] == 2
+    assert unassigned_data["summary"]["previous"]["duties_scheduled"] == 2
+    assert _stats(admin_client, duty_unit="  ")["summary"]["previous"]["duties_scheduled"] == 0
     assert unassigned_data["ranking"]["order"]["score"] == [unassigned.id]
     assert unassigned_data["ranking"]["rows"][0]["transfer"] is None
 
@@ -571,3 +581,314 @@ def test_series_is_weekly_for_short_periods_and_monthly_with_clipped_edges(
         ("2026-07-19", "2026-07-31"),
         ("2026-08-01", "2026-08-19"),
     ]
+
+
+def test_coverage_is_scoped_before_the_company_filter(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    seed = _seed_case(api_db)
+    seed.duty_unit_snapshot = "Alpha"
+    older = date(2026, 8, 14)
+    _case(api_db, seed, seed.employee_id, older, "Beta")
+    reviewer = _user(api_db, email="stats-coverage@test.ae")
+    for cap in REVIEW_CAPS:
+        perm_service.set_user_override(api_db, reviewer.id, cap, "grant")
+    _scope(api_db, reviewer, kind="duty_unit", duty_unit="Alpha")
+    api_db.commit()
+
+    all_scope = _stats(admin_client, duty_unit="Alpha")
+    assert all_scope["coverage_from"] == "2026-08-14"
+    assert all_scope["previous_comparable"] is True  # Equality is comparable.
+    assert (
+        all_scope["summary"]["previous"]["duties_scheduled"] == 0
+    )  # Beta did not leak into Alpha totals.
+    limited = _stats(_client(api_db, reviewer))
+    assert limited["coverage_from"] == "2026-08-17"
+    assert limited["previous_comparable"] is False
+
+    empty_reviewer = _user(api_db, email="stats-no-scope@test.ae")
+    for cap in REVIEW_CAPS:
+        perm_service.set_user_override(api_db, empty_reviewer.id, cap, "grant")
+    empty = _stats(_client(api_db, empty_reviewer))
+    assert (empty["coverage_from"], empty["previous_comparable"]) == (None, False)
+
+
+def test_partial_previous_period_keeps_its_actual_totals(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    seed = _seed_case(api_db)
+    seed.duty_unit_snapshot = "Alpha"
+    previous = _case(api_db, seed, seed.employee_id, date(2026, 8, 15), "Alpha")
+    _case(api_db, seed, seed.employee_id, date(2026, 8, 16), "Alpha")
+    _punch(
+        api_db,
+        previous,
+        event_id="past-grace",
+        at=previous.scheduled_start_at + timedelta(minutes=28),
+        direction="in",
+    )
+    _leave_span(api_db, seed.employee_id, "Sick Leave", date(2026, 8, 14), date(2026, 8, 14))
+    api_db.commit()
+
+    data = _stats(admin_client, duty_unit="Alpha")
+    assert data["coverage_from"] == "2026-08-15"
+    assert data["previous_comparable"] is False
+    previous_totals = data["summary"]["previous"]
+    assert previous_totals["duties_scheduled"] == 2
+    assert previous_totals["strength"] == 1
+    assert previous_totals["absence"] == {"days": 1, "episodes": 1}
+    assert previous_totals["late"] == {"count": 1, "minutes": 18}
+    assert previous_totals["leaves"]["sick"] == {"days": 0, "count": 0}
+    # Coverage clips the case scan, not leave history. This leave has no unit of its own.
+    assert _stats(admin_client)["summary"]["previous"]["leaves"]["sick"] == {"days": 1, "count": 1}
+
+
+def test_previous_totals_reader_uses_the_same_judgment_fields_as_the_register(
+    api_db: Session,
+) -> None:
+    fixture = build_attendance_day(
+        api_db,
+        operational_date=END,
+        posts=[("Gate", 2)],
+        punches={"G-9002": [time(5, 47), time(12, 22)]},
+    )
+    excused, corrected = fixture.employees
+    correction_case = next(
+        case
+        for case in fixture.cases
+        if case.employee_id == corrected.id and case.shift_code_snapshot == "morning"
+    )
+    _leave_span(api_db, excused.id, "Sick Leave", END, END)
+    for case in fixture.cases:
+        if case.employee_id == excused.id:
+            evaluate_case(api_db, case.id, evaluated_at=local(TODAY, time(12)))
+    latest = api_db.scalar(
+        select(AttendanceEvaluation)
+        .where(AttendanceEvaluation.attendance_case_id == correction_case.id)
+        .order_by(AttendanceEvaluation.revision.desc())
+    )
+    assert latest is not None
+    api_db.add(
+        AttendanceAdjustment(
+            attendance_case_id=correction_case.id,
+            base_evaluation_id=latest.id,
+            replacement_presence_state="completed",
+            replacement_late_minutes=45,
+            reason="Supervisor correction",
+            created_by_user_id=fixture.admin.id,
+        )
+    )
+    _case(api_db, correction_case, corrected.id, TODAY, correction_case.duty_unit_snapshot)
+    for policy in api_db.scalars(select(WorkAttendancePolicy)):
+        policy.effective_to = TODAY
+    api_db.commit()
+
+    scope = organization_scope()
+    expected = defaultdict(list)
+    for case, judgment, _ in workforce_read_service.iter_effective_attendance_rows(
+        api_db,
+        scope=scope,
+        from_date=END,
+        to_date=TODAY,
+        include_day_fields=True,
+    ):
+        expected[case.employee_id].append(judgment)
+    assert len(expected[excused.id]) == 2  # Double shift.
+    assert all(row.on_leave and row.leave_kind == "sick" for row in expected[excused.id])
+    assert expected[corrected.id][0].late_minutes == 45
+    assert expected[corrected.id][-1].absence_due_at is None  # No policy for this date.
+    actual = defaultdict(list)
+    for employee_id, judgment in workforce_read_service.iter_effective_attendance_totals_rows(
+        api_db,
+        scope=scope,
+        from_date=END,
+        to_date=TODAY,
+    ):
+        actual[employee_id].append(judgment)
+    assert actual == expected
+
+
+def test_company_status_starts_at_thirty_due_duties_not_thirty_scheduled(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    seed = _seed_case(api_db)
+    seed.duty_unit_snapshot = "Alpha"
+    for unit in ("Alpha", "Beta"):
+        for index in range(29 if unit == "Alpha" else 30):
+            person = _employee(api_db, f"G-{unit}-{index}")
+            _case(api_db, seed, person.id, START, unit)
+    _leave_span(api_db, seed.employee_id, "Sick Leave", START, START)
+    evaluate_case(api_db, seed.id, evaluated_at=local(END, time(23)))
+    api_db.commit()
+
+    alpha, beta = _stats(admin_client)["companies"]
+    assert alpha["totals"]["duties_scheduled"] == 30
+    assert alpha["totals"]["duties_due"] == 29
+    assert alpha["small_sample"] is True
+    assert alpha["ratio"]["absence"] == pytest.approx(58 / 59)
+    assert alpha["status"] == dict.fromkeys(("absence", "single_punch", "late", "overall"))
+    assert beta["totals"]["duties_due"] == 30
+    assert beta["small_sample"] is False
+    assert beta["status"]["absence"] == beta["status"]["overall"] == "normal"
+
+
+def test_employee_tier_starts_at_three_events(api_db: Session, admin_client: TestClient) -> None:
+    seed = _seed_case(api_db)
+    two = _employee(api_db, "G-TWO")
+    _case(api_db, seed, two.id, START, None)
+    for day in (START + timedelta(days=1), END):
+        _case(api_db, seed, seed.employee_id, day, None)
+    _case(api_db, seed, two.id, END, None)
+    for index in range(2):
+        person = _employee(api_db, f"G-ON-TIME-{index}")
+        case = _case(api_db, seed, person.id, START, None)
+        api_db.add(
+            AttendanceEvaluation(
+                attendance_case_id=case.id,
+                revision=1,
+                presence_state="completed",
+                reason_code="SHIFT_COMPLETED",
+                algorithm_version="stats-test",
+                input_fingerprint="present",
+            )
+        )
+    api_db.commit()
+    ranking = _stats(admin_client)["ranking"]
+    assert ranking["average_score"] == 3.75
+    by_id = {row["employee_id"]: row for row in ranking["rows"]}
+    assert (by_id[two.id]["events"], by_id[two.id]["small_sample"], by_id[two.id]["tier"]) == (
+        2,
+        True,
+        None,
+    )
+    three = by_id[seed.employee_id]
+    assert (three["events"], three["small_sample"], three["tier"]) == (
+        3,
+        False,
+        "needs_intervention",
+    )
+
+
+@pytest.mark.parametrize("start", [TODAY, END - timedelta(days=366)])
+def test_export_rejects_invalid_closed_period(admin_client: TestClient, start: date) -> None:
+    response = admin_client.get(
+        EXPORT_PATH, params={"from_date": str(start), "to_date": str(TODAY)}
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.parametrize(
+    "language,titles,note",
+    [
+        (
+            "en",
+            ["Summary", "Companies", "Trend", "Ranking", "National service"],
+            "Not enough earlier data",
+        ),
+        (
+            "ar",
+            ["ملخص الفترة", "السرايا", "الاتجاه عبر الزمن", "الأكثر تكراراً", "الخدمة الوطنية"],
+            "لا توجد بيانات سابقة كافية",
+        ),
+    ],
+)
+def test_export_workbook_has_localized_worksheets_and_typed_cells(
+    api_db: Session,
+    admin_client: TestClient,
+    language: str,
+    titles: list[str],
+    note: str,
+) -> None:
+    case = _seed_case(api_db)
+    case.duty_unit_snapshot = "Alpha"
+    employee = _employee(api_db, "G-EXCEL")
+    employee.name_en = "=1+1"  # Employee data must export as text, not a spreadsheet formula.
+    employee.name_ar = "=1+1"
+    _case(api_db, case, employee.id, START, "Alpha")
+    employee.duty_unit = "Alpha"
+    _leave_span(api_db, employee.id, "National Service", END, TODAY + timedelta(days=2), "Pending")
+    api_db.commit()
+    response = admin_client.get(
+        EXPORT_PATH,
+        params={"from_date": str(START), "to_date": str(TODAY), "language": language},
+    )
+    assert response.status_code == 200, response.text
+    assert (
+        response.headers["Content-Type"]
+        == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    disposition = response.headers["Content-Disposition"]
+    assert disposition.startswith("attachment; filename*=UTF-8''")
+    filename = unquote(disposition.split("''", 1)[1])
+    assert filename.startswith("إحصائيات السرايا" if language == "ar" else "Company statistics")
+    assert filename.endswith("2026-08-19.xlsx")  # Uses the clamped end date.
+
+    workbook = load_workbook(BytesIO(response.content))
+    assert workbook.sheetnames == titles
+    for sheet in workbook:
+        assert sheet.sheet_view.rightToLeft is (language == "ar")
+        assert sheet.freeze_panes is not None
+    summary, companies, trend, ranking, national_service = workbook.worksheets
+    assert summary.max_column == 3  # No delta column at all when coverage is incomplete.
+    assert note in {cell.value for row in summary for cell in row}
+    fraction = next(
+        cell
+        for row in companies
+        for cell in row
+        if cell.data_type == "n" and cell.number_format == "0.0%"
+    )
+    assert fraction.value == 1
+    assert trend["C2"].value == 2
+    assert trend["C2"].data_type == "n"
+    assert national_service["H2"].value == pytest.approx(0.25)
+    assert national_service["H2"].data_type == "n"
+    assert national_service["H2"].number_format == "0.0%"
+    name = next(cell for row in ranking for cell in row if cell.value == "=1+1")
+    assert name.data_type == "s"
+    assert ("عينة صغيرة" if language == "ar" else "Small sample") in {
+        cell.value for row in ranking for cell in row
+    }
+
+
+def test_export_includes_all_ranked_employees_but_no_out_of_scope_data(api_db: Session) -> None:
+    first = _seed_case(api_db)
+    first.duty_unit_snapshot = "Alpha"
+    _case(api_db, first, first.employee_id, END, "Alpha")  # Score 6; must rank first.
+    earlier = date(2026, 8, 14)
+    _case(api_db, first, first.employee_id, earlier, "Alpha")
+    visible_ids = {first.employee_id}
+    for index in range(52):
+        employee = _employee(api_db, f"G-ALPHA-{index:02}")
+        visible_ids.add(employee.id)
+        _case(api_db, first, employee.id, START, "Alpha")
+    outsider = _employee(api_db, "G-HIDDEN")
+    outsider.duty_unit = "Beta"
+    _case(api_db, first, outsider.id, START, "Beta")
+    _leave_span(api_db, outsider.id, "National Service", END, TODAY, "Pending")
+    user = _user(api_db, email="stats-export-reviewer@test.ae")
+    for cap in REVIEW_CAPS:
+        perm_service.set_user_override(api_db, user.id, cap, "grant")
+    _scope(api_db, user, kind="duty_unit", duty_unit="Alpha")
+    api_db.commit()
+    response = _client(api_db, user).get(
+        EXPORT_PATH,
+        params={"from_date": str(START), "to_date": str(END), "language": "en"},
+    )
+    assert response.status_code == 200, response.text
+    workbook = load_workbook(BytesIO(response.content))
+    ranked_ids = [row[0] for row in workbook["Ranking"].iter_rows(min_row=2, values_only=True)]
+    assert ranked_ids[0] == first.employee_id
+    assert len(ranked_ids) == 53
+    assert set(ranked_ids) == visible_ids
+    for sheet in workbook:
+        assert outsider.id not in {cell.value for row in sheet for cell in row}
+    summary = workbook["Summary"]
+    assert summary.max_column == 4
+    absence = next(row for row in summary.iter_rows() if row[0].value == "Absence · Days")
+    assert [(cell.value, cell.data_type) for cell in absence[1:]] == [
+        (54, "n"),
+        (1, "n"),
+        (53, "n"),
+    ]
+    assert absence[3].number_format == "0%"

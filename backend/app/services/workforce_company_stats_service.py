@@ -20,16 +20,20 @@ from app.api.errors import ValidationFailedError
 from app.core import clock, leave_lifecycle
 from app.core.attendance_verdict import RowState, judge_register_row, parse_instant
 from app.db.models import Book, BookVersion, Document, Employee, Leave
-from app.db.workforce_models import DutyAssignmentEvent
-from app.schemas.workforce import StatsStatus
-from app.services.workforce_read_service import iter_effective_attendance_rows
+from app.db.workforce_models import AttendanceCase, DutyAssignmentEvent
+from app.schemas.workforce import COMPANY_STATS_UNASSIGNED, StatsStatus
+from app.services.workforce_read_service import (
+    iter_effective_attendance_rows,
+    iter_effective_attendance_totals_rows,
+)
 from app.services.workforce_scope_service import WorkforceScope, scope_allows
 
 _DAY = timedelta(days=1)
 _MAX_DAYS = 366
-_UNASSIGNED = "__unassigned__"
 _LEAVE_KINDS = ("annual", "administrative", "sick", "duty", "national_service", "other")
 _METRICS = ("absence", "single_punch", "late")
+_MIN_DUE_DUTIES = 30
+_MIN_EMPLOYEE_EVENTS = 3
 _STATUSES: tuple[StatsStatus, ...] = ("good", "normal", "warn", "bad")
 _HOURS = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)")
 
@@ -40,7 +44,9 @@ def _unit(value: str | None) -> str | None:
 
 
 def _selected(unit: str | None, duty_unit: str | None) -> bool:
-    return duty_unit is None or (unit if unit is not None else _UNASSIGNED) == duty_unit
+    return (
+        duty_unit is None or (unit if unit is not None else COMPANY_STATS_UNASSIGNED) == duty_unit
+    )
 
 
 def _period(start: date, end: date, requested_end: date, days: int) -> dict[str, Any]:
@@ -51,6 +57,31 @@ def _period(start: date, end: date, requested_end: date, days: int) -> dict[str,
         "days": days,
         "clamped": end < requested_end,
     }
+
+
+def _coverage_from(db: Session, scope: WorkforceScope) -> date | None:
+    if not scope.entries:
+        return None
+    query = select(
+        AttendanceCase.operational_date,
+        AttendanceCase.employee_id,
+        AttendanceCase.department_snapshot,
+        AttendanceCase.duty_unit_snapshot,
+        AttendanceCase.duty_post_snapshot,
+    ).order_by(AttendanceCase.operational_date)
+    # The date index supplies chronological rows. Stop at the first authorized
+    # snapshot; do not load judgments or use the caller's company selection.
+    with db.connection().execute(query).tuples() as rows:
+        for day, employee_id, department, unit, post in rows:
+            if scope_allows(
+                scope,
+                employee_id=employee_id,
+                department=department,
+                duty_unit=unit,
+                duty_post=post,
+            ):
+                return day
+    return None
 
 
 @dataclass(slots=True)
@@ -304,15 +335,17 @@ def _previous_cases(
     now: datetime,
 ) -> _Totals:
     totals = _Totals()
-    for case, judgment, _ in iter_effective_attendance_rows(
+    if duty_unit is not None and not duty_unit.strip():
+        return totals  # Blank snapshot names are selected only via the sentinel.
+    for employee_id, judgment in iter_effective_attendance_totals_rows(
         db,
         scope=scope,
         from_date=start,
         to_date=end,
-        duty_unit=duty_unit if duty_unit != _UNASSIGNED else None,
+        duty_unit=duty_unit if duty_unit != COMPANY_STATS_UNASSIGNED else None,
+        unassigned_only=duty_unit == COMPANY_STATS_UNASSIGNED,
     ):
-        if duty_unit is None or _selected(_unit(case.duty_unit_snapshot), duty_unit):
-            totals.add_duty(case.employee_id, *judge_register_row(judgment, now=now))
+        totals.add_duty(employee_id, *judge_register_row(judgment, now=now))
     return totals
 
 
@@ -581,6 +614,7 @@ def _ratios(current: _Current) -> list[dict[str, Any]]:
         company = current.companies[unit]
         people = len(company.totals.people)
         d = company.totals.discipline
+        small_sample = company.totals.scheduled - company.totals.excused < _MIN_DUE_DUTIES
         ratio: dict[str, float | None] = {}
         status: dict[str, StatsStatus | None] = {}
         worst = -1
@@ -591,24 +625,28 @@ def _ratios(current: _Current) -> list[dict[str, Any]]:
                 ratio[key] = status[key] = None
                 continue
             r = ratio[key] = value * strength / (people * baseline)
+            if small_sample:
+                status[key] = None
+                continue
             level = 0 if r < 0.85 else 1 if r < 1.15 else 2 if r < 1.4 else 3
             status[key] = _STATUSES[level]
             worst = max(worst, level)
         status["overall"] = _STATUSES[worst] if worst >= 0 else None
         rows.append(
             {
-                "key": unit if unit is not None else _UNASSIGNED,
+                "key": unit if unit is not None else COMPANY_STATS_UNASSIGNED,
                 "duty_unit": unit,
                 "shift_codes": sorted(company.shifts),
                 "totals": company.totals.payload(),
                 "ratio": ratio,
+                "small_sample": small_sample,
                 "status": status,
             }
         )
     return rows
 
 
-def _ranking(db: Session, current: _Current, limit: int) -> dict[str, Any]:
+def _ranking(db: Session, current: _Current, limit: int | None) -> dict[str, Any]:
     employees: dict[str, Employee] = {}
     for ids in batched(current.ranking, 900):
         employees.update(
@@ -620,6 +658,8 @@ def _ranking(db: Session, current: _Current, limit: int) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for employee_id, stats in current.ranking.items():
         person = employees.get(employee_id)
+        d = stats.discipline
+        events = d.absence_days + d.single_punch + d.late_count
         rows.append(
             {
                 "employee_id": employee_id,
@@ -636,30 +676,35 @@ def _ranking(db: Session, current: _Current, limit: int) -> dict[str, Any]:
                 "leave_days": stats.leave_days,
                 "leave_count": stats.leave_count,
                 "score": stats.score,
+                "events": events,
+                "small_sample": events < _MIN_EMPLOYEE_EVENTS,
                 "tier": None,
                 "transfer": current.transfers.get(employee_id),
             }
         )
     size = len(rows)
     average = sum(row["score"] for row in rows) / size if size else 0.0
-    order: dict[str, list[str]] = {}
+    order: dict[str, list[str]] = {"score": [], "absence": [], "late": [], "single_punch": []}
     union: dict[str, dict[str, Any]] = {}
-    for sort, key in (
+    sorts = (
         ("score", "score"),
         ("absence", "absence_days"),
         ("late", "late_count"),
         ("single_punch", "single_punch"),
-    ):
+    )
+    for sort, key in sorts if limit is not None else sorts[:1]:
 
         def rank_key(row: dict[str, Any], metric: str = key) -> tuple[int, str, str]:
             return -row[metric], row["name_en"].casefold(), row["employee_id"]
 
-        top = sorted(rows, key=rank_key)[:limit]
+        top = sorted(rows, key=rank_key)
+        if limit is not None:
+            top = top[:limit]
         order[sort] = [row["employee_id"] for row in top]
         for row in top:
             union.setdefault(row["employee_id"], row)
     for row in union.values():
-        if average:
+        if average and not row["small_sample"]:
             if row["score"] >= 2 * average:
                 row["tier"] = "needs_intervention"
             elif row["score"] >= 1.3 * average:
@@ -674,9 +719,10 @@ def company_attendance_stats(
     from_date: date,
     to_date: date,
     duty_unit: str | None,
-    limit: int,
+    limit: int | None,
     now: datetime,
 ) -> dict[str, Any]:
+    """Build the report. A null limit returns the full score ranking for Excel only."""
     today = clock.organization_today()
     closed_through = today - _DAY
     end = min(to_date, closed_through)
@@ -695,6 +741,7 @@ def company_attendance_stats(
         )
     previous_end = from_date - _DAY
     previous_start = from_date - timedelta(days=days)
+    coverage_from = _coverage_from(db, scope)
     granularity: Literal["week", "month"] = "week" if days <= 31 else "month"
     series, bucket_index = _buckets(from_date, end, weekly=granularity == "week")
     instant = parse_instant(now)
@@ -702,15 +749,24 @@ def company_attendance_stats(
     current = _current_cases(
         db,
         scope=scope,
-        start=from_date,
+        start=max(from_date, coverage_from or today),
         end=end,
         duty_unit=duty_unit,
         now=instant,
         series=series,
         bucket_index=bucket_index,
     )
-    previous = _previous_cases(
-        db, scope=scope, start=previous_start, end=previous_end, duty_unit=duty_unit, now=instant
+    previous = (
+        _previous_cases(
+            db,
+            scope=scope,
+            start=max(previous_start, coverage_from),
+            end=previous_end,
+            duty_unit=duty_unit,
+            now=instant,
+        )
+        if coverage_from is not None and coverage_from <= previous_end
+        else _Totals()
     )
     enrolled = _leaves_and_enrolment(
         db,
@@ -731,6 +787,8 @@ def company_attendance_stats(
         "period": _period(from_date, end, to_date, days),
         "previous_period": _period(previous_start, previous_end, previous_end, days),
         "closed_through": closed_through,
+        "coverage_from": coverage_from,
+        "previous_comparable": coverage_from is not None and previous_start >= coverage_from,
         "duty_unit": duty_unit,
         "granularity": granularity,
         "summary": {"current": selected, "previous": previous.payload()},

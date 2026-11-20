@@ -406,6 +406,7 @@ def _time_report(db: Session, today: date, now: datetime) -> None:
                 db, scope=scope, from_date=start, to_date=end, duty_unit=unit, limit=10, now=now
             )
             seconds = perf_counter() - before
+            assert result["previous_comparable"], "The timed request must have full history."
             if run:
                 elapsed.append(seconds)
             assert result["summary"]["current"]["duties_scheduled"] == days * (

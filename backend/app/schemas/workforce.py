@@ -417,6 +417,9 @@ class AttendanceDayRowRead(RosterRowRead):
     corrected: bool = False
 
 
+COMPANY_STATS_UNASSIGNED = "__unassigned__"
+
+
 class StatsPeriod(BaseModel):
     from_date: date
     to_date: date
@@ -496,6 +499,7 @@ class CompanyStatsRow(BaseModel):
     shift_codes: list[str]
     totals: StatsTotals
     ratio: StatsCompanyRatio
+    small_sample: bool
     status: StatsCompanyStatus
 
 
@@ -534,6 +538,8 @@ class StatsEmployeeRow(BaseModel):
     leave_days: int
     leave_count: int
     score: int
+    events: int
+    small_sample: bool
     tier: Literal["needs_intervention", "above_average"] | None
     transfer: StatsTransfer | None
 
@@ -575,6 +581,8 @@ class CompanyStatsRead(BaseModel):
     period: StatsPeriod
     previous_period: StatsPeriod
     closed_through: date
+    coverage_from: date | None
+    previous_comparable: bool
     duty_unit: str | None
     granularity: Literal["month", "week"]
     summary: StatsSummary
