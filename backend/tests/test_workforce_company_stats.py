@@ -243,6 +243,47 @@ def test_filter_uses_snapshot_and_keeps_comparison_and_transfer(
     assert unassigned_data["ranking"]["rows"][0]["transfer"] is None
 
 
+def test_company_selection_and_workbook_share_natural_company_order(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    ordered = [
+        "السرية الأولى",
+        "السرية الثانية",
+        "السرية الثالثة",
+        "السرية الرابعة",
+        "السرية الخامسة",
+        "الفريق التاسع",
+        "الفريق العاشر",
+        "Company 2",
+        "Company \u0663",
+        "Company 10",
+        "apple",
+        "Zebra",
+        "الدوام الرسمي",
+        "مجموعة الدعم",
+    ]
+    seed = _seed_case(api_db)  # Null duty unit sorts last, regardless of insertion order.
+    for index, unit in enumerate(reversed(ordered)):
+        employee = _employee(api_db, f"G-SORT-{index}")
+        _case(api_db, seed, employee.id, START, unit)
+    api_db.commit()
+
+    data = _stats(admin_client, duty_unit="السرية الثانية")
+    assert [row["key"] for row in data["companies"]] == [*ordered, "__unassigned__"]
+
+    response = admin_client.get(
+        EXPORT_PATH,
+        params={"from_date": str(START), "to_date": str(END), "language": "en"},
+    )
+    assert response.status_code == 200, response.text
+    workbook = load_workbook(BytesIO(response.content))
+    assert [cell.value for cell in workbook["Companies"]["A"][1:]] == [
+        *ordered,
+        "Unassigned",
+        "Total",
+    ]
+
+
 def test_rate_excludes_both_kinds_of_excused_duties(
     api_db: Session, admin_client: TestClient
 ) -> None:

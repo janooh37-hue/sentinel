@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from itertools import batched
 from typing import Any, Literal
+from unicodedata import normalize
 
 from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.orm import Session, aliased
@@ -36,11 +37,44 @@ _MIN_DUE_DUTIES = 30
 _MIN_EMPLOYEE_EVENTS = 3
 _STATUSES: tuple[StatsStatus, ...] = ("good", "normal", "warn", "bad")
 _HOURS = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)")
+_COMPANY_WORD = re.compile(r"[^\W\d_]+")
+_COMPANY_NUMBER = re.compile(r"\d+")
+_ARABIC_ORDINAL = {
+    word: number
+    for number, forms in enumerate(
+        (
+            ("الأولى", "الأول"),
+            ("الثانية", "الثاني"),
+            ("الثالثة", "الثالث"),
+            ("الرابعة", "الرابع"),
+            ("الخامسة", "الخامس"),
+            ("السادسة", "السادس"),
+            ("السابعة", "السابع"),
+            ("الثامنة", "الثامن"),
+            ("التاسعة", "التاسع"),
+            ("العاشرة", "العاشر"),
+        ),
+        start=1,
+    )
+    for word in forms
+}
 
 
 def _unit(value: str | None) -> str | None:
     # Preserve exact snapshot names; only whitespace-only values are unassigned.
     return value if value and value.strip() else None
+
+
+def _company_sort_key(unit: str | None) -> tuple[int, tuple[int, ...], str, str]:
+    """Order ordinal, numbered, named, then unassigned companies."""
+    if unit is None:
+        return (3, (), "", "")
+    name = normalize("NFKC", unit).strip().casefold()
+    for match in _COMPANY_WORD.finditer(name):
+        if (ordinal := _ARABIC_ORDINAL.get(match[0])) is not None:
+            return (0, (ordinal,), name, unit)
+    numbers = tuple(int(digits) for digits in _COMPANY_NUMBER.findall(name))
+    return (1 if numbers else 2, numbers, name, unit)
 
 
 def _selected(unit: str | None, duty_unit: str | None) -> bool:
@@ -610,7 +644,7 @@ def _ratios(current: _Current) -> list[dict[str, Any]]:
     overall = current.overall.discipline
     baselines = (overall.absence_days, overall.single_punch, overall.late_count)
     rows = []
-    for unit in sorted(current.companies, key=lambda unit: (unit is None, unit or "")):
+    for unit in sorted(current.companies, key=_company_sort_key):
         company = current.companies[unit]
         people = len(company.totals.people)
         d = company.totals.discipline
