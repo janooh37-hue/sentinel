@@ -7,15 +7,10 @@ import type { CompanyStats, CompanyStatsBucket } from '@/lib/api'
 import {
   formatStatsDate, formatStatsDuration, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity,
 } from './companyStatsFormat'
-import { DISCIPLINE_METRICS, disciplineValue, deltaPercent, deltaTone, METRIC_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
+import { DISCIPLINE_METRICS, disciplineValue, deltaPercent, deltaTone, METRIC_TOKENS, STATUS_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
 import { isPartialBucket, trendValue } from './trendModel'
 
 const LEAVE_TILES = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
-const DELTA_CLASS = {
-  good: 'bg-success-soft text-success',
-  bad: 'bg-accent-soft text-destructive-text',
-  neutral: 'bg-surface-tinted text-muted-foreground',
-}
 
 type SummaryData = Pick<CompanyStats, 'summary' | 'previous_period' | 'previous_comparable' | 'series' | 'granularity'>
 
@@ -45,13 +40,21 @@ function Delta({ current, previous, kind }: { current: number; previous: number;
   const change = deltaPercent(current, previous)
   if (change === null) return null
   const tone = deltaTone(kind, change)
+  const colors = STATUS_TOKENS[tone === 'neutral' ? 'normal' : tone]
   const value = formatStatsPercent(Math.abs(change))
   const Icon = change > 0 ? ArrowUp : ArrowDown
   return (
-    <span className={`inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold ${DELTA_CLASS[tone]}`}>
+    <span className="inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold" style={{ color: colors.fg, backgroundColor: colors.soft }}>
       {change === 0 ? t('companyStats.delta.noChange') : (
         <>
-          <span className="sr-only">{t(change > 0 ? 'companyStats.delta.up' : 'companyStats.delta.down', { change: value })}</span>
+          <span className="sr-only">
+            <Trans
+              t={t}
+              i18nKey={change > 0 ? 'companyStats.delta.up' : 'companyStats.delta.down'}
+              values={{ change: value }}
+              components={{ amount: <bdi dir="ltr" /> }}
+            />
+          </span>
           <Icon aria-hidden="true" className="size-3" />
           <bdi dir="ltr" aria-hidden="true" className="tabular-nums">{value}</bdi>
         </>

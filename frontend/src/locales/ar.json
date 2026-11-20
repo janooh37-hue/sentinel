@@ -7889,7 +7889,7 @@
       "closedThrough": "يقتصر التقرير على الأيام المغلقة حتى {{date}}.",
       "missingDates": "أدخل تاريخي البداية والنهاية.",
       "reversedDates": "اختر بداية لا تتجاوز تاريخ النهاية أو آخر يوم مغلق.",
-      "longRange": "اختر فترة لا تتجاوز 366 يوماً."
+      "longRange": "اختر فترة لا تتجاوز 366 يومًا."
     },
     "unit": {
       "label": "طريقة العد",
@@ -7901,25 +7901,25 @@
       "figure": {
         "day_zero": "يوم",
         "day_one": "يوم",
-        "day_two": "يومان",
+        "day_two": "يوم",
         "day_few": "أيام",
         "day_many": "يومًا",
         "day_other": "يوم",
         "episode_zero": "حالة",
         "episode_one": "حالة",
-        "episode_two": "حالتان",
+        "episode_two": "حالة",
         "episode_few": "حالات",
         "episode_many": "حالةً",
         "episode_other": "حالة",
         "occurrence_zero": "مرة",
         "occurrence_one": "مرة",
-        "occurrence_two": "مرتان",
+        "occurrence_two": "مرة",
         "occurrence_few": "مرات",
         "occurrence_many": "مرةً",
         "occurrence_other": "مرة",
         "permit_zero": "تصريح",
         "permit_one": "تصريح",
-        "permit_two": "تصريحان",
+        "permit_two": "تصريح",
         "permit_few": "تصاريح",
         "permit_many": "تصريحًا",
         "permit_other": "تصريح"
@@ -8017,8 +8017,8 @@
     },
     "delta": {
       "noChange": "بدون تغيير",
-      "up": "ارتفاع بنسبة {{change}} عن الفترة السابقة",
-      "down": "انخفاض بنسبة {{change}} عن الفترة السابقة"
+      "up": "ارتفاع بنسبة <amount>{{change}}</amount> عن الفترة السابقة",
+      "down": "انخفاض بنسبة <amount>{{change}}</amount> عن الفترة السابقة"
     },
     "coverage": {
       "notEnough": "لا توجد بيانات سابقة كافية"
@@ -8047,8 +8047,8 @@
     "trend": {
       "title": "الاتجاه عبر الزمن",
       "metric": "مقياس الاتجاه",
-      "weekly": "أسبوعياً",
-      "monthly": "شهرياً",
+      "weekly": "أسبوعيًا",
+      "monthly": "شهريًا",
       "week": "أسبوع <number>{{number}}</number>",
       "episodes": "بالحالات",
       "average": "المتوسط",
@@ -8067,20 +8067,20 @@
       "openAttendance": "عرض الحضور ليوم {{date}}"
     },
     "nationalService": {
-      "enrolled": "الملتحقون حالياً: <number>{{number}}</number>",
+      "enrolled": "الملتحقون حاليًا: <number>{{number}}</number>",
       "remaining": "المتبقي: <days>{{days}}</days>",
       "returns": "العودة: <date>{{date}}</date>",
       "progress": "تقدم الخدمة الوطنية: {{name}}",
-      "empty": "لا يوجد ملتحقون حالياً ضمن هذا النطاق.",
+      "empty": "لا يوجد ملتحقون حاليًا ضمن هذا النطاق.",
       "absenceDays": "أيام الغياب بسبب الخدمة خلال الفترة"
     },
     "comparison": {
       "title": "المقارنة التفصيلية",
       "relative": "المقارنة بمعدل الفرد في جميع السرايا",
-      "leavesGroup": "الإجازات والغياب المبرر · بدون تقييم",
-      "disciplineGroup": "الانضباط · حسب المعدل",
-      "less": "أقل بنسبة {{amount}}",
-      "more": "أعلى بنسبة {{amount}}",
+      "leavesGroup": "الإجازات والغياب المبرر\u00a0· بدون تقييم",
+      "disciplineGroup": "الانضباط\u00a0· حسب المعدل",
+      "less": "أقل بنسبة <amount>{{amount}}</amount>",
+      "more": "أعلى بنسبة <amount>{{amount}}</amount>",
       "atAverage": "عند المعدل",
       "noComparison": "لا مقارنة",
       "due_zero": "لا تكليفات مستحقة",
@@ -8090,10 +8090,10 @@
       "due_many": "التكليفات المستحقة: <number>{{number}}</number> تكليفًا",
       "due_other": "التكليفات المستحقة: <number>{{number}}</number> تكليف",
       "total": "المجموع",
-      "scrollHint": "مرّر أفقياً لعرض بقية الأعمدة."
+      "scrollHint": "مرّر أفقيًا لعرض بقية الأعمدة."
     },
     "ranking": {
-      "title": "الأكثر تكراراً",
+      "title": "الأكثر تكرارًا",
       "scope": "السرية المحددة: <company/>",
       "sort": "الترتيب حسب",
       "score": "المؤشر",
@@ -8101,13 +8101,13 @@
       "employee": "الموظف",
       "leaves": "الإجازات",
       "allLeaveKinds": "تشمل كل الأنواع",
-      "episodes": "حالات",
-      "summary_zero": "المعروض: لا يوجد موظفون · متوسط المؤشر: <number>{{average}}</number>",
-      "summary_one": "المعروض: <number>{{shown}}</number> من موظف واحد · متوسط المؤشر: <number>{{average}}</number>",
-      "summary_two": "المعروض: <number>{{shown}}</number> من موظفَين · متوسط المؤشر: <number>{{average}}</number>",
-      "summary_few": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظفين · متوسط المؤشر: <number>{{average}}</number>",
-      "summary_many": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظفًا · متوسط المؤشر: <number>{{average}}</number>",
-      "summary_other": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظف · متوسط المؤشر: <number>{{average}}</number>",
+      "episodes": "بالحالات",
+      "summary_zero": "المعروض: لا يوجد موظفون\u00a0· متوسط المؤشر: <number>{{average}}</number>",
+      "summary_one": "المعروض: <number>{{shown}}</number> من موظف واحد\u00a0· متوسط المؤشر: <number>{{average}}</number>",
+      "summary_two": "المعروض: <number>{{shown}}</number> من موظفَين\u00a0· متوسط المؤشر: <number>{{average}}</number>",
+      "summary_few": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظفين\u00a0· متوسط المؤشر: <number>{{average}}</number>",
+      "summary_many": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظفًا\u00a0· متوسط المؤشر: <number>{{average}}</number>",
+      "summary_other": "المعروض: <number>{{shown}}</number> من <number>{{total}}</number> موظف\u00a0· متوسط المؤشر: <number>{{average}}</number>",
       "empty": "لا يوجد موظفون لديهم تكليفات مجدولة خلال هذه الفترة.",
       "transferFrom": "منقول من <company/> في <date/>",
       "transferTo": "منقول إلى <company/> في <date/>",

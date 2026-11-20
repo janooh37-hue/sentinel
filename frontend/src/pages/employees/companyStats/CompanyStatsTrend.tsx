@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 
 import type { CompanyStats, CompanyStatsBucket } from '@/lib/api'
 
+import { statementLocale } from '../statement/statementModel'
 import { companyDisplayName, formatStatsDate, formatStatsNumber } from './companyStatsFormat'
 import { METRIC_TOKENS, TREND_METRICS, type CountUnit, type TrendMetric } from './companyStatsModel'
 import { fullBucketAverage, isPartialBucket, monthAxisLabels, trendValue, yAxisTop } from './trendModel'
@@ -35,7 +36,7 @@ function BucketDetail({ bucket, partial, weekly, language, shortMonth }: {
   const { start, end } = bucket
   if (!partial) return weekly ? <time dateTime={start}>{formatStatsDate(start, language, false)}</time> : null
   if (start.slice(0, 7) !== end.slice(0, 7)) {
-    return <><time dateTime={start}>{formatStatsDate(start, language, false)}</time> · <time dateTime={end}>{formatStatsDate(end, language, false)}</time></>
+    return <><time dateTime={start}>{formatStatsDate(start, language, false)}</time>{'\u00a0· '}<time dateTime={end}>{formatStatsDate(end, language, false)}</time></>
   }
   const first = Number(start.slice(-2))
   const last = Number(end.slice(-2))
@@ -51,7 +52,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
   const { granularity, series, period: { from_date, to_date } } = data
   const weekly = granularity === 'week'
   const labels = useMemo(() => weekly ? null : monthAxisLabels(series, language), [weekly, series, language])
-  const shortMonth = useMemo(() => new Intl.DateTimeFormat(language, { month: 'short', timeZone: 'UTC' }), [language])
+  const shortMonth = useMemo(() => new Intl.DateTimeFormat(statementLocale(language), { month: 'short', timeZone: 'UTC' }), [language])
   const color = METRIC_TOKENS[metric]
   const metricLabel = t(`companyStats.metric.${metric}`)
   const grainLabel = t(weekly ? 'companyStats.trend.weekly' : 'companyStats.trend.monthly')
@@ -98,7 +99,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
             {metricLabel}<span className="sr-only"> · {grainLabel}</span>
           </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {grainLabel} · {countBy} · <bdi dir="auto">{data.duty_unit === null ? t('companyStats.filters.all') : companyDisplayName(data.duty_unit, t)}</bdi>
+            {grainLabel}{'\u00a0· '}{countBy}{'\u00a0· '}<bdi dir="auto">{data.duty_unit === null ? t('companyStats.filters.all') : companyDisplayName(data.duty_unit, t)}</bdi>
           </p>
         </div>
         <div role="group" aria-label={t('companyStats.trend.metric')} className="inline-flex max-w-full flex-wrap items-stretch gap-0.5 rounded-md border bg-surface-tinted p-0.5">
@@ -108,7 +109,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
               type="button"
               aria-pressed={option === metric}
               onClick={() => onMetricChange(option)}
-              className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8"
+              className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm border border-transparent! px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground"
             >
               {t(`companyStats.metric.${option}`)}
             </button>
@@ -129,7 +130,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
             </li>
             {mean !== null && (
               <>
-                <li className="inline-flex items-center gap-1"><span aria-hidden="true" className={swatchClass} style={aboveStyle} />{metricLabel} · {t('companyStats.trend.atOrAbove')}</li>
+                <li className="inline-flex items-center gap-1"><span aria-hidden="true" className={swatchClass} style={aboveStyle} /><span>{metricLabel}{'\u00a0· '}{t('companyStats.trend.atOrAbove')}</span></li>
                 <li className="inline-flex items-center gap-1"><span aria-hidden="true" className={swatchClass} style={belowStyle} />{t('companyStats.trend.below')}</li>
               </>
             )}
@@ -141,7 +142,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
             role="region"
             aria-labelledby={titleId}
             tabIndex={0}
-            className="overflow-x-auto [scroll-padding-inline-start:39px] [scrollbar-color:var(--border-strong)_var(--surface)] [scrollbar-width:thin] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+            className="overflow-x-auto [scroll-padding-inline-start:39px] [scrollbar-color:var(--border-strong)_var(--surface)] [scrollbar-width:thin] focus-visible:-outline-offset-2!"
           >
             <div
               className="grid grid-cols-[32px_minmax(0,1fr)] grid-rows-[150px_auto] gap-x-[7px] pt-8 md:grid-rows-[168px_auto]"
@@ -188,7 +189,7 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
                           to={`/employees/attendance?date=${end}`}
                           aria-label={`${label}${partial ? ` · ${partialLabel}` : ''} · ${action}`}
                           title={action}
-                          className="absolute inset-0 flex items-end justify-center rounded-sm hover:bg-surface-tinted/60 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+                          className="absolute inset-0 flex items-end justify-center rounded-sm hover:bg-surface-tinted/60 focus-visible:-outline-offset-2!"
                         >
                           <bdi aria-hidden="true" dir="ltr" className="absolute z-[2] rounded-sm bg-surface px-0.5 text-xs leading-tight font-bold tabular-nums" style={{ insetBlockEnd: `calc(${height}% + 2px)` }}>
                             {formatStatsNumber(value)}

@@ -7368,8 +7368,8 @@
     },
     "delta": {
       "noChange": "No change",
-      "up": "Up {{change}} from the previous period",
-      "down": "Down {{change}} from the previous period"
+      "up": "Up <amount>{{change}}</amount> from the previous period",
+      "down": "Down <amount>{{change}}</amount> from the previous period"
     },
     "coverage": {
       "notEnough": "Not enough earlier data"
@@ -7428,10 +7428,10 @@
     "comparison": {
       "title": "Detailed comparison",
       "relative": "Compared with the average per person across companies",
-      "leavesGroup": "Leave and excused absences · not rated",
-      "disciplineGroup": "Discipline · relative to average",
-      "less": "{{amount}} below",
-      "more": "{{amount}} above",
+      "leavesGroup": "Leave and excused absences\u00a0· not rated",
+      "disciplineGroup": "Discipline\u00a0· relative to average",
+      "less": "<amount>{{amount}}</amount> below",
+      "more": "<amount>{{amount}}</amount> above",
       "atAverage": "At the average",
       "noComparison": "No comparison",
       "due_one": "<number>{{number}}</number> due duty",
@@ -7449,8 +7449,8 @@
       "leaves": "Leave",
       "allLeaveKinds": "All leave kinds",
       "episodes": "Episodes",
-      "summary_one": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employee · Average score: <number>{{average}}</number>",
-      "summary_other": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employees · Average score: <number>{{average}}</number>",
+      "summary_one": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employee\u00a0· Average score: <number>{{average}}</number>",
+      "summary_other": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employees\u00a0· Average score: <number>{{average}}</number>",
       "empty": "No employees had scheduled duties in this period.",
       "transferFrom": "Transferred from <company/> on <date/>",
       "transferTo": "Transferred to <company/> on <date/>",

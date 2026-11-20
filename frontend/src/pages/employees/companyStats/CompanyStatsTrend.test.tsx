@@ -16,16 +16,16 @@ const totals: CompanyStatsTotals = {
   },
 }
 const first: CompanyStatsBucket = {
-  start: '2026-10-20', end: '2026-10-26',
+  start: '2026-09-20', end: '2026-09-26',
   absence_days: 4, absence_episodes: 1, single_punch: 3, late_count: 5, late_minutes: 60,
   sick_days: 8, sick_count: 2,
 }
 const data: CompanyStats = {
-  period: { from_date: first.start, to_date: '2026-10-29', requested_to_date: '2026-10-29', days: 10, clamped: false },
-  previous_period: { from_date: '2026-10-10', to_date: '2026-10-19', requested_to_date: '2026-10-19', days: 10, clamped: false },
-  closed_through: '2026-10-29', coverage_from: first.start, previous_comparable: false,
+  period: { from_date: first.start, to_date: '2026-09-29', requested_to_date: '2026-09-29', days: 10, clamped: false },
+  previous_period: { from_date: '2026-09-10', to_date: '2026-09-19', requested_to_date: '2026-09-19', days: 10, clamped: false },
+  closed_through: '2026-09-29', coverage_from: first.start, previous_comparable: false,
   duty_unit: null, granularity: 'week', summary: { current: totals, previous: totals }, companies: [], overall: totals,
-  series: [first, { ...first, start: '2026-10-27', end: '2026-10-29', absence_days: 30, sick_count: 7 }],
+  series: [first, { ...first, start: '2026-09-27', end: '2026-09-29', absence_days: 30, sick_count: 7 }],
   ranking: { total: 0, average_score: 0, order: { score: [], absence: [], late: [], single_punch: [] }, rows: [] },
   national_service: { enrolled: [], absence_days: 0 },
 }
@@ -42,9 +42,10 @@ it('labels and links weekly buckets, excluding the hatched bucket from the avera
     const chips = screen.getByRole('group', { name: 'Trend metric' })
     expect(within(chips).getByRole('button', { name: 'Absence' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('region', { name: /Absence/ })).toHaveTextContent('Week 2')
+    expect(screen.getByRole('region', { name: /Absence/ })).toHaveTextContent('27–29 Sept')
     expect(screen.getByText(/Average of full weeks/)).toHaveTextContent('4')
     expect(screen.getByRole('link', { name: /Absence · .*: 30 · Partial week · View attendance/ }))
-      .toHaveAttribute('href', '/employees/attendance?date=2026-10-29')
+      .toHaveAttribute('href', '/employees/attendance?date=2026-09-29')
     expect(screen.getByRole('region', { name: /Absence/ })).toHaveAttribute('dir', 'rtl')
 
     fireEvent.click(within(chips).getByRole('button', { name: 'Sick leave' }))
@@ -52,7 +53,7 @@ it('labels and links weekly buckets, excluding the hatched bucket from the avera
     rerender(<CompanyStatsTrend data={data} metric="sick" unit="count" onMetricChange={onMetricChange} />)
     expect(within(chips).getByRole('button', { name: 'Sick leave' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('link', { name: /Sick leave · .*: 2 · View attendance/ }))
-      .toHaveAttribute('href', '/employees/attendance?date=2026-10-26')
+      .toHaveAttribute('href', '/employees/attendance?date=2026-09-26')
   } finally {
     document.documentElement.dir = direction
   }

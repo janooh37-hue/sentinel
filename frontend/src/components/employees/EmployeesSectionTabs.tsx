@@ -33,7 +33,7 @@ interface Props {
 }
 
 const BASE =
-  'inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl px-3 py-2.5 text-[0.84em] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none md:min-h-0 md:px-4'
+  'inline-flex min-h-[44px] shrink-0 items-center gap-2 whitespace-nowrap rounded-t-xl px-3 py-2.5 text-[0.84em] font-semibold transition-colors focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none md:min-h-0 md:px-4'
 
 function tabClass({ isActive }: { isActive: boolean }): string {
   return `${BASE} ${

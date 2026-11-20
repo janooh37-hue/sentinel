@@ -2134,6 +2134,7 @@ body {
     min-inline-size: 100%;
     padding-inline: 10mm;
     contain: inline-size;
+    font-variant-numeric: tabular-nums;
     --text-muted: #5a6068;
     --border: #e6e4dd;
   }

@@ -24,8 +24,10 @@ import { customRangeError, useCompanyStatsParams, type CompanyStatsFilters } fro
 type ExportParams = CompanyStatsParams & { language: 'ar' | 'en' }
 type PrintJob = { data: CompanyStats; unit: CountUnit; sort: RankingSort }
 
-const CONTROL = 'min-h-[44px] w-full min-w-0 rounded-sm border bg-surface px-2.5 text-sm focus-visible:outline-2 focus-visible:outline-ring lg:min-h-9'
-const EXPORT_BUTTON = 'min-h-[44px] lg:min-h-9'
+const FILTER_FOCUS = 'focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring'
+const BUTTON_FOCUS = 'focus-visible:outline-none! focus-visible:ring-inset focus-visible:ring-offset-0'
+const CONTROL = `min-h-[44px] w-full min-w-0 rounded-sm border bg-surface px-2.5 text-sm ${FILTER_FOCUS} lg:min-h-9`
+const EXPORT_BUTTON = `min-h-[44px] ${BUTTON_FOCUS} lg:min-h-9`
 
 function SegmentedFilter<T extends string>({ label, choices, value, onChange, optionLabel, className }: {
   label: string
@@ -45,7 +47,7 @@ function SegmentedFilter<T extends string>({ label, choices, value, onChange, op
             type="button"
             aria-pressed={choice === value}
             onClick={() => onChange(choice)}
-            className="min-h-[44px] min-w-[44px] flex-1 whitespace-nowrap rounded-sm px-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:text-primary-text motion-reduce:transition-none lg:min-h-8 lg:min-w-0 lg:px-2.5"
+            className={`min-h-[44px] min-w-[44px] flex-auto whitespace-nowrap rounded-sm border border-transparent! px-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground ${FILTER_FOCUS} aria-pressed:bg-surface aria-pressed:text-primary-text motion-reduce:transition-none lg:min-h-8 lg:flex-none lg:px-2.5 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground`}
           >
             {optionLabel(choice)}
           </button>
@@ -87,7 +89,7 @@ function CustomDates({ range, closedThrough, update }: Pick<CompanyStatsFilters,
             required
             aria-describedby={error ? `${description} ${errorId}` : description}
             aria-invalid={error ? true : undefined}
-            className={`${CONTROL} lg:w-36`}
+            className={`${CONTROL} rtl:text-end lg:w-36`}
             style={{ borderColor: error ? 'var(--accent)' : 'var(--border-strong)' }}
             onChange={(event) => changeDate(edge, event.currentTarget.value)}
           />
@@ -276,7 +278,7 @@ export function CompanyStatsPage(): React.JSX.Element {
         ) : query.isError ? (
           <div role="alert" className="mt-5 flex flex-wrap items-center gap-2.5 rounded-md border bg-surface p-4 text-sm text-destructive-text">
             <p>{t('companyStats.states.error')}</p>
-            <Button type="button" variant="secondary" size="xs" className="min-h-[44px] lg:min-h-0" onClick={() => void query.refetch()}>
+            <Button type="button" variant="secondary" size="xs" className={`min-h-[44px] ${BUTTON_FOCUS} lg:min-h-0`} onClick={() => void query.refetch()}>
               {t('companyStats.states.retry')}
             </Button>
           </div>

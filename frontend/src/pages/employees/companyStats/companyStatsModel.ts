@@ -97,7 +97,8 @@ export const STATUS_TOKENS: Record<StatusTone, { fg: string; soft: string; bar: 
   good: { fg: 'var(--success)', soft: 'var(--success-soft)', bar: 'var(--success)' },
   normal: { fg: 'var(--text-muted)', soft: 'var(--surface-tinted)', bar: 'var(--text-muted)' },
   warn: { fg: 'var(--warning)', soft: 'var(--warning-soft)', bar: 'var(--warning)' },
-  bad: { fg: 'var(--accent)', soft: 'var(--accent-soft)', bar: 'var(--accent)' },
+  // Text uses the AA-safe variant (4.5:1 on the soft fill in both themes); fills stay on --accent.
+  bad: { fg: 'var(--destructive-text)', soft: 'var(--accent-soft)', bar: 'var(--accent)' },
   small: { fg: 'var(--text-muted)', soft: 'var(--surface-tinted)', bar: 'var(--text-muted)' },
 }
 
@@ -111,4 +112,24 @@ export const METRIC_TOKENS: Record<TrendMetric, string> = {
 
 export function splitMinutes(total: number): { hours: number; minutes: number } {
   return { hours: Math.floor(total / 60), minutes: total % 60 }
+}
+
+/**
+ * The rate that fills a whole rail: the highest absence rate among companies
+ * with a rated sample, so one tiny company cannot flatten every other rail.
+ * Falls back to all rows when none is rated.
+ */
+export function absenceRateScale(
+  companies: ReadonlyArray<{ small_sample: boolean; totals: { absence_rate?: number | null } }>,
+): number {
+  const rated = companies.filter((company) => !company.small_sample)
+  const rows = rated.length > 0 ? rated : companies
+  return Math.max(0, ...rows.map((company) => company.totals.absence_rate ?? 0))
+}
+
+/** Rail fill in percent (0–100). A positive rate on a zero scale saturates; no rate, no fill. */
+export function absenceRateFill(rate: number | null | undefined, scale: number): number {
+  if (!rate || rate <= 0) return 0
+  if (scale <= 0) return 100
+  return Math.min(100, (rate / scale) * 100)
 }

@@ -43,11 +43,11 @@ describe('PeriodSummary', () => {
     render(<PeriodSummary data={data} unit="days" />)
 
     const discipline = within(screen.getByRole('article', { name: 'Discipline' }))
-    expect(discipline.getByText('Up 50% from the previous period')).toBeInTheDocument()
-    expect(discipline.getByText('Down 100% from the previous period')).toBeInTheDocument()
+    expect(discipline.getByText(/^Up\s+from the previous period$/)).toHaveTextContent('Up 50% from the previous period')
+    expect(discipline.getByText(/^Down\s+from the previous period$/)).toHaveTextContent('Down 100% from the previous period')
     expect(discipline.getByText('No change')).toBeInTheDocument()
     const leaves = within(screen.getByRole('article', { name: 'Leave and excused absences' }))
-    expect(leaves.getByText('Up 100% from the previous period')).toBeInTheDocument()
+    expect(leaves.getByText(/^Up\s+from the previous period$/)).toHaveTextContent('Up 100% from the previous period')
   })
 
   it('reports occurrences without converting permit hours to days', () => {

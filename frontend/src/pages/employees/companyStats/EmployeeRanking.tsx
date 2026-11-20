@@ -66,9 +66,9 @@ function Score({ employee, maximum, t }: { employee: CompanyStatsEmployee; maxim
       <div aria-hidden="true" className="h-1 min-w-0 rounded-full bg-border">
         <div className="h-full rounded-full" style={{ inlineSize: `${score / maximum * 100}%`, backgroundColor: tone.bar }} />
       </div>
-      <bdi dir="ltr" className={score === 0 ? 'text-muted-foreground' : undefined}>{formatStatsNumber(score)}</bdi>
+      <bdi dir="ltr" className={`text-end ${score === 0 ? 'text-muted-foreground' : ''}`}>{formatStatsNumber(score)}</bdi>
       <div className="col-span-2 flex justify-end empty:hidden md:col-span-1 md:empty:block">
-        {badge && <span className="rounded-full px-1.5 py-0.5 text-xs leading-snug font-semibold" style={{ color: tone.fg, backgroundColor: tone.soft }}>{badge}</span>}
+        {badge && <span className="rounded-full px-1.5 py-0.5 text-xs leading-snug font-semibold whitespace-nowrap" style={{ color: tone.fg, backgroundColor: tone.soft }}>{badge}</span>}
       </div>
     </div>
   )
@@ -113,7 +113,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                 type="button"
                 aria-pressed={option === sort}
                 onClick={() => onSortChange(option)}
-                className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8"
+                className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm border border-transparent! px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground"
               >
                 {columnLabel(option, t)}
               </button>
@@ -123,7 +123,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
       </header>
       <p className="mb-2 text-xs text-muted-foreground">
         {companyName !== null && (
-          <><Trans i18nKey="companyStats.ranking.scope" components={{ company: <bdi dir="auto">{companyName}</bdi> }} /> · </>
+          <><Trans i18nKey="companyStats.ranking.scope" components={{ company: <bdi dir="auto">{companyName}</bdi> }} />{'\u00a0· '}</>
         )}
         <Trans
           i18nKey="companyStats.ranking.summary"
@@ -142,13 +142,13 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
             tabIndex={0}
             role="region"
             aria-labelledby={titleId}
-            className="overflow-x-auto rounded-md border bg-surface [scrollbar-color:var(--border-strong)_var(--surface)] [scrollbar-width:thin] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
+            className="overflow-x-auto rounded-md border bg-surface [scrollbar-color:var(--border-strong)_var(--surface)] [scrollbar-width:thin] focus-visible:-outline-offset-2!"
           >
             <table
-              className="w-full table-fixed border-separate border-spacing-0 text-sm tabular-nums"
-              style={{ minWidth: mobile ? `calc(${employeeWidth} + ${scoreWidth} + ${4 * 88 + 116}px)` : 1040 }}
+              className="w-full table-fixed border-separate border-spacing-0 text-sm"
+              style={{ fontVariantNumeric: 'tabular-nums', minWidth: mobile ? `calc(${employeeWidth} + ${scoreWidth} + ${4 * 88 + 116}px)` : 1040 }}
             >
-              <caption className="sr-only">{title}{companyName !== null ? <> · <bdi dir="auto">{companyName}</bdi></> : null}</caption>
+              <caption className="sr-only">{title}{companyName !== null ? <>{'\u00a0· '}<bdi dir="auto">{companyName}</bdi></> : null}</caption>
               <colgroup>
                 <col style={mobile ? { inlineSize: employeeWidth } : undefined} />
                 {columns.map((column) => <col key={column} style={{ inlineSize: column === 'score' ? scoreWidth : column === 'company' ? 160 : column === 'leaves' ? 116 : 88 }} />)}
@@ -159,10 +159,10 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                   {columns.map((column) => {
                     const sorted = sort === column
                     return (
-                      <th key={column} scope="col" aria-sort={sorted ? 'descending' : undefined} className={`${HEADER} ${column === 'company' ? 'text-start' : 'text-end'} ${sorted ? SORTED : 'bg-surface-raised text-muted-foreground'}`}>
-                        {columnLabel(column, t)}
-                        {column === 'absence' && <span className={NOTE}>{t(sorted || unit === 'days' ? 'companyStats.unit.days' : 'companyStats.ranking.episodes')}</span>}
-                        {column === 'leaves' && <span className={NOTE}>{t(`companyStats.unit.${unit}`)} · {t('companyStats.ranking.allLeaveKinds')}</span>}
+                      <th key={column} scope="col" dir={column === 'company' ? undefined : 'ltr'} aria-sort={sorted ? 'descending' : undefined} className={`${HEADER} ${column === 'company' ? 'text-start' : 'text-end'} ${sorted ? SORTED : 'bg-surface-raised text-muted-foreground'}`}>
+                        <bdi dir="auto">{columnLabel(column, t)}</bdi>
+                        {column === 'absence' && <span className={NOTE}><bdi dir="auto">{t(sorted || unit === 'days' ? 'companyStats.unit.days' : 'companyStats.ranking.episodes')}</bdi></span>}
+                        {column === 'leaves' && <span className={NOTE}><bdi dir="auto">{t(`companyStats.unit.${unit}`)}{'\u00a0· '}{t('companyStats.ranking.allLeaveKinds')}</bdi></span>}
                       </th>
                     )
                   })}
@@ -196,8 +196,8 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                                 <bdi dir="auto">{name}</bdi><ExternalLink aria-hidden="true" className="ms-1 hidden size-3 align-middle md:inline rtl:-scale-x-100" />
                               </Link>
                             ) : <bdi dir="auto" className="font-semibold">{name}</bdi>}
-                            <span className={NOTE}><bdi dir="ltr">{employee.employee_id}</bdi>{position && <> · <bdi dir="auto">{position}</bdi></>}</span>
-                            {mobile && <span className={NOTE}><bdi dir="auto">{company}</bdi>{shift && <> · <bdi dir="auto">{shift}</bdi></>}</span>}
+                            <span className={NOTE}><bdi dir="ltr">{employee.employee_id}</bdi>{position && <>{'\u00a0· '}<bdi dir="auto">{position}</bdi></>}</span>
+                            {mobile && <span className={NOTE}><bdi dir="auto">{company}</bdi>{shift && <>{'\u00a0· '}<bdi dir="auto">{shift}</bdi></>}</span>}
                             {transfer && (
                               <span className="mt-0.5 block w-fit rounded-sm bg-surface-tinted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                                 <Trans
@@ -213,7 +213,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                         </div>
                       </th>
                       {columns.map((column) => (
-                        <td key={column} className={`border-b px-2 py-2 align-middle ${column === 'company' ? 'text-start' : 'text-end'} ${sort === column ? SORTED : ''}`}>
+                        <td key={column} dir={column === 'company' || column === 'score' ? undefined : 'ltr'} className={`border-b px-2 py-2 align-middle ${column === 'company' ? 'text-start' : 'text-end'} ${sort === column ? SORTED : ''}`}>
                           {column === 'company' ? <><bdi dir="auto">{company}</bdi>{shift && <span className={NOTE}><bdi dir="auto">{shift}</bdi></span>}</>
                             : column === 'score' ? <Score employee={employee} maximum={maximum} t={t} />
                               : <RankingValue column={column} row={employee} discipline={discipline} sorted={sort === column} unit={unit} t={t} />}

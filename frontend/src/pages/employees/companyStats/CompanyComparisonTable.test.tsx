@@ -26,8 +26,8 @@ const data: CompanyStats = {
     },
     {
       key: '__unassigned__', duty_unit: null, shift_codes: [], small_sample: true,
-      totals: { ...totals, duties_due: 8, absence: { days: 2, episodes: 1 }, absence_rate: 25 },
-      ratio: { absence: 1.5, single_punch: null, late: null },
+      totals: { ...totals, duties_due: 8, absence: { days: 2, episodes: 1 }, absence_rate: 25, single_punch: 0 },
+      ratio: { absence: 1.5, single_punch: 0, late: null },
       status: { absence: null, single_punch: null, late: null, overall: null },
     },
   ],
@@ -50,7 +50,10 @@ it('shows every row, keeps small-sample ratios neutral, and reads the Total from
   expect(within(ratedRow).getByText(/2h 30m requested \(from 2 with hours\)/)).toBeInTheDocument()
   const smallRow = rows.find((row) => within(row).queryByRole('button', { name: 'Unassigned' }))!
   expect(within(smallRow).getByText('Small sample')).toBeInTheDocument()
-  expect(within(smallRow).getByText('50% above')).toBeInTheDocument()
+  const percentage = within(smallRow).getByText('50%')
+  expect(percentage).toHaveAttribute('dir', 'ltr')
+  expect(percentage.parentElement).toHaveTextContent('50% above')
+  expect(within(smallRow).queryByText('100%')).not.toBeInTheDocument()
   expect(within(smallRow).queryByText('Above average')).not.toBeInTheDocument()
   fireEvent.click(within(smallRow).getByRole('button', { name: 'Unassigned' }))
   expect(onSelect).toHaveBeenLastCalledWith('__unassigned__')

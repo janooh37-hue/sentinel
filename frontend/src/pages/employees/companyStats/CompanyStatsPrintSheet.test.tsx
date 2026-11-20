@@ -44,10 +44,21 @@ describe('CompanyStatsPrintSheet', () => {
     expect(screen.getByText(/From\s+until/)).toHaveTextContent('From 1 Nov until 19 Nov 2026')
     expect(screen.getByText('Not enough earlier data')).toBeInTheDocument()
     expect(screen.getByText('Small sample')).toBeInTheDocument()
-    expect(screen.getAllByText('2h 30m requested (from 1 with hours)').length).toBeGreaterThan(0)
+    const permits = screen.getAllByRole('cell', { name: '2 permits · 2h 30m requested (from 1 with hours)' })
+    expect(permits).toHaveLength(3) // Summary, company row, overall.
+    for (const cell of permits) expect(cell.querySelectorAll('bdi')).toHaveLength(1)
+    expect(screen.getByText(/^Other leave/)).toHaveTextContent('Other leave (compassionate, emergency, Hajj): 0')
     const ranking = within(screen.getByRole('table', { name: 'Most frequent exceptions' }))
     expect(ranking.getAllByRole('rowheader').map((header) => header.textContent?.trim())).toEqual(['Salem Ali', 'Ibrahim Salem'])
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('prints a plain zero for exit permits when there are none', () => {
+    const none = { ...totals, leaves: { ...totals.leaves, exit_permits: { count: 0, hours: null, with_hours: 0 } } }
+    render(<CompanyStatsPrintSheet data={{ ...data, summary: { ...data.summary, current: none } }} unit="days" sort="score" />)
+
+    const summary = within(screen.getByRole('table', { name: 'Period summary' }))
+    expect(within(summary.getByRole('row', { name: /^Exit permits/ })).getByRole('cell')).toHaveTextContent(/^0$/)
   })
 
   it('suggests a scoped PDF filename only while printing', () => {

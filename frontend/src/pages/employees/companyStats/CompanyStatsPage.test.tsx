@@ -76,7 +76,9 @@ describe('CompanyStatsPage', () => {
       expect(screen.getByRole('heading', { name })).toBeInTheDocument()
     }
     expect(screen.getByText(/^From\s+to$/)).toHaveTextContent('From 21 Aug to 19 Nov 2026')
-    expect(screen.getAllByText('Up 100% from the previous period')).toHaveLength(2)
+    const increases = screen.getAllByText(/^Up\s+from the previous period$/)
+    expect(increases).toHaveLength(2)
+    for (const increase of increases) expect(increase).toHaveTextContent('Up 100% from the previous period')
   })
 
   it('marks a clamped period and hides all discipline and leave deltas when coverage is insufficient', async () => {

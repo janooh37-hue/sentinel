@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { CompanyStatsRow } from '@/lib/api'
 
 import { companyDisplayName, formatStatsNumber, formatStatsPercent, formatStatsQuantity } from './companyStatsFormat'
-import { DISCIPLINE_METRICS, disciplineValue, STATUS_TOKENS, type CountUnit, type StatusTone } from './companyStatsModel'
+import { absenceRateFill, absenceRateScale, DISCIPLINE_METRICS, disciplineValue, STATUS_TOKENS, type CountUnit, type StatusTone } from './companyStatsModel'
 
 interface Props {
   companies: CompanyStatsRow[]
@@ -34,7 +34,7 @@ function CompanyCard({ row, unit, rateMax, selected, selectedCard, onSelect }: {
   const roster = row.shift_codes.includes('office_day') ? t('companyStats.companies.officeRoster')
     : row.shift_codes.length ? t('companyStats.companies.shiftRoster') : null
   const absenceRate = totals.absence_rate
-  const rateWidth = absenceRate === null || rateMax === 0 ? 0 : absenceRate / rateMax * 100
+  const rateWidth = absenceRateFill(absenceRate, rateMax)
 
   return (
     <button
@@ -44,7 +44,7 @@ function CompanyCard({ row, unit, rateMax, selected, selectedCard, onSelect }: {
       aria-labelledby={`${id}-name`}
       aria-describedby={`${id}-meta ${id}-status ${id}-rate ${id}-figures`}
       onClick={() => onSelect(selected ? null : row.key)}
-      className={`flex min-w-0 flex-col items-stretch rounded-md border bg-surface p-2.5 text-start transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none ${selected ? 'ring-1 ring-inset ring-ring' : 'hover:ring-1 hover:ring-inset hover:ring-ring/60'}`}
+      className={`flex min-w-0 flex-col items-stretch rounded-md border bg-surface p-2.5 text-start ring-inset transition-colors focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none ${selected ? 'ring-1 ring-ring' : 'hover:ring-1 hover:ring-ring/60'}`}
       style={selected ? { borderColor: 'var(--primary)' } : undefined}
     >
       <span id={`${id}-name`} className="flex items-start justify-between gap-1 text-sm font-bold">
@@ -57,10 +57,7 @@ function CompanyCard({ row, unit, rateMax, selected, selectedCard, onSelect }: {
       <span
         id={`${id}-status`}
         className="mb-1.5 w-fit max-w-full rounded-full px-1.5 py-0.5 text-xs font-semibold leading-snug"
-        style={{
-          color: colors.fg,
-          backgroundColor: tone === 'bad' ? `color-mix(in srgb, ${colors.soft} 52%, var(--surface))` : colors.soft,
-        }}
+        style={{ color: colors.fg, backgroundColor: colors.soft }}
       >
         {t(`companyStats.status.${tone === 'small' ? 'smallSample' : tone ?? 'unknown'}`)}
         {driver !== null && <span> · {t(`companyStats.metric.${driver}`)}</span>}
@@ -97,7 +94,7 @@ export function CompanyCards({ companies, unit, selected, onSelect }: Props): Re
   const { t } = useTranslation()
   const heading = useId()
   const selectedCard = useRef<HTMLButtonElement>(null)
-  const rateMax = companies.reduce((max, { totals }) => Math.max(max, totals.absence_rate ?? 0), 0)
+  const rateMax = absenceRateScale(companies)
   return (
     <section aria-labelledby={heading} className="min-w-0">
       <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -113,7 +110,7 @@ export function CompanyCards({ companies, unit, selected, onSelect }: Props): Re
               type="button"
               variant="ghost"
               size="xs"
-              className="min-h-[44px] bg-primary-soft text-primary-text lg:min-h-0"
+              className="min-h-[44px] bg-primary-soft text-primary-text focus-visible:outline-none! focus-visible:ring-inset focus-visible:ring-offset-0 lg:min-h-0"
               onClick={() => {
                 selectedCard.current?.focus()
                 onSelect(null)
