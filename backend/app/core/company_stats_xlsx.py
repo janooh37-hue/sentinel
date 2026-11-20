@@ -153,7 +153,7 @@ def _append(sheet: Worksheet, values: tuple[CellValue, ...], *, subtotal: bool =
             for value in values
         )
     )
-    row = sheet.max_row
+    row: int = sheet.max_row
     for index, value in enumerate(values, start=1):
         cell = sheet.cell(row, index)
         cell.font = _SUBTOTAL_FONT if subtotal else _BODY_FONT
