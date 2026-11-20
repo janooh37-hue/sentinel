@@ -12,7 +12,7 @@ import { trendValue } from './trendModel'
 
 const LEAVE_COLUMNS = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
 
-type PrintValue = string | { text: string; note: string }
+type PrintValue = string | { count: string; hours: string | null } | { text: string; note: string }
 
 interface PrintRow {
   key: string
@@ -20,12 +20,12 @@ interface PrintRow {
   values: PrintValue[]
 }
 
-function PrintTable({ title, columns, rows, empty, wideColumn }: {
+function PrintTable({ title, columns, rows, empty, columnWidths }: {
   title: string
   columns: string[]
   rows: PrintRow[]
   empty?: string
-  wideColumn?: number
+  columnWidths?: Readonly<Record<number, string>>
 }) {
   return (
     <section className="mt-[4mm]">
@@ -38,7 +38,8 @@ function PrintTable({ title, columns, rows, empty, wideColumn }: {
                 <th
                   key={label}
                   scope="col"
-                  className={`border-y px-1.5 py-1 [overflow-wrap:anywhere] ${index === 0 ? 'w-1/5 text-start' : '[direction:ltr] text-end'} ${index === wideColumn ? 'w-[40mm]' : ''}`}
+                  className={`border-y px-1.5 py-1 [overflow-wrap:normal] [word-break:normal] ${index === 0 ? 'text-start' : '[direction:ltr] text-end'}`}
+                  style={{ inlineSize: columnWidths?.[index] ?? (index === 0 ? '20%' : undefined) }}
                 >
                   <bdi>{label}</bdi>
                 </th>
@@ -51,7 +52,12 @@ function PrintTable({ title, columns, rows, empty, wideColumn }: {
                 <th scope="row" className="border-b px-1.5 py-1 text-start font-semibold [overflow-wrap:anywhere]">{label}</th>
                 {values.map((value, index) => (
                   <td key={columns[index + 1]} className="border-b px-1.5 py-1 [direction:ltr] text-end [overflow-wrap:anywhere]">
-                    {typeof value === 'string' ? <bdi>{value}</bdi> : (
+                    {typeof value === 'string' ? <bdi>{value}</bdi> : 'count' in value ? (
+                      <bdi>
+                        <span className="whitespace-nowrap">{value.count}{value.hours !== null && ' ·'}</span>
+                        {value.hours !== null && <> {value.hours}</>}
+                      </bdi>
+                    ) : (
                       <>
                         <bdi dir="ltr">{value.text}</bdi>
                         <span className="block text-muted-foreground">{value.note}</span>
@@ -80,17 +86,15 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
 
   const metricLabels = DISCIPLINE_METRICS.map((metric) => t(`companyStats.metric.${metric}`))
   const leaveLabels = LEAVE_COLUMNS.map((kind) => t(`companyStats.leaves.${kind}`))
-  const changeCells = (value: number, before: number, display = formatStatsNumber(value)): string[] => {
+  const changeCells = (value: number, before: number, display: PrintValue = formatStatsNumber(value)): PrintValue[] => {
     if (!comparable) return [display]
     const change = deltaPercent(value, before)
     return [display, formatStatsNumber(before), change === null ? '—' : `${change > 0 ? '+' : ''}${formatStatsPercent(change)}`]
   }
-  const permitNote = (totals: CompanyStatsTotals): string => {
+  const permitNote = (totals: CompanyStatsTotals): PrintValue => {
     const permits = totals.leaves.exit_permits
     if (permits.count === 0) return formatStatsNumber(0)
-    const count = formatStatsQuantity('permit', permits.count, t)
-    const hours = formatStatsPermitHours(permits, t)
-    return hours === null ? count : `${count} · ${hours}`
+    return { count: formatStatsQuantity('permit', permits.count, t), hours: formatStatsPermitHours(permits, t) }
   }
   const other = current.leaves.other
   const summaryRows: PrintRow[] = [
@@ -107,7 +111,7 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
         : changeCells(current.leaves[kind][unit], previous.leaves[kind][unit]),
     })),
   ]
-  const comparisonValues = (totals: CompanyStatsTotals): string[] => [
+  const comparisonValues = (totals: CompanyStatsTotals): PrintValue[] => [
     ...LEAVE_COLUMNS.map((kind) => kind === 'exit_permits' ? permitNote(totals) : formatStatsNumber(totals.leaves[kind][unit])),
     ...DISCIPLINE_METRICS.map((metric) => formatStatsNumber(disciplineValue(totals, metric, unit))),
     totals.absence_rate === null ? '—' : formatStatsPercent(totals.absence_rate, 1),
@@ -176,7 +180,11 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
       <PrintTable
         title={t('companyStats.comparison.title')}
         columns={[t('companyStats.filters.company'), ...leaveLabels, ...metricLabels, t('companyStats.companies.rate')]}
-        wideColumn={LEAVE_COLUMNS.indexOf('exit_permits') + 1}
+        columnWidths={{
+          0: '15%',
+          [LEAVE_COLUMNS.indexOf('administrative') + 1]: '28mm',
+          [LEAVE_COLUMNS.indexOf('exit_permits') + 1]: '36mm',
+        }}
         rows={comparisonRows}
       />
       <PrintTable
