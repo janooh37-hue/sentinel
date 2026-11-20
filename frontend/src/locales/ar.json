@@ -7901,6 +7901,22 @@
       "hint": "الهالة = في الموقع الآن · العلامة = مُصحَّح",
       "details": "كل إجازة معتمدة تعفي من الدوام تظهر بالأزرق مع اسم نوعها. الخدمة الوطنية بالبنفسجي. الحضور داخل مدة السماح ليس مخالفة."
     },
+    "results": {
+      "label": "نتائج المرشحات",
+      "people": "الموظفون: <0>{{count}}</0>",
+      "rows": "الصفوف المعروضة: <0>{{count}}</0>",
+      "empty": "لا توجد صفوف تطابق هذه المرشحات",
+      "clearSearch": "مسح البحث"
+    },
+    "filter": {
+      "clear": "مسح المرشحات",
+      "rowStatus": "حالة الصف",
+      "button": "المرشحات",
+      "active": "مرشحات الصفوف النشطة",
+      "remove": "إزالة {{label}}",
+      "close": "إغلاق المرشحات",
+      "showResults": "عرض النتائج"
+    },
     "quickCorrection": {
       "title": "تصحيح سريع",
       "subtitle": "اختر النتيجة النهائية لليوم",
@@ -7992,6 +8008,11 @@
       "people_few": "الموظفون: <0>{{count}}</0>",
       "people_many": "الموظفون: <0>{{count}}</0>",
       "people_other": "الموظفون: <0>{{count}}</0>",
+      "who": "الموظفون",
+      "splitAbsent": "غائب",
+      "splitAwaited": "مُنتظَر",
+      "residual": "لم يُصنَّفوا بعد",
+      "residualHint": "لم تبدأ الوردية، أو لم يُسجَّل الخروج",
       "onSite": "في الموقع",
       "left": "غادروا",
       "notArrived": "لم يصلوا",
@@ -8007,6 +8028,8 @@
       "today": "اليوم",
       "previousDay": "اليوم السابق",
       "nextDay": "اليوم التالي",
+      "chooseDay": "اختيار اليوم",
+      "company": "السرية",
       "search": "الاسم أو الرقم أو الموقع…",
       "print": "طباعة",
       "export": "تصدير",
@@ -8039,12 +8062,18 @@
       "openEmployee": "فتح ملف الموظف · {{name}} · {{employeeId}}"
     },
     "print": {
+      "whoFilter": "الموظفون: {{who}}",
+      "statesFilter": "حالة الصف: {{states}}",
+      "companyFilter": "السرية: <0>{{company}}</0>",
+      "searchDeclaration": "بحث «<0>{{term}}</0>»",
+      "rowsShown": "الصفوف: <0>{{shown}}</0> من <1>{{total}}</1>",
+      "asOf": "حتى <0>{{time}}</0>",
+      "allRows": "كل الصفوف",
       "title": "سجل الحضور اليومي",
       "titlePeer": "Daily Duty Register",
       "subtitleSheet": "{{date}} · سجل الحضور حسب الوردية والسرية والموقع",
       "subtitleShift": "{{date}} · صفحة لكل وردية · صفحة {{index}} من {{total}}",
       "filtered": "مُرشَّح: {{filter}}",
-      "searchFilter": "بحث «{{term}}»",
       "date": "التاريخ",
       "shifts": "الورديات",
       "assigned": "المكلَّفون",
@@ -8126,6 +8155,9 @@
     },
     "attention": {
       "title": "يحتاج قراراً",
+      "anchor": "يحتاج قراراً · <0>{{count}}</0>",
+      "filterHint": "لا تتأثر بالمرشحات",
+      "scope": "جميع السرايا · كل الورديات · حالات حضور لم تُحسم",
       "none": "لا شيء يحتاج قراراً اليوم.",
       "reviewAll": "مراجعة الكل",
       "openFile": "فتح ملف الحضور"

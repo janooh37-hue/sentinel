@@ -10,11 +10,17 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import type { AttendanceRow } from './attendanceModel'
+import type { AttendanceFilter, AttendanceRow } from './attendanceModel'
 import {
+  EMPTY_FILTER,
+  ON_SITE_BUCKETS,
+  STATE_CHIP_ORDER,
+  applyAttendanceFilter,
   arrivalOffsetMinutes,
+  daySummary,
   groupByUnitAndPost,
   inAt,
+  isFilterActive,
   isOnSiteNow,
   isWindowOpen,
   minutesPastGrace,
@@ -22,11 +28,17 @@ import {
   onSiteSummary,
   orderByAttention,
   outAt,
+  personBuckets,
   postSummary,
   rowState,
   shiftCounts,
   shiftIsoDate,
   siteTime,
+  stateCounts,
+  matchesCompany,
+  parseAttendanceFilter,
+  parseCompany,
+  writeAttendanceFilter,
 } from './attendanceModel'
 
 // The morning duty runs 01:00Z-09:00Z with thirty minutes of grace, so the
@@ -388,6 +400,224 @@ describe('onSiteSummary', () => {
       nationalService: 1,
       people: 5,
     })
+  })
+})
+
+describe('personBuckets', () => {
+  it('keeps one best bucket per person regardless of double-shift row order', () => {
+    const rows = [
+      row({ employee_id: 'A', shift_code: 'night', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'A', final_out_at: null }),
+      row({ employee_id: 'B', final_out_at: '2026-08-19T05:00:00Z' }),
+      row({ employee_id: 'B', on_leave: true, leave_kind: 'national_service' }),
+      row({ employee_id: 'C', scheduled_start_at: '2026-08-19T18:00:00Z', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+    ]
+
+    expect([...personBuckets(rows, RUNNING)]).toEqual([
+      ['A', 'onSite'], ['B', 'left'], ['C', null],
+    ])
+    expect(personBuckets([...rows].reverse(), RUNNING).get('A')).toBe('onSite')
+    expect(onSiteSummary(rows, RUNNING)).toEqual({
+      onSite: 1, left: 1, notArrived: 0, leave: 0, nationalService: 0, people: 3,
+    })
+  })
+})
+
+describe('daySummary', () => {
+  it('splits not-arrived people into absent and awaited and preserves unplaced people', () => {
+    const noPunch = { punch_count: 0, first_punch_at: null, last_punch_at: null, presence_state: 'scheduled' as const }
+    const rows = [
+      row({ employee_id: 'absent', ...noPunch, absence_due_at: '2026-08-19T01:30:00Z' }),
+      row({ employee_id: 'absent', ...noPunch, shift_code: 'night' }),
+      row({ employee_id: 'awaited', ...noPunch }),
+      row({ employee_id: 'future', ...noPunch, scheduled_start_at: '2026-08-19T18:00:00Z' }),
+      row({ employee_id: 'unpaired', punch_count: 1, judgment_due_at: '2026-08-19T01:30:00Z' }),
+      row({ employee_id: 'left', final_out_at: '2026-08-19T01:40:00Z' }),
+      row({ employee_id: 'left', ...noPunch, presence_state: 'absent' }),
+      row({ employee_id: 'leave', on_leave: true, leave_kind: 'annual' }),
+      row({ employee_id: 'service', on_leave: true, leave_kind: 'national_service' }),
+    ]
+
+    expect(daySummary(rows, BEFORE_ABSENCE)).toEqual({
+      onSite: 0, left: 1, notArrived: 2, leave: 1, nationalService: 1, people: 7,
+      absent: 1, awaited: 1, residual: 2,
+    })
+    expect(daySummary([], RUNNING)).toEqual({
+      onSite: 0, left: 0, notArrived: 0, leave: 0, nationalService: 0, people: 0,
+      absent: 0, awaited: 0, residual: 0,
+    })
+  })
+})
+
+describe('applyAttendanceFilter', () => {
+  it('keeps every row of selected people, ORs row states, and ANDs corrected', () => {
+    const rows = [
+      row({ employee_id: 'A', first_in_at: '2026-08-19T01:40:00Z', final_out_at: null, late_minutes: 40, corrected: true }),
+      row({ employee_id: 'A', shift_code: 'night', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'B', first_in_at: '2026-08-19T01:00:00Z', final_out_at: null, corrected: true }),
+      row({ employee_id: 'C', first_in_at: '2026-08-19T01:40:00Z', final_out_at: '2026-08-19T05:00:00Z', late_minutes: 40, corrected: true }),
+      row({ employee_id: 'D', final_out_at: null, late_minutes: 40, corrected: false }),
+    ]
+    const filter: AttendanceFilter = { who: 'onSite', states: [], corrected: false }
+    const selected = applyAttendanceFilter(rows, filter, RUNNING)
+    expect(selected.map((r) => [r.employee_id, r.shift_code])).toEqual([
+      ['A', 'morning'], ['A', 'night'], ['B', 'morning'], ['D', 'morning'],
+    ])
+    expect(selected[0]).toBe(rows[0])
+    expect(onSiteSummary(rows, RUNNING)).toEqual({
+      onSite: 3, left: 1, notArrived: 0, leave: 0, nationalService: 0, people: 4,
+    })
+    expect(applyAttendanceFilter(rows, { ...filter, states: ['late', 'absent'] }, RUNNING)
+      .map((r) => [r.employee_id, r.shift_code])).toEqual([
+      ['A', 'morning'], ['A', 'night'], ['D', 'morning'],
+    ])
+    expect(applyAttendanceFilter(rows, { ...filter, states: ['late', 'absent'], corrected: true }, RUNNING)
+      .map((r) => [r.employee_id, r.shift_code])).toEqual([['A', 'morning']])
+    expect(applyAttendanceFilter(rows, { who: null, states: ['late'], corrected: true }, RUNNING)
+      .map((r) => r.employee_id)).toEqual(['A', 'C'])
+  })
+
+  it('leaves every row visible by default and exposes the approved filter orders', () => {
+    const rows = [
+      row({ employee_id: 'A' }),
+      row({ employee_id: 'B', on_leave: true }),
+    ]
+    expect(EMPTY_FILTER).toEqual({ who: null, states: [], corrected: false })
+    expect(applyAttendanceFilter(rows, EMPTY_FILTER, RUNNING).map((r) => r.employee_id)).toEqual(['A', 'B'])
+    expect(isFilterActive(EMPTY_FILTER)).toBe(false)
+    expect(isFilterActive({ who: 'left', states: [], corrected: false })).toBe(true)
+    expect(isFilterActive({ who: null, states: ['late'], corrected: false })).toBe(true)
+    expect(isFilterActive({ who: null, states: [], corrected: true })).toBe(true)
+    expect(ON_SITE_BUCKETS).toEqual(['onSite', 'left', 'notArrived', 'leave', 'nationalService'])
+    expect(STATE_CHIP_ORDER).toEqual([
+      'verified', 'grace', 'late', 'unpaired', 'absent', 'pending', 'leave', 'national_service',
+    ])
+  })
+})
+
+describe('stateCounts', () => {
+  it('counts rows in the people scope without narrowing chips by states or corrected', () => {
+    const rows = [
+      row({ employee_id: 'A', corrected: true, first_in_at: '2026-08-19T01:40:00Z', late_minutes: 40 }),
+      row({ employee_id: 'A', shift_code: 'night', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'B', late_minutes: 10 }),
+      row({ employee_id: 'C', corrected: true, first_in_at: '2026-08-19T01:40:00Z', final_out_at: '2026-08-19T05:00:00Z', late_minutes: 40 }),
+      row({ employee_id: 'D', punch_count: 0, first_punch_at: null, presence_state: 'scheduled', scheduled_start_at: '2026-08-19T18:00:00Z', absence_due_at: '2026-08-19T19:00:00Z' }),
+      row({ employee_id: 'E', corrected: true, first_in_at: '2026-08-19T01:00:00Z' }),
+    ]
+    expect(stateCounts(rows, EMPTY_FILTER, RUNNING)).toEqual({
+      verified: 1, grace: 1, late: 2, unpaired: 0, absent: 1, pending: 1,
+      leave: 0, national_service: 0, corrected: 3,
+    })
+    expect(stateCounts(rows, { who: 'onSite', states: [], corrected: false }, RUNNING)).toEqual({
+      verified: 1, grace: 1, late: 1, unpaired: 0, absent: 1, pending: 0,
+      leave: 0, national_service: 0, corrected: 2,
+    })
+    expect(stateCounts(rows, { who: 'onSite', states: ['late', 'absent'], corrected: true }, RUNNING)).toEqual({
+      verified: 1, grace: 1, late: 1, unpaired: 0, absent: 1, pending: 0,
+      leave: 0, national_service: 0, corrected: 1,
+    })
+    expect(stateCounts(rows, { who: 'onSite', states: ['absent'], corrected: false }, RUNNING).corrected).toBe(0)
+    expect(stateCounts([], EMPTY_FILTER, RUNNING)).toEqual({
+      verified: 0, grace: 0, late: 0, unpaired: 0, absent: 0, pending: 0,
+      leave: 0, national_service: 0, corrected: 0,
+    })
+  })
+})
+
+describe('company scope', () => {
+  it('recounts the day for company scope while attendance filters only change results and chip scope', () => {
+    const rows = [
+      row({ employee_id: 'A', duty_unit: 'First', final_out_at: null, late_minutes: 40 }),
+      row({ employee_id: 'A', duty_unit: 'First', shift_code: 'night', punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+      row({ employee_id: 'B', duty_unit: 'First', final_out_at: '2026-08-19T05:00:00Z' }),
+      row({ employee_id: 'C', duty_unit: 'Second', on_leave: true, leave_kind: 'annual' }),
+      row({ employee_id: 'D', duty_unit: null, punch_count: 0, first_punch_at: null, presence_state: 'scheduled' }),
+    ]
+    const scoped = rows.filter((r) => matchesCompany(r, 'First'))
+    expect(scoped.map((r) => r.employee_id)).toEqual(['A', 'A', 'B'])
+    expect(daySummary(rows, RUNNING)).toEqual({
+      onSite: 1, left: 1, notArrived: 1, leave: 1, nationalService: 0, people: 4,
+      absent: 1, awaited: 0, residual: 0,
+    })
+    for (const filter of [
+      EMPTY_FILTER,
+      { who: 'onSite', states: [], corrected: false },
+      { who: 'onSite', states: ['late'], corrected: false },
+      { who: 'left', states: ['absent'], corrected: true },
+    ] satisfies AttendanceFilter[]) {
+      applyAttendanceFilter(scoped, filter, RUNNING)
+      expect(daySummary(scoped, RUNNING)).toEqual({
+        onSite: 1, left: 1, notArrived: 0, leave: 0, nationalService: 0, people: 2,
+        absent: 0, awaited: 0, residual: 0,
+      })
+    }
+    expect(applyAttendanceFilter(scoped, { who: 'onSite', states: ['late'], corrected: false }, RUNNING)
+      .map((r) => [r.employee_id, r.shift_code])).toEqual([['A', 'morning']])
+    expect(stateCounts(scoped, EMPTY_FILTER, RUNNING)).toEqual({
+      verified: 1, grace: 0, late: 1, unpaired: 0, absent: 1, pending: 0,
+      leave: 0, national_service: 0, corrected: 0,
+    })
+    for (const states of [[], ['late'], ['absent']] satisfies AttendanceFilter['states'][]) {
+      expect(stateCounts(scoped, { who: 'onSite', states, corrected: false }, RUNNING)).toEqual({
+        verified: 0, grace: 0, late: 1, unpaired: 0, absent: 1, pending: 0,
+        leave: 0, national_service: 0, corrected: 0,
+      })
+    }
+    expect(rows.filter((r) => matchesCompany(r, null)).map((r) => r.employee_id)).toEqual(['A', 'A', 'B', 'C', 'D'])
+    expect(rows.filter((r) => matchesCompany(r, '__unassigned__')).map((r) => r.employee_id)).toEqual(['D'])
+    expect(matchesCompany(row({ duty_unit: '' }), '__unassigned__')).toBe(true)
+    expect(matchesCompany(row({ duty_unit: '   ' }), '__unassigned__')).toBe(true)
+    expect(matchesCompany(row({ duty_unit: 'First' }), '__unassigned__')).toBe(false)
+    expect(matchesCompany(row({ duty_unit: ' First ' }), 'First')).toBe(false)
+  })
+})
+
+describe('attendance filter URL', () => {
+  it('drops invalid values, canonicalizes states, and rejects on-site scope on past days', () => {
+    const params = new URLSearchParams('who=unknown&state=unpaired,unknown,late,late,verified,pending&corrected=yes&company=%20First%20')
+    expect(parseAttendanceFilter(params, { isToday: true })).toEqual({
+      who: null, states: ['verified', 'late', 'unpaired', 'pending'], corrected: false,
+    })
+    expect(parseCompany(params)).toBe('First')
+    expect(parseAttendanceFilter(new URLSearchParams('who=onSite&corrected=1'), { isToday: false })).toEqual({
+      who: null, states: [], corrected: true,
+    })
+    expect(parseAttendanceFilter(new URLSearchParams('who=onSite'), { isToday: true })).toEqual({
+      who: 'onSite', states: [], corrected: false,
+    })
+    expect(parseAttendanceFilter(new URLSearchParams('state=unknown,,&corrected=true'), { isToday: false })).toEqual({
+      who: null, states: [], corrected: false,
+    })
+    expect(parseAttendanceFilter(new URLSearchParams(), { isToday: true })).toEqual({
+      who: null, states: [], corrected: false,
+    })
+    expect(parseCompany(new URLSearchParams('company=__unassigned__'))).toBe('__unassigned__')
+    expect(parseCompany(new URLSearchParams('company=%20%20'))).toBeNull()
+    expect(parseCompany(new URLSearchParams())).toBeNull()
+  })
+
+  it('round-trips filters without mutating URL scope and removes only default filter parameters', () => {
+    const params = new URLSearchParams('date=2026-08-19&company=First&shift=night&q=Ali&view=register&tag=a&tag=b')
+    const filter: AttendanceFilter = { who: 'left', states: ['late', 'unpaired'], corrected: true }
+    const written = writeAttendanceFilter(params, filter)
+
+    expect(written).not.toBe(params)
+    expect(params.toString()).toBe('date=2026-08-19&company=First&shift=night&q=Ali&view=register&tag=a&tag=b')
+    expect(written.get('who')).toBe('left')
+    expect(written.get('state')).toBe('late,unpaired')
+    expect(written.get('corrected')).toBe('1')
+    expect(written.get('company')).toBe('First')
+    expect(written.getAll('tag')).toEqual(['a', 'b'])
+    expect(parseAttendanceFilter(written, { isToday: false })).toEqual({
+      who: 'left', states: ['late', 'unpaired'], corrected: true,
+    })
+    expect(parseAttendanceFilter(written, { isToday: true })).toEqual(filter)
+    expect(writeAttendanceFilter(written, EMPTY_FILTER).toString()).toBe(
+      'date=2026-08-19&company=First&shift=night&q=Ali&view=register&tag=a&tag=b',
+    )
+    expect(writeAttendanceFilter(new URLSearchParams(), EMPTY_FILTER).toString()).toBe('')
+    expect(written.get('who')).toBe('left')
   })
 })
 

@@ -7,7 +7,12 @@
  * `seen/due`, so switching is a decision, not a probe.
  */
 
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { UNASSIGNED } from '@/lib/dutyUnits'
+import { cn } from '@/lib/utils'
+import { NATIVE_SELECT } from '@/pages/leaves/report/controls'
 
 import type { PrintLayout } from './AttendancePrintSheet'
 import type { AttendanceRow, ShiftCount } from './attendanceModel'
@@ -32,10 +37,13 @@ interface Props {
   rows: readonly AttendanceRow[]
   now: Date
   shiftCode: string | null
+  company: string | null
+  companies: readonly string[]
   view: AttendanceView
   search: string
   onDateChange: (iso: string) => void
   onShiftChange: (shiftCode: string | null) => void
+  onCompanyChange: (company: string | null) => void
   onViewChange: (view: AttendanceView) => void
   onSearchChange: (value: string) => void
   onPrint: (layout: PrintLayout) => void
@@ -64,23 +72,30 @@ export function AttendanceToolbar({
   rows,
   now,
   shiftCode,
+  company,
+  companies,
   view,
   search,
   onDateChange,
   onShiftChange,
+  onCompanyChange,
   onViewChange,
   onSearchChange,
   onPrint,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
+  const companyId = useId()
   const counts = shiftCounts(rows, { now })
   const shifts = orderedShifts(counts)
   const today = dayStrip.at(-1)?.iso ?? operationalDate
+  const companyOptions = company && company !== UNASSIGNED && !companies.includes(company)
+    ? [...companies, company]
+    : companies
 
   return (
     <div data-print-hide>
       <div className="sticky top-0 z-20 flex flex-wrap items-center gap-2.5 rounded-2xl border border-hairline bg-surface p-2.5 shadow-[0_10px_26px_-22px_rgba(13,40,69,.4)]">
-        <div className="flex items-center overflow-hidden rounded-xl border border-border">
+        <div className="flex items-stretch overflow-hidden rounded-xl border border-border">
           <button
             type="button"
             aria-label={t('attendance.toolbar.previousDay')}
@@ -89,9 +104,21 @@ export function AttendanceToolbar({
           >
             ‹
           </button>
-          <span className="border-x border-border px-3 py-1.5 font-mono text-[0.82em] font-bold tabular-nums">
-            {operationalDate}
-          </span>
+          {/* The native control: WebView2 draws its calendar, and it already
+              speaks to the keyboard and screen readers. No min: any recorded
+              day is fair game. Max today: there is no register for tomorrow. */}
+          <input
+            type="date"
+            dir="ltr"
+            value={operationalDate}
+            max={today}
+            aria-label={t('attendance.toolbar.chooseDay')}
+            onChange={(event) => {
+              const picked = event.target.value
+              if (picked && picked <= today) onDateChange(picked)
+            }}
+            className="min-h-[44px] border-x border-border bg-transparent px-3 py-1.5 font-mono text-[0.82em] font-bold tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:min-h-0"
+          />
           <button
             type="button"
             aria-label={t('attendance.toolbar.nextDay')}
@@ -131,6 +158,24 @@ export function AttendanceToolbar({
               </button>
             )
           })}
+        </div>
+
+        <div className="flex w-full min-w-0 flex-col gap-1.5 lg:w-auto lg:flex-row lg:items-center lg:gap-2">
+          <label htmlFor={companyId} className="text-[0.75em] text-muted-foreground">
+            {t('attendance.toolbar.company')}
+          </label>
+          <select
+            id={companyId}
+            value={company ?? ''}
+            onChange={(event) => onCompanyChange(event.target.value || null)}
+            className={cn(NATIVE_SELECT, 'min-h-[44px] w-full lg:min-h-9 lg:w-auto lg:max-w-[200px]')}
+          >
+            <option value="">{t('leaves.report.allCompanies')}</option>
+            {companyOptions.filter((candidate) => candidate !== UNASSIGNED).map((candidate) => (
+              <option key={candidate} value={candidate}>{candidate}</option>
+            ))}
+            <option value={UNASSIGNED}>{t('dutyLocations.unassigned')}</option>
+          </select>
         </div>
 
         <label className="flex min-w-[220px] flex-1 items-center gap-2 rounded-xl border border-border px-2.5 py-1.5 md:max-w-[280px]">
