@@ -33976,6 +33976,107 @@
         }
       }
     },
+    "/api/v1/workforce/attendance/company-stats/export": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Export Company Attendance Stats",
+        "description": "Download the same scoped report with the complete score ranking.",
+        "operationId": "export_company_attendance_stats_api_v1_workforce_attendance_company_stats_export_get",
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "duty_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duty Unit"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "type": "string",
+              "default": "ar",
+              "title": "Language"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/attendance/punches": {
       "get": {
         "tags": [
@@ -44525,6 +44626,22 @@
             "format": "date",
             "title": "Closed Through"
           },
+          "coverage_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage From"
+          },
+          "previous_comparable": {
+            "type": "boolean",
+            "title": "Previous Comparable"
+          },
           "duty_unit": {
             "anyOf": [
               {
@@ -44576,6 +44693,8 @@
           "period",
           "previous_period",
           "closed_through",
+          "coverage_from",
+          "previous_comparable",
           "duty_unit",
           "granularity",
           "summary",
@@ -44618,6 +44737,10 @@
           "ratio": {
             "$ref": "#/components/schemas/StatsCompanyRatio"
           },
+          "small_sample": {
+            "type": "boolean",
+            "title": "Small Sample"
+          },
           "status": {
             "$ref": "#/components/schemas/StatsCompanyStatus"
           }
@@ -44629,6 +44752,7 @@
           "shift_codes",
           "totals",
           "ratio",
+          "small_sample",
           "status"
         ],
         "title": "CompanyStatsRow"
@@ -62413,6 +62537,14 @@
             "type": "integer",
             "title": "Score"
           },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "small_sample": {
+            "type": "boolean",
+            "title": "Small Sample"
+          },
           "tier": {
             "anyOf": [
               {
@@ -62457,6 +62589,8 @@
           "leave_days",
           "leave_count",
           "score",
+          "events",
+          "small_sample",
           "tier",
           "transfer"
         ],

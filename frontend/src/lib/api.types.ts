@@ -7635,6 +7635,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workforce/attendance/company-stats/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Company Attendance Stats
+         * @description Download the same scoped report with the complete score ranking.
+         */
+        get: operations["export_company_attendance_stats_api_v1_workforce_attendance_company_stats_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/attendance/punches": {
         parameters: {
             query?: never;
@@ -10615,6 +10635,10 @@ export interface components {
              * Format: date
              */
             closed_through: string;
+            /** Coverage From */
+            coverage_from: string | null;
+            /** Previous Comparable */
+            previous_comparable: boolean;
             /** Duty Unit */
             duty_unit: string | null;
             /**
@@ -10641,6 +10665,8 @@ export interface components {
             shift_codes: string[];
             totals: components["schemas"]["StatsTotals"];
             ratio: components["schemas"]["StatsCompanyRatio"];
+            /** Small Sample */
+            small_sample: boolean;
             status: components["schemas"]["StatsCompanyStatus"];
         };
         /**
@@ -16395,6 +16421,10 @@ export interface components {
             leave_count: number;
             /** Score */
             score: number;
+            /** Events */
+            events: number;
+            /** Small Sample */
+            small_sample: boolean;
             /** Tier */
             tier: ("needs_intervention" | "above_average") | null;
             transfer: components["schemas"]["StatsTransfer"] | null;
@@ -38030,6 +38060,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompanyStatsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_company_attendance_stats_api_v1_workforce_attendance_company_stats_export_get: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+                duty_unit?: string | null;
+                language?: "ar" | "en";
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
                 };
             };
             /** @description Validation Error */
