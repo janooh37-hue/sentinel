@@ -19,6 +19,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
 
+import { BrandWordmark } from './BrandWordmark'
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
 import { NAV_ITEMS } from './navItems'
@@ -82,15 +83,10 @@ export function NavDrawer({ open, onOpenChange, returnFocusRef }: NavDrawerProps
       >
         <SheetTitle className="sr-only">{t('nav.menu')}</SheetTitle>
         {/* Header: brand + close */}
-        <div className="flex items-center justify-between border-b border-border px-4 py-3 @max-[200px]:px-2">
-          <div className="flex min-w-0 items-center gap-2.5">
-            <img
-              src="/brand/gssg-logo.png"
-              alt="GSSG"
-              className="aspect-square h-9 w-9 max-w-none shrink-0 rounded-full object-cover ring-1 ring-border"
-            />
-            <span className="text-[1.05em] font-bold tracking-tight text-primary @max-[200px]:hidden">GSSG</span>
-          </div>
+        {/* ps-6 puts the mark on the nav icons' column (nav px-3 + link px-3). */}
+        <div className="flex items-center justify-between border-b border-border py-3 pe-4 ps-6 @max-[200px]:px-2">
+          {/* 22px tall at full size; a drawer narrowed by large text scales the whole mark down instead of cropping it. */}
+          <BrandWordmark className="w-[138px] min-w-0 max-w-full" />
           <SheetClose
             className="flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={t('common.close', { defaultValue: 'Close' })}

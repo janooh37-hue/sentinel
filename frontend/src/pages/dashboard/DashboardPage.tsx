@@ -585,18 +585,13 @@ function DashboardHero({
       className="anim-fade-up relative mb-4 flex min-h-0 flex-col gap-4 overflow-hidden rounded-2xl px-4 py-4 md:mb-6 md:min-h-[150px] md:flex-row md:items-stretch md:gap-5 md:px-8 md:py-6"
       style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}
     >
-      {/* Soft white circle highlight (upper-right) */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute -top-20 end-[-80px] h-[280px] w-[280px] rounded-full bg-white/[0.06]"
-      />
       {/* Bottom depth gradient */}
       <span
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-black/[0.18]"
       />
 
-      <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-2 text-white max-md:pe-14">
+      <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-2 text-white">
         <span className="text-[0.68em] font-medium uppercase tracking-[0.08em] text-white/60">
           {greeting}
         </span>
@@ -651,31 +646,6 @@ function DashboardHero({
           {insight}
         </div>
       </div>
-
-      {/* Mobile: small rounded-square crest wrap (44×44, matches .m-hero__crest-wrap),
-           absolutely pinned to the top inline-end corner (text column reserves
-           space for it via max-md:pe-14 above) so it never overlaps the headline.
-           Desktop (md+): transparent passthrough — the img itself carries the 80×80 circle style. */}
-      <div className="relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-xl bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.18)] max-md:absolute max-md:top-4 max-md:end-4 md:h-auto md:w-auto md:self-center md:rounded-none md:bg-transparent md:shadow-none">
-        <img
-          src="/brand/gssg-logo.png"
-          alt=""
-          aria-hidden
-          className="dashboard-crest relative h-8 w-8 rounded-full object-cover opacity-90 md:h-[80px] md:w-[80px] md:shadow-[0_0_0_1px_rgba(255,255,255,0.18)]"
-        />
-      </div>
-
-      {/* Crest rotation keyframes — scoped to this element's animation name. */}
-      <style>{`
-        .dashboard-crest { animation: gssg-crest-spin 90s linear infinite; }
-        @keyframes gssg-crest-spin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .dashboard-crest { animation: none; }
-        }
-      `}</style>
     </div>
   )
 }
