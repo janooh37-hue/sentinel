@@ -51,6 +51,11 @@ scripts/mng.ps1 logs
 - Permissions: a user without the capability never sees the feature; no disabled, read-only, or locked copies of things they cannot do. Read the `permissions` skill before adding a gated feature, a capability, or a role preset, or before changing record visibility.
 - DOCX rendering uses templates in `backend/templates/`; PDF conversion depends on Word COM running as the interactive `Admin` user.
 
+## Brand
+
+- Use the GSSG wordmark: `frontend/public/brand/gssg-wordmark.png` for light surfaces, `frontend/public/brand/gssg-wordmark-on-dark.png` for dark surfaces.
+- The globe emblem is retired (`docs/brand/retired/`). Use it only when the user says "use the old logo".
+
 ## Required reviews
 
 - Arabic and English are peers. After UI strings, layouts, documents, or notifications change, run the `i18n-rtl-reviewer`; use logical CSS properties and verify both directions.
