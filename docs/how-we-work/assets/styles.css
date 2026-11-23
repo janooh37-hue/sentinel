@@ -21,7 +21,7 @@ h1, h2, h3 { font-family: Georgia, "Times New Roman", serif; color: var(--navy);
 /* Cover */
 .cover { background: var(--navy); color: #fff; display: flex; flex-direction: column;
          justify-content: center; align-items: center; text-align: center; gap: 10mm; }
-.cover img { width: 42mm; }
+.cover img { block-size: 11mm; inline-size: auto; max-inline-size: 100%; }
 .cover h1 { color: #fff; font-size: 26pt; }
 .cover .subtitle { font-size: 13pt; color: var(--navy-soft); }
 .cover .byline { position: absolute; bottom: 24mm; font-size: 10pt; color: var(--navy-soft); }
