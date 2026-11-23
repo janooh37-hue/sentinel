@@ -805,6 +805,23 @@
 [data-font-scale="23"],
 [data-font-scale="24"] { font-size: 24px; }
 
+/* BrandWordmark (components/shell/BrandWordmark.tsx), tone "surface": both
+   files are in the DOM and the app theme shows one, so the mark follows
+   data-theme without a render. Grey letters suit a light surface; the
+   lightened file suits the dark theme's near-black surface. */
+.brand-wordmark > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.brand-wordmark > .brand-wordmark__dark,
+[data-theme="dark"] .brand-wordmark > .brand-wordmark__light {
+  display: none;
+}
+[data-theme="dark"] .brand-wordmark > .brand-wordmark__dark {
+  display: block;
+}
+
 /* TopNav adaptation (UI-02). The header is a dense single row: logo + brand
    copy, up to 7 destinations, then AaSlider + language + theme + intake +
    baskets + gateway + bell + settings + avatar. Measured on main before this
@@ -815,17 +832,21 @@
    screen where no amount of scrolling inside the header could reach them.
 
    The row now NEVER wraps and NEVER overflows; it sheds decoration in tiers,
-   widest-first, and every control stays clickable:
-     Tier 1 (<1560px): the brand copy goes, the logo (still a labelled link to
-       the dashboard) stays; gaps and padding tighten.
-     Tier 1b (<1520px): the two widest utilities shed their extras (the Aa
+   widest-first, and every control stays clickable. The brand is the GSSG
+   wordmark (126px wide, 20px tall), with the tagline beside it in the widest
+   tier. Measured with every destination granted, at the default content
+   scale (clearance = labelled strip to the utilities, en / ar):
+     Tier 1 (<1960px): the tagline goes, the wordmark (still a labelled link
+       to the dashboard) stays; gaps and padding tighten. At 1960 the full
+       row keeps ~50px / ~85px clear.
+     Tier 1b (<1640px): the two widest utilities shed their extras (the Aa
        range, whose ± buttons remain; the language word, whose globe remains).
-       With all nine destinations (Assets added after Vehicles) the labelled
-       strip otherwise runs into the utilities from ~1510px down.
+       At 1640 the strip keeps ~39px / ~55px clear; at 1380, ~25px / ~30px.
+     Tier 1c (<1380px): destination links tighten their side padding; at 1280
+       the labelled strip keeps ~33px / ~38px clear.
      Tier 2 (<1280px): destinations collapse to their icons — the icon lives in
        the DOM at every width and is revealed here, with the accessible name
-       kept on the link. Measured with every destination granted: at 1280 the
-       labelled strip keeps ~30px (en) / ~60px (ar) clear of the utilities.
+       kept on the link.
    Large content scales (20-24) get Tier 2 at any width, and keep the old cap
    on the header's OWN font so chrome stays usable while page content grows. */
 /* The link icon is decoration until a collapsed tier needs it as the only
@@ -834,7 +855,7 @@
   display: none;
 }
 
-@media (max-width: 1559px) {
+@media (max-width: 1959px) {
   [data-topnav] {
     gap: 0.5rem;
     /* Physical env() insets: a landscape phone's notch/island sits on a physical side whatever the direction. */
@@ -846,13 +867,15 @@
     display: none;
   }
 
+  /* 12px past the header gap, so the wordmark reads as the brand, not as
+     destination zero. */
   [data-topnav] .topnav-destinations {
-    margin-inline-start: 0;
+    margin-inline-start: 0.75rem;
     gap: 0.125rem;
   }
 }
 
-@media (max-width: 1519px) {
+@media (max-width: 1639px) {
   [data-topnav] [data-topnav-aa-range],
   [data-topnav] [data-topnav-language-label] {
     display: none;
@@ -864,6 +887,12 @@
 
   [data-topnav] [data-topnav-aa] {
     gap: 0.25rem;
+    padding-inline: 0.5rem;
+  }
+}
+
+@media (max-width: 1379px) {
+  [data-topnav] .topnav-link {
     padding-inline: 0.5rem;
   }
 }

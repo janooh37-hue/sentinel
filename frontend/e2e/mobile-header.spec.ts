@@ -612,12 +612,13 @@ async function expectHeaderGeometry(h: Harness): Promise<void> {
     expect(b.r, `${b.tag} "${b.label}" end edge`).toBeLessThanOrEqual(vw - c.insets.right + EPS)
   }
 
-  // The brand mark keeps its 1:1 aspect wherever it shows (it was squeezed into an ellipse / a sliver before).
-  const logo = hdr.locator('img[alt="GSSG"]').first()
+  // The brand mark (the wide GSSG wordmark) keeps its aspect wherever it shows: it scales down whole as a cramped
+  // row narrows it, never squeezed or cropped, and it hides before it becomes illegibly small.
+  const logo = hdr.getByRole('img', { name: 'GSSG', exact: true }).first()
   if (await logo.isVisible()) {
     const lb = await rectOf(logo)
-    expect(Math.abs(lb.w - lb.h), `logo stays square (${Math.round(lb.w)}x${Math.round(lb.h)})`).toBeLessThanOrEqual(1)
-    expect(lb.w, 'logo is not collapsed').toBeGreaterThanOrEqual(24)
+    expect(lb.w / lb.h, `logo keeps its aspect (${Math.round(lb.w)}x${Math.round(lb.h)})`).toBeCloseTo(1440 / 229, 1)
+    expect(lb.h, 'logo is not collapsed').toBeGreaterThanOrEqual(11)
   }
 
   if (!isPhoneHeader(c)) {
