@@ -9,7 +9,7 @@
  *   1. Both layouts name the shift AND print its window, per section.
  *   2. The unit ("السرية …") prints at bold weight — it is the line a
  *      supervisor finds the sheet by.
- *   3. The crest is on every sheet, at the inline-start edge.
+ *   3. The wordmark is on every sheet, at the inline-start edge.
  *   4. The provenance line carries the link back to the screen and the instant
  *      the paper was produced, and re-stamps when the dialog opens.
  *   5. A filtered register says so, so paper can never look like a whole day.
@@ -202,13 +202,12 @@ describe('AttendancePrintSheet', () => {
     },
   )
 
-  it('carries the crest and the provenance line on the sheet', () => {
+  it('carries the wordmark and the provenance line on the sheet', () => {
     const { container } = renderSheet()
 
     const logo = container.querySelector('img')
-    expect(logo).toHaveAttribute('src', '/brand/gssg-logo.png')
-    // Decorative: the title beside it already names the document.
-    expect(logo).toHaveAttribute('alt', '')
+    expect(logo).toHaveAttribute('src', '/brand/gssg-wordmark.png')
+    expect(logo).toHaveAttribute('alt', 'GSSG')
 
     expect(screen.getByText(/\/employees\/attendance\?date=2026-08-19/)).toBeInTheDocument()
     expect(screen.getByTestId('attendance-print-stamp')).toHaveTextContent('19 Aug 2026, 16:00')
@@ -365,12 +364,12 @@ describe('AttendancePrintSheet', () => {
       expect(line?.textContent).not.toMatch(/\dh \d\dm/)
     })
 
-    it('repeats the crest and the stamp on every sheet, and counts its lines', () => {
+    it('repeats the wordmark and the stamp on every sheet, and counts its lines', () => {
       const { container } = renderSheet({ layout: 'roster' })
 
       // thead/tfoot groups are the only thing a browser repeats across the
       // fragments of a broken table, so the masthead and provenance live there.
-      expect(container.querySelector('thead img')).toHaveAttribute('src', '/brand/gssg-logo.png')
+      expect(container.querySelector('thead img')).toHaveAttribute('src', '/brand/gssg-wordmark.png')
       expect(container.querySelector('tfoot [data-testid="attendance-print-stamp"]')).not.toBeNull()
       // A repeated foot cannot number its own page — Chrome implements no
       // `@page` margin boxes — so it asserts the figure that proves the run is
