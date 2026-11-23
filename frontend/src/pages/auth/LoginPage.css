@@ -24,23 +24,18 @@
   border-bottom: 1px solid var(--border);
   background: var(--surface);
 }
-.gssg-login .top-chrome__brand { display: flex; align-items: center; gap: 10px; }
-.gssg-login .top-chrome__logo {
-  width: 30px; height: 30px; border-radius: 99px;
-  box-shadow: 0 0 0 1px var(--border); flex-shrink: 0; object-fit: cover;
-}
-.gssg-login .top-chrome__mark { display: flex; flex-direction: column; line-height: 1.05; }
-.gssg-login .top-chrome__wordmark {
-  font-size: 13.5px; font-weight: 700; color: var(--primary); letter-spacing: -0.015em;
-}
+.gssg-login .top-chrome__brand { display: flex; align-items: center; gap: 12px; }
+/* The wordmark, 22px tall (the file is 1440×229). */
+.gssg-login .top-chrome__logo { width: 138px; flex-shrink: 0; }
 .gssg-login .top-chrome__tagline {
-  font-size: 9.5px; color: var(--text-muted); letter-spacing: 0.04em; margin-top: 2px;
+  font-size: 11.5px; color: var(--text-muted); letter-spacing: 0.03em; white-space: nowrap;
 }
 [dir="rtl"] .gssg-login .top-chrome__tagline {
-  font-family: var(--font-arabic); font-size: 11px; letter-spacing: 0;
+  font-family: var(--font-arabic); font-size: 12.5px; letter-spacing: 0;
 }
 .gssg-login .top-chrome__eyebrow {
-  margin-inline-start: 16px; padding-inline-start: 16px;
+  /* 4px past the brand's 12px gap: 16px either side of the divider. */
+  margin-inline-start: 4px; padding-inline-start: 16px;
   border-inline-start: 1px solid var(--hairline);
   font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase;
   color: var(--text-faint); font-weight: 600;
@@ -398,32 +393,32 @@
     min-height: calc(100vh);
   }
 
-  /* 3. Hero band: compact height, vertical stack, add crest badge via
-        ::before pseudo-element (logo image in a rounded tile). */
+  /* 3. Hero band: compact height, vertical stack, with the wordmark above
+        the title via a ::before pseudo-element. */
   .gssg-login .hero-band {
     margin: 0;
     height: auto;
     min-height: 130px;
-    padding: 22px 18px 44px; /* extra bottom padding so card overlaps */
+    /* 16px top: the wordmark shares the language pill's centre line. */
+    padding: 16px 18px 44px; /* extra bottom padding so card overlaps */
     flex-direction: column;
     justify-content: flex-end;
     align-items: flex-start;
     gap: 0;
   }
 
-  /* Crest tile shown only on mobile — rendered as a pseudo-element
-     so the TSX markup is untouched */
+  /* The wordmark, shown only on mobile (the top chrome that carries it on
+     desktop is reduced to the language pill here). The band is dark in both
+     themes, so it is the on-dark file: 22px tall, sized from the file's
+     1440×229 so it is never stretched, on the inline-start edge like the
+     title below it. */
   .gssg-login .hero-band::before {
     content: '';
     display: block;
-    width: 50px;
-    height: 50px;
-    border-radius: 14px;
-    background:
-      rgba(255, 255, 255, 0.12)
-      url('/brand/gssg-logo.png') center / 36px 36px no-repeat;
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.2);
-    margin-bottom: 14px;
+    width: 138px;
+    aspect-ratio: 1440 / 229;
+    background: url('/brand/gssg-wordmark-on-dark.png') center / contain no-repeat;
+    margin-bottom: 16px;
     flex-shrink: 0;
   }
 
@@ -440,10 +435,11 @@
     max-width: 30ch;
   }
 
-  /* Status meta pill: keep top-end but adjust position for no top-chrome */
+  /* Status meta pill: the language pill already holds the top-end corner
+     here, and the two drew on top of each other. The title below names the
+     product, so the pill goes. */
   .gssg-login .hero-band__meta {
-    top: 14px;
-    inset-inline-end: 14px;
+    display: none;
   }
 
   /* 4. Card wrap: remove the large negative overlap; use a smaller one
