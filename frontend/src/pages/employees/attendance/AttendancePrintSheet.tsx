@@ -314,13 +314,15 @@ function Masthead({
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   return (
-    <div className="flex items-center gap-2.5 border-b-[1.5px] border-black pb-1.5">
-      {/* The crest is bilingual by construction (Arabic ring above, English
-          below), so one asset serves both directions. Decorative: the title
-          beside it already names the document. */}
-      <img src="/brand/gssg-logo.png" alt="" className="h-[15mm] w-[15mm] shrink-0 object-contain" />
+    // Keep the original masthead content height so repeating it does not
+    // move register rows onto another page.
+    <div
+      className="box-content flex min-h-[15mm] items-center gap-5 border-b-[1.5px] pb-1.5"
+      style={{ borderColor: 'var(--primary)' }}
+    >
+      <img src="/brand/gssg-wordmark.png" alt="GSSG" className="h-[9mm] w-auto shrink-0" />
       <div className="min-w-0 flex-1">
-        <h2 className="text-[13pt] font-extrabold tracking-[-0.01em]">
+        <h2 className="whitespace-nowrap text-[13pt] font-extrabold tracking-[-0.01em]">
           {t('attendance.print.title')}{' '}
           {/* The peer language, isolated: an Arabic run butted against a Latin
               one is reordered by the bidi algorithm without it. */}
@@ -574,7 +576,7 @@ function totalMinutes(row: AttendanceRow): number | null {
  *
  * Masthead and provenance live INSIDE `thead`/`tfoot`. A table header group
  * repeats on every sheet the table spills onto, so sheet three carries the
- * crest and the printed-at stamp too; placed above the table they would appear
+ * wordmark and the printed-at stamp too; placed above the table they would appear
  * once and leave the rest of the run unheaded. The cost is the page number:
  * Chrome implements no `@page` margin boxes, so a repeated foot cannot count
  * its own page — it asserts the line total instead, which is the figure that

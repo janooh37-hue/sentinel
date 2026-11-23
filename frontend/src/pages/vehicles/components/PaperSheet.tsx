@@ -64,28 +64,31 @@ export function PaperSheet({
       )}
     >
       <header
-        className="flex items-center justify-between gap-4 border-b-2 pb-3"
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b-2 pb-3"
         style={{ borderColor: NAVY }}
       >
-        {/* The crest is bilingual by construction (Arabic ring above, English
-            below), so one asset serves both directions. Decorative: the
-            company name sits beside it. */}
-        <img src="/brand/gssg-logo.png" alt="" className="h-[58px] w-[58px] shrink-0 object-contain" />
-        <div className="min-w-0 flex-1 text-center">
-          <strong className="block text-[0.8rem] font-bold" style={{ color: NAVY }}>
+        {/* The Latin-only wordmark is decorative here: the company name
+            is written in Arabic and English beside it. */}
+        <img
+          src="/brand/gssg-wordmark.png"
+          alt=""
+          width={1440}
+          height={229}
+          className="h-auto w-[57mm] max-w-full shrink-0"
+        />
+        <div className="text-start">
+          <strong lang="ar" className="block text-[0.8rem] font-bold" style={{ color: NAVY }}>
             {companyAr}
           </strong>
-          <span dir="ltr" className="isolate-bidi mt-0.5 block text-[0.68rem] font-semibold" style={{ color: NAVY }}>
-            {companyEn}
+          <span className="mt-0.5 block text-[0.68rem] font-semibold" style={{ color: NAVY }}>
+            <bdi dir="ltr" lang="en">{companyEn}</bdi>
           </span>
           <small className="mt-1 block text-[0.62rem] text-[#4a4a4a]">
-            {companySubAr}
-            <span dir="ltr" className="isolate-bidi"> · {companySubEn}</span>
+            <span lang="ar">{companySubAr}</span>
+            {' · '}
+            <bdi dir="ltr" lang="en">{companySubEn}</bdi>
           </small>
         </div>
-        <span className="shrink-0 font-mono text-[0.7rem] font-semibold" style={{ color: NAVY }}>
-          GSSG
-        </span>
       </header>
 
       <div className="my-4 grid grid-cols-2 gap-3 text-[0.66rem]">
