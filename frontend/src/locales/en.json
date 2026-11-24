@@ -3528,7 +3528,7 @@
       "approverNotEligible": "Choose an active account that is allowed to approve.",
       "sequentialSignerHint": "The Branch Manager signs first, then the Project Manager.",
       "branchNotes": "Branch Manager notes (optional)",
-      "noteCounter": "Characters: {{count}} / {{max}}",
+      "noteCounter": "Characters: {{used}} / {{max}}",
       "branchStageWordRevision": "This Administrative Leave was edited in Word. Regenerate it from the form to route it through the branch manager and project manager.",
       "stageProgress": "Approval stages",
       "notYourStep": "This approval stage is not yours to sign. The record has been refreshed.",
