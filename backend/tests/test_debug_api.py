@@ -1,9 +1,11 @@
-"""Debug console: admin gate, issue grouping, browser-error capture, prompt."""
+"""Debug console: admin gate, issue grouping, browser-error capture, prompt, request ring."""
 
 from __future__ import annotations
 
+import gc
 import json
 import logging
+import warnings
 
 import pytest
 from fastapi.testclient import TestClient
@@ -136,3 +138,24 @@ def test_diagnose_runs_in_background_and_reports_failure(api_db, logfile, monkey
 def test_diagnose_without_engine_is_409(api_db, monkeypatch):
     monkeypatch.setattr(debug, "_engines", dict)
     assert _client(api_db, "admin").post("/api/v1/debug/diagnose", json={}).status_code == 409
+
+
+def test_unhandled_error_is_recorded_and_closes_every_stream(api_db):
+    """A raising endpoint lands in the request ring as a 500 and leaves no unclosed
+    anyio stream for a later test's garbage collection to report."""
+    app = create_app()
+
+    def fail() -> User:
+        raise RuntimeError("synthetic endpoint failure")
+
+    app.dependency_overrides[get_current_user] = fail
+    client = TestClient(app)
+    gc.collect()
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", ResourceWarning)
+        with pytest.raises(RuntimeError, match="synthetic endpoint failure"):
+            client.get("/api/v1/employees")
+        gc.collect()
+    assert [str(w.message) for w in caught if "MemoryObject" in str(w.message)] == []
+    last = debug._requests[-1]
+    assert (last["method"], last["path"], last["status"]) == ("GET", "/api/v1/employees", 500)
