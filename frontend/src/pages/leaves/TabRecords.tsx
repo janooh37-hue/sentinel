@@ -541,7 +541,7 @@ function LeaveDetailDrawer({
               </div>
             )}
 
-            {/* Edit leave — post-approval amendment for Annual rows */}
+            {/* Edit leave — post-approval date amendment for request kinds */}
             {acts.includes('amend') && (
               <div className="flex flex-wrap gap-2">
                 <Button

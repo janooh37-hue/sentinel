@@ -5,7 +5,7 @@ Routes:
   GET    /leaves/awaiting-return/count  — bell badge: leaves awaiting a return form
   GET    /leaves/{leave_id}             — detail
   PATCH  /leaves/{leave_id}             — update status / notes
-  POST   /leaves/{leave_id}/amend       — post-approval end-date amendment (Annual)
+  POST   /leaves/{leave_id}/amend       — post-approval date amendment (request kinds)
   DELETE /leaves/{leave_id}             — soft-delete (returns 204)
 
 The balance endpoint lives on the employees router:
@@ -208,10 +208,15 @@ def amend_leave(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("leaves.edit"))],
 ) -> LeaveRead:
-    """Post-approval amendment (Annual Leave): change the end date with a
-    required reason; the employee is notified with old vs new duration."""
+    """Post-approval amendment (request kinds): change the start and/or end
+    date with a required reason; the employee is notified with the new dates."""
     row = leave_service.amend_approved_leave(
-        db, leave_id, end_date=payload.end_date, reason=payload.reason, actor=_user.email
+        db,
+        leave_id,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
+        reason=payload.reason,
+        actor=_user.email,
     )
     return _with_employee_name(LeaveRead.model_validate(row), row, db)
 

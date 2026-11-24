@@ -487,11 +487,19 @@ def update_leave(
 
 
 def amend_approved_leave(
-    db: Session, leave_id: int, *, end_date: date, reason: str, actor: str | None = None
+    db: Session,
+    leave_id: int,
+    *,
+    end_date: date,
+    reason: str,
+    start_date: date | None = None,
+    actor: str | None = None,
 ) -> Leave:
-    """Post-approval amendment: Annual + Approved only, end date/days only
-    (start fixed), reason required. Notifies the employee (best-effort) with
-    old vs new duration and the reason. Spec 2026-07-15."""
+    """Post-approval amendment: request kinds + Approved, start and/or end
+    date (``start_date=None`` keeps the start), reason required. The approval
+    chain stands; the signed record gets a date-corrected revision. Notifies
+    the employee (best-effort) with the new dates, old vs new duration and the
+    reason."""
     row = get_leave(db, leave_id)
     old_start, old_end = row.start_date, row.end_date
     before = _workforce_leave_snapshot(row)
@@ -501,15 +509,17 @@ def amend_approved_leave(
             f"A {row.leave_type!r} record in state {row.status!r} cannot be amended",
             current_status=row.status,
         )
-    if end_date < row.start_date:
+    new_start = start_date if start_date is not None else row.start_date
+    if end_date < new_start:
         raise ValidationFailedError(
             "LEAVE_DATES_INVALID", "end_date must be on or after start_date"
         )
-    _refuse_duplicate_dates(db, row, row.start_date, end_date)
-    old = {"end": str(row.end_date), "days": row.days}
+    _refuse_duplicate_dates(db, row, new_start, end_date)
+    old = {"start": str(row.start_date), "end": str(row.end_date), "days": row.days}
     old_days = row.days
+    row.start_date = new_start
     row.end_date = end_date
-    row.days = (end_date - row.start_date).days + 1
+    row.days = (end_date - new_start).days + 1
     row.notes = reason
     row.updated_at = _utcnow()
     _audit(
@@ -517,7 +527,11 @@ def amend_approved_leave(
         "leave.amended",
         leave_id,
         actor,
-        {"from": old, "to": {"end": str(end_date), "days": row.days}, "reason": reason},
+        {
+            "from": old,
+            "to": {"start": str(new_start), "end": str(end_date), "days": row.days},
+            "reason": reason,
+        },
     )
     _enqueue_leave_reevaluation(
         db,
@@ -525,7 +539,7 @@ def amend_approved_leave(
         after=row,
         reason_code="LEAVE_AMENDED",
     )
-    if end_date != old_end:
+    if new_start != old_start or end_date != old_end:
         leave_record_sync.sync_leave_record(
             db, row, old_start=old_start, old_end=old_end, old_days=old_days, actor=actor
         )
