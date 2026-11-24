@@ -7,6 +7,7 @@ import type { CompanyStats, CompanyStatsBucket } from '@/lib/api'
 import { statementLocale } from '../statement/statementModel'
 import { companyDisplayName, formatStatsDate, formatStatsNumber } from './companyStatsFormat'
 import { METRIC_TOKENS, TREND_METRICS, type CountUnit, type TrendMetric } from './companyStatsModel'
+import { SegmentedFilter } from './SegmentedFilter'
 import { fullBucketAverage, isPartialBucket, monthAxisLabels, trendValue, yAxisTop } from './trendModel'
 
 interface Props {
@@ -102,19 +103,14 @@ export function CompanyStatsTrend({ data, metric, unit, onMetricChange }: Props)
             {grainLabel}{'\u00a0· '}{countBy}{'\u00a0· '}<bdi dir="auto">{data.duty_unit === null ? t('companyStats.filters.all') : companyDisplayName(data.duty_unit, t)}</bdi>
           </p>
         </div>
-        <div role="group" aria-label={t('companyStats.trend.metric')} className="inline-flex max-w-full flex-wrap items-stretch gap-0.5 rounded-md border bg-surface-tinted p-0.5">
-          {TREND_METRICS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              aria-pressed={option === metric}
-              onClick={() => onMetricChange(option)}
-              className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm border border-transparent! px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground"
-            >
-              {t(`companyStats.metric.${option}`)}
-            </button>
-          ))}
-        </div>
+        <SegmentedFilter
+          compact
+          label={t('companyStats.trend.metric')}
+          choices={TREND_METRICS}
+          value={metric}
+          onChange={onMetricChange}
+          optionLabel={(option) => t(`companyStats.metric.${option}`)}
+        />
       </header>
       {buckets.length > 0 && (
         <>

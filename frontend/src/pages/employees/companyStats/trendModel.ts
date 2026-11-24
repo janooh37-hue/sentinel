@@ -1,6 +1,6 @@
 import type { CompanyStats, CompanyStatsBucket } from '@/lib/api'
-import { isArabic } from '@/lib/language'
 
+import { statementLocale } from '../statement/statementModel'
 import { addDays, type CountUnit, type TrendMetric } from './companyStatsModel'
 
 type BucketDates = Pick<CompanyStatsBucket, 'start' | 'end'>
@@ -42,7 +42,7 @@ export function monthAxisLabels(buckets: readonly Pick<CompanyStatsBucket, 'star
     const month = start.slice(5, 7)
     monthCounts.set(month, (monthCounts.get(month) ?? 0) + 1)
   }
-  const format = new Intl.DateTimeFormat(isArabic(language) ? 'ar-AE-u-ca-gregory' : 'en-GB', {
+  const format = new Intl.DateTimeFormat(statementLocale(language), {
     month: buckets.length > 6 ? 'short' : 'long', timeZone: 'UTC',
   })
   const spansYears = buckets[0]?.start.slice(0, 4) !== buckets.at(-1)?.start.slice(0, 4)

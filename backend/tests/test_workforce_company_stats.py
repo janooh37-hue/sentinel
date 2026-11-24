@@ -863,12 +863,18 @@ def test_export_rejects_invalid_closed_period(admin_client: TestClient, start: d
     [
         (
             "en",
-            ["Summary", "Companies", "Trend", "Ranking", "National service"],
+            [
+                "Period summary",
+                "Companies",
+                "Trend over time",
+                "Most frequent exceptions",
+                "National Service",
+            ],
             "Not enough earlier data",
         ),
         (
             "ar",
-            ["ملخص الفترة", "السرايا", "الاتجاه عبر الزمن", "الأكثر تكراراً", "الخدمة الوطنية"],
+            ["ملخص الفترة", "السرايا", "الاتجاه عبر الزمن", "الأكثر تكرارًا", "الخدمة الوطنية"],
             "لا توجد بيانات سابقة كافية",
         ),
     ],
@@ -913,6 +919,20 @@ def test_export_workbook_has_localized_worksheets_and_typed_cells(
     summary, companies, trend, ranking, national_service = workbook.worksheets
     assert summary.max_column == 3  # No delta column at all when coverage is incomplete.
     assert note in {cell.value for row in summary for cell in row}
+    summary_labels = {cell.value for cell in summary["A"]}
+    assert (
+        "إجازات أخرى (تعزية، طارئة، حج) · بعدد المرات"
+        if language == "ar"
+        else "Other leave (compassionate, emergency, Hajj) · Occurrences"
+    ) in summary_labels
+    assert trend["C1"].value == ("غياب · بالأيام" if language == "ar" else "Absence · Days")
+    assert trend["D1"].value == ("غياب · بالحالات" if language == "ar" else "Absence · Episodes")
+    assert ranking["K1"].value == ("أيام مرضية" if language == "ar" else "Sick days")
+    assert national_service["A3"].value == (
+        "أيام الغياب بسبب الخدمة خلال الفترة"
+        if language == "ar"
+        else "National Service absence days in the period"
+    )
     fraction = next(
         cell
         for row in companies
@@ -958,13 +978,16 @@ def test_export_includes_all_ranked_employees_but_no_out_of_scope_data(api_db: S
     )
     assert response.status_code == 200, response.text
     workbook = load_workbook(BytesIO(response.content))
-    ranked_ids = [row[0] for row in workbook["Ranking"].iter_rows(min_row=2, values_only=True)]
+    ranked_ids = [
+        row[0]
+        for row in workbook["Most frequent exceptions"].iter_rows(min_row=2, values_only=True)
+    ]
     assert ranked_ids[0] == first.employee_id
     assert len(ranked_ids) == 53
     assert set(ranked_ids) == visible_ids
     for sheet in workbook:
         assert outsider.id not in {cell.value for row in sheet for cell in row}
-    summary = workbook["Summary"]
+    summary = workbook["Period summary"]
     assert summary.max_column == 4
     absence = next(row for row in summary.iter_rows() if row[0].value == "Absence · Days")
     assert [(cell.value, cell.data_type) for cell in absence[1:]] == [

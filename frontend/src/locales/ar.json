@@ -7977,6 +7977,7 @@
       "disciplineHelp": "مخالفات حضور غير مبررة",
       "leaves": "الإجازات والغياب المبرر",
       "unpairedHelp": "تكليفات غير مكتملة البصمة",
+      "lateDuration": "مدة التأخير بعد السماح",
       "lateHelp": "{{time}} بعد السماح"
     },
     "leaves": {
@@ -7986,6 +7987,7 @@
       "duty": "مهمة رسمية",
       "national_service": "الخدمة الوطنية",
       "exit_permits": "تصاريح الخروج",
+      "exitPermitDuration": "ساعات تصاريح الخروج",
       "permitHours": "{{duration}} مطلوبة (عدد التصاريح بمدة مسجّلة: {{n}})",
       "other": "إجازات أخرى (تعزية، طارئة، حج)"
     },
@@ -8017,6 +8019,7 @@
       "unknown": "لا مقارنة"
     },
     "delta": {
+      "new": "جديد",
       "noChange": "بدون تغيير",
       "up": "ارتفاع بنسبة <amount>{{change}}</amount> عن الفترة السابقة",
       "down": "انخفاض بنسبة <amount>{{change}}</amount> عن الفترة السابقة"

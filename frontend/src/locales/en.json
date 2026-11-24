@@ -7328,6 +7328,7 @@
       "disciplineHelp": "Unexcused attendance exceptions",
       "leaves": "Leave and excused absences",
       "unpairedHelp": "Duties left unpaired",
+      "lateDuration": "Time past grace",
       "lateHelp": "{{time}} past grace"
     },
     "leaves": {
@@ -7337,6 +7338,7 @@
       "duty": "Official mission",
       "national_service": "National Service",
       "exit_permits": "Exit permits",
+      "exitPermitDuration": "Exit permit hours",
       "permitHours": "{{duration}} requested (from {{n}} with hours)",
       "other": "Other leave (compassionate, emergency, Hajj)"
     },
@@ -7368,6 +7370,7 @@
       "unknown": "No comparison"
     },
     "delta": {
+      "new": "New",
       "noChange": "No change",
       "up": "Up <amount>{{change}}</amount> from the previous period",
       "down": "Down <amount>{{change}}</amount> from the previous period"

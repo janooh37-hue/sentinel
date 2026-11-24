@@ -53,7 +53,6 @@ export interface CompanyStatsParams {
   to_date: string
   /** Exact duty_unit snapshot, or `__unassigned__`. */
   duty_unit?: string
-  limit?: number
 }
 export type EmployeeAttendanceHistory = components['schemas']['EmployeeAttendanceHistoryRead']
 export type EmployeeAttendanceHistoryDay =

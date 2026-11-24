@@ -8,7 +8,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import {
   companyDisplayName, formatStatsDuration, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity,
 } from './companyStatsFormat'
-import { absenceRateFill, absenceRateScale, DISCIPLINE_METRICS, disciplineValue, STATUS_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
+import { absenceRateFill, absenceRateScale, DISCIPLINE_METRICS, disciplineValue, LEAVE_COLUMNS, rosterLabelKey, STATUS_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
 
 interface Props {
   data: CompanyStats
@@ -17,7 +17,6 @@ interface Props {
   onSelect(key: string | null): void
 }
 
-const LEAVE_COLUMNS = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
 const STATUSES = ['good', 'normal', 'warn', 'bad'] as const
 const WIDE_ORDER = ['leaves', 'discipline', 'rate'] as const
 const MOBILE_ORDER = ['discipline', 'rate', 'leaves'] as const
@@ -233,8 +232,7 @@ export function CompanyComparisonTable({ data, unit, selected, onSelect }: Props
             {companies.map((row) => {
               const active = row.key === selected
               const company = companyDisplayName(row.duty_unit, t)
-              const roster = row.shift_codes.includes('office_day') ? t('companyStats.companies.officeRoster')
-                : row.shift_codes.length ? t('companyStats.companies.shiftRoster') : null
+              const roster = rosterLabelKey(row.shift_codes)
               return (
                 <tr key={row.key}>
                   <th scope="row" className={`${FIRST} border-b p-0 ${active ? 'bg-primary-soft text-primary-text before:absolute before:inset-y-0 before:start-0 before:w-[3px] before:bg-primary' : 'bg-surface'}`}>
@@ -248,7 +246,7 @@ export function CompanyComparisonTable({ data, unit, selected, onSelect }: Props
                       <bdi dir="auto" className="font-semibold">{company}</bdi>
                       <span className={NOTE}>
                         <bdi dir="auto">{formatStatsQuantity('person', row.totals.strength, t)}</bdi>
-                        {roster && <span className="block md:inline"><span aria-hidden="true" className="hidden md:inline">{'\u00a0· '}</span>{roster}</span>}
+                        {roster && <span className="block md:inline"><span aria-hidden="true" className="hidden md:inline">{'\u00a0· '}</span>{t(roster)}</span>}
                       </span>
                     </button>
                     {row.small_sample && <span className="mx-2 mb-1.5 block text-xs font-medium text-muted-foreground">{t('companyStats.status.smallSample')}</span>}

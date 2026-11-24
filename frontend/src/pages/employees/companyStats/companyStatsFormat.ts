@@ -2,7 +2,7 @@ import type { TFunction } from 'i18next'
 
 import type { CompanyStatsTotals } from '@/lib/api'
 
-import { formatStatementDate } from '../statement/statementModel'
+import { formatStatementDate, statementLocale } from '../statement/statementModel'
 import { splitMinutes, UNASSIGNED_KEY } from './companyStatsModel'
 
 export function companyDisplayName(key: string | null, t: TFunction): string {
@@ -15,7 +15,7 @@ const numbers = new Map<number, Intl.NumberFormat>()
 export function formatStatsNumber(value: number, decimals = 0): string {
   let format = numbers.get(decimals)
   if (format === undefined) {
-    format = new Intl.NumberFormat('en-GB', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    format = new Intl.NumberFormat(statementLocale('en'), { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
     numbers.set(decimals, format)
   }
   return format.format(value)
@@ -42,13 +42,17 @@ export function formatStatsDuration(totalMinutes: number, t: TFunction): string 
     : t('companyStats.unit.minutesOnly', { minutes: formatStatsNumber(minutes) })
 }
 
+export function formatStatsHours(hours: number, t: TFunction): string {
+  return formatStatsDuration(Math.round(hours * 60), t)
+}
+
 export function formatStatsPermitHours(
   permits: CompanyStatsTotals['leaves']['exit_permits'],
   t: TFunction,
 ): string | null {
   if (permits.hours === null) return null
   return t('companyStats.leaves.permitHours', {
-    duration: formatStatsDuration(Math.round(permits.hours * 60), t),
+    duration: formatStatsHours(permits.hours, t),
     n: formatStatsNumber(permits.with_hours),
   })
 }

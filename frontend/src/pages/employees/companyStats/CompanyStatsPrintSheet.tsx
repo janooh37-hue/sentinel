@@ -1,18 +1,16 @@
-import type { ReactNode } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { usePrintFilename } from '@/hooks/usePrintFilename'
 import type { CompanyStats, CompanyStatsTotals } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 
-import { companyDisplayName, formatStatsDate, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity } from './companyStatsFormat'
-import { deltaPercent, DISCIPLINE_METRICS, disciplineValue, TREND_METRICS, type CountUnit, type RankingSort } from './companyStatsModel'
-import { StatsPeriodLabel } from './PeriodSummary'
+import { companyDisplayName, formatStatsDate, formatStatsDuration, formatStatsHours, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity } from './companyStatsFormat'
+import { deltaPercent, DISCIPLINE_METRICS, disciplineValue, LEAVE_COLUMNS, rankingBadge, TREND_METRICS, type CountUnit, type RankingSort } from './companyStatsModel'
+import { NewDeltaChip, StatsPeriodLabel } from './PeriodSummary'
 import { trendValue } from './trendModel'
 
-const LEAVE_COLUMNS = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
-
-type PrintValue = string | { count: string; hours: string | null } | { text: string; note: string }
+type PrintValue = string | ReactElement
 
 interface PrintRow {
   key: string
@@ -52,17 +50,7 @@ function PrintTable({ title, columns, rows, empty, columnWidths }: {
                 <th scope="row" className="border-b px-1.5 py-1 text-start font-semibold [overflow-wrap:anywhere]">{label}</th>
                 {values.map((value, index) => (
                   <td key={columns[index + 1]} className="border-b px-1.5 py-1 [direction:ltr] text-end [overflow-wrap:anywhere]">
-                    {typeof value === 'string' ? <bdi>{value}</bdi> : 'count' in value ? (
-                      <bdi>
-                        <span className="whitespace-nowrap">{value.count}{value.hours !== null && ' ·'}</span>
-                        {value.hours !== null && <> {value.hours}</>}
-                      </bdi>
-                    ) : (
-                      <>
-                        <bdi dir="ltr">{value.text}</bdi>
-                        <span className="block text-muted-foreground">{value.note}</span>
-                      </>
-                    )}
+                    {typeof value === 'string' ? <bdi>{value}</bdi> : value}
                   </td>
                 ))}
               </tr>
@@ -86,31 +74,66 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
 
   const metricLabels = DISCIPLINE_METRICS.map((metric) => t(`companyStats.metric.${metric}`))
   const leaveLabels = LEAVE_COLUMNS.map((kind) => t(`companyStats.leaves.${kind}`))
-  const changeCells = (value: number, before: number, display: PrintValue = formatStatsNumber(value)): PrintValue[] => {
+  const changeCells = (
+    value: number | null,
+    before: number | null,
+    display: PrintValue = value === null ? '—' : formatStatsNumber(value),
+    previousDisplay = before === null ? '—' : formatStatsNumber(before),
+  ): PrintValue[] => {
     if (!comparable) return [display]
     const change = deltaPercent(value, before)
-    return [display, formatStatsNumber(before), change === null ? '—' : `${change > 0 ? '+' : ''}${formatStatsPercent(change)}`]
+    const delta = change === 'new' ? <NewDeltaChip /> : change === null ? '—' : `${change > 0 ? '+' : ''}${formatStatsPercent(change)}`
+    return [display, previousDisplay, delta]
   }
   const permitNote = (totals: CompanyStatsTotals): PrintValue => {
     const permits = totals.leaves.exit_permits
     if (permits.count === 0) return formatStatsNumber(0)
-    return { count: formatStatsQuantity('permit', permits.count, t), hours: formatStatsPermitHours(permits, t) }
+    const hours = formatStatsPermitHours(permits, t)
+    return (
+      <bdi>
+        <span className="whitespace-nowrap">{formatStatsQuantity('permit', permits.count, t)}{hours !== null && ' ·'}</span>
+        {hours !== null && <> {hours}</>}
+      </bdi>
+    )
   }
   const other = current.leaves.other
+  const currentHours = current.leaves.exit_permits.hours
+  const previousHours = previous.leaves.exit_permits.hours
   const summaryRows: PrintRow[] = [
     ...DISCIPLINE_METRICS.map((metric, index) => ({
       key: metric,
       label: metricLabels[index],
       values: changeCells(disciplineValue(current, metric, unit), disciplineValue(previous, metric, unit)),
     })),
-    ...LEAVE_COLUMNS.map((kind, index) => ({
+    {
+      key: 'late-duration',
+      label: t('companyStats.summary.lateDuration'),
+      values: changeCells(
+        current.late.minutes, previous.late.minutes,
+        formatStatsDuration(current.late.minutes, t), formatStatsDuration(previous.late.minutes, t),
+      ),
+    },
+  ]
+  for (const [index, kind] of LEAVE_COLUMNS.entries()) {
+    summaryRows.push({
       key: kind,
       label: leaveLabels[index],
       values: kind === 'exit_permits'
         ? changeCells(current.leaves.exit_permits.count, previous.leaves.exit_permits.count, permitNote(current))
         : changeCells(current.leaves[kind][unit], previous.leaves[kind][unit]),
-    })),
-  ]
+    })
+    if (kind === 'exit_permits' && comparable && (currentHours !== null || previousHours !== null)) {
+      summaryRows.push({
+        key: 'exit-permit-duration',
+        label: t('companyStats.leaves.exitPermitDuration'),
+        values: changeCells(
+          currentHours, previousHours,
+          currentHours === null ? '—' : formatStatsHours(currentHours, t),
+          previousHours === null ? '—' : formatStatsHours(previousHours, t),
+        ),
+      })
+    }
+  }
   const comparisonValues = (totals: CompanyStatsTotals): PrintValue[] => [
     ...LEAVE_COLUMNS.map((kind) => kind === 'exit_permits' ? permitNote(totals) : formatStatsNumber(totals.leaves[kind][unit])),
     ...DISCIPLINE_METRICS.map((metric) => formatStatsNumber(disciplineValue(totals, metric, unit))),
@@ -134,7 +157,7 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
   for (const key of data.ranking.order[sort]) {
     const row = employees.get(key)
     if (!row) continue
-    const badge = row.small_sample ? t('companyStats.status.smallSample') : row.tier ? t(`companyStats.tier.${row.tier}`) : null
+    const { labelKey } = rankingBadge(row)
     rankingRows.push({
       key,
       label: <bdi>{pickEmployeeName(row, language)}</bdi>,
@@ -145,7 +168,12 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
         formatStatsNumber(row.late_count),
         formatStatsNumber(row.sick_days),
         formatStatsNumber(unit === 'days' ? row.leave_days : row.leave_count),
-        badge === null ? formatStatsNumber(row.score) : { text: formatStatsNumber(row.score), note: badge },
+        labelKey === null ? formatStatsNumber(row.score) : (
+          <>
+            <bdi dir="ltr">{formatStatsNumber(row.score)}</bdi>
+            <span className="block text-muted-foreground">{t(labelKey)}</span>
+          </>
+        ),
       ],
     })
   }

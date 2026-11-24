@@ -1,4 +1,4 @@
-import type { CompanyStatsStatus, CompanyStatsTotals } from '@/lib/api'
+import type { CompanyStatsEmployee, CompanyStatsStatus, CompanyStatsTotals } from '@/lib/api'
 
 /** Query key for the employees whose duty unit is blank (the API's sentinel). */
 export const UNASSIGNED_KEY = '__unassigned__'
@@ -14,6 +14,13 @@ export type TrendMetric = (typeof TREND_METRICS)[number]
 
 export const DISCIPLINE_METRICS = ['absence', 'single_punch', 'late'] as const
 export type DisciplineMetric = (typeof DISCIPLINE_METRICS)[number]
+
+export const LEAVE_COLUMNS = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
+
+export function rosterLabelKey(shiftCodes: readonly string[]) {
+  if (shiftCodes.includes('office_day')) return 'companyStats.companies.officeRoster'
+  return shiftCodes.length ? 'companyStats.companies.shiftRoster' : null
+}
 
 /** Absence follows the unit (days or episodes); single punch and late are always counts. */
 export function disciplineValue(
@@ -76,21 +83,28 @@ export function presetRange(
   }
 }
 
-/** Period-over-period change in whole percent; null when there is no base to compare. */
-export function deltaPercent(current: number, previous: number): number | null {
-  if (previous === 0) return null
+/** Whole-percent change, or 'new' if there is a figure but no nonzero baseline. */
+export function deltaPercent(current: number | null, previous: number | null): number | 'new' | null {
+  if (current === null || previous === null) return null
+  if (previous === 0) return current > 0 ? 'new' : null
   return Math.round(((current - previous) / previous) * 100)
 }
 
 export type DeltaTone = 'good' | 'bad' | 'neutral'
 
 /** Discipline metrics: up is bad, down is good. Leaves carry no judgement. */
-export function deltaTone(kind: 'discipline' | 'leave', delta: number | null): DeltaTone {
-  if (kind === 'leave' || delta === null || delta === 0) return 'neutral'
+export function deltaTone(kind: 'discipline' | 'leave', delta: number): DeltaTone {
+  if (kind === 'leave' || delta === 0) return 'neutral'
   return delta > 0 ? 'bad' : 'good'
 }
 
 export type StatusTone = CompanyStatsStatus | 'small'
+
+export function rankingBadge({ small_sample, tier }: Pick<CompanyStatsEmployee, 'small_sample' | 'tier'>) {
+  const tone: StatusTone = small_sample ? 'small' : tier === 'needs_intervention' ? 'bad' : tier === 'above_average' ? 'warn' : 'normal'
+  const labelKey = small_sample ? 'companyStats.status.smallSample' : tier === null ? null : `companyStats.tier.${tier}` as const
+  return { tone, labelKey }
+}
 
 /** Sentinel tokens per status (contract legend). `small` = neutral, never coloured. */
 export const STATUS_TOKENS: Record<StatusTone, { fg: string; soft: string; bar: string }> = {

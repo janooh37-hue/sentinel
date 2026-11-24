@@ -20,9 +20,16 @@ from sqlalchemy.orm import Session, aliased
 from app.api.errors import ValidationFailedError
 from app.core import clock, leave_lifecycle
 from app.core.attendance_verdict import RowState, judge_register_row, parse_instant
+from app.core.company_stats_xlsx import (
+    LEAVE_KINDS,
+    RATIO_METRICS,
+    WorkbookLanguage,
+    build_company_stats_workbook,
+    company_stats_filename,
+)
 from app.db.models import Book, BookVersion, Document, Employee, Leave
 from app.db.workforce_models import AttendanceCase, DutyAssignmentEvent
-from app.schemas.workforce import COMPANY_STATS_UNASSIGNED, StatsStatus
+from app.schemas.workforce import COMPANY_STATS_UNASSIGNED, CompanyStatsRead, StatsStatus
 from app.services.workforce_read_service import (
     iter_effective_attendance_rows,
     iter_effective_attendance_totals_rows,
@@ -31,8 +38,6 @@ from app.services.workforce_scope_service import WorkforceScope, scope_allows
 
 _DAY = timedelta(days=1)
 _MAX_DAYS = 366
-_LEAVE_KINDS = ("annual", "administrative", "sick", "duty", "national_service", "other")
-_METRICS = ("absence", "single_punch", "late")
 _MIN_DUE_DUTIES = 30
 _MIN_EMPLOYEE_EVENTS = 3
 _STATUSES: tuple[StatsStatus, ...] = ("good", "normal", "warn", "bad")
@@ -165,7 +170,7 @@ class _LeaveTotals:
 
     def payload(self) -> dict[str, Any]:
         result: dict[str, Any] = {}
-        for kind in _LEAVE_KINDS:
+        for kind in LEAVE_KINDS:
             days, count = self.by_kind.get(kind, (0, 0))
             result[kind] = {"days": days, "count": count}
         result["exit_permits"] = {
@@ -206,6 +211,16 @@ class _Totals:
             self.discipline.add(state, minutes, starts_episode)
         return starts_episode
 
+    def merge_duty_counts(self, other: _Totals) -> None:
+        """Sum only the duty counts that are additive across companies."""
+        self.scheduled += other.scheduled
+        self.excused += other.excused
+        self.pending += other.pending
+        self.discipline.absence_days += other.discipline.absence_days
+        self.discipline.single_punch += other.discipline.single_punch
+        self.discipline.late_count += other.discipline.late_count
+        self.discipline.late_minutes += other.discipline.late_minutes
+
     def payload(self) -> dict[str, Any]:
         d = self.discipline
         due = self.scheduled - self.excused
@@ -223,7 +238,7 @@ class _Totals:
         }
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, eq=False)
 class _Bucket:
     start: date
     end: date
@@ -241,20 +256,30 @@ class _Bucket:
         }
 
 
-def _buckets(start: date, end: date, *, weekly: bool) -> tuple[list[_Bucket], dict[date, int]]:
-    buckets: list[_Bucket] = []
-    by_day: dict[date, int] = {}
-    while start <= end:
-        stop = (
-            start + timedelta(days=min(6, (end - start).days))
-            if weekly
-            else min(end, start.replace(day=monthrange(start.year, start.month)[1]))
-        )
-        for offset in range((stop - start).days + 1):
-            by_day[start + timedelta(days=offset)] = len(buckets)
-        buckets.append(_Bucket(start, stop))
-        start = stop + _DAY
-    return buckets, by_day
+@dataclass(slots=True)
+class _Series:
+    buckets: list[_Bucket]
+    by_day: dict[date, _Bucket]
+
+    @classmethod
+    def for_period(cls, start: date, end: date, *, weekly: bool) -> _Series:
+        buckets: list[_Bucket] = []
+        by_day: dict[date, _Bucket] = {}
+        while start <= end:
+            stop = (
+                start + timedelta(days=min(6, (end - start).days))
+                if weekly
+                else min(end, start.replace(day=monthrange(start.year, start.month)[1]))
+            )
+            bucket = _Bucket(start, stop)
+            buckets.append(bucket)
+            for offset in range((stop - start).days + 1):
+                by_day[start + timedelta(days=offset)] = bucket
+            start = stop + _DAY
+        return cls(buckets, by_day)
+
+    def bucket_for(self, day: date) -> _Bucket:
+        return self.by_day[day]
 
 
 @dataclass(slots=True)
@@ -302,8 +327,7 @@ def _current_cases(
     end: date,
     duty_unit: str | None,
     now: datetime,
-    series: list[_Bucket],
-    bucket_index: dict[date, int],
+    series: _Series,
 ) -> _Current:
     data = _Current()
     if duty_unit is None:
@@ -349,18 +373,11 @@ def _current_cases(
         if state in ("absent", "unpaired", "late"):
             person.discipline.add(state, minutes, starts_episode)
             # A run spanning buckets counts once, in the bucket where it starts.
-            series[bucket_index[day]].discipline.add(state, minutes, starts_episode)
+            series.bucket_for(day).discipline.add(state, minutes, starts_episode)
     overall = data.overall
     overall.people.update(prior_case)
     for company in data.companies.values():
-        totals = company.totals
-        overall.scheduled += totals.scheduled
-        overall.excused += totals.excused
-        overall.pending += totals.pending
-        overall.discipline.absence_days += totals.discipline.absence_days
-        overall.discipline.single_punch += totals.discipline.single_punch
-        overall.discipline.late_count += totals.discipline.late_count
-        overall.discipline.late_minutes += totals.discipline.late_minutes
+        overall.merge_duty_counts(company.totals)
     return data
 
 
@@ -502,12 +519,12 @@ def _summarize_leave(
     spans: Iterator[tuple[str | None, date, date]],
     from_date: date,
     duty_unit: str | None,
-    series: list[_Bucket],
-    bucket_index: dict[date, int],
+    series: _Series,
 ) -> None:
     all_days = filtered_days = previous_days = 0
     company_days: dict[str | None, int] = {}
-    sick_buckets: set[int] = set()
+    # A leave record can meet the same bucket in several assignment spans.
+    sick_buckets: set[_Bucket] = set()
     for unit, start, end in spans:
         selected = _selected(unit, duty_unit)
         if selected and start < from_date:
@@ -522,10 +539,10 @@ def _summarize_leave(
             filtered_days += days
             if kind == "sick":
                 while start <= end:
-                    index = bucket_index[start]
-                    stop = min(series[index].end, end)
-                    series[index].sick_days += (stop - start).days + 1
-                    sick_buckets.add(index)
+                    bucket = series.bucket_for(start)
+                    stop = min(bucket.end, end)
+                    bucket.sick_days += (stop - start).days + 1
+                    sick_buckets.add(bucket)
                     start = stop + _DAY
 
     if previous_days:
@@ -543,8 +560,8 @@ def _summarize_leave(
             person.leave_count += 1
             if kind == "sick":
                 person.sick_days += filtered_days
-    for index in sick_buckets:
-        series[index].sick_count += 1
+    for bucket in sick_buckets:
+        bucket.sick_count += 1
 
 
 def _leaves_and_enrolment(
@@ -558,8 +575,7 @@ def _leaves_and_enrolment(
     duty_unit: str | None,
     current: _Current,
     previous: _Totals,
-    series: list[_Bucket],
-    bucket_index: dict[date, int],
+    series: _Series,
 ) -> list[dict[str, Any]]:
     leaves = db.execute(
         select(Leave, Employee)
@@ -627,7 +643,6 @@ def _leaves_and_enrolment(
             from_date=start,
             duty_unit=duty_unit,
             series=series,
-            bucket_index=bucket_index,
         )
 
     hours_by_id = _permit_hours(db, [leave_id for leave_id, _, _ in permits])
@@ -657,7 +672,7 @@ def _ratios(current: _Current) -> list[dict[str, Any]]:
         status: dict[str, StatsStatus | None] = {}
         worst = -1
         for key, value, baseline in zip(
-            _METRICS, (d.absence_days, d.single_punch, d.late_count), baselines, strict=True
+            RATIO_METRICS, (d.absence_days, d.single_punch, d.late_count), baselines, strict=True
         ):
             if not baseline or not people:  # A leave-only company has no duty to rate.
                 ratio[key] = status[key] = None
@@ -781,7 +796,7 @@ def company_attendance_stats(
     previous_start = from_date - timedelta(days=days)
     coverage_from = _coverage_from(db, scope)
     granularity: Literal["week", "month"] = "week" if days <= 31 else "month"
-    series, bucket_index = _buckets(from_date, end, weekly=granularity == "week")
+    series = _Series.for_period(from_date, end, weekly=granularity == "week")
     instant = parse_instant(now)
     assert instant is not None
     current = _current_cases(
@@ -792,7 +807,6 @@ def company_attendance_stats(
         duty_unit=duty_unit,
         now=instant,
         series=series,
-        bucket_index=bucket_index,
     )
     previous = (
         _previous_cases(
@@ -817,7 +831,6 @@ def company_attendance_stats(
         current=current,
         previous=previous,
         series=series,
-        bucket_index=bucket_index,
     )
     overall = current.overall.payload()
     selected = current.filtered.payload() if duty_unit is not None else overall
@@ -832,10 +845,40 @@ def company_attendance_stats(
         "summary": {"current": selected, "previous": previous.payload()},
         "companies": _ratios(current),
         "overall": overall,
-        "series": [bucket.payload() for bucket in series],
+        "series": [bucket.payload() for bucket in series.buckets],
         "ranking": _ranking(db, current, limit),
         "national_service": {
             "enrolled": enrolled,
             "absence_days": selected["leaves"]["national_service"]["days"],
         },
     }
+
+
+def export_workbook(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    duty_unit: str | None,
+    language: WorkbookLanguage,
+    now: datetime,
+) -> tuple[bytes, str]:
+    """Render the scoped report and name it using the actual closed period."""
+    stats = CompanyStatsRead.model_validate(
+        company_attendance_stats(
+            db,
+            scope=scope,
+            from_date=from_date,
+            to_date=to_date,
+            duty_unit=duty_unit,
+            limit=None,
+            now=now,
+        )
+    )
+    return (
+        build_company_stats_workbook(stats, language=language),
+        company_stats_filename(
+            stats.period.from_date, stats.period.to_date, stats.duty_unit, language
+        ),
+    )

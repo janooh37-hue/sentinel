@@ -43,6 +43,7 @@ describe('CompanyStatsPrintSheet', () => {
     expect(screen.getByRole('heading', { name: 'Company statistics', level: 1 })).toBeInTheDocument()
     expect(screen.getByText(/From\s+until/)).toHaveTextContent('From 1 Nov until 19 Nov 2026')
     expect(screen.getByText('Not enough earlier data')).toBeInTheDocument()
+    expect(screen.queryByRole('columnheader', { name: 'Change' })).not.toBeInTheDocument()
     expect(screen.getByText('Small sample')).toBeInTheDocument()
     const permits = screen.getAllByRole('cell', { name: '2 permits · 2h 30m requested (from 1 with hours)' })
     expect(permits).toHaveLength(3) // Summary, company row, overall.
@@ -60,6 +61,34 @@ describe('CompanyStatsPrintSheet', () => {
     const summary = within(screen.getByRole('table', { name: 'Period summary' }))
     expect(within(summary.getByRole('row', { name: /^Exit permits/ })).getByRole('cell')).toHaveTextContent(/^0$/)
   })
+
+  it('prints New from a zero baseline but keeps zero to zero blank', () => {
+    const previous = { ...totals, absence: { days: 0, episodes: 0 } }
+    render(<CompanyStatsPrintSheet data={{ ...data, previous_comparable: true, summary: { current: totals, previous } }} unit="days" sort="score" />)
+
+    const summary = within(screen.getByRole('table', { name: 'Period summary' }))
+    const absence = within(summary.getByRole('row', { name: /^Absence/ }))
+    expect(absence.getByRole('cell', { name: 'New' })).toBeInTheDocument()
+    const annual = within(summary.getByRole('row', { name: /^Annual leave/ }))
+    expect(annual.getByRole('cell', { name: '—' })).toBeInTheDocument()
+  })
+
+  it.each([{ hours: 5, with_hours: 1 }, { hours: null, with_hours: 0 }])(
+    'prints duration comparisons when both periods have the figures (previous permit hours: $hours)',
+    ({ hours, with_hours }) => {
+      const previous = {
+        ...totals, late: { count: 2, minutes: 30 },
+        leaves: { ...totals.leaves, exit_permits: { count: 2, hours, with_hours } },
+      }
+      render(<CompanyStatsPrintSheet data={{ ...data, previous_comparable: true, summary: { current: totals, previous } }} unit="days" sort="score" />)
+
+      const summary = within(screen.getByRole('table', { name: 'Period summary' }))
+      const late = within(summary.getByRole('row', { name: /^Time past grace/ }))
+      expect(late.getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['45m', '30m', '+50%'])
+      const permit = within(summary.getByRole('row', { name: /^Exit permit hours/ }))
+      expect(permit.getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['2h 30m', hours === null ? '—' : '5h 0m', hours === null ? '—' : '-50%'])
+    },
+  )
 
   it('suggests a scoped PDF filename only while printing', () => {
     const original = document.title

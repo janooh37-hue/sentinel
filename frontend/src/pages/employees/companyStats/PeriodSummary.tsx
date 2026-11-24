@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { Trans, useTranslation } from 'react-i18next'
 
@@ -7,10 +7,8 @@ import type { CompanyStats, CompanyStatsBucket } from '@/lib/api'
 import {
   formatStatsDate, formatStatsDuration, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity,
 } from './companyStatsFormat'
-import { DISCIPLINE_METRICS, disciplineValue, deltaPercent, deltaTone, METRIC_TOKENS, STATUS_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
+import { DISCIPLINE_METRICS, disciplineValue, deltaPercent, deltaTone, LEAVE_COLUMNS, METRIC_TOKENS, STATUS_TOKENS, type CountUnit, type DisciplineMetric } from './companyStatsModel'
 import { isPartialBucket, trendValue } from './trendModel'
-
-const LEAVE_TILES = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
 
 type SummaryData = Pick<CompanyStats, 'summary' | 'previous_period' | 'previous_comparable' | 'series' | 'granularity'>
 
@@ -35,16 +33,24 @@ export function StatsPeriodLabel({ period }: { period: Pick<CompanyStats['period
   )
 }
 
-function Delta({ current, previous, kind }: { current: number; previous: number; kind: 'discipline' | 'leave' }) {
+const DELTA_CHIP = 'inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold'
+
+export function NewDeltaChip() {
+  const { t } = useTranslation()
+  return <bdi className={`${DELTA_CHIP} bg-surface-tinted text-muted-foreground`}>{t('companyStats.delta.new')}</bdi>
+}
+
+function Delta({ current, previous, kind }: { current: number | null; previous: number | null; kind: 'discipline' | 'leave' }) {
   const { t } = useTranslation()
   const change = deltaPercent(current, previous)
   if (change === null) return null
+  if (change === 'new') return <NewDeltaChip />
   const tone = deltaTone(kind, change)
   const colors = STATUS_TOKENS[tone === 'neutral' ? 'normal' : tone]
   const value = formatStatsPercent(Math.abs(change))
   const Icon = change > 0 ? ArrowUp : ArrowDown
   return (
-    <span className="inline-flex w-fit items-center gap-0.5 rounded-full px-1.5 text-xs font-semibold" style={{ color: colors.fg, backgroundColor: colors.soft }}>
+    <span className={DELTA_CHIP} style={{ color: colors.fg, backgroundColor: colors.soft }}>
       {change === 0 ? t('companyStats.delta.noChange') : (
         <>
           <span className="sr-only">
@@ -108,11 +114,11 @@ function MetricTitle({ label, color }: { label: string; color: string }) {
   )
 }
 
-function Figure({ value, kind, large = false, note = null }: {
+function Figure({ value, kind, large = false, children }: {
   value: number
   kind: 'day' | 'episode' | 'occurrence' | 'permit'
   large?: boolean
-  note?: string | null
+  children?: ReactNode
 }) {
   const { t } = useTranslation()
   return (
@@ -121,7 +127,7 @@ function Figure({ value, kind, large = false, note = null }: {
         <bdi dir="ltr" className="tabular-nums">{formatStatsNumber(value)}</bdi>
       </strong>
       {value !== 0 && <> <span>{t(`companyStats.unit.figure.${kind}`, { count: value })}</span></>}
-      {note !== null && <> · <bdi>{note}</bdi></>}
+      {children}
     </p>
   )
 }
@@ -135,13 +141,10 @@ export function PeriodSummary({ data, unit }: { data: SummaryData; unit: CountUn
   const previous = data.previous_comparable ? data.summary.previous : null
   const byDays = unit === 'days'
   const { other, exit_permits: permits } = current.leaves
-  const details = {
-    absence: byDays
-      ? formatStatsQuantity('episode', current.absence.episodes, t)
-      : formatStatsQuantity('day', current.absence.days, t),
-    single_punch: t('companyStats.summary.unpairedHelp'),
-    late: t('companyStats.summary.lateHelp', { time: formatStatsDuration(current.late.minutes, t) }),
-  }
+  const absenceDetail = byDays
+    ? formatStatsQuantity('episode', current.absence.episodes, t)
+    : formatStatsQuantity('day', current.absence.days, t)
+  const permitHours = formatStatsPermitHours(permits, t)
   return (
     <section aria-labelledby={heading} className="min-w-0">
       <div className="mb-2.5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -174,7 +177,12 @@ export function PeriodSummary({ data, unit }: { data: SummaryData; unit: CountUn
                   <MetricTitle label={t(`companyStats.metric.${metric}`)} color={METRIC_TOKENS[metric]} />
                   <Figure value={value} kind={metric === 'absence' ? (byDays ? 'day' : 'episode') : 'occurrence'} large />
                   <div className="min-h-8 flex-1 text-xs text-muted-foreground">
-                    {value !== 0 && <bdi>{details[metric]}</bdi>}
+                    {metric === 'late' ? (value > 0 || (previous?.late.minutes ?? 0) > 0) && (
+                      <span role="group" aria-label={t('companyStats.summary.lateDuration')} className="inline-flex flex-wrap items-center gap-1">
+                        <bdi>{t('companyStats.summary.lateHelp', { time: formatStatsDuration(current.late.minutes, t) })}</bdi>
+                        <Delta current={current.late.minutes} previous={previous?.late.minutes ?? null} kind="discipline" />
+                      </span>
+                    ) : value !== 0 && <bdi>{metric === 'absence' ? absenceDetail : t('companyStats.summary.unpairedHelp')}</bdi>}
                   </div>
                   <Sparkline series={data.series} granularity={data.granularity} metric={metric} unit={unit} />
                   {previous !== null && (
@@ -193,7 +201,7 @@ export function PeriodSummary({ data, unit }: { data: SummaryData; unit: CountUn
             <p className="text-xs text-muted-foreground">{t(byDays ? 'companyStats.unit.byDays' : 'companyStats.unit.byCount')}</p>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {LEAVE_TILES.map((key) => {
+            {LEAVE_COLUMNS.map((key) => {
               const permit = key === 'exit_permits'
               const value = permit ? permits.count : current.leaves[key][unit]
               const before = previous === null ? null : permit ? previous.leaves.exit_permits.count : previous.leaves[key][unit]
@@ -205,11 +213,17 @@ export function PeriodSummary({ data, unit }: { data: SummaryData; unit: CountUn
                   style={{ backgroundColor: `color-mix(in srgb, var(${isService ? '--smart-soft' : '--info-soft'}) 32%, var(--surface-raised))` }}
                 >
                   <MetricTitle label={t(`companyStats.leaves.${key}`)} color={isService ? 'var(--smart)' : METRIC_TOKENS.sick} />
-                  <Figure
-                    value={value}
-                    kind={permit ? 'permit' : byDays ? 'day' : 'occurrence'}
-                    note={permit ? formatStatsPermitHours(permits, t) : null}
-                  />
+                  <Figure value={value} kind={permit ? 'permit' : byDays ? 'day' : 'occurrence'}>
+                    {permit && permitHours !== null && (
+                      <>
+                        {' · '}
+                        <span role="group" aria-label={t('companyStats.leaves.exitPermitDuration')}>
+                          <bdi>{permitHours}</bdi>{' '}
+                          <Delta current={permits.hours} previous={previous?.leaves.exit_permits.hours ?? null} kind="leave" />
+                        </span>
+                      </>
+                    )}
+                  </Figure>
                   <div className="mt-auto flex flex-wrap items-end justify-between gap-1 text-xs text-muted-foreground">
                     {!permit && value > 0 && (
                       <bdi>{byDays ? formatStatsQuantity('occurrence', current.leaves[key].count, t) : formatStatsQuantity('day', current.leaves[key].days, t)}</bdi>

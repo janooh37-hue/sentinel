@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { CompanyStatsRow } from '@/lib/api'
 
 import { companyDisplayName, formatStatsNumber, formatStatsPercent, formatStatsQuantity } from './companyStatsFormat'
-import { absenceRateFill, absenceRateScale, DISCIPLINE_METRICS, disciplineValue, STATUS_TOKENS, type CountUnit, type StatusTone } from './companyStatsModel'
+import { absenceRateFill, absenceRateScale, DISCIPLINE_METRICS, disciplineValue, rosterLabelKey, STATUS_TOKENS, type CountUnit, type StatusTone } from './companyStatsModel'
 
 interface Props {
   companies: CompanyStatsRow[]
@@ -31,8 +31,7 @@ function CompanyCard({ row, unit, rateMax, selected, selectedCard, onSelect }: {
     (row.ratio[metric] ?? -1) > (row.ratio[worst] ?? -1) ? metric : worst,
   )
   const colors = STATUS_TOKENS[tone ?? 'normal']
-  const roster = row.shift_codes.includes('office_day') ? t('companyStats.companies.officeRoster')
-    : row.shift_codes.length ? t('companyStats.companies.shiftRoster') : null
+  const roster = rosterLabelKey(row.shift_codes)
   const absenceRate = totals.absence_rate
   const rateWidth = absenceRateFill(absenceRate, rateMax)
 
@@ -52,7 +51,7 @@ function CompanyCard({ row, unit, rateMax, selected, selectedCard, onSelect }: {
         {selected && <Check aria-hidden="true" className="size-4 shrink-0 text-primary-text" />}
       </span>
       <span id={`${id}-meta`} className="mb-1.5 mt-0.5 text-xs leading-snug text-muted-foreground">
-        <bdi>{formatStatsQuantity('person', totals.strength, t)}</bdi>{roster && <> · {roster}</>}
+        <bdi>{formatStatsQuantity('person', totals.strength, t)}</bdi>{roster && <> · {t(roster)}</>}
       </span>
       <span
         id={`${id}-status`}

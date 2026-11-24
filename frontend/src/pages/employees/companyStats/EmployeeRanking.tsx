@@ -10,7 +10,8 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 
 import { companyDisplayName, formatStatsDate, formatStatsDuration, formatStatsNumber, formatStatsQuantity } from './companyStatsFormat'
-import { disciplineValue, RANKING_SORTS, STATUS_TOKENS, type CountUnit, type RankingSort } from './companyStatsModel'
+import { disciplineValue, rankingBadge, RANKING_SORTS, STATUS_TOKENS, type CountUnit, type RankingSort } from './companyStatsModel'
+import { SegmentedFilter } from './SegmentedFilter'
 
 interface Props {
   data: CompanyStats
@@ -58,9 +59,9 @@ function RankingValue({ column, row, discipline, sorted, unit, t }: {
 }
 
 function Score({ employee, maximum, t }: { employee: CompanyStatsEmployee; maximum: number; t: TFunction }) {
-  const { tier, small_sample: smallSample, score } = employee
-  const tone = STATUS_TOKENS[smallSample ? 'small' : tier === 'needs_intervention' ? 'bad' : tier === 'above_average' ? 'warn' : 'normal']
-  const badge = smallSample ? t('companyStats.status.smallSample') : tier ? t(`companyStats.tier.${tier}`) : null
+  const { score } = employee
+  const badge = rankingBadge(employee)
+  const tone = STATUS_TOKENS[badge.tone]
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_3ch] items-center gap-x-1.5 gap-y-1 md:grid-cols-[minmax(0,1fr)_3ch_minmax(0,8.5rem)]">
       <div aria-hidden="true" className="h-1 min-w-0 rounded-full bg-border">
@@ -68,7 +69,7 @@ function Score({ employee, maximum, t }: { employee: CompanyStatsEmployee; maxim
       </div>
       <bdi dir="ltr" className={`text-end ${score === 0 ? 'text-muted-foreground' : ''}`}>{formatStatsNumber(score)}</bdi>
       <div className="col-span-2 flex justify-end empty:hidden md:col-span-1 md:empty:block">
-        {badge && <span className="rounded-full px-1.5 py-0.5 text-xs leading-snug font-semibold whitespace-nowrap" style={{ color: tone.fg, backgroundColor: tone.soft }}>{badge}</span>}
+        {badge.labelKey && <span className="rounded-full px-1.5 py-0.5 text-xs leading-snug font-semibold whitespace-nowrap" style={{ color: tone.fg, backgroundColor: tone.soft }}>{t(badge.labelKey)}</span>}
       </div>
     </div>
   )
@@ -106,19 +107,14 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
         </h2>
         <span aria-hidden="true" className="min-w-4 flex-1 border-t" />
         <div className="basis-full md:basis-auto">
-          <div role="group" aria-label={t('companyStats.ranking.sort')} className="inline-flex max-w-full flex-wrap items-stretch gap-0.5 rounded-md border bg-surface-tinted p-0.5">
-            {RANKING_SORTS.map((option) => (
-              <button
-                key={option}
-                type="button"
-                aria-pressed={option === sort}
-                onClick={() => onSortChange(option)}
-                className="min-h-[44px] min-w-[44px] cursor-pointer rounded-sm border border-transparent! px-2 text-xs text-muted-foreground hover:bg-surface-raised focus-visible:outline-none! focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring aria-pressed:bg-surface aria-pressed:font-semibold aria-pressed:text-primary-text md:min-h-8 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground"
-              >
-                {columnLabel(option, t)}
-              </button>
-            ))}
-          </div>
+          <SegmentedFilter
+            compact
+            label={t('companyStats.ranking.sort')}
+            choices={RANKING_SORTS}
+            value={sort}
+            onChange={onSortChange}
+            optionLabel={(option) => columnLabel(option, t)}
+          />
         </div>
       </header>
       <p className="mb-2 text-xs text-muted-foreground">

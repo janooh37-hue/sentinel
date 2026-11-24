@@ -22,21 +22,26 @@ if TYPE_CHECKING:
 type WorkbookLanguage = Literal["ar", "en"]
 type CellValue = date | str | int | float | None
 
-# English and Arabic peers, using the Company statistics page's vocabulary.
+# Shared with the stats service so payload keys and workbook columns stay in sync.
+LEAVE_KINDS = ("annual", "administrative", "sick", "duty", "national_service", "other")
+RATIO_METRICS = ("absence", "single_punch", "late")
+
+# Match shared labels in frontend/src/locales/{en,ar}.json (companyStats); the
+# workbook also needs standalone column labels where the page uses a sentence.
 _COPY = {
     "title": ("Company statistics", "إحصائيات السرايا"),
-    "summary": ("Summary", "ملخص الفترة"),
+    "summary": ("Period summary", "ملخص الفترة"),
     "companies": ("Companies", "السرايا"),
-    "trend": ("Trend", "الاتجاه عبر الزمن"),
-    "ranking": ("Ranking", "الأكثر تكراراً"),
-    "national_service": ("National service", "الخدمة الوطنية"),
+    "trend": ("Trend over time", "الاتجاه عبر الزمن"),
+    "ranking": ("Most frequent exceptions", "الأكثر تكرارًا"),
+    "national_service": ("National Service", "الخدمة الوطنية"),
     "all": ("All companies", "جميع السرايا"),
     "company": ("Company", "السرية"),
     "unassigned": ("Unassigned", "غير محدد"),
     "metric": ("Metric", "المقياس"),
     "current": ("Current period", "الفترة الحالية"),
     "previous": ("Previous period", "الفترة السابقة"),
-    "delta": ("Change", "التغير"),
+    "delta": ("Change", "التغيّر"),
     "not_enough": ("Not enough earlier data", "لا توجد بيانات سابقة كافية"),
     "from": ("From", "من"),
     "to": ("To", "إلى"),
@@ -47,9 +52,9 @@ _COPY = {
     "due": ("Due duties", "التكليفات المستحقة"),
     "pending": ("Pending judgment", "بانتظار التقييم"),
     "absence": ("Absence", "غياب"),
-    "days": ("Days", "أيام"),
-    "episodes": ("Episodes", "حالات"),
-    "count": ("Occurrences", "عدد المرات"),
+    "days": ("Days", "بالأيام"),
+    "episodes": ("Episodes", "بالحالات"),
+    "count": ("Occurrences", "بعدد المرات"),
     "single_punch": ("Single punch", "بصمة واحدة"),
     "late": ("Late", "تأخير"),
     "late_minutes": ("Minutes past grace", "الدقائق بعد السماح"),
@@ -57,8 +62,9 @@ _COPY = {
     "annual": ("Annual leave", "إجازة سنوية"),
     "administrative": ("Administrative leave", "إجازة إدارية"),
     "sick": ("Sick leave", "إجازة مرضية"),
+    "sick_days": ("Sick days", "أيام مرضية"),
     "duty": ("Official mission", "مهمة رسمية"),
-    "other": ("Other leave", "إجازات أخرى"),
+    "other": ("Other leave (compassionate, emergency, Hajj)", "إجازات أخرى (تعزية، طارئة، حج)"),
     "exit_permits": ("Exit permits", "تصاريح الخروج"),
     "requested_hours": ("Hours requested", "الساعات المطلوبة"),
     "with_hours": ("Permits with hours", "تصاريح محددة الساعات"),
@@ -90,12 +96,10 @@ _COPY = {
     "remaining": ("Days remaining", "الأيام المتبقية"),
     "progress": ("Service progress", "تقدم الخدمة الوطنية"),
     "service_days": (
-        "National service absence days in the period",
+        "National Service absence days in the period",
         "أيام الغياب بسبب الخدمة خلال الفترة",
     ),
 }
-_LEAVE_KEYS = ("annual", "administrative", "sick", "duty", "national_service", "other")
-_RATIO_KEYS = ("absence", "single_punch", "late")
 _TOTAL_KEYS = (
     "strength",
     "scheduled",
@@ -108,7 +112,7 @@ _TOTAL_KEYS = (
     "late",
     "late_minutes",
     "rate",
-    *(f"{leave}.{measure}" for leave in _LEAVE_KEYS for measure in ("days", "count")),
+    *(f"{leave}.{measure}" for leave in LEAVE_KINDS for measure in ("days", "count")),
     "exit_permits",
     "requested_hours",
     "with_hours",
@@ -272,7 +276,13 @@ def _summary(workbook: Workbook, stats: CompanyStatsRead, language: WorkbookLang
 
 
 def _companies(workbook: Workbook, stats: CompanyStatsRead, language: WorkbookLanguage) -> None:
-    columns = ("company", "shift", *_TOTAL_KEYS, *(f"{key}.ratio" for key in _RATIO_KEYS), "status")
+    columns = (
+        "company",
+        "shift",
+        *_TOTAL_KEYS,
+        *(f"{key}.ratio" for key in RATIO_METRICS),
+        "status",
+    )
     sheet = _sheet(
         workbook,
         "companies",
@@ -350,7 +360,7 @@ def _ranking(workbook: Workbook, stats: CompanyStatsRead, language: WorkbookLang
         "single_punch",
         "late",
         "late_minutes",
-        "sick.days",
+        "sick_days",
         "leave.days",
         "leave.count",
         "events",

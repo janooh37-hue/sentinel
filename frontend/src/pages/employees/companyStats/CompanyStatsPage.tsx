@@ -19,6 +19,7 @@ import { CompanyStatsTrend } from './CompanyStatsTrend'
 import { EmployeeRanking } from './EmployeeRanking'
 import { NationalServiceCard } from './NationalServiceCard'
 import { PeriodSummary, StatsPeriodLabel } from './PeriodSummary'
+import { SegmentedFilter } from './SegmentedFilter'
 import { customRangeError, useCompanyStatsParams, type CompanyStatsFilters } from './useCompanyStatsParams'
 
 type ExportParams = CompanyStatsParams & { language: 'ar' | 'en' }
@@ -28,34 +29,6 @@ const FILTER_FOCUS = 'focus-visible:outline-none! focus-visible:ring-2 focus-vis
 const BUTTON_FOCUS = 'focus-visible:outline-none! focus-visible:ring-inset focus-visible:ring-offset-0'
 const CONTROL = `min-h-[44px] w-full min-w-0 rounded-sm border bg-surface px-2.5 text-sm ${FILTER_FOCUS} lg:min-h-9`
 const EXPORT_BUTTON = `min-h-[44px] ${BUTTON_FOCUS} lg:min-h-9`
-
-function SegmentedFilter<T extends string>({ label, choices, value, onChange, optionLabel, className }: {
-  label: string
-  choices: readonly T[]
-  value: T
-  onChange(value: T): void
-  optionLabel(value: T): string
-  className?: string
-}) {
-  return (
-    <div className={`grid min-w-0 gap-1 lg:flex lg:items-center lg:gap-2 ${className ?? ''}`}>
-      <span aria-hidden="true" className="whitespace-nowrap text-xs font-bold">{label}</span>
-      <div role="group" aria-label={label} className="flex max-w-full flex-wrap items-stretch gap-0.5 rounded-md bg-surface-tinted p-0.5">
-        {choices.map((choice) => (
-          <button
-            key={choice}
-            type="button"
-            aria-pressed={choice === value}
-            onClick={() => onChange(choice)}
-            className={`min-h-[44px] min-w-[44px] flex-auto whitespace-nowrap rounded-sm border border-transparent! px-1 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground ${FILTER_FOCUS} aria-pressed:bg-surface aria-pressed:text-primary-text motion-reduce:transition-none lg:min-h-8 lg:flex-none lg:px-2.5 [[data-theme=dark]_&]:aria-pressed:border-border-strong! [[data-theme=dark]_&]:aria-pressed:bg-primary-soft [[data-theme=dark]_&]:aria-pressed:text-foreground`}
-          >
-            {optionLabel(choice)}
-          </button>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 function CustomDates({ range, closedThrough, update }: Pick<CompanyStatsFilters, 'range' | 'update'> & { closedThrough: string }) {
   const { t, i18n } = useTranslation()

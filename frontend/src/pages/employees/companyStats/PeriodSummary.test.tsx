@@ -44,18 +44,62 @@ describe('PeriodSummary', () => {
 
     const discipline = within(screen.getByRole('article', { name: 'Discipline' }))
     expect(discipline.getByText(/^Up\s+from the previous period$/)).toHaveTextContent('Up 50% from the previous period')
-    expect(discipline.getByText(/^Down\s+from the previous period$/)).toHaveTextContent('Down 100% from the previous period')
+    const drops = discipline.getAllByText(/^Down\s+from the previous period$/)
+    expect(drops).toHaveLength(2)
+    for (const drop of drops) expect(drop).toHaveTextContent('Down 100% from the previous period')
     expect(discipline.getByText('No change')).toBeInTheDocument()
     const leaves = within(screen.getByRole('article', { name: 'Leave and excused absences' }))
     expect(leaves.getByText(/^Up\s+from the previous period$/)).toHaveTextContent('Up 100% from the previous period')
   })
+
+  it.each([true, false])('shows a new figure only for a comparable period (%s)', (previous_comparable) => {
+    const previous = { ...data.summary.previous, single_punch: 0 }
+    render(<PeriodSummary data={{ ...data, previous_comparable, summary: { current, previous } }} unit="days" />)
+
+    const discipline = within(screen.getByRole('article', { name: 'Discipline' }))
+    if (previous_comparable) {
+      expect(discipline.getByText('New')).not.toHaveAttribute('style')
+      expect(screen.queryByText('Not enough earlier data')).not.toBeInTheDocument()
+    } else {
+      expect(discipline.queryByText('New')).not.toBeInTheDocument()
+      expect(screen.getByText('Not enough earlier data')).toBeInTheDocument()
+    }
+    const zeroTile = screen.getByText('Administrative leave').closest('div')!
+    expect(within(zeroTile).queryByText('No change')).not.toBeInTheDocument()
+  })
+
+  it('compares time past grace separately from the late count', () => {
+    const summary = { ...data.summary, current: { ...current, late: { count: 2, minutes: 60 } } }
+    render(<PeriodSummary data={{ ...data, summary }} unit="days" />)
+
+    const time = within(screen.getByRole('group', { name: 'Time past grace' }))
+    expect(time.getByText(/^Up\s+from the previous period$/)).toHaveTextContent('Up 50% from the previous period')
+  })
+
+  it.each([{ hours: 7, with_hours: 2 }, { hours: null, with_hours: 0 }])(
+    'compares only recorded permit hours (previous: $hours)',
+    ({ hours, with_hours }) => {
+      const previous = {
+        ...data.summary.previous,
+        leaves: { ...data.summary.previous.leaves, exit_permits: { count: 4, hours, with_hours } },
+      }
+      render(<PeriodSummary data={{ ...data, summary: { current, previous } }} unit="days" />)
+
+      const duration = within(screen.getByRole('group', { name: 'Exit permit hours' }))
+      expect(duration.getByText('3h 30m requested (from 2 with hours)')).toBeInTheDocument()
+      const change = duration.queryByText(/^Down\s+from the previous period$/)
+      if (hours === null) expect(change).not.toBeInTheDocument()
+      else expect(change).toHaveTextContent('Down 50% from the previous period')
+      expect(duration.queryByText('New')).not.toBeInTheDocument()
+    },
+  )
 
   it('reports occurrences without converting permit hours to days', () => {
     render(<PeriodSummary data={data} unit="count" />)
 
     expect(screen.getByText('12 days')).toBeInTheDocument()
     expect(screen.getByText('16 days')).toBeInTheDocument()
-    expect(screen.getByText('3h 30m requested (from 2 with hours)').parentElement).toHaveTextContent('4 permits · 3h 30m requested (from 2 with hours)')
+    expect(screen.getByText('3h 30m requested (from 2 with hours)').closest('p')).toHaveTextContent('4 permits · 3h 30m requested (from 2 with hours)')
     expect(screen.getByText(/Other leave \(compassionate, emergency, Hajj\)/)).toHaveTextContent('2 days · 1 record')
   })
 

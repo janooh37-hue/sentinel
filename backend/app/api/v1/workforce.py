@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ConflictError, ValidationFailedError
 from app.config import get_settings
-from app.core import clock, company_stats_xlsx
+from app.core import clock
 from app.db.models import User
 from app.db.session import get_db
 from app.db.workforce_models import (
@@ -484,25 +484,17 @@ def export_company_attendance_stats(
     language: Literal["ar", "en"] = "ar",
 ) -> Response:
     """Download the same scoped report with the complete score ranking."""
-    stats = CompanyStatsRead.model_validate(
-        workforce_company_stats_service.company_attendance_stats(
-            db,
-            scope=_scope(db, user),
-            from_date=from_date,
-            to_date=to_date,
-            duty_unit=duty_unit,
-            limit=None,
-            now=clock.utcnow(),
-        )
-    )
-    filename = company_stats_xlsx.company_stats_filename(
-        stats.period.from_date,
-        stats.period.to_date,
-        stats.duty_unit,
-        language,
+    workbook, filename = workforce_company_stats_service.export_workbook(
+        db,
+        scope=_scope(db, user),
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        language=language,
+        now=clock.utcnow(),
     )
     return Response(
-        company_stats_xlsx.build_company_stats_workbook(stats, language=language),
+        workbook,
         media_type=_XLSX_MEDIA_TYPE,
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename, safe='')}",
