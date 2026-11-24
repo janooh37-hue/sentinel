@@ -50,11 +50,31 @@ describe('PdfPages', () => {
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} onPainted={painted} />)
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(13))
 
-    setNear([1, 2])
+    await setNear([1, 2])
 
     await waitFor(() => expect(painted).toHaveBeenCalled())
     expect(canvasCount(view.container)).toBe(2)
     expect(renders[2]).not.toHaveBeenCalled()
+  })
+
+  it('lets a test mark pages near as soon as the page boxes commit, before their effects run', async () => {
+    const { doc } = makeDoc(13)
+    const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} />)
+    // Resume in the microtask right after the commit that renders the boxes: the passive
+    // effect that builds the near observer has not run yet (on a loaded runner, waitFor can
+    // hand control back at this same point). ES2023 lib predates Promise.withResolvers.
+    await new Promise<void>((resolve) => {
+      const mo = new MutationObserver(() => {
+        if (view.container.querySelectorAll('[data-pdf-page]').length !== 13) return
+        mo.disconnect()
+        resolve()
+      })
+      mo.observe(view.container, { childList: true, subtree: true })
+    })
+
+    await setNear([1])
+
+    await waitFor(() => expect(canvasCount(view.container)).toBe(1))
   })
 
   it('with eager, onPainted waits until every page of a long document has painted', async () => {
@@ -68,7 +88,7 @@ describe('PdfPages', () => {
     root = view.container
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(13))
 
-    setNear([1])
+    await setNear([1])
 
     await waitFor(() => expect(painted).toHaveBeenCalled())
     expect(counts.every((c) => c === 13)).toBe(true)
@@ -77,21 +97,29 @@ describe('PdfPages', () => {
 
   it('fires onPainted again when eager is switched on for pages that are already painted', async () => {
     const { doc } = makeDoc(13)
-    const painted = vi.fn()
+    const counts: number[] = []
+    let root: HTMLElement | null = null
+    const painted = vi.fn(() => {
+      counts.push(root ? canvasCount(root) : -1)
+    })
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} onPainted={painted} />)
+    root = view.container
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(13))
-    setNear([1])
-    await waitFor(() => expect(painted).toHaveBeenCalledTimes(1))
+    await setNear([1])
+    // Page 1 may report twice (the first paint before the observer reports, then as the near
+    // page), depending on whether that first paint finished before setNear: one canvas either way.
+    await waitFor(() => expect(painted).toHaveBeenCalled())
     expect(canvasCount(view.container)).toBe(1)
 
     view.rerender(<PdfPages doc={doc} sizing={{ kind: 'fit' }} eager onPainted={painted} />)
-    await waitFor(() => expect(canvasCount(view.container)).toBe(13))
-    await waitFor(() => expect(painted).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(counts.at(-1)).toBe(13))
 
     // A second print: eager off, then on again — everything is painted, the signal still fires.
+    const before = counts.length
     view.rerender(<PdfPages doc={doc} sizing={{ kind: 'fit' }} onPainted={painted} />)
     view.rerender(<PdfPages doc={doc} sizing={{ kind: 'fit' }} eager onPainted={painted} />)
-    await waitFor(() => expect(painted.mock.calls.length).toBeGreaterThanOrEqual(3))
+    await waitFor(() => expect(counts.length).toBeGreaterThan(before))
+    expect(counts.at(-1)).toBe(13)
   })
 
   it('releases pages that leave the near set (with a margin) and repaints them on return', async () => {
@@ -99,13 +127,13 @@ describe('PdfPages', () => {
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} />)
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(20))
 
-    setNear([1, 2])
+    await setNear([1, 2])
     await waitFor(() => expect(canvasCount(view.container)).toBe(2))
     const first = boxOf(view.container, 1).querySelector('canvas')
     expect(first).not.toBeNull()
     expect(first?.width).toBeGreaterThan(0)
 
-    setNear([10, 11])
+    await setNear([10, 11])
     await waitFor(() => expect(canvasCount(view.container)).toBe(2))
     expect(boxOf(view.container, 1).querySelector('canvas')).toBeNull()
     expect(boxOf(view.container, 10).querySelector('canvas')).not.toBeNull()
@@ -115,12 +143,12 @@ describe('PdfPages', () => {
     expect(cleanup[1]).toHaveBeenCalled()
 
     // Pages inside the margin of the new near set are untouched.
-    setNear([4])
+    await setNear([4])
     await waitFor(() => expect(boxOf(view.container, 4).querySelector('canvas')).not.toBeNull())
     expect(boxOf(view.container, 10).querySelector('canvas')).toBeNull()
 
     const rendersBefore = renders[0].mock.calls.length
-    setNear([1])
+    await setNear([1])
     await waitFor(() => expect(boxOf(view.container, 1).querySelector('canvas')).not.toBeNull())
     expect(renders[0].mock.calls.length).toBe(rendersBefore + 1)
   })
@@ -130,14 +158,14 @@ describe('PdfPages', () => {
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} />)
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(20))
 
-    setNear([5])
+    await setNear([5])
     await waitFor(() => expect(canvasCount(view.container)).toBe(1))
-    setNear([7])
+    await setNear([7])
     await waitFor(() => expect(boxOf(view.container, 7).querySelector('canvas')).not.toBeNull())
     expect(boxOf(view.container, 5).querySelector('canvas')).not.toBeNull()
     expect(cleanup[4]).not.toHaveBeenCalled()
 
-    setNear([8])
+    await setNear([8])
     await waitFor(() => expect(boxOf(view.container, 8).querySelector('canvas')).not.toBeNull())
     expect(boxOf(view.container, 5).querySelector('canvas')).toBeNull()
     expect(cleanup[4]).toHaveBeenCalled()
@@ -148,10 +176,10 @@ describe('PdfPages', () => {
     const painted = vi.fn()
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} eager onPainted={painted} />)
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(20))
-    setNear([1])
+    await setNear([1])
     await waitFor(() => expect(painted).toHaveBeenCalled())
 
-    setNear([20])
+    await setNear([20])
 
     await waitFor(() => expect(painted.mock.calls.length).toBeGreaterThanOrEqual(1))
     expect(canvasCount(view.container)).toBe(20)
@@ -162,7 +190,7 @@ describe('PdfPages', () => {
     const { doc, cleanup } = makeDoc(3)
     const view = render(<PdfPages doc={doc} sizing={{ kind: 'fit' }} />)
     await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(3))
-    setNear([1, 2, 3])
+    await setNear([1, 2, 3])
     await waitFor(() => expect(canvasCount(view.container)).toBe(3))
     const canvases = Array.from(view.container.querySelectorAll('canvas'))
 
