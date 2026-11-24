@@ -6,7 +6,7 @@ import type { CompanyStats, CompanyStatsTotals } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { companyDisplayName, formatStatsDate, formatStatsDuration, formatStatsHours, formatStatsNumber, formatStatsPercent, formatStatsPermitHours, formatStatsQuantity } from './companyStatsFormat'
-import { deltaPercent, DISCIPLINE_METRICS, disciplineValue, LEAVE_COLUMNS, rankingBadge, TREND_METRICS, type CountUnit, type RankingSort } from './companyStatsModel'
+import { deltaPercent, DISCIPLINE_METRICS, disciplineValue, LEAVE_COLUMNS, rankingAbsenceField, rankingBadge, TREND_METRICS, type CountUnit, type RankingSort } from './companyStatsModel'
 import { NewDeltaChip, StatsPeriodLabel } from './PeriodSummary'
 import { trendValue } from './trendModel'
 
@@ -152,18 +152,26 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
   }))
   comparisonRows.push({ key: 'report-total', label: t('companyStats.comparison.total'), values: comparisonValues(data.overall) })
 
+  const absenceField = rankingAbsenceField(unit, sort)
+  const showAbsenceUnit = unit === 'count' && absenceField === 'absence_days'
+  const rankingMetricLabels = showAbsenceUnit
+    ? metricLabels.map((label, index) => DISCIPLINE_METRICS[index] === 'absence' ? t('companyStats.ranking.absenceDays') : label)
+    : metricLabels
   const employees = new Map(data.ranking.rows.map((row) => [row.employee_id, row]))
   const rankingRows: PrintRow[] = []
   for (const key of data.ranking.order[sort]) {
     const row = employees.get(key)
     if (!row) continue
     const { labelKey } = rankingBadge(row)
+    const absence = row[absenceField]
     rankingRows.push({
       key,
       label: <bdi>{pickEmployeeName(row, language)}</bdi>,
       values: [
         companyDisplayName(row.duty_unit, t),
-        formatStatsNumber(unit === 'days' || sort === 'absence' ? row.absence_days : row.absence_episodes),
+        showAbsenceUnit && absence > 0 ? (
+          <><bdi dir="ltr">{formatStatsNumber(absence)}</bdi>{' · '}<bdi>{formatStatsQuantity('episode', row.absence_episodes, t)}</bdi></>
+        ) : formatStatsNumber(absence),
         formatStatsNumber(row.single_punch),
         formatStatsNumber(row.late_count),
         formatStatsNumber(row.sick_days),
@@ -241,7 +249,7 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
       <PrintTable
         title={t('companyStats.ranking.title')}
         columns={[
-          t('companyStats.ranking.employee'), t('companyStats.filters.company'), ...metricLabels,
+          t('companyStats.ranking.employee'), t('companyStats.filters.company'), ...rankingMetricLabels,
           t('companyStats.ranking.sickDays'), t('companyStats.ranking.leaves'), t('companyStats.ranking.score'),
         ]}
         rows={rankingRows}

@@ -35,6 +35,12 @@ export function disciplineValue(
 
 export const RANKING_SORTS = ['score', 'absence', 'late', 'single_punch'] as const
 export type RankingSort = (typeof RANKING_SORTS)[number]
+export type RankingAbsenceField = 'absence_days' | 'absence_episodes'
+
+/** Absence ranking is ordered by days even when the rest of the report counts occurrences. */
+export function rankingAbsenceField(unit: CountUnit, sort: RankingSort): RankingAbsenceField {
+  return unit === 'days' || sort === 'absence' ? 'absence_days' : 'absence_episodes'
+}
 
 const PRESET_MONTHS: Record<Exclude<PeriodPreset, 'custom'>, number> = {
   '1m': 1,

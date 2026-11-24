@@ -7448,6 +7448,7 @@
       "scope": "Company: <company/>",
       "sort": "Sort by",
       "score": "Score",
+      "absenceDays": "Absence (days)",
       "sickDays": "Sick days",
       "employee": "Employee",
       "leaves": "Leave",

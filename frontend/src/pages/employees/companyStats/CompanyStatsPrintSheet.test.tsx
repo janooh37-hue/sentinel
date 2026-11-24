@@ -54,6 +54,19 @@ describe('CompanyStatsPrintSheet', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
+  it.each([
+    { sort: 'absence', heading: 'Absence (days)', value: '2 · 1 episode' },
+    { sort: 'late', heading: 'Absence', value: '1' },
+  ] as const)('prints the actual absence measure in occurrence mode when sorted by $sort', ({ sort, heading, value }) => {
+    render(<CompanyStatsPrintSheet data={data} unit="count" sort={sort} />)
+
+    const ranking = within(screen.getByRole('table', { name: 'Most frequent exceptions' }))
+    const headers = ranking.getAllByRole('columnheader')
+    const absenceColumn = headers.indexOf(ranking.getByRole('columnheader', { name: heading }))
+    const employeeRow = within(ranking.getByRole('row', { name: /^Ibrahim Salem/ }))
+    expect(employeeRow.getAllByRole('cell')[absenceColumn - 1]?.textContent).toBe(value)
+  })
+
   it('prints a plain zero for exit permits when there are none', () => {
     const none = { ...totals, leaves: { ...totals.leaves, exit_permits: { count: 0, hours: null, with_hours: 0 } } }
     render(<CompanyStatsPrintSheet data={{ ...data, summary: { ...data.summary, current: none } }} unit="days" sort="score" />)

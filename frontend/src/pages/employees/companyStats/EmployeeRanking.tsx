@@ -4,13 +4,13 @@ import { useId } from 'react'
 import { Trans, useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
-import type { CompanyStats, CompanyStatsEmployee, CompanyStatsTotals } from '@/lib/api'
+import type { CompanyStats, CompanyStatsEmployee } from '@/lib/api'
 import { localized } from '@/lib/language'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 
 import { companyDisplayName, formatStatsDate, formatStatsDuration, formatStatsNumber, formatStatsQuantity } from './companyStatsFormat'
-import { disciplineValue, rankingBadge, RANKING_SORTS, STATUS_TOKENS, type CountUnit, type RankingSort } from './companyStatsModel'
+import { rankingAbsenceField, rankingBadge, RANKING_SORTS, STATUS_TOKENS, type CountUnit, type RankingAbsenceField, type RankingSort } from './companyStatsModel'
 import { SegmentedFilter } from './SegmentedFilter'
 
 interface Props {
@@ -29,7 +29,6 @@ const NOTE = 'block text-xs font-normal text-muted-foreground'
 const SORTED = 'bg-primary-soft font-semibold text-foreground'
 
 type Column = (typeof DESKTOP_COLUMNS)[number]
-type Discipline = Pick<CompanyStatsTotals, 'absence' | 'single_punch' | 'late'>
 
 function columnLabel(column: Column, t: TFunction): string {
   if (column === 'company') return t('companyStats.filters.company')
@@ -37,17 +36,18 @@ function columnLabel(column: Column, t: TFunction): string {
   return t(`companyStats.metric.${column}`)
 }
 
-function RankingValue({ column, row, discipline, sorted, unit, t }: {
+function RankingValue({ column, row, absenceField, sorted, unit, t }: {
   column: Exclude<Column, 'score' | 'company'>
   row: CompanyStatsEmployee
-  discipline: Discipline
+  absenceField: RankingAbsenceField
   sorted: boolean
   unit: CountUnit
   t: TFunction
 }) {
   const value = column === 'sickDays' ? row.sick_days
     : column === 'leaves' ? unit === 'days' ? row.leave_days : row.leave_count
-      : disciplineValue(discipline, column, sorted && column === 'absence' ? 'days' : unit)
+      : column === 'absence' ? row[absenceField]
+        : column === 'single_punch' ? row.single_punch : row.late_count
   const note = value > 0 && column === 'late' ? formatStatsDuration(row.late_minutes, t)
     : value > 0 && column === 'absence' && sorted ? formatStatsQuantity('episode', row.absence_episodes, t) : null
   return (
@@ -83,6 +83,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
   const titleId = useId()
   const title = t('companyStats.ranking.title')
   const language = i18n.language
+  const absenceField = rankingAbsenceField(unit, sort)
   const columns = mobile ? [sort, ...METRIC_COLUMNS.filter((column) => column !== sort)] : DESKTOP_COLUMNS
   const employeeWidth = 'min(158px, 44vw)'
   const scoreWidth = mobile ? 'clamp(145px, 47vw, 185px)' : 296
@@ -157,7 +158,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                     return (
                       <th key={column} scope="col" dir={column === 'company' ? undefined : 'ltr'} aria-sort={sorted ? 'descending' : undefined} className={`${HEADER} ${column === 'company' ? 'text-start' : 'text-end'} ${sorted ? SORTED : 'bg-surface-raised text-muted-foreground'}`}>
                         <bdi dir="auto">{columnLabel(column, t)}</bdi>
-                        {column === 'absence' && <span className={NOTE}><bdi dir="auto">{t(sorted || unit === 'days' ? 'companyStats.unit.days' : 'companyStats.ranking.episodes')}</bdi></span>}
+                        {column === 'absence' && <span className={NOTE}><bdi dir="auto">{t(absenceField === 'absence_days' ? 'companyStats.unit.days' : 'companyStats.ranking.episodes')}</bdi></span>}
                         {column === 'leaves' && <span className={NOTE}><bdi dir="auto">{t(`companyStats.unit.${unit}`)}{'\u00a0· '}{t('companyStats.ranking.allLeaveKinds')}</bdi></span>}
                       </th>
                     )
@@ -172,11 +173,6 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                   const shift = employee.shift_code ? t(`attendance.shift.${employee.shift_code}`, employee.shift_code) : null
                   const transfer = employee.transfer
                   const movedOut = transfer?.from_unit === employee.duty_unit
-                  const discipline = {
-                    absence: { days: employee.absence_days, episodes: employee.absence_episodes },
-                    single_punch: employee.single_punch,
-                    late: { count: employee.late_count, minutes: employee.late_minutes },
-                  }
                   return (
                     <tr key={employee.employee_id} className="last:[&>*]:border-b-0">
                       <th scope="row" className={`${FIRST} border-b bg-surface font-medium align-middle`}>
@@ -212,7 +208,7 @@ export function EmployeeRanking({ data, sort, onSortChange, unit, companyName }:
                         <td key={column} dir={column === 'company' || column === 'score' ? undefined : 'ltr'} className={`border-b px-2 py-2 align-middle ${column === 'company' ? 'text-start' : 'text-end'} ${sort === column ? SORTED : ''}`}>
                           {column === 'company' ? <><bdi dir="auto">{company}</bdi>{shift && <span className={NOTE}><bdi dir="auto">{shift}</bdi></span>}</>
                             : column === 'score' ? <Score employee={employee} maximum={maximum} t={t} />
-                              : <RankingValue column={column} row={employee} discipline={discipline} sorted={sort === column} unit={unit} t={t} />}
+                              : <RankingValue column={column} row={employee} absenceField={absenceField} sorted={sort === column} unit={unit} t={t} />}
                         </td>
                       ))}
                     </tr>
