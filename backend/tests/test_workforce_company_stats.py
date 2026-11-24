@@ -545,6 +545,18 @@ def test_permit_hours_use_the_live_owning_current_version(
     assert prose_permits == {"count": 1, "hours": None, "with_hours": 0}
 
 
+def test_negative_permit_durations_are_not_hours(api_db: Session, admin_client: TestClient) -> None:
+    api_db.add(BookCategory(id="HR", prefix="HR"))
+    for index, hours in enumerate((3, -2, "-2", -0.5)):
+        employee = _employee(api_db, f"G-PERMIT-{index}")
+        employee.duty_unit = "Alpha"
+        _permit_book(api_db, _leave_span(api_db, employee.id, "Leave Permit", START, START), hours)
+    api_db.commit()
+
+    permits = _stats(admin_client)["summary"]["current"]["leaves"]["exit_permits"]
+    assert permits == {"count": 4, "hours": 3.0, "with_hours": 1}
+
+
 def test_national_service_is_live_today_even_outside_requested_period(
     api_db: Session, admin_client: TestClient
 ) -> None:

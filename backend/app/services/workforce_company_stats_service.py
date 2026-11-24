@@ -481,7 +481,8 @@ def _parse_hours(value: object) -> Decimal | None:
         parsed = Decimal(str(value))
     else:
         return None
-    return parsed if math.isfinite(float(parsed)) else None
+    # A requested duration is never negative, however the form stored it.
+    return parsed if math.isfinite(float(parsed)) and parsed >= 0 else None
 
 
 def _permit_hours(db: Session, leave_ids: list[int]) -> dict[int, Decimal | None]:
