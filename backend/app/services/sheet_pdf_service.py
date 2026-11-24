@@ -107,6 +107,9 @@ def print_sheet(sheet_html: str, *, lang: str) -> bytes:
                 "--no-first-run",
                 "--no-default-browser-check",
                 "--disable-extensions",
+                # From an elevated server on a desktop session the browser otherwise
+                # relaunches itself de-elevated and exits without printing.
+                "--do-not-de-elevate",
                 "--allow-file-access-from-files",
                 f"--user-data-dir={work / 'profile'}",
                 "--no-pdf-header-footer",
