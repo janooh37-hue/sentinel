@@ -287,6 +287,13 @@ class _Current:
     transfers: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
+def _company(current: _Current, unit: str | None) -> _Company:
+    company = current.companies.get(unit)
+    if company is None:
+        company = current.companies[unit] = _Company()
+    return company
+
+
 def _current_cases(
     db: Session,
     *,
@@ -311,9 +318,7 @@ def _current_cases(
         day = case.operational_date
         state, minutes = judge_register_row(judgment, now=now)
 
-        company = data.companies.get(unit)
-        if company is None:
-            company = data.companies[unit] = _Company()
+        company = _company(data, unit)
         company.totals.add_duty(employee_id, state, minutes)
         if shift:
             company.shifts.add(shift)
@@ -528,8 +533,8 @@ def _summarize_leave(
     if all_days:
         current.overall.leaves.add_leave(kind, all_days)
     for unit, days in company_days.items():
-        if (company := current.companies.get(unit)) is not None:
-            company.totals.leaves.add_leave(kind, days)
+        # A company with leave but no duty in the period is listed, unrated.
+        _company(current, unit).totals.leaves.add_leave(kind, days)
     if filtered_days:
         if current.filtered is not current.overall:
             current.filtered.leaves.add_leave(kind, filtered_days)
@@ -630,8 +635,7 @@ def _leaves_and_enrolment(
         hours = hours_by_id.get(leave_id)
         if is_current:
             current.overall.leaves.add_permit(hours)
-            if (company := current.companies.get(unit)) is not None:
-                company.totals.leaves.add_permit(hours)
+            _company(current, unit).totals.leaves.add_permit(hours)
             if current.filtered is not current.overall and _selected(unit, duty_unit):
                 current.filtered.leaves.add_permit(hours)
         else:
@@ -655,7 +659,7 @@ def _ratios(current: _Current) -> list[dict[str, Any]]:
         for key, value, baseline in zip(
             _METRICS, (d.absence_days, d.single_punch, d.late_count), baselines, strict=True
         ):
-            if not baseline:
+            if not baseline or not people:  # A leave-only company has no duty to rate.
                 ratio[key] = status[key] = None
                 continue
             r = ratio[key] = value * strength / (people * baseline)

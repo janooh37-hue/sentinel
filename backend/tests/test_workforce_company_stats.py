@@ -16,7 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import clock
-from app.db.models import Book, BookCategory, BookVersion, Document
+from app.db.models import Book, BookCategory, BookVersion, Document, Employee
 from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
@@ -599,6 +599,43 @@ def test_excused_only_company_and_empty_period_have_defined_zero_states(
     }
 
 
+def test_leave_only_company_is_listed_unrated_and_reconciles_with_overall(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    absent = _seed_case(api_db)  # A non-zero overall baseline for the ratios.
+    absent.duty_unit_snapshot = "Alpha"
+    on_leave = _employee(api_db, "G-LEAVE-ONLY")
+    on_leave.duty_unit = "Beta"  # No case in the period: Beta exists only through Leaves.
+    _leave_span(api_db, on_leave.id, "Annual Leave", START, END)
+    _leave_span(api_db, on_leave.id, "Leave Permit", END, END)
+    api_db.commit()
+
+    data = _stats(admin_client)
+    assert [row["key"] for row in data["companies"]] == ["Alpha", "Beta"]
+    beta = data["companies"][1]
+    totals = beta["totals"]
+    assert (totals["strength"], totals["duties_scheduled"], totals["duties_due"]) == (0, 0, 0)
+    assert totals["absence_rate"] is None
+    assert totals["leaves"]["annual"] == {"days": 3, "count": 1}
+    assert totals["leaves"]["exit_permits"]["count"] == 1
+    assert beta["small_sample"] is True
+    assert beta["ratio"] == {"absence": None, "single_punch": None, "late": None}
+    assert beta["status"] == dict.fromkeys(("absence", "single_punch", "late", "overall"))
+    overall = data["overall"]["leaves"]
+    for kind, field in (("annual", "days"), ("annual", "count"), ("exit_permits", "count")):
+        companies = sum(row["totals"]["leaves"][kind][field] for row in data["companies"])
+        assert companies == overall[kind][field]
+
+    selected = _stats(admin_client, duty_unit="Beta")["summary"]["current"]["leaves"]
+    assert selected["annual"] == {"days": 3, "count": 1}
+    response = admin_client.get(
+        EXPORT_PATH, params={"from_date": str(START), "to_date": str(END), "language": "en"}
+    )
+    assert response.status_code == 200, response.text
+    sheet = load_workbook(BytesIO(response.content))["Companies"]
+    assert [cell.value for cell in sheet["A"][1:]] == ["Alpha", "Beta", "Total"]
+
+
 def test_series_is_weekly_for_short_periods_and_monthly_with_clipped_edges(
     api_db: Session, admin_client: TestClient
 ) -> None:
@@ -754,6 +791,9 @@ def test_company_status_starts_at_thirty_due_duties_not_thirty_scheduled(
 ) -> None:
     seed = _seed_case(api_db)
     seed.duty_unit_snapshot = "Alpha"
+    seed_employee = api_db.get(Employee, seed.employee_id)
+    assert seed_employee is not None
+    seed_employee.duty_unit = "Alpha"  # The sick leave stays in Alpha, not "Unassigned".
     for unit in ("Alpha", "Beta"):
         for index in range(29 if unit == "Alpha" else 30):
             person = _employee(api_db, f"G-{unit}-{index}")
