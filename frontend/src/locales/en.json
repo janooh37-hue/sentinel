@@ -7297,6 +7297,24 @@
       "hint": "Halo = on site now · notch = corrected",
       "details": "All approved excusing leave is blue and names its type. National Service is purple. Arriving inside the grace is not an exception."
     },
+    "results": {
+      "label": "Filter results",
+      "people_one": "<0>{{count}}</0> person",
+      "people_other": "<0>{{count}}</0> people",
+      "rows_one": "<0>{{count}}</0> row shown",
+      "rows_other": "<0>{{count}}</0> rows shown",
+      "empty": "No rows match these filters",
+      "clearSearch": "Clear search"
+    },
+    "filter": {
+      "clear": "Clear filters",
+      "rowStatus": "Row status",
+      "button": "Filters",
+      "active": "Active row filters",
+      "remove": "Remove {{label}}",
+      "close": "Close filters",
+      "showResults": "Show results"
+    },
     "quickCorrection": {
       "title": "Quick correction",
       "subtitle": "Choose the day’s effective result",
@@ -7384,6 +7402,11 @@
       "asOf": "As of <0>{{time}}</0>",
       "people_one": "<0>{{count}}</0> person",
       "people_other": "<0>{{count}}</0> people",
+      "who": "People",
+      "splitAbsent": "Absent",
+      "splitAwaited": "Awaited",
+      "residual": "Not placed yet",
+      "residualHint": "Shift not started, or no Out recorded",
       "onSite": "On site",
       "left": "Left",
       "notArrived": "Not arrived",
@@ -7399,6 +7422,8 @@
       "today": "Today",
       "previousDay": "Previous day",
       "nextDay": "Next day",
+      "chooseDay": "Choose day",
+      "company": "Company",
       "search": "Name, G-number, or post…",
       "print": "Print",
       "export": "Export",
@@ -7427,12 +7452,20 @@
       "openEmployee": "Open employee file · {{name}} · {{employeeId}}"
     },
     "print": {
+      "whoFilter": "People: {{who}}",
+      "statesFilter": "Row status: {{states}}",
+      "companyFilter": "Company: <0>{{company}}</0>",
+      "searchDeclaration": "search \"<0>{{term}}</0>\"",
+      "rowsShown_one": "<0>{{shown}}</0> of <1>{{total}}</1> row",
+      "rowsShown_other": "<0>{{shown}}</0> of <1>{{total}}</1> rows",
+      "asOf": "as of <0>{{time}}</0>",
+      "allRows": "All rows",
       "title": "Daily Duty Register",
       "titlePeer": "سجل الحضور اليومي",
       "subtitleSheet": "{{date}} · duty register by shift, unit and post",
       "subtitleShift": "{{date}} · one sheet per shift · sheet {{index}} of {{total}}",
-      "filtered": "filtered: {{filter}}",
-      "searchFilter": "search \"{{term}}\"",
+      "filteredLabel": "Filtered",
+      "filtered": "Filtered: {{filter}}",
       "date": "Date",
       "shifts": "Shifts",
       "assigned": "Assigned",
@@ -7506,6 +7539,9 @@
     },
     "attention": {
       "title": "Needs a decision",
+      "anchor": "Needs a decision · <0>{{count}}</0>",
+      "filterHint": "Not narrowed by filters",
+      "scope": "All companies · all shifts · unresolved attendance",
       "none": "Nothing needs a decision today.",
       "reviewAll": "Review all",
       "openFile": "Open attendance file"
