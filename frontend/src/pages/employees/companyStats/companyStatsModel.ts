@@ -1,0 +1,155 @@
+import type { CompanyStatsEmployee, CompanyStatsStatus, CompanyStatsTotals } from '@/lib/api'
+
+/** Query key for the employees whose duty unit is blank (the API's sentinel). */
+export const UNASSIGNED_KEY = '__unassigned__'
+
+export const PERIOD_PRESETS = ['1m', '3m', '6m', '1y', 'custom'] as const
+export type PeriodPreset = (typeof PERIOD_PRESETS)[number]
+
+export const COUNT_UNITS = ['days', 'count'] as const
+export type CountUnit = (typeof COUNT_UNITS)[number]
+
+export const TREND_METRICS = ['absence', 'single_punch', 'late', 'sick'] as const
+export type TrendMetric = (typeof TREND_METRICS)[number]
+
+export const DISCIPLINE_METRICS = ['absence', 'single_punch', 'late'] as const
+export type DisciplineMetric = (typeof DISCIPLINE_METRICS)[number]
+
+export const LEAVE_COLUMNS = ['annual', 'administrative', 'sick', 'exit_permits', 'duty', 'national_service'] as const
+
+export function rosterLabelKey(shiftCodes: readonly string[]) {
+  if (shiftCodes.includes('office_day')) return 'companyStats.companies.officeRoster'
+  return shiftCodes.length ? 'companyStats.companies.shiftRoster' : null
+}
+
+/** Absence follows the unit (days or episodes); single punch and late are always counts. */
+export function disciplineValue(
+  totals: Pick<CompanyStatsTotals, 'absence' | 'single_punch' | 'late'>,
+  metric: DisciplineMetric,
+  unit: CountUnit,
+): number {
+  if (metric === 'absence') return unit === 'days' ? totals.absence.days : totals.absence.episodes
+  if (metric === 'single_punch') return totals.single_punch
+  return totals.late.count
+}
+
+export const RANKING_SORTS = ['score', 'absence', 'late', 'single_punch'] as const
+export type RankingSort = (typeof RANKING_SORTS)[number]
+export type RankingAbsenceField = 'absence_days' | 'absence_episodes'
+
+/** Absence ranking is ordered by days even when the rest of the report counts occurrences. */
+export function rankingAbsenceField(unit: CountUnit, sort: RankingSort): RankingAbsenceField {
+  return unit === 'days' || sort === 'absence' ? 'absence_days' : 'absence_episodes'
+}
+
+const PRESET_MONTHS: Record<Exclude<PeriodPreset, 'custom'>, number> = {
+  '1m': 1,
+  '3m': 3,
+  '6m': 6,
+  '1y': 12,
+}
+
+function parseIsoDate(value: string): Date {
+  const [y, m, d] = value.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+function isoDate(value: Date): string {
+  return value.toISOString().slice(0, 10)
+}
+
+export function addDays(value: string, days: number): string {
+  const date = parseIsoDate(value)
+  date.setUTCDate(date.getUTCDate() + days)
+  return isoDate(date)
+}
+
+function addMonthsClamped(value: string, months: number): string {
+  const date = parseIsoDate(value)
+  const day = date.getUTCDate()
+  date.setUTCDate(1)
+  date.setUTCMonth(date.getUTCMonth() + months)
+  const lastDay = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate()
+  date.setUTCDate(Math.min(day, lastDay))
+  return isoDate(date)
+}
+
+/**
+ * The requested range for a preset, as of the site's `today` (YYYY-MM-DD).
+ * Only closed days count, so a preset ends yesterday; it starts the day after
+ * the same date N months back (3 months on 19 Nov = 20 Aug – 18 Nov).
+ */
+export function presetRange(
+  preset: Exclude<PeriodPreset, 'custom'>,
+  today: string,
+): { from: string; to: string } {
+  return {
+    from: addDays(addMonthsClamped(today, -PRESET_MONTHS[preset]), 1),
+    to: addDays(today, -1),
+  }
+}
+
+/** Whole-percent change, or 'new' if there is a figure but no nonzero baseline. */
+export function deltaPercent(current: number | null, previous: number | null): number | 'new' | null {
+  if (current === null || previous === null) return null
+  if (previous === 0) return current > 0 ? 'new' : null
+  return Math.round(((current - previous) / previous) * 100)
+}
+
+export type DeltaTone = 'good' | 'bad' | 'neutral'
+
+/** Discipline metrics: up is bad, down is good. Leaves carry no judgement. */
+export function deltaTone(kind: 'discipline' | 'leave', delta: number): DeltaTone {
+  if (kind === 'leave' || delta === 0) return 'neutral'
+  return delta > 0 ? 'bad' : 'good'
+}
+
+export type StatusTone = CompanyStatsStatus | 'small'
+
+export function rankingBadge({ small_sample, tier }: Pick<CompanyStatsEmployee, 'small_sample' | 'tier'>) {
+  const tone: StatusTone = small_sample ? 'small' : tier === 'needs_intervention' ? 'bad' : tier === 'above_average' ? 'warn' : 'normal'
+  const labelKey = small_sample ? 'companyStats.status.smallSample' : tier === null ? null : `companyStats.tier.${tier}` as const
+  return { tone, labelKey }
+}
+
+/** Sentinel tokens per status (contract legend). `small` = neutral, never coloured. */
+export const STATUS_TOKENS: Record<StatusTone, { fg: string; soft: string; bar: string }> = {
+  good: { fg: 'var(--success)', soft: 'var(--success-soft)', bar: 'var(--success)' },
+  normal: { fg: 'var(--text-muted)', soft: 'var(--surface-tinted)', bar: 'var(--text-muted)' },
+  warn: { fg: 'var(--warning)', soft: 'var(--warning-soft)', bar: 'var(--warning)' },
+  // Text uses the AA-safe variant (4.5:1 on the soft fill in both themes); fills stay on --accent.
+  bad: { fg: 'var(--destructive-text)', soft: 'var(--accent-soft)', bar: 'var(--accent)' },
+  small: { fg: 'var(--text-muted)', soft: 'var(--surface-tinted)', bar: 'var(--text-muted)' },
+}
+
+/** Metric colours, matching AttendanceStatusDot tones (absent, unpaired, late, leave). */
+export const METRIC_TOKENS: Record<TrendMetric, string> = {
+  absence: 'var(--accent)',
+  single_punch: 'var(--destructive)',
+  late: 'var(--warning)',
+  sick: 'var(--info)',
+}
+
+export function splitMinutes(total: number): { hours: number; minutes: number } {
+  return { hours: Math.floor(total / 60), minutes: total % 60 }
+}
+
+/**
+ * The rate that fills a whole rail: the highest absence rate among companies
+ * with a rated sample, so one tiny company cannot flatten every other rail.
+ * Falls back to all rows when none is rated.
+ */
+export function absenceRateScale(
+  companies: ReadonlyArray<{ small_sample: boolean; totals: { absence_rate?: number | null } }>,
+): number {
+  const rated = companies.filter((company) => !company.small_sample)
+  const rows = rated.length > 0 ? rated : companies
+  return Math.max(0, ...rows.map((company) => company.totals.absence_rate ?? 0))
+}
+
+/** Rail fill in percent (0–100). A positive rate on a zero scale saturates; no rate, no fill. */
+export function absenceRateFill(rate: number | null | undefined, scale: number): number {
+  if (!rate || rate <= 0) return 0
+  if (scale <= 0) return 100
+  return Math.min(100, (rate / scale) * 100)
+}

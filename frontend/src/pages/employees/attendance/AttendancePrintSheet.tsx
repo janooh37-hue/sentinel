@@ -24,14 +24,15 @@
  * register built from rules and weight needs no fill anyway.
  */
 
-import { useContext, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
+import { Fragment, useContext, useEffect, useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 
 import { usePrintFilename } from '@/hooks/usePrintFilename'
 import { AuthContext } from '@/lib/authContext'
+import { UNASSIGNED } from '@/lib/dutyUnits'
 import { pickEmployeeName } from '@/lib/employeeName'
 
-import type { AttendanceRow, RowState, StateInput } from './attendanceModel'
+import type { AttendanceFilter, AttendanceRow, RowState, StateInput } from './attendanceModel'
 import {
   groupByUnitAndPost,
   inAt,
@@ -46,6 +47,7 @@ import {
   rowState,
   siteTime,
   splitByShift,
+  writeAttendanceFilter,
 } from './attendanceModel'
 import { attendancePrintFilename } from './printFilename'
 import { attendanceStatusLabel } from './attendanceStatusLabel'
@@ -62,6 +64,10 @@ interface Props {
   shiftCode: string | null
   /** Active search term, declared for the same reason. */
   search: string
+  filter: AttendanceFilter
+  company: string | null
+  /** Whole loaded day, before either scope or attendance filters. */
+  totalRows: number
   graceMinutes?: number
 }
 
@@ -198,6 +204,9 @@ export function AttendancePrintSheet({
   operationalDate,
   shiftCode,
   search,
+  filter,
+  company,
+  totalRows,
   graceMinutes,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -221,13 +230,62 @@ export function AttendancePrintSheet({
   // printout can be reproduced rather than argued about.
   const params = new URLSearchParams({ date: operationalDate })
   if (shiftCode) params.set('shift', shiftCode)
-  const printLink = `${window.location.origin}/employees/attendance?${params.toString()}`
+  if (company) params.set('company', company)
+  const printLink = `${window.location.origin}/employees/attendance?${writeAttendanceFilter(params, filter).toString()}`
 
   // A filtered register must never look like the whole day.
-  const filters: string[] = []
-  if (shiftCode) filters.push(t(`attendance.shift.${shiftCode}`, shiftCode))
-  if (search.trim()) filters.push(t('attendance.print.searchFilter', { term: search.trim() }))
-  const filterNote = filters.length > 0 ? t('attendance.print.filtered', { filter: filters.join(' · ') }) : null
+  const tiers: string[] = []
+  if (filter.who) tiers.push(t('attendance.print.whoFilter', { who: t(`attendance.onSiteNow.${filter.who}`) }))
+  if (filter.states.length > 0) {
+    tiers.push(t('attendance.print.statesFilter', {
+      states: filter.states.map((state) => attendanceStatusLabel(t, state)).join(i18n.language.startsWith('ar') ? '، ' : ', '),
+    }))
+  }
+  if (filter.corrected) tiers.push(t('attendance.state.corrected'))
+  const searchTerm = search.trim()
+  const partialScope = company || shiftCode || searchTerm || rows.length < totalRows
+  const clauses: React.ReactNode[] = [
+    tiers.length > 0
+      ? t('attendance.print.filtered', { filter: tiers.join(' · ') })
+      : t(partialScope ? 'attendance.print.filteredLabel' : 'attendance.print.allRows'),
+    <Trans
+      key="company"
+      i18nKey="attendance.print.companyFilter"
+      values={{ company: company === UNASSIGNED ? t('dutyLocations.unassigned') : company ?? t('leaves.report.allCompanies') }}
+      components={[<bdi dir="auto" key="company" />]}
+    />,
+  ]
+  if (shiftCode) clauses.push(t(`attendance.shift.${shiftCode}`, shiftCode))
+  if (searchTerm) {
+    clauses.push(
+      <Trans
+        i18nKey="attendance.print.searchDeclaration"
+        values={{ term: searchTerm }}
+        components={[<bdi dir="auto" key="search" />]}
+      />,
+    )
+  }
+  const filterNote = (
+    <>
+      {clauses.map((part, index) => <Fragment key={index}>{index > 0 && ' · '}{part}</Fragment>)}
+      {' · '}
+      <Trans
+        i18nKey="attendance.print.rowsShown"
+        count={totalRows}
+        values={{ shown: rows.length, total: totalRows }}
+        components={[
+          <bdi dir="ltr" key="shown" className="font-mono tabular-nums" />,
+          <bdi dir="ltr" key="total" className="font-mono tabular-nums" />,
+        ]}
+      />
+      {' · '}
+      <Trans
+        i18nKey="attendance.print.asOf"
+        values={{ time: siteTime(now.toISOString()) }}
+        components={[<bdi dir="ltr" key="as-of" className="font-mono tabular-nums" />]}
+      />
+    </>
+  )
 
   const foot = (tail: string): React.JSX.Element => (
     <Foot printLink={printLink} printedAt={printedAt} operator={operator} tail={tail} />
@@ -308,42 +366,38 @@ function Masthead({
   facts,
 }: {
   subtitle: string
-  filterNote: string | null
+  filterNote: React.ReactNode
   facts: ReadonlyArray<readonly [string, string]>
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   return (
-    <div className="flex items-center gap-2.5 border-b-[1.5px] border-black pb-1.5">
-      {/* The crest is bilingual by construction (Arabic ring above, English
-          below), so one asset serves both directions. Decorative: the title
-          beside it already names the document. */}
-      <img src="/brand/gssg-logo.png" alt="" className="h-[15mm] w-[15mm] shrink-0 object-contain" />
-      <div className="min-w-0 flex-1">
-        <h2 className="text-[13pt] font-extrabold tracking-[-0.01em]">
-          {t('attendance.print.title')}{' '}
-          {/* The peer language, isolated: an Arabic run butted against a Latin
-              one is reordered by the bidi algorithm without it. */}
-          <span dir={isAr ? 'ltr' : 'rtl'} className="isolate-bidi text-[0.82em] font-semibold">
-            {t('attendance.print.titlePeer')}
-          </span>
-        </h2>
-        <p className="mt-px text-[8pt] text-muted-foreground">
-          {subtitle}
-          {filterNote && <> · <b className="font-semibold text-accent">{filterNote}</b></>}
-        </p>
+    <>
+      <div className="flex items-center gap-2.5 border-b-[1.5px] border-black pb-1.5">
+        {/* The crest is bilingual by construction; the title names the document. */}
+        <img src="/brand/gssg-logo.png" alt="" className="h-[15mm] w-[15mm] shrink-0 object-contain" />
+        <div className="min-w-0 flex-1">
+          <h2 className="text-[13pt] font-extrabold tracking-[-0.01em]">
+            {t('attendance.print.title')}{' '}
+            <span dir={isAr ? 'ltr' : 'rtl'} className="isolate-bidi text-[0.82em] font-semibold">
+              {t('attendance.print.titlePeer')}
+            </span>
+          </h2>
+          <p className="mt-px text-[8pt] text-muted-foreground">{subtitle}</p>
+        </div>
+        <dl className="flex shrink-0 gap-3 text-end">
+          {facts.map(([label, value]) => (
+            <div key={label} className="min-w-[15mm]">
+              <dt className="text-[6.4pt] uppercase tracking-[.1em] text-muted-foreground ltr:uppercase">
+                {label}
+              </dt>
+              <dd className="font-mono text-[11pt] font-extrabold tabular-nums"><bdi dir="ltr">{value}</bdi></dd>
+            </div>
+          ))}
+        </dl>
       </div>
-      <dl className="flex shrink-0 gap-3 text-end">
-        {facts.map(([label, value]) => (
-          <div key={label} className="min-w-[15mm]">
-            <dt className="text-[6.4pt] uppercase tracking-[.1em] text-muted-foreground ltr:uppercase">
-              {label}
-            </dt>
-            <dd className="font-mono text-[11pt] font-extrabold tabular-nums">{value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
+      <p data-testid="attendance-print-declaration" className="mb-2 mt-1.5 text-[8pt] leading-relaxed">{filterNote}</p>
+    </>
   )
 }
 
@@ -592,7 +646,7 @@ function Roster({
   list: readonly Section[]
   input: StateInput
   operationalDate: string
-  filterNote: string | null
+  filterNote: React.ReactNode
   printLink: string
   printedAt: string
   operator: string | null
@@ -836,7 +890,7 @@ function ShiftSheet({
   total: number
   input: StateInput
   operationalDate: string
-  filterNote: string | null
+  filterNote: React.ReactNode
   foot: React.JSX.Element
 }): React.JSX.Element {
   const { t } = useTranslation()

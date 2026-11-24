@@ -38,6 +38,7 @@ import {
   loadAttendancePrintPage,
   loadBookRecordPage,
   loadBooksPage,
+  loadCompanyStatsPage,
   loadDashboardPage,
   loadDutyLocationsPage,
   loadEmployeeDetailPage,
@@ -120,6 +121,7 @@ const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
 const AttendancePage = lazy(loadAttendancePage)
+const CompanyStatsPage = lazy(loadCompanyStatsPage)
 const AbsencesPage = lazy(() =>
   import('@/pages/absences/AbsencesPage').then((m) => ({ default: m.AbsencesPage })),
 )
@@ -341,6 +343,16 @@ function Shell(): React.JSX.Element {
                   <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[0]}>
                     <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[1]}>
                       <AttendancePage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/employees/company-stats"
+                element={
+                  <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[0]}>
+                    <RequireCapability cap={ATTENDANCE_ROSTER_CAPS[1]}>
+                      <CompanyStatsPage />
                     </RequireCapability>
                   </RequireCapability>
                 }

@@ -692,7 +692,8 @@
       "attendance": "Attendance",
       "orgTree": "Organization",
       "dutyLocations": "Duty Locations",
-      "timesheet": "Time Sheet"
+      "timesheet": "Time Sheet",
+      "companyStats": "Company statistics"
     },
     "orgTree": {
       "title": "ORG-tree",
@@ -7260,6 +7261,212 @@
     "openRecord": "Open record",
     "openLookup": "Add an employee on the Employees page"
   },
+  "companyStats": {
+    "title": "Company statistics",
+    "header": {
+      "range": "From <fromDate>{{from}}</fromDate> to <toDate>{{to}}</toDate>",
+      "clampedRange": "From <fromDate>{{from}}</fromDate> until <toDate>{{to}}</toDate>",
+      "closedOnly": "Closed days only",
+      "pendingDuties": "{{duties}} pending judgment"
+    },
+    "period": {
+      "1m": "1 month",
+      "3m": "3 months",
+      "6m": "6 months",
+      "1y": "1 year",
+      "custom": "Custom range"
+    },
+    "filters": {
+      "period": "Period",
+      "company": "Company",
+      "all": "All companies",
+      "from": "From",
+      "to": "To",
+      "closedThrough": "Only closed days are reported (through {{date}}).",
+      "missingDates": "Enter both dates.",
+      "reversedDates": "Choose a start date on or before the end date and within the closed days.",
+      "longRange": "Choose a period of 366 days or fewer."
+    },
+    "unit": {
+      "label": "Count by",
+      "days": "Days",
+      "count": "Occurrences",
+      "byDays": "By days",
+      "byCount": "By occurrences",
+      "minutesOnly": "{{minutes}}m",
+      "figure": {
+        "day_one": "day",
+        "day_other": "days",
+        "episode_one": "episode",
+        "episode_other": "episodes",
+        "occurrence_one": "time",
+        "occurrence_other": "times",
+        "permit_one": "permit",
+        "permit_other": "permits"
+      },
+      "quantity": {
+        "day_one": "{{n}} day",
+        "day_other": "{{n}} days",
+        "person_one": "{{n}} person",
+        "person_other": "{{n}} people",
+        "episode_one": "{{n}} episode",
+        "episode_other": "{{n}} episodes",
+        "occurrence_one": "{{n}} time",
+        "occurrence_other": "{{n}} times",
+        "record_one": "{{n}} record",
+        "record_other": "{{n}} records",
+        "permit_one": "{{n}} permit",
+        "permit_other": "{{n}} permits",
+        "duty_one": "{{n}} duty",
+        "duty_other": "{{n}} duties"
+      }
+    },
+    "summary": {
+      "title": "Period summary",
+      "previousPeriod": "Previous period:",
+      "discipline": "Discipline",
+      "disciplineHelp": "Unexcused attendance exceptions",
+      "leaves": "Leave and excused absences",
+      "unpairedHelp": "Duties left unpaired",
+      "lateDuration": "Time past grace",
+      "lateHelp": "{{time}} past grace"
+    },
+    "leaves": {
+      "annual": "Annual leave",
+      "administrative": "Administrative leave",
+      "sick": "Sick leave",
+      "duty": "Official mission",
+      "national_service": "National Service",
+      "exit_permits": "Exit permits",
+      "exitPermitDuration": "Exit permit hours",
+      "permitHours": "{{duration}} requested (from {{n}} with hours)",
+      "other": "Other leave (compassionate, emergency, Hajj)"
+    },
+    "companies": {
+      "title": "Companies",
+      "select": "Select a company to filter the report",
+      "showAll": "Show all companies",
+      "shiftRoster": "Shift roster",
+      "officeRoster": "Office schedule",
+      "rate": "Absence rate",
+      "noDuties": "No due duties",
+      "empty": "No companies had scheduled duties in this period."
+    },
+    "company": {
+      "unassigned": "Unassigned"
+    },
+    "metric": {
+      "absence": "Absence",
+      "single_punch": "Single punch",
+      "late": "Late",
+      "sick": "Sick leave"
+    },
+    "status": {
+      "good": "Better than average",
+      "normal": "Within average",
+      "warn": "Above average",
+      "bad": "Needs intervention",
+      "smallSample": "Small sample",
+      "unknown": "No comparison"
+    },
+    "delta": {
+      "new": "New",
+      "noChange": "No change",
+      "up": "Up <amount>{{change}}</amount> from the previous period",
+      "down": "Down <amount>{{change}}</amount> from the previous period"
+    },
+    "coverage": {
+      "notEnough": "Not enough earlier data"
+    },
+    "export": {
+      "label": "Export report",
+      "pdf": "PDF",
+      "excel": "Excel",
+      "downloading": "Downloading company statistics…",
+      "downloaded": "Company statistics downloaded"
+    },
+    "print": {
+      "metric": "Metric",
+      "current": "Current period",
+      "previous": "Previous period",
+      "change": "Change",
+      "returnDate": "Return date",
+      "daysRemaining": "Days remaining"
+    },
+    "states": {
+      "loading": "Loading company statistics…",
+      "error": "Could not load company statistics.",
+      "retry": "Retry",
+      "empty": "No attendance or leave records in this period."
+    },
+    "trend": {
+      "title": "Trend over time",
+      "metric": "Trend metric",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "week": "Week <number>{{number}}</number>",
+      "episodes": "Episodes",
+      "average": "Average",
+      "atOrAbove": "At or above average",
+      "below": "Below average",
+      "fullWeeks": "Average of full weeks",
+      "fullMonths": "Average of full months",
+      "noFullWeeks": "No full weeks to average",
+      "noFullMonths": "No full months to average",
+      "partial": "Partial",
+      "partialWeek": "Partial week",
+      "partialMonth": "Partial month",
+      "empty": "No values for this metric in the selected period.",
+      "bucketValue": "{{metric}} · {{range}}: {{value}}",
+      "bucketRange": "From {{from}} to {{to}}",
+      "openAttendance": "View attendance for {{date}}"
+    },
+    "nationalService": {
+      "enrolled": "Currently enrolled: <number>{{number}}</number>",
+      "remaining": "<days>{{days}}</days> remaining",
+      "returns": "Returns <date>{{date}}</date>",
+      "progress": "Service progress for {{name}}",
+      "empty": "No one in this scope is currently enrolled.",
+      "absenceDays": "National Service absence days in the period"
+    },
+    "comparison": {
+      "title": "Detailed comparison",
+      "relative": "Compared with the average per person across companies",
+      "leavesGroup": "Leave and excused absences\u00a0· not rated",
+      "disciplineGroup": "Discipline\u00a0· relative to average",
+      "less": "<amount>{{amount}}</amount> below",
+      "more": "<amount>{{amount}}</amount> above",
+      "atAverage": "At the average",
+      "noComparison": "No comparison",
+      "due_one": "<number>{{number}}</number> due duty",
+      "due_other": "<number>{{number}}</number> due duties",
+      "total": "Total",
+      "scrollHint": "Scroll horizontally to see all columns."
+    },
+    "ranking": {
+      "title": "Most frequent exceptions",
+      "scope": "Company: <company/>",
+      "sort": "Sort by",
+      "score": "Score",
+      "absenceDays": "Absence (days)",
+      "sickDays": "Sick days",
+      "employee": "Employee",
+      "leaves": "Leave",
+      "allLeaveKinds": "All leave kinds",
+      "episodes": "Episodes",
+      "summary_one": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employee\u00a0· Average score: <number>{{average}}</number>",
+      "summary_other": "Showing <number>{{shown}}</number> of <number>{{total}}</number> employees\u00a0· Average score: <number>{{average}}</number>",
+      "empty": "No employees had scheduled duties in this period.",
+      "transferFrom": "Transferred from <company/> on <date/>",
+      "transferTo": "Transferred to <company/> on <date/>",
+      "formula": "Score = absence days × 3 + single punches × 2 + late duties",
+      "method": "Absence rate = missed duties ÷ due duties (scheduled minus excused). Absence episodes group consecutive missed duties."
+    },
+    "tier": {
+      "needs_intervention": "Needs intervention",
+      "above_average": "Above average"
+    }
+  },
   "attendance": {
     "title": "Attendance",
     "titleAr": "الحضور",
@@ -7296,6 +7503,24 @@
       "title": "Status legend",
       "hint": "Halo = on site now · notch = corrected",
       "details": "All approved excusing leave is blue and names its type. National Service is purple. Arriving inside the grace is not an exception."
+    },
+    "results": {
+      "label": "Filter results",
+      "people_one": "<0>{{count}}</0> person",
+      "people_other": "<0>{{count}}</0> people",
+      "rows_one": "<0>{{count}}</0> row shown",
+      "rows_other": "<0>{{count}}</0> rows shown",
+      "empty": "No rows match these filters",
+      "clearSearch": "Clear search"
+    },
+    "filter": {
+      "clear": "Clear filters",
+      "rowStatus": "Row status",
+      "button": "Filters",
+      "active": "Active row filters",
+      "remove": "Remove {{label}}",
+      "close": "Close filters",
+      "showResults": "Show results"
     },
     "quickCorrection": {
       "title": "Quick correction",
@@ -7384,6 +7609,11 @@
       "asOf": "As of <0>{{time}}</0>",
       "people_one": "<0>{{count}}</0> person",
       "people_other": "<0>{{count}}</0> people",
+      "who": "People",
+      "splitAbsent": "Absent",
+      "splitAwaited": "Awaited",
+      "residual": "Not placed yet",
+      "residualHint": "Shift not started, or no Out recorded",
       "onSite": "On site",
       "left": "Left",
       "notArrived": "Not arrived",
@@ -7399,6 +7629,8 @@
       "today": "Today",
       "previousDay": "Previous day",
       "nextDay": "Next day",
+      "chooseDay": "Choose day",
+      "company": "Company",
       "search": "Name, G-number, or post…",
       "print": "Print",
       "export": "Export",
@@ -7427,12 +7659,20 @@
       "openEmployee": "Open employee file · {{name}} · {{employeeId}}"
     },
     "print": {
+      "whoFilter": "People: {{who}}",
+      "statesFilter": "Row status: {{states}}",
+      "companyFilter": "Company: <0>{{company}}</0>",
+      "searchDeclaration": "search \"<0>{{term}}</0>\"",
+      "rowsShown_one": "<0>{{shown}}</0> of <1>{{total}}</1> row",
+      "rowsShown_other": "<0>{{shown}}</0> of <1>{{total}}</1> rows",
+      "asOf": "as of <0>{{time}}</0>",
+      "allRows": "All rows",
       "title": "Daily Duty Register",
       "titlePeer": "سجل الحضور اليومي",
       "subtitleSheet": "{{date}} · duty register by shift, unit and post",
       "subtitleShift": "{{date}} · one sheet per shift · sheet {{index}} of {{total}}",
-      "filtered": "filtered: {{filter}}",
-      "searchFilter": "search \"{{term}}\"",
+      "filteredLabel": "Filtered",
+      "filtered": "Filtered: {{filter}}",
       "date": "Date",
       "shifts": "Shifts",
       "assigned": "Assigned",
@@ -7506,6 +7746,9 @@
     },
     "attention": {
       "title": "Needs a decision",
+      "anchor": "Needs a decision · <0>{{count}}</0>",
+      "filterHint": "Not narrowed by filters",
+      "scope": "All companies · all shifts · unresolved attendance",
       "none": "Nothing needs a decision today.",
       "reviewAll": "Review all",
       "openFile": "Open attendance file"

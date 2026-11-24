@@ -25,10 +25,8 @@ export const SEGMENT_BUTTON =
 export const SEGMENT_ON = 'bg-primary-soft font-semibold text-primary'
 export const SEGMENT_OFF = 'font-medium text-muted-foreground hover:text-foreground'
 
-/** Form-field label and native select, as in the fleet fines report's filter bar. */
+/** Form-field label, as in the fleet fines report's filter bar. */
 export const FIELD_LABEL = 'mb-1.5 block text-[0.72em] font-medium text-muted-foreground'
-export const NATIVE_SELECT =
-  'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background'
 
 export function toggleItem<T>(list: T[], item: T): T[] {
   return list.includes(item) ? list.filter((x) => x !== item) : [...list, item]

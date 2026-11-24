@@ -33878,6 +33878,205 @@
         }
       }
     },
+    "/api/v1/workforce/attendance/company-stats": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Get Company Attendance Stats",
+        "description": "Compare scoped attendance and leave over closed Dubai calendar days.",
+        "operationId": "get_company_attendance_stats_api_v1_workforce_attendance_company_stats_get",
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "duty_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duty Unit"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyStatsRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workforce/attendance/company-stats/export": {
+      "get": {
+        "tags": [
+          "workforce"
+        ],
+        "summary": "Export Company Attendance Stats",
+        "description": "Download the same scoped report with the complete score ranking.",
+        "operationId": "export_company_attendance_stats_api_v1_workforce_attendance_company_stats_export_get",
+        "parameters": [
+          {
+            "name": "from_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From Date"
+            }
+          },
+          {
+            "name": "to_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To Date"
+            }
+          },
+          {
+            "name": "duty_unit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Duty Unit"
+            }
+          },
+          {
+            "name": "language",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "ar",
+                "en"
+              ],
+              "type": "string",
+              "default": "ar",
+              "title": "Language"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/attendance/punches": {
       "get": {
         "tags": [
@@ -44413,6 +44612,150 @@
           "message"
         ],
         "title": "ClientError"
+      },
+      "CompanyStatsRead": {
+        "properties": {
+          "period": {
+            "$ref": "#/components/schemas/StatsPeriod"
+          },
+          "previous_period": {
+            "$ref": "#/components/schemas/StatsPeriod"
+          },
+          "closed_through": {
+            "type": "string",
+            "format": "date",
+            "title": "Closed Through"
+          },
+          "coverage_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage From"
+          },
+          "previous_comparable": {
+            "type": "boolean",
+            "title": "Previous Comparable"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "month",
+              "week"
+            ],
+            "title": "Granularity"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/StatsSummary"
+          },
+          "companies": {
+            "items": {
+              "$ref": "#/components/schemas/CompanyStatsRow"
+            },
+            "type": "array",
+            "title": "Companies"
+          },
+          "overall": {
+            "$ref": "#/components/schemas/StatsTotals"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/StatsBucket"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "ranking": {
+            "$ref": "#/components/schemas/StatsRanking"
+          },
+          "national_service": {
+            "$ref": "#/components/schemas/StatsNationalService"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "previous_period",
+          "closed_through",
+          "coverage_from",
+          "previous_comparable",
+          "duty_unit",
+          "granularity",
+          "summary",
+          "companies",
+          "overall",
+          "series",
+          "ranking",
+          "national_service"
+        ],
+        "title": "CompanyStatsRead",
+        "description": "Closed attendance periods, scoped company comparison, and live NS enrolment."
+      },
+      "CompanyStatsRow": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "shift_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Shift Codes"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/StatsTotals"
+          },
+          "ratio": {
+            "$ref": "#/components/schemas/StatsCompanyRatio"
+          },
+          "small_sample": {
+            "type": "boolean",
+            "title": "Small Sample"
+          },
+          "status": {
+            "$ref": "#/components/schemas/StatsCompanyStatus"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "duty_unit",
+          "shift_codes",
+          "totals",
+          "ratio",
+          "small_sample",
+          "status"
+        ],
+        "title": "CompanyStatsRow"
       },
       "CompletePasswordSetupRequest": {
         "properties": {
@@ -61907,6 +62250,778 @@
           "printed_by_name"
         ],
         "title": "StatementPrintRead"
+      },
+      "StatsAbsence": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "episodes": {
+            "type": "integer",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "episodes"
+        ],
+        "title": "StatsAbsence"
+      },
+      "StatsBucket": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "absence_days": {
+            "type": "integer",
+            "title": "Absence Days"
+          },
+          "absence_episodes": {
+            "type": "integer",
+            "title": "Absence Episodes"
+          },
+          "single_punch": {
+            "type": "integer",
+            "title": "Single Punch"
+          },
+          "late_count": {
+            "type": "integer",
+            "title": "Late Count"
+          },
+          "late_minutes": {
+            "type": "integer",
+            "title": "Late Minutes"
+          },
+          "sick_days": {
+            "type": "integer",
+            "title": "Sick Days"
+          },
+          "sick_count": {
+            "type": "integer",
+            "title": "Sick Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "absence_days",
+          "absence_episodes",
+          "single_punch",
+          "late_count",
+          "late_minutes",
+          "sick_days",
+          "sick_count"
+        ],
+        "title": "StatsBucket"
+      },
+      "StatsCompanyRatio": {
+        "properties": {
+          "absence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence"
+          },
+          "single_punch": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Single Punch"
+          },
+          "late": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late"
+          }
+        },
+        "type": "object",
+        "required": [
+          "absence",
+          "single_punch",
+          "late"
+        ],
+        "title": "StatsCompanyRatio"
+      },
+      "StatsCompanyStatus": {
+        "properties": {
+          "absence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "normal",
+                  "warn",
+                  "bad"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence"
+          },
+          "single_punch": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "normal",
+                  "warn",
+                  "bad"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Single Punch"
+          },
+          "late": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "normal",
+                  "warn",
+                  "bad"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late"
+          },
+          "overall": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "good",
+                  "normal",
+                  "warn",
+                  "bad"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall"
+          }
+        },
+        "type": "object",
+        "required": [
+          "absence",
+          "single_punch",
+          "late",
+          "overall"
+        ],
+        "title": "StatsCompanyStatus"
+      },
+      "StatsEmployeeRow": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "position_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Ar"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "shift_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Code"
+          },
+          "absence_days": {
+            "type": "integer",
+            "title": "Absence Days"
+          },
+          "absence_episodes": {
+            "type": "integer",
+            "title": "Absence Episodes"
+          },
+          "single_punch": {
+            "type": "integer",
+            "title": "Single Punch"
+          },
+          "late_count": {
+            "type": "integer",
+            "title": "Late Count"
+          },
+          "late_minutes": {
+            "type": "integer",
+            "title": "Late Minutes"
+          },
+          "sick_days": {
+            "type": "integer",
+            "title": "Sick Days"
+          },
+          "leave_days": {
+            "type": "integer",
+            "title": "Leave Days"
+          },
+          "leave_count": {
+            "type": "integer",
+            "title": "Leave Count"
+          },
+          "score": {
+            "type": "integer",
+            "title": "Score"
+          },
+          "events": {
+            "type": "integer",
+            "title": "Events"
+          },
+          "small_sample": {
+            "type": "boolean",
+            "title": "Small Sample"
+          },
+          "tier": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "needs_intervention",
+                  "above_average"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tier"
+          },
+          "transfer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatsTransfer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "name_ar",
+          "position",
+          "position_ar",
+          "duty_unit",
+          "shift_code",
+          "absence_days",
+          "absence_episodes",
+          "single_punch",
+          "late_count",
+          "late_minutes",
+          "sick_days",
+          "leave_days",
+          "leave_count",
+          "score",
+          "events",
+          "small_sample",
+          "tier",
+          "transfer"
+        ],
+        "title": "StatsEmployeeRow"
+      },
+      "StatsEnrolledEmployee": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "return_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Return Date"
+          },
+          "days_remaining": {
+            "type": "integer",
+            "title": "Days Remaining"
+          },
+          "progress": {
+            "type": "number",
+            "title": "Progress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "name_en",
+          "name_ar",
+          "duty_unit",
+          "start_date",
+          "end_date",
+          "return_date",
+          "days_remaining",
+          "progress"
+        ],
+        "title": "StatsEnrolledEmployee"
+      },
+      "StatsExitPermits": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "with_hours": {
+            "type": "integer",
+            "title": "With Hours"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "hours",
+          "with_hours"
+        ],
+        "title": "StatsExitPermits"
+      },
+      "StatsLate": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "minutes": {
+            "type": "integer",
+            "title": "Minutes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "minutes"
+        ],
+        "title": "StatsLate"
+      },
+      "StatsLeaveKind": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "count"
+        ],
+        "title": "StatsLeaveKind"
+      },
+      "StatsLeaves": {
+        "properties": {
+          "annual": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "administrative": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "sick": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "duty": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "national_service": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "other": {
+            "$ref": "#/components/schemas/StatsLeaveKind"
+          },
+          "exit_permits": {
+            "$ref": "#/components/schemas/StatsExitPermits"
+          }
+        },
+        "type": "object",
+        "required": [
+          "annual",
+          "administrative",
+          "sick",
+          "duty",
+          "national_service",
+          "other",
+          "exit_permits"
+        ],
+        "title": "StatsLeaves"
+      },
+      "StatsNationalService": {
+        "properties": {
+          "enrolled": {
+            "items": {
+              "$ref": "#/components/schemas/StatsEnrolledEmployee"
+            },
+            "type": "array",
+            "title": "Enrolled"
+          },
+          "absence_days": {
+            "type": "integer",
+            "title": "Absence Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enrolled",
+          "absence_days"
+        ],
+        "title": "StatsNationalService"
+      },
+      "StatsPeriod": {
+        "properties": {
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "requested_to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Requested To Date"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "clamped": {
+            "type": "boolean",
+            "title": "Clamped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_date",
+          "to_date",
+          "requested_to_date",
+          "days",
+          "clamped"
+        ],
+        "title": "StatsPeriod"
+      },
+      "StatsRanking": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "average_score": {
+            "type": "number",
+            "title": "Average Score"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/StatsEmployeeRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "order": {
+            "$ref": "#/components/schemas/StatsRankingOrder"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "average_score",
+          "rows",
+          "order"
+        ],
+        "title": "StatsRanking"
+      },
+      "StatsRankingOrder": {
+        "properties": {
+          "score": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Score"
+          },
+          "absence": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Absence"
+          },
+          "late": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Late"
+          },
+          "single_punch": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Single Punch"
+          }
+        },
+        "type": "object",
+        "required": [
+          "score",
+          "absence",
+          "late",
+          "single_punch"
+        ],
+        "title": "StatsRankingOrder"
+      },
+      "StatsSummary": {
+        "properties": {
+          "current": {
+            "$ref": "#/components/schemas/StatsTotals"
+          },
+          "previous": {
+            "$ref": "#/components/schemas/StatsTotals"
+          }
+        },
+        "type": "object",
+        "required": [
+          "current",
+          "previous"
+        ],
+        "title": "StatsSummary"
+      },
+      "StatsTotals": {
+        "properties": {
+          "strength": {
+            "type": "integer",
+            "title": "Strength"
+          },
+          "duties_scheduled": {
+            "type": "integer",
+            "title": "Duties Scheduled"
+          },
+          "duties_excused": {
+            "type": "integer",
+            "title": "Duties Excused"
+          },
+          "duties_due": {
+            "type": "integer",
+            "title": "Duties Due"
+          },
+          "duties_pending": {
+            "type": "integer",
+            "title": "Duties Pending"
+          },
+          "absence": {
+            "$ref": "#/components/schemas/StatsAbsence"
+          },
+          "single_punch": {
+            "type": "integer",
+            "title": "Single Punch"
+          },
+          "late": {
+            "$ref": "#/components/schemas/StatsLate"
+          },
+          "absence_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absence Rate"
+          },
+          "leaves": {
+            "$ref": "#/components/schemas/StatsLeaves"
+          }
+        },
+        "type": "object",
+        "required": [
+          "strength",
+          "duties_scheduled",
+          "duties_excused",
+          "duties_due",
+          "duties_pending",
+          "absence",
+          "single_punch",
+          "late",
+          "absence_rate",
+          "leaves"
+        ],
+        "title": "StatsTotals"
+      },
+      "StatsTransfer": {
+        "properties": {
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "on_date": {
+            "type": "string",
+            "format": "date",
+            "title": "On Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_unit",
+          "to_unit",
+          "on_date"
+        ],
+        "title": "StatsTransfer"
       },
       "StoreBatchRead": {
         "properties": {

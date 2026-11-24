@@ -1,7 +1,9 @@
+import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { AttendanceException } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { cn } from '@/lib/utils'
 
 import { CorrectAttendanceButton } from './AttendanceCorrectionEntry'
 import { AttendanceStatusDot } from './AttendanceStatusDot'
@@ -26,6 +28,8 @@ interface Props {
   graceMinutes?: number
   onOpenEmployee: (employeeId: string) => void
   onReviewCase?: (caseId: number) => void
+  id?: string
+  labelledBy?: string
 }
 
 export function AttentionQueue({
@@ -36,8 +40,22 @@ export function AttentionQueue({
   graceMinutes,
   onOpenEmployee,
   onReviewCase,
+  id,
+  labelledBy,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const titleId = useId()
+  const [desktop, setDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 64rem)').matches)
+  useEffect(() => {
+    if (!labelledBy) return
+    // Match lg exactly: hidden IDREFs still name elements, so switch the
+    // accessible label with the layout rather than listing both headlines.
+    const media = window.matchMedia('(min-width: 64rem)')
+    const update = (): void => setDesktop(media.matches)
+    update()
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [labelledBy])
   const input = { now, graceMinutes }
   const registerQueue = orderByAttention(rows, input).filter((row) => needsDecision(rowState(row, input)))
   const reviewingExceptions = exceptionRows !== undefined
@@ -54,14 +72,23 @@ export function AttentionQueue({
       : null
 
   return (
-    <aside className="rounded-2xl border border-hairline bg-surface" data-testid="attendance-attention-queue">
-      <header className="flex items-center gap-2.5 border-b border-hairline px-4 py-3">
-        <h3 className="text-[0.82em] font-bold">{t('attendance.attention.title')}</h3>
-        {queue.length > 0 && (
-          <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[0.72em] font-bold text-accent">
-            {queue.length}
-          </span>
-        )}
+    <aside
+      id={id}
+      tabIndex={-1}
+      aria-labelledby={labelledBy && desktop ? labelledBy : titleId}
+      className="rounded-2xl border border-hairline bg-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      data-testid="attendance-attention-queue"
+    >
+      <header className="border-b border-hairline px-4 py-3">
+        <div className={cn('flex items-center gap-2.5', labelledBy && 'lg:hidden')}>
+          <h3 id={titleId} className="text-[0.82em] font-bold">{t('attendance.attention.title')}</h3>
+          {queue.length > 0 && (
+            <span className="rounded-full bg-accent-soft px-2 py-0.5 font-mono text-[0.72em] font-bold text-accent">
+              <bdi dir="ltr">{queue.length}</bdi>
+            </span>
+          )}
+        </div>
+        {labelledBy && <p className="mt-1 text-xs leading-relaxed text-muted-foreground lg:mt-0">{t('attendance.attention.scope')}</p>}
       </header>
 
       {queue.length === 0 ? (
