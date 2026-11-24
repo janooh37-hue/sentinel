@@ -204,7 +204,7 @@ def test_0099_separates_inmate_violations_and_registers_classifications(tmp_path
                 .all()
             )
 
-        command.upgrade(config, "head")
+        command.upgrade(config, "0099_inmate_violations_category")
 
         with engine.begin() as connection:
             categories = {
