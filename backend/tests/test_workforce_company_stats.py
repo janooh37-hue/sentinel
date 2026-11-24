@@ -798,6 +798,48 @@ def test_previous_totals_reader_uses_the_same_judgment_fields_as_the_register(
     assert actual == expected
 
 
+def test_a_correction_snapshot_replaces_lateness_like_the_case_detail(api_db: Session) -> None:
+    """A correction is a full snapshot: its null lateness wins in every read path."""
+    case = _seed_case(api_db)
+    evaluation = AttendanceEvaluation(
+        attendance_case_id=case.id,
+        revision=1,
+        presence_state="completed",
+        reason_code="SHIFT_COMPLETED",
+        late_minutes=45,
+        algorithm_version="stats-test",
+        input_fingerprint="late",
+    )
+    api_db.add(evaluation)
+    api_db.flush()
+    correction = AttendanceAdjustment(
+        attendance_case_id=case.id,
+        base_evaluation_id=evaluation.id,
+        replacement_presence_state="completed",
+        replacement_late_minutes=None,
+        reason="State-only correction",
+        created_by_user_id=_user(api_db, email="snapshot@test.ae").id,
+    )
+    api_db.add(correction)
+    api_db.commit()
+
+    automatic = workforce_read_service._effective_evaluation_values(evaluation, None)
+    detail = workforce_read_service._effective_evaluation_values(evaluation, correction)
+    assert automatic is not None and automatic["late_minutes"] == 45
+    assert detail is not None and detail["late_minutes"] is None
+    scope = organization_scope()
+    day = case.operational_date
+    rows = workforce_read_service.iter_effective_attendance_rows(
+        api_db, scope=scope, from_date=day, to_date=day, include_day_fields=True
+    )
+    totals = workforce_read_service.iter_effective_attendance_totals_rows(
+        api_db, scope=scope, from_date=day, to_date=day
+    )
+    [(_, row, _)], [(_, total)] = list(rows), list(totals)
+    assert (row.presence_state, row.late_minutes) == ("completed", None)
+    assert total == row
+
+
 def test_company_status_starts_at_thirty_due_duties_not_thirty_scheduled(
     api_db: Session, admin_client: TestClient
 ) -> None:
