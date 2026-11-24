@@ -392,6 +392,9 @@ def test_scheduler_registers_vehicle_reminders_at_0910_dubai(
         def start(self) -> None:
             self.running = True
 
+        def add_listener(self, *_args: Any, **_kwargs: Any) -> None:
+            pass
+
         def add_job(
             self,
             func: Callable[..., Any],
