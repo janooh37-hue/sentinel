@@ -88,6 +88,7 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
   loadApprovalsPage: () => Promise.resolve({ default: () => <div>approvals-page</div> }),
   loadAttendancePage: () => Promise.resolve({ default: () => <div>attendance-page</div> }),
+  loadCompanyStatsPage: () => Promise.resolve({ default: () => <div>company-stats-page</div> }),
   loadDebugConsolePage: () => Promise.resolve({ default: () => <div>debug-console-page</div> }),
   loadBookRecordPage: () => Promise.resolve({ default: () => <div>book-record-page</div> }),
   loadBooksPage: () => Promise.resolve({ default: () => <div>books-page</div> }),
@@ -139,6 +140,7 @@ import { useNotificationStream } from '@/hooks/useNotificationStream'
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
   ['/employees/attendance', ['workforce.people.view', 'workforce.attendance.review'], 'attendance-page'],
+  ['/employees/company-stats', ['workforce.people.view', 'workforce.attendance.review'], 'company-stats-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
   ['/employees/G100/edit', ['employees.edit'], 'employee-edit-page'],
   ['/employees/G100/edit', ['employees.change_id'], 'employee-edit-page'],
@@ -232,6 +234,18 @@ describe('App route capability gates', () => {
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
       expect(screen.queryByText('attendance-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['workforce.people.view', 'workforce.attendance.review'])(
+    'denies /employees/company-stats when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/employees/company-stats')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('company-stats-page')).not.toBeInTheDocument()
     },
   )
 

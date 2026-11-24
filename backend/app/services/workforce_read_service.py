@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import json
 from bisect import bisect_left, bisect_right
-from dataclasses import dataclass
+from collections import defaultdict
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from math import floor
-from typing import Any
+from typing import Any, NamedTuple, cast
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, null, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core import leave_lifecycle
+from app.core.attendance_verdict import JudgedRow
 from app.db.models import AuditLog, Employee, Leave
 from app.db.workforce_models import (
     AttendanceAdjustment,
@@ -54,6 +57,32 @@ from app.services.workforce_access_service import (
 )
 from app.services.workforce_etag import etag_for, row_etag
 from app.services.workforce_scope_service import WorkforceScope, scope_allows
+
+
+class _RegisterCase(NamedTuple):
+    """Only the columns the effective register projection reads."""
+
+    id: int
+    employee_id: str
+    operational_date: date
+    scheduled_start_at: datetime
+    scheduled_end_at: datetime
+    shift_occurrence_id: int | None
+    shift_code_snapshot: str
+    department_snapshot: str | None
+    duty_unit_snapshot: str | None
+    duty_post_snapshot: str | None
+    evaluation_id: int | None
+    presence_state: str | None
+    reason_code: str | None
+    crew_code_snapshot: str | None = None
+    first_in_at: datetime | None = None
+    final_out_at: datetime | None = None
+    primary_leave_type: str | None = None
+
+
+type EffectiveAttendanceRow = tuple[_RegisterCase, JudgedRow, dict[str, Any] | None]
+type _CaseWindow = AttendanceCase | _RegisterCase
 
 
 def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, AttendanceEvaluation]:
@@ -106,7 +135,7 @@ def _case_leave_fields(
     return result
 
 
-def _case_allowed(case: AttendanceCase, scope: WorkforceScope) -> bool:
+def _case_allowed(case: _CaseWindow, scope: WorkforceScope) -> bool:
     return scope_allows(
         scope,
         employee_id=case.employee_id,
@@ -120,7 +149,7 @@ def _employee_row(db: Session, employee_id: str) -> Employee | None:
     return db.get(Employee, employee_id)
 
 
-def _employees_for_cases(db: Session, cases: list[AttendanceCase]) -> dict[str, Employee]:
+def _employees_for_cases(db: Session, cases: Sequence[_CaseWindow]) -> dict[str, Employee]:
     employee_ids = {case.employee_id for case in cases}
     if not employee_ids:
         return {}
@@ -130,7 +159,7 @@ def _employees_for_cases(db: Session, cases: list[AttendanceCase]) -> dict[str, 
     }
 
 
-def _person_fields(case: AttendanceCase, employees: dict[str, Employee]) -> dict[str, Any]:
+def _person_fields(case: _CaseWindow, employees: dict[str, Employee]) -> dict[str, Any]:
     employee = employees.get(case.employee_id)
     return {
         "employee_id": case.employee_id,
@@ -232,6 +261,14 @@ def list_exceptions(
     return sorted(result, key=severity)
 
 
+def _verified_people_query(employee_ids: set[str]) -> Select[AttendanceProviderPerson]:
+    return select(AttendanceProviderPerson).where(
+        AttendanceProviderPerson.employee_id.in_(employee_ids),
+        AttendanceProviderPerson.mapping_state == "verified",
+        AttendanceProviderPerson.active.is_(True),
+    )
+
+
 def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, AttendanceProviderPerson]:
     """The active verified provider person per employee.
 
@@ -241,73 +278,50 @@ def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, Attendanc
     """
     if not employee_ids:
         return {}
-    rows = db.scalars(
-        select(AttendanceProviderPerson).where(
-            AttendanceProviderPerson.employee_id.in_(employee_ids),
-            AttendanceProviderPerson.mapping_state == "verified",
-            AttendanceProviderPerson.active.is_(True),
-        )
-    )
+    rows = db.scalars(_verified_people_query(employee_ids))
     return {row.employee_id: row for row in rows if row.employee_id is not None}
 
 
-def _policies_for_cases(
-    db: Session, cases: list[AttendanceCase]
-) -> dict[int, WorkAttendancePolicy | None]:
-    if not cases:
-        return {}
-
-    occurrence_ids = {
+def _occurrence_shift_ids(db: Session, cases: Sequence[_CaseWindow]) -> dict[int, int]:
+    occurrences = {
         case.shift_occurrence_id for case in cases if case.shift_occurrence_id is not None
     }
-    occurrence_shift_ids: dict[int, int] = (
-        {
-            occurrence_id: shift_definition_id
-            for occurrence_id, shift_definition_id in db.execute(
-                select(
-                    WorkShiftOccurrence.id,
-                    WorkShiftOccurrence.shift_definition_id,
-                ).where(WorkShiftOccurrence.id.in_(occurrence_ids))
+    if not occurrences:
+        return {}
+    return dict(
+        db.execute(
+            select(WorkShiftOccurrence.id, WorkShiftOccurrence.shift_definition_id).where(
+                WorkShiftOccurrence.id.in_(occurrences)
             )
-        }
-        if occurrence_ids
-        else {}
-    )
-    case_shift_ids = {
-        case.id: (
-            occurrence_shift_ids.get(case.shift_occurrence_id)
-            if case.shift_occurrence_id is not None
-            else None
         )
-        for case in cases
-    }
-    earliest_date = min(case.operational_date for case in cases)
-    latest_date = max(case.operational_date for case in cases)
-    shift_ids = {
-        shift_definition_id
-        for shift_definition_id in case_shift_ids.values()
-        if shift_definition_id is not None
-    }
-    query = select(WorkAttendancePolicy).where(
-        WorkAttendancePolicy.approved_at.is_not(None),
-        WorkAttendancePolicy.effective_from <= latest_date,
-        or_(
-            WorkAttendancePolicy.effective_to.is_(None),
-            WorkAttendancePolicy.effective_to > earliest_date,
-        ),
+        .tuples()
+        .all()
     )
+
+
+def _policy_candidates(
+    db: Session,
+    *,
+    earliest: date,
+    latest: date,
+    shift_ids: set[int],
+) -> list[WorkAttendancePolicy]:
+    shift_filter: ColumnElement[bool] = WorkAttendancePolicy.shift_definition_id.is_(None)
     if shift_ids:
-        query = query.where(
-            or_(
-                WorkAttendancePolicy.shift_definition_id.is_(None),
-                WorkAttendancePolicy.shift_definition_id.in_(shift_ids),
-            )
-        )
-    else:
-        query = query.where(WorkAttendancePolicy.shift_definition_id.is_(None))
-    policies = list(
+        shift_filter = or_(shift_filter, WorkAttendancePolicy.shift_definition_id.in_(shift_ids))
+    return list(
         db.scalars(
-            query.order_by(
+            select(WorkAttendancePolicy)
+            .where(
+                WorkAttendancePolicy.approved_at.is_not(None),
+                WorkAttendancePolicy.effective_from <= latest,
+                or_(
+                    WorkAttendancePolicy.effective_to.is_(None),
+                    WorkAttendancePolicy.effective_to > earliest,
+                ),
+                shift_filter,
+            )
+            .order_by(
                 WorkAttendancePolicy.shift_definition_id.is_not(None).desc(),
                 WorkAttendancePolicy.effective_from.desc(),
                 WorkAttendancePolicy.id.desc(),
@@ -315,27 +329,48 @@ def _policies_for_cases(
         )
     )
 
-    resolved: dict[int, WorkAttendancePolicy | None] = {}
-    for case in cases:
-        shift_definition_id = case_shift_ids[case.id]
-        resolved[case.id] = next(
-            (
-                policy
-                for policy in policies
-                if policy.effective_from <= case.operational_date
-                and (policy.effective_to is None or policy.effective_to > case.operational_date)
-                and (
-                    policy.shift_definition_id is None
-                    or policy.shift_definition_id == shift_definition_id
-                )
-            ),
-            None,
+
+def _policy_on(
+    policies: Sequence[WorkAttendancePolicy], day: date, shift_id: int | None
+) -> WorkAttendancePolicy | None:
+    return next(
+        (
+            policy
+            for policy in policies
+            if policy.effective_from <= day
+            and (policy.effective_to is None or day < policy.effective_to)
+            and (policy.shift_definition_id is None or policy.shift_definition_id == shift_id)
+        ),
+        None,
+    )
+
+
+def _policies_for_cases(
+    db: Session, cases: Sequence[_CaseWindow]
+) -> dict[int, WorkAttendancePolicy | None]:
+    if not cases:
+        return {}
+    shift_ids = _occurrence_shift_ids(db, cases)
+    policies = _policy_candidates(
+        db,
+        earliest=min(case.operational_date for case in cases),
+        latest=max(case.operational_date for case in cases),
+        shift_ids=set(shift_ids.values()),
+    )
+    return {
+        case.id: _policy_on(
+            policies,
+            case.operational_date,
+            shift_ids.get(case.shift_occurrence_id)
+            if case.shift_occurrence_id is not None
+            else None,
         )
-    return resolved
+        for case in cases
+    }
 
 
 def _profiles_for_cases(
-    db: Session, cases: list[AttendanceCase]
+    db: Session, cases: Sequence[_CaseWindow]
 ) -> dict[tuple[str, str], AttendancePunchProfile]:
     keys = {
         (case.employee_id, case.shift_code_snapshot) for case in cases if case.shift_code_snapshot
@@ -357,32 +392,36 @@ def _profiles_for_cases(
     }
 
 
-def _previous_case_ends(db: Session, cases: list[AttendanceCase]) -> dict[int, datetime | None]:
+def _previous_case_ends(db: Session, cases: Sequence[_CaseWindow]) -> dict[int, datetime]:
     if not cases:
         return {}
-    current_case = aliased(AttendanceCase)
-    previous_case = aliased(AttendanceCase)
-    return {
-        case_id: previous_end
-        for case_id, previous_end in db.execute(
-            select(current_case.id, func.max(previous_case.scheduled_end_at))
-            .select_from(current_case)
-            .outerjoin(
-                previous_case,
-                and_(
-                    previous_case.employee_id == current_case.employee_id,
-                    previous_case.id != current_case.id,
-                    previous_case.scheduled_end_at <= current_case.scheduled_start_at,
-                ),
-            )
-            .where(current_case.id.in_([case.id for case in cases]))
-            .group_by(current_case.id)
+    # An earlier end cannot constrain the evaluator's arrival floor. Read only
+    # ends that could matter, including adjacent duties outside the requested scope.
+    floor = min(case.scheduled_start_at for case in cases) - timedelta(
+        minutes=attendance_profile_service.MAX_WIDEN_MINUTES
+    )
+    ceiling = max(case.scheduled_start_at for case in cases)
+    ends_by_employee: dict[str, list[datetime]] = {}
+    for employee_id, end in db.connection().execute(
+        select(AttendanceCase.employee_id, AttendanceCase.scheduled_end_at)
+        .where(
+            AttendanceCase.employee_id.in_({case.employee_id for case in cases}),
+            AttendanceCase.scheduled_start_at < ceiling,
+            AttendanceCase.scheduled_end_at.between(floor, ceiling),
         )
-    }
+        .order_by(AttendanceCase.employee_id, AttendanceCase.scheduled_end_at)
+    ):
+        ends_by_employee.setdefault(employee_id, []).append(end)
+    result: dict[int, datetime] = {}
+    for case in cases:
+        ends = ends_by_employee.get(case.employee_id)
+        if ends and (index := bisect_right(ends, case.scheduled_start_at)) > 0:
+            result[case.id] = ends[index - 1]
+    return result
 
 
 def _punch_window(
-    case: AttendanceCase,
+    case: _CaseWindow,
     policy: WorkAttendancePolicy,
     *,
     profile: AttendancePunchProfile | None,
@@ -390,7 +429,8 @@ def _punch_window(
 ) -> tuple[datetime, datetime]:
     """The evaluator's evidence window using already-prefetched habit data."""
     return attendance_profile_service._evidence_window(
-        case=case,
+        # The evaluator only needs the two scheduled instants on this projection.
+        case=cast(AttendanceCase, case),
         policy=policy,
         profile=profile,
         previous_case_end=previous_case_end,
@@ -400,12 +440,12 @@ def _punch_window(
 def _punch_windows(
     db: Session,
     *,
-    cases: list[AttendanceCase],
+    cases: Sequence[_CaseWindow],
     people: dict[str, AttendanceProviderPerson],
     policies: dict[int, WorkAttendancePolicy | None],
     profiles: dict[tuple[str, str], AttendancePunchProfile] | None = None,
 ) -> dict[int, tuple[datetime, datetime]]:
-    eligible: list[tuple[AttendanceCase, WorkAttendancePolicy]] = []
+    eligible: list[tuple[_CaseWindow, WorkAttendancePolicy]] = []
     for case in cases:
         policy = policies.get(case.id)
         if people.get(case.employee_id) is not None and policy is not None:
@@ -490,19 +530,19 @@ def _punch_bounds(
     return (first_at, last_at, count)
 
 
-def _judgment_due_at(case: AttendanceCase, policy: WorkAttendancePolicy | None) -> datetime | None:
+def _judgment_due_at(case: _CaseWindow, policy: WorkAttendancePolicy | None) -> datetime | None:
     if policy is None:
         return None
     return case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
 
 
-def _absence_due_at(case: AttendanceCase, policy: WorkAttendancePolicy | None) -> datetime | None:
+def _absence_due_at(case: _CaseWindow, policy: WorkAttendancePolicy | None) -> datetime | None:
     if policy is None:
         return None
     return case.scheduled_start_at + timedelta(minutes=policy.absence_after_minutes)
 
 
-def _late_minutes(case: AttendanceCase, first_punch_at: datetime | None) -> int | None:
+def _late_minutes(case: _CaseWindow, first_punch_at: datetime | None) -> int | None:
     """Whole minutes between the scheduled start and the first punch.
 
     Grace is NOT applied here: the client needs the raw lateness so it can show
@@ -515,6 +555,529 @@ def _late_minutes(case: AttendanceCase, first_punch_at: datetime | None) -> int 
     return int(minutes) if minutes > 0 else 0
 
 
+def _sqlite_register_rows(db: Session, query: Select[*tuple[Any, ...]]) -> list[tuple[Any, ...]]:
+    """Read a bulk column projection as SQLite tuples without wrapping each row.
+
+    Keep SQLAlchemy's bound parameters and session transaction. The two callers
+    below decode the date/time text explicitly; neither reads ORM entities.
+    """
+    with db.connection().execute(query) as result:
+        cursor = result.cursor
+        assert cursor is not None
+        return cast(list[tuple[Any, ...]], cursor.fetchall())
+
+
+def _compact_register_cases(
+    db: Session, query: Select[*tuple[Any, ...]], *, grouped: bool
+) -> list[_RegisterCase]:
+    cases: list[_RegisterCase] = []
+    slots: dict[tuple[str, str, str], tuple[date, datetime, datetime]] = {}
+    by_slot: defaultdict[tuple[str, str, str], list[_RegisterCase]] | None = (
+        defaultdict(list) if grouped else None
+    )
+    for (
+        case_id,
+        employee,
+        day,
+        begins,
+        ends,
+        occurrence,
+        shift,
+        department,
+        unit,
+        post,
+        evaluation,
+        state,
+        reason,
+    ) in _sqlite_register_rows(db, query):
+        # Most people on a shift share the same exact captured times.
+        key = day, begins, ends
+        slot = slots.get(key)
+        if slot is None:
+            slot = slots[key] = (
+                date.fromisoformat(day),
+                datetime.fromisoformat(begins),
+                datetime.fromisoformat(ends),
+            )
+        case = _RegisterCase(
+            case_id,
+            employee,
+            *slot,
+            occurrence,
+            shift,
+            department,
+            unit,
+            post,
+            evaluation,
+            state,
+            reason,
+        )
+        if by_slot is not None:
+            by_slot[key].append(case)
+        else:
+            cases.append(case)
+    # Totals need chronological duties per employee, not a name/ID tie-break
+    # across the entire roster. Sort the shift slots, not every case in SQLite.
+    if by_slot is not None:
+        for key in sorted(by_slot):
+            cases.extend(by_slot[key])
+    return cases
+
+
+def _register_cases(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    shift_code: str | None,
+    duty_unit: str | None,
+    include_day_fields: bool,
+    totals_only: bool = False,
+    unassigned_only: bool = False,
+) -> list[_RegisterCase]:
+    unrestricted = (
+        scope.is_organization
+        and scope.requested_department is None
+        and scope.requested_duty_unit is None
+        and scope.requested_duty_post is None
+    )
+    # A totals-only request never displays this hierarchy. Keep the snapshots
+    # when they are needed for scope enforcement or the Unassigned filter.
+    omit_hierarchy = totals_only and unrestricted
+    revision = aliased(AttendanceEvaluation)
+    latest_id = (
+        select(revision.id)
+        .where(revision.attendance_case_id == AttendanceCase.id)
+        .order_by(revision.revision.desc())
+        .limit(1)
+        .correlate(AttendanceCase)
+        .scalar_subquery()
+    )
+    query = (
+        select(
+            AttendanceCase.id,
+            AttendanceCase.employee_id,
+            AttendanceCase.operational_date,
+            AttendanceCase.scheduled_start_at,
+            AttendanceCase.scheduled_end_at,
+            AttendanceCase.shift_occurrence_id,
+            AttendanceCase.shift_code_snapshot,
+            null() if omit_hierarchy else AttendanceCase.department_snapshot,
+            null() if omit_hierarchy and not unassigned_only else AttendanceCase.duty_unit_snapshot,
+            null() if omit_hierarchy else AttendanceCase.duty_post_snapshot,
+            AttendanceEvaluation.id,
+            AttendanceEvaluation.presence_state,
+            AttendanceEvaluation.reason_code,
+        )
+        .select_from(AttendanceCase)
+        .outerjoin(AttendanceEvaluation, AttendanceEvaluation.id == latest_id)
+        .where(AttendanceCase.operational_date.between(from_date, to_date))
+        .order_by(AttendanceCase.operational_date)
+    )
+    if not totals_only:
+        query = query.order_by(
+            AttendanceCase.scheduled_start_at,
+            AttendanceCase.employee_id,
+            AttendanceCase.id,
+        )
+    if shift_code is not None:
+        query = query.where(AttendanceCase.shift_code_snapshot == shift_code)
+    if duty_unit is not None:
+        query = query.where(AttendanceCase.duty_unit_snapshot == duty_unit)
+    if include_day_fields:
+        query = (
+            query.add_columns(
+                AttendanceCase.crew_code_snapshot,
+                AttendanceEvaluation.first_in_at,
+                AttendanceEvaluation.final_out_at,
+                Leave.leave_type,
+            )
+            .outerjoin(
+                AttendanceEvaluationLeaveSource,
+                and_(
+                    AttendanceEvaluationLeaveSource.evaluation_id == AttendanceEvaluation.id,
+                    AttendanceEvaluationLeaveSource.is_primary.is_(True),
+                ),
+            )
+            .outerjoin(Leave, Leave.id == AttendanceEvaluationLeaveSource.leave_id)
+        )
+    cases = (
+        [_RegisterCase._make(row) for row in db.connection().execute(query).all()]
+        if include_day_fields
+        else _compact_register_cases(db, query, grouped=totals_only)
+    )
+    if unassigned_only:
+        cases = [case for case in cases if not (case.duty_unit_snapshot or "").strip()]
+    if unrestricted:
+        # Organization scope allows any captured hierarchy, but not a blank ID.
+        return [case for case in cases if case.employee_id.strip()]
+    allowed: dict[tuple[str, str | None, str | None, str | None], bool] = {}
+    visible_cases: list[_RegisterCase] = []
+    for case in cases:
+        key = (
+            case.employee_id,
+            case.department_snapshot,
+            case.duty_unit_snapshot,
+            case.duty_post_snapshot,
+        )
+        visible = allowed.get(key)
+        if visible is None:
+            visible = allowed[key] = _case_allowed(case, scope)
+        if visible:
+            visible_cases.append(case)
+    return visible_cases
+
+
+def _register_punch_evidence(
+    db: Session,
+    person_ids: set[int],
+    start: datetime,
+    end: datetime,
+) -> dict[int, tuple[list[datetime], dict[int, int]]]:
+    evidence: dict[int, tuple[list[datetime], dict[int, int]]] = {}
+    last_person_id = None
+    times: list[datetime] = []
+    assignments: dict[int, int] = {}
+    timestamps: dict[str, datetime] = {}
+    for person_id, occurred_at, assigned_case in _sqlite_register_rows(
+        db,
+        select(
+            AttendancePunch.provider_person_id,
+            AttendancePunch.occurred_at,
+            AttendancePunchAssignment.attendance_case_id,
+        )
+        .outerjoin(
+            AttendancePunchAssignment, AttendancePunchAssignment.punch_id == AttendancePunch.id
+        )
+        .where(
+            AttendancePunch.provider_person_id.in_(person_ids),
+            AttendancePunch.occurred_at.between(start, end),
+        )
+        .order_by(AttendancePunch.provider_person_id, AttendancePunch.occurred_at),
+    ):
+        if last_person_id != person_id:
+            last_person_id = person_id
+            times, assignments = [], {}
+            evidence[person_id] = times, assignments
+        if assigned_case is not None:
+            assignments[len(times)] = assigned_case
+        stamp = timestamps.get(occurred_at)
+        if stamp is None:
+            stamp = timestamps[occurred_at] = datetime.fromisoformat(occurred_at)
+        times.append(stamp)
+    return evidence
+
+
+def _register_punch_bounds(
+    case_id: int,
+    evidence: tuple[list[datetime], dict[int, int]],
+    window: tuple[datetime, datetime],
+) -> tuple[datetime | None, datetime | None, int]:
+    times, assignments = evidence
+    lo = bisect_left(times, window[0])
+    hi = bisect_right(times, window[1], lo)
+    if lo == hi:
+        return None, None, 0
+    if not assignments:
+        return times[lo], times[hi - 1], hi - lo
+    first = last = None
+    count = 0
+    for index in range(lo, hi):
+        assigned_case = assignments.get(index)
+        if assigned_case is None or assigned_case == case_id:
+            last = times[index]
+            if count == 0:
+                first = last
+            count += 1
+    return first, last, count
+
+
+@dataclass(slots=True)
+class _RegisterTiming:
+    policy: WorkAttendancePolicy | None
+    window: tuple[datetime, datetime] | None
+    absence_due: datetime | None
+    judgment_due: datetime | None
+    grace: int | None
+    judgments: dict[tuple[str | None, int, int | None, str | None], JudgedRow] = field(
+        default_factory=dict
+    )
+
+
+def _register_timings(
+    db: Session, cases: list[_RegisterCase], start: date, end: date
+) -> tuple[list[_RegisterTiming], list[tuple[datetime, datetime]]]:
+    shift_ids = _occurrence_shift_ids(db, cases)
+    policies = _policy_candidates(db, earliest=start, latest=end, shift_ids=set(shift_ids.values()))
+    by_slot: dict[tuple[int | None, date, datetime, datetime], _RegisterTiming] = {}
+    by_case: list[_RegisterTiming] = []
+    windows: list[tuple[datetime, datetime]] = []
+    for case in cases:
+        slot = (
+            case.shift_occurrence_id,
+            case.operational_date,
+            case.scheduled_start_at,
+            case.scheduled_end_at,
+        )
+        timing = by_slot.get(slot)
+        if timing is None:
+            shift_id = (
+                shift_ids.get(case.shift_occurrence_id)
+                if case.shift_occurrence_id is not None
+                else None
+            )
+            policy = _policy_on(policies, case.operational_date, shift_id)
+            window = (
+                _punch_window(case, policy, profile=None, previous_case_end=None)
+                if policy is not None
+                else None
+            )
+            if window is not None:
+                windows.append(window)
+            timing = by_slot[slot] = _RegisterTiming(
+                policy,
+                window,
+                _absence_due_at(case, policy),
+                _judgment_due_at(case, policy),
+                policy.grace_minutes if policy is not None else None,
+            )
+        by_case.append(timing)
+    return by_case, windows
+
+
+def _range_corrections(db: Session, start: date, end: date) -> dict[int, AttendanceAdjustment]:
+    # Drive the lookup from the sparse correction table, not a bound variable
+    # per scheduled duty. Leaf selection is still the correction service's rule.
+    case_day = (
+        select(AttendanceCase.operational_date)
+        .where(AttendanceCase.id == AttendanceAdjustment.attendance_case_id)
+        .scalar_subquery()
+    )
+    by_case: dict[int, list[AttendanceAdjustment]] = {}
+    for adjustment in db.scalars(
+        select(AttendanceAdjustment)
+        .where(AttendanceAdjustment.revoked_at.is_(None), case_day.between(start, end))
+        .order_by(
+            AttendanceAdjustment.attendance_case_id,
+            AttendanceAdjustment.created_at,
+            AttendanceAdjustment.id,
+        )
+    ):
+        by_case.setdefault(adjustment.attendance_case_id, []).append(adjustment)
+    return {
+        case_id: active
+        for case_id, corrections in by_case.items()
+        if (active := attendance_correction_service.active_correction(corrections)) is not None
+    }
+
+
+def _project_register(
+    db: Session,
+    cases: list[_RegisterCase],
+    *,
+    start: date,
+    end: date,
+    include_day_fields: bool,
+) -> Iterator[EffectiveAttendanceRow]:
+    if not cases:
+        return
+    adjustments = _range_corrections(db, start, end)
+    people = {
+        employee_id: person_id
+        for employee_id, person_id in db.connection()
+        .execute(
+            _verified_people_query({case.employee_id for case in cases}).with_only_columns(
+                AttendanceProviderPerson.employee_id, AttendanceProviderPerson.id
+            )
+        )
+        .all()
+    }
+    timings, windows = _register_timings(db, cases, start, end)
+    profiles = _profiles_for_cases(db, cases) if people and windows else {}
+    widened: dict[int, tuple[datetime, datetime]] = {}
+    if profiles:
+        profiled = [
+            (case, timing.policy, profile)
+            for case, timing in zip(cases, timings, strict=True)
+            if timing.policy is not None
+            and case.employee_id in people
+            and (profile := profiles.get((case.employee_id, case.shift_code_snapshot))) is not None
+        ]
+        prior_ends = _previous_case_ends(db, [case for case, _, _ in profiled])
+        widened = {
+            case.id: _punch_window(
+                case, policy, profile=profile, previous_case_end=prior_ends.get(case.id)
+            )
+            for case, policy, profile in profiled
+        }
+        windows.extend(widened.values())
+    if people and windows:
+        by_provider = _register_punch_evidence(
+            db,
+            set(people.values()),
+            min(first for first, _ in windows),
+            max(last for _, last in windows),
+        )
+        evidence = {
+            employee_id: timeline
+            for employee_id, person_id in people.items()
+            if (timeline := by_provider.get(person_id)) is not None
+        }
+    else:
+        evidence = {}
+
+    for case, timing in zip(cases, timings, strict=True):
+        adjustment = adjustments.get(case.id)
+        status, first_in, final_out = case.presence_state, case.first_in_at, case.final_out_at
+        reason = case.reason_code
+        window = widened.get(case.id, timing.window) if widened else timing.window
+        first_at = last_at = None
+        count = 0
+        if window is not None and (punches := evidence.get(case.employee_id)) is not None:
+            first_at, last_at, count = _register_punch_bounds(case.id, punches, window)
+
+        if adjustment is None or case.evaluation_id is None:
+            late = _late_minutes(case, first_at)
+        else:
+            effective = attendance_correction_service.overlay(
+                {
+                    "presence_state": status,
+                    "first_in_at": first_in,
+                    "final_out_at": final_out,
+                    "reason_code": reason,
+                },
+                adjustment,
+            )
+            status, first_in, final_out, reason, late = (
+                effective["presence_state"],
+                effective["first_in_at"],
+                effective["final_out_at"],
+                effective["reason_code"],
+                effective["late_minutes"],
+            )
+
+        kind = workforce_leave.LEAVE_KIND_BY_REASON.get(reason) if reason else None
+        key = status, count, late, kind
+        judgment = timing.judgments.get(key)
+        if judgment is None:
+            judgment = timing.judgments[key] = JudgedRow(
+                status,
+                count,
+                late,
+                timing.grace,
+                timing.absence_due,
+                timing.judgment_due,
+                status == "excused_leave",
+                kind,
+            )
+
+        day_fields = None
+        if include_day_fields:
+            day_fields = {
+                "case_id": case.id,
+                "presence_state": status,
+                "reason_code": reason,
+                "final_out_at": final_out,
+                "leave_kind": kind,
+                "leave_label": (
+                    leave_lifecycle.leave_label(case.primary_leave_type)
+                    if kind and reason == case.reason_code and case.primary_leave_type is not None
+                    else None
+                ),
+                "first_in_at": first_in,
+                "corrected": adjustment is not None,
+                "first_punch_at": first_at,
+                "last_punch_at": last_at,
+                "punch_count": count,
+                "late_minutes": late,
+                "on_leave": judgment.on_leave,
+                "judgment_due_at": timing.judgment_due,
+                "grace_minutes": timing.grace,
+                "absence_due_at": timing.absence_due,
+            }
+        yield case, judgment, day_fields
+
+
+def iter_effective_attendance_rows(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    shift_code: str | None = None,
+    duty_unit: str | None = None,
+    include_day_fields: bool = False,
+) -> Iterator[EffectiveAttendanceRow]:
+    """Scoped register facts in date and shift order, with optional exact snapshot filters."""
+    return _iter_register_rows(
+        db,
+        scope=scope,
+        from_date=from_date,
+        to_date=to_date,
+        shift_code=shift_code,
+        duty_unit=duty_unit,
+        include_day_fields=include_day_fields,
+    )
+
+
+def iter_effective_attendance_totals_rows(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    duty_unit: str | None = None,
+    unassigned_only: bool = False,
+) -> Iterator[tuple[str, JudgedRow]]:
+    """The same judgment inputs, in duty order per person, without display fields."""
+    for case, judgment, _ in _iter_register_rows(
+        db,
+        scope=scope,
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        totals_only=True,
+        unassigned_only=unassigned_only,
+    ):
+        yield case.employee_id, judgment
+
+
+def _iter_register_rows(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    from_date: date,
+    to_date: date,
+    shift_code: str | None = None,
+    duty_unit: str | None = None,
+    include_day_fields: bool = False,
+    totals_only: bool = False,
+    unassigned_only: bool = False,
+) -> Iterator[EffectiveAttendanceRow]:
+    start = from_date
+    while start <= to_date:
+        # Bound memory and the punch time span, even for a year-over-year read.
+        end = start + timedelta(days=min(27, (to_date - start).days))
+        cases = _register_cases(
+            db,
+            scope=scope,
+            from_date=start,
+            to_date=end,
+            shift_code=shift_code,
+            duty_unit=duty_unit,
+            include_day_fields=include_day_fields,
+            totals_only=totals_only,
+            unassigned_only=unassigned_only,
+        )
+        yield from _project_register(
+            db, cases, start=start, end=end, include_day_fields=include_day_fields
+        )
+        if end == to_date:
+            break
+        start = end + timedelta(days=1)
+
+
 def list_attendance_day(
     db: Session,
     *,
@@ -522,70 +1085,23 @@ def list_attendance_day(
     operational_date: date,
     shift_code: str | None = None,
 ) -> list[dict[str, Any]]:
-    """Every scheduled person for one operational date, with their punch bounds.
-
-    The register, the board and the timeline are three projections of this one
-    payload, so it carries the punch facts ``list_roster`` deliberately omits.
-    """
-    cases = [
-        case
-        for case in db.scalars(
-            select(AttendanceCase).where(AttendanceCase.operational_date == operational_date)
+    """Every scheduled person for one operational date, with their punch bounds."""
+    rows = list(
+        iter_effective_attendance_rows(
+            db,
+            scope=scope,
+            from_date=operational_date,
+            to_date=operational_date,
+            shift_code=shift_code,
+            include_day_fields=True,
         )
-        if _case_allowed(case, scope)
-    ]
-    if shift_code is not None:
-        cases = [case for case in cases if case.shift_code_snapshot == shift_code]
-    if not cases:
-        return []
-
-    latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = attendance_correction_service.active_corrections(db, [case.id for case in cases])
-    effective_by_case = {
-        case_id: _effective_evaluation_values(evaluation, adjustments.get(case_id))
-        for case_id, evaluation in latest.items()
-    }
-    leave_fields = _case_leave_fields(db, evaluations=latest, effective=effective_by_case)
-    people = _verified_people(db, {case.employee_id for case in cases})
-    employees = _employees_for_cases(db, cases)
-    policies = _policies_for_cases(db, cases)
-    windows = _punch_windows(db, cases=cases, people=people, policies=policies)
-    punch_rows = _punch_rows_for_cases(db, cases=cases, people=people, windows=windows)
-
+    )
+    employees = _employees_for_cases(db, [case for case, _, _ in rows])
     result: list[dict[str, Any]] = []
-    for case in cases:
-        adjustment = adjustments.get(case.id)
-        effective = effective_by_case.get(case.id)
-        leave_kind, leave_label = leave_fields.get(case.id, (None, None))
-        policy = policies.get(case.id)
-        first_at, last_at, count = _punch_bounds(case, punch_rows.get(case.id, []))
-        result.append(
-            {
-                **_person_fields(case, employees),
-                "case_id": case.id,
-                "presence_state": effective["presence_state"] if effective else None,
-                "reason_code": effective["reason_code"] if effective else None,
-                "final_out_at": effective["final_out_at"] if effective else None,
-                "leave_kind": leave_kind,
-                "leave_label": leave_label,
-                "first_in_at": effective["first_in_at"] if effective else None,
-                "corrected": adjustment is not None,
-                "first_punch_at": first_at,
-                "last_punch_at": last_at,
-                "punch_count": count,
-                "late_minutes": (
-                    effective["late_minutes"]
-                    if adjustment is not None and effective
-                    else _late_minutes(case, first_at)
-                ),
-                "on_leave": effective is not None
-                and effective["presence_state"] == "excused_leave",
-                "judgment_due_at": _judgment_due_at(case, policy),
-                "grace_minutes": policy.grace_minutes if policy is not None else None,
-                "absence_due_at": _absence_due_at(case, policy),
-            }
-        )
-    return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+    for case, _, day_fields in rows:
+        assert day_fields is not None
+        result.append({**_person_fields(case, employees), **day_fields})
+    return result
 
 
 def list_attendance_punches(

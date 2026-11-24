@@ -5,9 +5,8 @@
  *   1. Directory and Attendance link to their routes and the active tab is
  *      marked with aria-current="page".
  *   2. The attention badge appears only when there is something to decide.
- *   3. Attendance requires both roster capabilities, so an operator never
- *      sees a tab that would 403.
- *   4. Time Sheet is the last tab and needs `timesheet.view`.
+ *   3. Attendance and Company statistics require both roster capabilities.
+ *   4. Company statistics follows Time Sheet, which needs `timesheet.view`.
  *   5. Every tab carries ONE language — the Arabic build renders Arabic labels
  *      with no English companion beside them.
  */
@@ -77,7 +76,7 @@ describe('EmployeesSectionTabs', () => {
   })
 
   it.each(['workforce.people.view', 'workforce.attendance.review'])(
-    'hides Attendance and its attention badge without %s',
+    'hides Attendance, its badge, and Company statistics without %s',
     (denied) => {
       hasCapability.mockImplementation((cap) => cap !== denied)
 
@@ -85,6 +84,7 @@ describe('EmployeesSectionTabs', () => {
 
       expect(linkTo('/employees')).toBeDefined()
       expect(linkTo('/employees/attendance')).toBeUndefined()
+      expect(linkTo('/employees/company-stats')).toBeUndefined()
       expect(screen.queryByTestId('attendance-attention-badge')).not.toBeInTheDocument()
     },
   )
@@ -119,8 +119,8 @@ describe('EmployeesSectionTabs', () => {
     expect(linkTo('/employees')).toBeDefined()
   })
 
-  it('orders Time Sheet last and renders one language per tab', () => {
-    renderTabs({}, '/employees/timesheet')
+  it('orders Company statistics after Time Sheet and renders one language per tab', () => {
+    renderTabs({}, '/employees/company-stats')
 
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '/employees',
@@ -128,8 +128,9 @@ describe('EmployeesSectionTabs', () => {
       '/employees/org-tree',
       '/duty-locations',
       '/employees/timesheet',
+      '/employees/company-stats',
     ])
-    expect(linkTo('/employees/timesheet')).toHaveAttribute('aria-current', 'page')
+    expect(linkTo('/employees/company-stats')).toHaveAttribute('aria-current', 'page')
     // The bilingual companion spans are gone, so nothing inside the switcher
     // declares the opposite direction and nothing needs bidi isolation.
     expect(document.querySelector('[dir="rtl"]')).toBeNull()
@@ -162,6 +163,8 @@ describe('EmployeesSectionTabs (Arabic)', () => {
     renderTabs({}, '/employees/timesheet')
 
     expect(screen.getByText('كشف الحضور الشهري')).toBeInTheDocument()
+    expect(screen.getByText('إحصائيات السرايا')).toBeInTheDocument()
+    expect(screen.queryByText('Company statistics')).not.toBeInTheDocument()
     expect(screen.queryByText('Time Sheet')).not.toBeInTheDocument()
     // Attendance carried the companion span that made the tab bilingual; an
     // English leak beside the Arabic label is exactly what was removed.
