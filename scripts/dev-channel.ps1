@@ -198,12 +198,18 @@ function Start-Server {
     $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' +
         [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launch))
     $task = Get-ScheduledTask -TaskName $ServerTask -ErrorAction SilentlyContinue
-    if (-not $task -or $task.Actions[0].Arguments -ne $arguments -or $task.Principal.RunLevel -ne 'Highest') {
+    # Task Scheduler's defaults refuse to start a task on battery: the laptop must not need AC power.
+    if (-not $task -or $task.Actions[0].Arguments -ne $arguments -or $task.Principal.RunLevel -ne 'Highest' -or
+        $task.Settings.DisallowStartIfOnBatteries -or $task.Settings.StopIfGoingOnBatteries) {
         # Not $env:USERDOMAIN: over SSH it is WORKGROUP, which maps to no account.
         $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
         $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
         $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
-        try { Register-ScheduledTask -TaskName $ServerTask -Action $action -Principal $principal -Force | Out-Null }
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+        try {
+            Register-ScheduledTask -TaskName $ServerTask -Action $action -Principal $principal -Settings $settings -Force |
+                Out-Null
+        }
         catch { throw "Could not register the '$ServerTask' task ($_). Run this once from an elevated shell; SSH from dtop is one." }
     }
     Start-ScheduledTask -TaskName $ServerTask
