@@ -152,10 +152,10 @@ export function CompanyStatsPrintSheet({ data, unit, sort }: { data: CompanyStat
 
   return (
     <article className="print-company-stats hidden text-[9pt] leading-snug text-black print:block" lang={language} dir={language === 'ar' ? 'rtl' : 'ltr'} aria-label={title}>
-      <div className="flex break-inside-avoid items-center gap-[3mm] border-b pb-[2mm]">
-        <img src="/brand/gssg-logo.png" alt="" className="size-[14mm] shrink-0 object-contain" />
-        <div className="min-w-0">
-          <h1 className="text-[15pt] font-bold">{title}</h1>
+      <div className="flex break-inside-avoid items-center gap-5 border-b-[1.5px] pb-[2mm]" style={{ borderColor: 'var(--primary)' }}>
+        <img src="/brand/gssg-wordmark.png" alt="GSSG" className="h-[9mm] w-auto shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h1 className="whitespace-nowrap text-[15pt] font-bold">{title}</h1>
           <p className="text-[11pt] font-semibold"><bdi>{scope}</bdi></p>
           <p><StatsPeriodLabel period={period} /></p>
           <p className="text-muted-foreground">{t(unit === 'days' ? 'companyStats.unit.byDays' : 'companyStats.unit.byCount')}</p>

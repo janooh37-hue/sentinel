@@ -2136,6 +2136,9 @@ body {
     contain: inline-size;
     font-variant-numeric: tabular-nums;
     --text-muted: #5a6068;
+    /* The masthead rule is drawn in the brand navy: keep the light value on
+       paper when the operator prints from the dark theme. */
+    --primary: #0d2845;
     --border: #e6e4dd;
   }
   .print-company-stats thead {
