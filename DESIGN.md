@@ -557,13 +557,14 @@ or animate the artwork, or crop or ellipsise it.
 | Vehicle `PaperSheet` | `57mm` wide, height auto (~9.1mm) |
 | `StatementLetterhead` | `60mm` wide, height auto (~9.5mm) |
 
-In `backend/templates/*.docx`, the Material Request Form and Violation
-Form put a centred `4.4cm` wordmark above the UAE logo in the page-1
-logo block. The Security Permit and Warning Form continuation headers
-place the wordmark, company name (`14/10pt`) and UAE logo in one
-vertically centred row. The continuation footers of those two forms,
-Report and Inmate Conduct Violations use a `4.4cm` wordmark without
-changing the footer row height.
+In `backend/templates/*.docx`, the wordmark is the only brand mark; the
+UAE nation-brand logo is not used. The Material Request Form and
+Violation Form centre a `4.4cm` wordmark vertically in the page-1 logo
+block. The Security Permit and Warning Form continuation headers place
+the wordmark and company name (`14/10pt`) in one vertically centred row,
+with the name column taking the rest of the width. The continuation
+footers of those two forms, Report and Inmate Conduct Violations use a
+`4.4cm` wordmark without changing the footer row height.
 
 **App icons:** favicon, Apple touch and PWA icons use the wordmark's
 red swoosh over a light `G` on a navy tile. `frontend/public/icons/`
