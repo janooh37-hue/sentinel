@@ -4205,6 +4205,7 @@
     },
     "outlook": {
       "hasAttachment": "Has attachment",
+      "tableLanguage": "Table language",
       "tabs": {
         "all": "All",
         "unread": "Unread"

@@ -39,6 +39,7 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pushRecentRecipient, recordRecipientsForForm } from '@/lib/recentRecipients'
 import { clearBasket } from '@/lib/emailBasket'
+import { saveTableLanguage, swapLetterTable, type TableLanguage } from '@/lib/basketEmail'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RecipientChipsInput } from '@/components/ledger/RecipientChipsInput'
@@ -89,6 +90,9 @@ export interface OutlookComposePrefill {
   references?: ComposeReference[]
   attachRefPdf?: boolean
   basketKey?: string
+  /** Basket letters whose table the operator may show in Arabic or English. */
+  tableLanguage?: TableLanguage
+  tableVariants?: Record<TableLanguage, string>
 }
 
 interface OutlookComposePageProps {
@@ -329,6 +333,21 @@ export function OutlookComposePage({
   const [refPdfFiles, setRefPdfFiles] = useState<Map<number, File>>(new Map())
   const refPdfInFlight = useRef<Set<number>>(new Set())
   const addRefBtnRef = useRef<HTMLButtonElement>(null)
+
+  // ── letter table language (basket letters that offer Arabic / English) ────
+  const tableVariants = prefill?.tableVariants
+  const [tableLanguage, setTableLanguage] = useState<TableLanguage>(prefill?.tableLanguage ?? 'ar')
+  const editedTableCells = useRef<Set<string>>(new Set())
+  const switchTableLanguage = (lang: TableLanguage): void => {
+    if (!tableVariants || lang === tableLanguage) return
+    const result = swapLetterTable(
+      getValues('body') ?? '', tableVariants[tableLanguage], tableVariants[lang], editedTableCells.current,
+    )
+    editedTableCells.current = result.edited
+    setValue('body', result.html, { shouldDirty: true })
+    setTableLanguage(lang)
+    saveTableLanguage(lang)
+  }
 
   const refLabel = t('ledger.outlook.ref.label', { defaultValue: 'Ref' })
 
@@ -802,6 +821,35 @@ export function OutlookComposePage({
                         pdfLabel={t('ledger.outlook.ref.pdf', { defaultValue: 'PDF' })}
                       />
                     )}
+                  </div>
+                )}
+
+                {tableVariants && (
+                  <div
+                    role="group"
+                    aria-labelledby="compose-table-language"
+                    className="flex flex-wrap items-center gap-2 text-[11.5px]"
+                  >
+                    <span id="compose-table-language" className="font-semibold text-muted-foreground">
+                      {t('ledger.outlook.tableLanguage')}
+                    </span>
+                    {(['ar', 'en'] as const).map((lang) => (
+                      <button
+                        key={lang}
+                        type="button"
+                        lang={lang}
+                        aria-pressed={tableLanguage === lang}
+                        onClick={() => switchTableLanguage(lang)}
+                        className={cn(
+                          'rounded-full px-2.5 py-0.5 font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          tableLanguage === lang
+                            ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
+                            : 'bg-surface-tinted text-muted-foreground hover:bg-surface-tinted/70',
+                        )}
+                      >
+                        {lang === 'ar' ? 'العربية' : 'English'}
+                      </button>
+                    ))}
                   </div>
                 )}
 

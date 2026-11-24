@@ -27,6 +27,9 @@ export interface EmailBasketItem {
   classificationCode?: string | null // General Book draft variant, with generic fallback
   violations?: string[] // Violation / Warning Form: Arabic violation labels — subject + bulleted المخالفات cell
   violationNotes?: string // Violation Form: remarks that are not the "Others" violation text
+  hrDocs?: string[] // HR Request Form: requested-document keys (doc_selections) — Type of Certificate column
+  hrDocOther?: string // HR Request Form: "Other (please specify)" text, appended to the documents
+  addressedTo?: string // HR Request Form: addressed_to — The entity / الجهة column
 }
 
 export type BasketKey = string

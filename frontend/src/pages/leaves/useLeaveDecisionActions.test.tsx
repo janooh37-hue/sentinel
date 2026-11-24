@@ -135,9 +135,10 @@ describe('useLeaveDecisionActions', () => {
       () => useLeaveDecisionActions({ leaveId: 7, employeeId: 'G100', onMutated }),
       { wrapper: wrapperFor(qc) },
     )
-    result.current.amendMutation.mutate({ end_date: '2026-08-25', reason: 'Corrected dates' })
+    const changes = { start_date: '2026-08-02', end_date: '2026-08-25', reason: 'Corrected dates' }
+    result.current.amendMutation.mutate(changes)
     await waitFor(() => expect(onMutated).toHaveBeenCalledOnce())
-    expect(amend).toHaveBeenCalledWith(7, { end_date: '2026-08-25', reason: 'Corrected dates' })
+    expect(amend).toHaveBeenCalledWith(7, changes)
     for (const queryKey of [['leave', 7], ['leaves-list'], ['leave-balance', 'G100'], ['books']]) {
       expect(invalidate).toHaveBeenCalledWith({ queryKey })
     }

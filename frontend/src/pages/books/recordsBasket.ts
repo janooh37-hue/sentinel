@@ -94,6 +94,12 @@ export function deriveRecordItem({
       : (book.subject ?? book.ref_number)
 
   const { violations, notes: violationNotes } = violationDetailsAr(formKind, fields)
+  const isHrRequest = formKind === 'HR Request Form'
+  const hrDocs = isHrRequest ? docSelectionKeys(fields['doc_selections']) : []
+  const otherDoc = fields['please_specify']
+  const hrDocOther = isHrRequest && typeof otherDoc === 'string' ? otherDoc.trim() : ''
+  const entity = fields['addressed_to']
+  const addressedTo = isHrRequest && typeof entity === 'string' ? entity.trim() : ''
 
   return {
     bookId: book.id,
@@ -125,7 +131,20 @@ export function deriveRecordItem({
     bookDate: typeof book.created_at === 'string' ? book.created_at.slice(0, 10) : undefined,
     ...(violations.length > 0 && { violations }),
     ...(violationNotes && { violationNotes }),
+    ...(hrDocs.length > 0 && { hrDocs }),
+    ...(hrDocOther && { hrDocOther }),
+    ...(addressedTo && { addressedTo }),
   }
+}
+
+/** The stored doc_selections shape varies (dict of flags / list / single key). */
+function docSelectionKeys(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : []
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string' && !!v)
+  if (value && typeof value === 'object') {
+    return Object.entries(value).filter(([, on]) => !!on).map(([key]) => key)
+  }
+  return []
 }
 
 // ---------------------------------------------------------------------------

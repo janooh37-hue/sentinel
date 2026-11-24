@@ -103,8 +103,8 @@ DEFAULTS: dict[str, dict[str, str]] = {
         "en": "Dear {name},\nA warning has been issued against you on {date} ({weekday}).\nViolation: {type}.\nPlease come to the administration office to sign the warning.\nAl Wathba Rehabilitation Centre",
     },
     nf.EVENT_LEAVE_AMENDED: {
-        "ar": f"عزيزي {{name}}،\nتم تعديل إجازتك السنوية.\nتاريخ البداية: {{start}} ({{start_weekday}})\nتاريخ النهاية: {{end}} ({{end_weekday}})\n{{duration_line}}{{reason_line}}لأي استفسار يرجى مراجعة {nf.ADMIN_OFFICE_AR}.\nإدارة مركز الإصلاح والتأهيل بالوثبة",
-        "en": "Dear {name},\nYour Annual Leave has been updated.\nStart: {start} ({start_weekday})\nEnd: {end} ({end_weekday})\n{duration_line}{reason_line}For any clarification, please contact the administration office.\nAl Wathba Rehabilitation Centre",
+        "ar": f"عزيزي {{name}}،\nتم تعديل إجازتك ({{type}}).\nتاريخ البداية: {{start}} ({{start_weekday}})\nتاريخ النهاية: {{end}} ({{end_weekday}})\n{{duration_line}}{{reason_line}}لأي استفسار يرجى مراجعة {nf.ADMIN_OFFICE_AR}.\nإدارة مركز الإصلاح والتأهيل بالوثبة",
+        "en": "Dear {name},\nYour leave ({type}) has been updated.\nStart: {start} ({start_weekday})\nEnd: {end} ({end_weekday})\n{duration_line}{reason_line}For any clarification, please contact the administration office.\nAl Wathba Rehabilitation Centre",
     },
 }
 EVENTS = tuple(DEFAULTS)
@@ -280,15 +280,17 @@ def vars_leave_permit(record: Any, emp: Employee, lang: str) -> dict[str, str]:
 def vars_leave_amended(
     leave: Any, emp: Employee, lang: str, *, old_days: int, reason: str
 ) -> dict[str, str]:
-    days = str(leave.days)
-    if lang == "ar":
-        duration_line = f"المدة الجديدة: {days} يوم (بدلاً من {old_days}).\n"
-        reason_line = f"سبب التعديل: {reason}\n"
-    else:
-        duration_line = f"New duration: {days} day(s) (was {old_days}).\n"
-        reason_line = f"Reason: {reason}\n"
+    days = leave.days
+    duration_line = ""
+    if days != old_days:
+        if lang == "ar":
+            duration_line = f"المدة الجديدة: {days} يوم (بدلاً من {old_days}).\n"
+        else:
+            duration_line = f"New duration: {days} day(s) (was {old_days}).\n"
+    reason_line = f"سبب التعديل: {reason}\n" if lang == "ar" else f"Reason: {reason}\n"
     return {
         **vars_sick_leave_registered(leave, emp, lang),
+        "type": nf.type_label(leave.leave_type, lang),
         "old_days": str(old_days),
         "reason": reason,
         "duration_line": duration_line,
@@ -410,7 +412,7 @@ _EVENT_VARIABLE_NAMES = {
     nf.EVENT_PASSPORT_RELEASE: "name",
     nf.EVENT_RESIGNATION: "name date weekday",
     nf.EVENT_WARNING: "name date weekday violation_type",
-    nf.EVENT_LEAVE_AMENDED: "name start start_weekday end end_weekday days old_days reason duration_line reason_line",
+    nf.EVENT_LEAVE_AMENDED: "name type start start_weekday end end_weekday days old_days reason duration_line reason_line",
 }
 VARIABLES: dict[str, tuple[Variable, ...]] = {
     event: tuple(_VARIABLES[name] for name in names.split())
