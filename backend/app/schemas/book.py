@@ -304,7 +304,7 @@ class BookEditSessionRead(ORMBase):
     created_at: datetime
 
 
-class WordSaveStatusRead(BaseModel):
+class WordSaveStatusRead(ORMBase):
     last_put_at: datetime | None
 
 
@@ -348,7 +348,7 @@ class WordBookCreate(BaseModel):
     date: str | None = None
 
 
-class WordSessionRead(BaseModel):
+class WordSessionRead(ORMBase):
     book_id: int
     ref_number: str
     token: str
@@ -366,7 +366,7 @@ class WordSessionDetailRead(WordSessionRead):
     cc: list[str]
 
 
-class TemplateSessionRead(BaseModel):
+class TemplateSessionRead(ORMBase):
     id: int
     name: str
     token: str
