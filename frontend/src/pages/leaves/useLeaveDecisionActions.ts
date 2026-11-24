@@ -14,7 +14,9 @@ import { useTranslation } from 'react-i18next'
 import { toast } from '@/lib/toast'
 
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
-import type { LeaveRead, LeaveStatus, LeaveUpdate } from '@/lib/api'
+import type { LeaveAmend, LeaveRead, LeaveStatus, LeaveUpdate } from '@/lib/api'
+
+type AmendChanges = Required<LeaveAmend>
 
 /** A sign-gated leave keeps its deciding record in the toast's reference chip. */
 export function leaveErrorToast(t: TFunction, err: unknown): Parameters<typeof toast.error> {
@@ -48,7 +50,7 @@ interface Decisions {
     { status: LeaveStatus; n: string; notify?: boolean }
   >
   deleteMutation: UseMutationResult<unknown, Error, void>
-  amendMutation: UseMutationResult<unknown, Error, { end_date: string; reason: string }>
+  amendMutation: UseMutationResult<unknown, Error, AmendChanges>
   editMutation: UseMutationResult<LeaveRead, Error, Pick<LeaveUpdate, 'start_date' | 'end_date' | 'notes'>>
 }
 
@@ -96,15 +98,14 @@ export function useLeaveDecisionActions({
   })
 
   const amendMutation = useMutation({
-    mutationFn: ({ end_date, reason }: { end_date: string; reason: string }) =>
-      api.amendLeave(leaveId, { end_date, reason }),
+    mutationFn: (changes: AmendChanges) => api.amendLeave(leaveId, changes),
     onSuccess: () => {
       invalidate()
       void qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t('leaves.amend.toast'))
       onMutated()
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: (err) => toast.error(...leaveErrorToast(t, err)),
   })
 
   const editMutation = useMutation({

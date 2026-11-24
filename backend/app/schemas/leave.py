@@ -47,11 +47,13 @@ class LeaveUpdate(BaseModel):
 
 
 class LeaveAmend(BaseModel):
-    """POST /leaves/{id}/amend — post-approval end-date change (Annual only).
+    """POST /leaves/{id}/amend — post-approval date change (request kinds).
 
-    The reason is required: it is sent to the employee in the notification.
+    ``start_date`` omitted keeps the current start. The reason is required: it
+    is sent to the employee in the notification.
     """
 
+    start_date: date | None = None
     end_date: date
     reason: str = Field(min_length=1)
 

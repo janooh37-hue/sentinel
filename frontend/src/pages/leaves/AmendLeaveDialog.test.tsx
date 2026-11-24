@@ -33,7 +33,7 @@ function renderIt() {
 }
 
 describe('AmendLeaveDialog', () => {
-  it('disables save until a reason is given, then submits end_date + reason', async () => {
+  it('disables save until a reason is given, then submits the dates + reason', async () => {
     renderIt()
     const save = screen.getByRole('button', { name: /save|حفظ/i })
     expect(save).toBeDisabled()
@@ -42,8 +42,26 @@ describe('AmendLeaveDialog', () => {
     fireEvent.click(save)
     await waitFor(() =>
       expect(api.amendLeave).toHaveBeenCalledWith(5, {
+        start_date: '2026-08-01',
         end_date: '2026-08-25',
         reason: 'balance',
+      }),
+    )
+  })
+
+  it('submits a moved start date with the recomputed duration', async () => {
+    renderIt()
+    fireEvent.change(screen.getByLabelText(/start.?date|تاريخ البداية/i), {
+      target: { value: '2026-08-05' },
+    })
+    expect(screen.getByText(/21/)).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/reason|سبب/i), { target: { value: 'moved' } })
+    fireEvent.click(screen.getByRole('button', { name: /save|حفظ/i }))
+    await waitFor(() =>
+      expect(api.amendLeave).toHaveBeenCalledWith(5, {
+        start_date: '2026-08-05',
+        end_date: '2026-08-25',
+        reason: 'moved',
       }),
     )
   })

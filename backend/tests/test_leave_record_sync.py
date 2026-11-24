@@ -578,6 +578,30 @@ def test_amendment_with_unchanged_end_date_does_not_create_revision(env):
     assert len(book.versions) == 1
 
 
+def test_approved_amendment_moves_start_date_on_the_signed_record(env):
+    book, leave = generate(env)
+    sign(env, book)
+    leave_service.update_leave(
+        env.db, leave.id, LeaveUpdate(status="Approved"), actor=env.signer.email
+    )
+    previous = book.versions[-1]
+    leave_service.amend_approved_leave(
+        env.db,
+        leave.id,
+        start_date=date(2026, 10, 19),
+        end_date=leave.end_date,
+        reason="Started a day earlier",
+        actor=env.signer.email,
+    )
+    current = book.versions[-1]
+    assert current.id != previous.id
+    assert current.fields["start_date"] == "19/10/2026"
+    assert str(current.fields["total_days"]) == "3"
+    assert current.status == book.approval_state == "approved"
+    assert leave.status == "Approved"
+    assert (leave.start_date, leave.days) == (date(2026, 10, 19), 3)
+
+
 def test_pending_sign_gated_request_edit_still_settles_leave_when_current_revision_is_signed(env):
     book, leave = generate(env, leave_type="Emergency Leave")
     submit(env, book)
