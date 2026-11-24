@@ -1,0 +1,312 @@
+[
+  {
+    "name": "leave flag overrides an explicit absence and a late punch",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "absent", "punch_count": 1, "late_minutes": 60, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": true, "leave_kind": "sick"
+    },
+    "expected": { "state": "leave", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "excused presence is leave without a leave flag or kind",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "excused_leave", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "leave", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "flagged National Service outranks explicit absence",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "absent", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": null,
+      "on_leave": true, "leave_kind": "national_service"
+    },
+    "expected": { "state": "national_service", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "excused presence also makes National Service a distinct verdict",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "excused_leave", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": null,
+      "on_leave": false, "leave_kind": "national_service"
+    },
+    "expected": { "state": "national_service", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "National Service kind alone does not excuse the duty",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 0, "grace_minutes": 30,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": "national_service"
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "explicit absence outranks a late unpaired punch",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "absent", "punch_count": 1, "late_minutes": 58, "grace_minutes": 30,
+      "absence_due_at": null, "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "absent", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "explicit absence needs no clock boundary",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "absent", "punch_count": 0, "late_minutes": null, "grace_minutes": null,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "absent", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "completed without punches stays verified after the absence boundary",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 0, "late_minutes": 45, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "on duty without punches stays verified after the absence boundary",
+    "now": "2026-08-19T06:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "zero punches become absent exactly at the naive UTC absence boundary",
+    "now": "2026-08-19T02:00:00Z",
+    "row": {
+      "presence_state": "scheduled", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "absent", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "zero punches are pending one millisecond before the naive UTC absence boundary",
+    "now": "2026-08-19T01:59:59.999Z",
+    "row": {
+      "presence_state": "scheduled", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "pending", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "zero punches with unknown presence are absent after the offset absence boundary",
+    "now": "2026-08-19T02:01:00Z",
+    "row": {
+      "presence_state": "unknown", "punch_count": 0, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T06:00:00+04:00", "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "absent", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "zero punches without an absence boundary remain pending even after judgment is due",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": null, "punch_count": 0, "late_minutes": null, "grace_minutes": null,
+      "absence_due_at": null, "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "pending", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "zero punches ignore a late offset and treat an invalid absence boundary as missing",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "scheduled", "punch_count": 0, "late_minutes": 45, "grace_minutes": 30,
+      "absence_due_at": "not-an-instant", "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "pending", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "two punches with zero late minutes stay verified after judgment is due",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 0, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "two punches inside the grace stay grace after judgment is due",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 12, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "grace", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "arrival exactly at the row grace is grace, not late",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 15, "grace_minutes": 15,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "grace", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "late minutes subtract the row grace rather than the fallback",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 24, "grace_minutes": 15,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "late", "minutes_past_grace": 9 }
+  },
+  {
+    "name": "explicit zero grace makes a minute late count in full",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 1, "grace_minutes": 0,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "late", "minutes_past_grace": 1 }
+  },
+  {
+    "name": "zero late minutes with zero grace are verified",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 0, "grace_minutes": 0,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "null policy grace applies the 30-minute fallback at equality",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 30, "grace_minutes": null,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "grace", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "late minutes subtract 30 when policy grace is null",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": 31, "grace_minutes": null,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "late", "minutes_past_grace": 1 }
+  },
+  {
+    "name": "a late lone punch stays late after judgment is due",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 1, "late_minutes": 180, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "late", "minutes_past_grace": 150 }
+  },
+  {
+    "name": "a lone punch inside the grace becomes unpaired exactly at the offset judgment boundary",
+    "now": "2026-08-19T11:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 12, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T15:00:00+04:00",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "unpaired", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "an on-time lone punch is unpaired after the judgment boundary",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 0, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "unpaired", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "an on-time lone punch stays verified just before judgment is due",
+    "now": "2026-08-19T10:59:59.999Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 0, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "a lone punch at the grace boundary stays grace until judgment is due",
+    "now": "2026-08-19T06:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 30, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "2026-08-19T11:00:00Z",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "grace", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "a lone punch cannot be unpaired without a judgment boundary",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 0, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "an invalid judgment instant leaves a lone punch inside the grace",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "on_duty", "punch_count": 1, "late_minutes": 12, "grace_minutes": 30,
+      "absence_due_at": "2026-08-19T02:00:00Z", "judgment_due_at": "not-an-instant",
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "grace", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "a missing arrival offset is verified when paired",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": null, "grace_minutes": 30,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  },
+  {
+    "name": "an early arrival is verified rather than grace",
+    "now": "2026-08-19T12:00:00Z",
+    "row": {
+      "presence_state": "completed", "punch_count": 2, "late_minutes": -8, "grace_minutes": 30,
+      "absence_due_at": null, "judgment_due_at": null,
+      "on_leave": false, "leave_kind": null
+    },
+    "expected": { "state": "verified", "minutes_past_grace": 0 }
+  }
+]

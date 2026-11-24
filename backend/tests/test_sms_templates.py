@@ -492,7 +492,7 @@ def test_render_leave_amended_full_text_en():
     )
     assert text == (
         "Dear John Smith,\n"
-        "Your Annual Leave has been updated.\n"
+        "Your leave (Annual Leave) has been updated.\n"
         "Start: 01/08/2026 (Saturday)\n"
         "End: 20/08/2026 (Thursday)\n"
         "New duration: 20 day(s) (was 25).\n"
@@ -502,20 +502,87 @@ def test_render_leave_amended_full_text_en():
     )
 
 
-def test_render_leave_amended_arabic_wording():
+@pytest.mark.parametrize(
+    ("leave_type", "expected_line"),
+    [
+        ("Annual Leave - إجازة سنوية", "تم تعديل إجازتك (إجازة سنوية)."),
+        ("Emergency Leave", "تم تعديل إجازتك (إجازة طارئة)."),
+        ("Duty Leave", "تم تعديل إجازتك (الاستئذان)."),
+    ],
+)
+def test_render_leave_amended_arabic_wording(leave_type, expected_line):
     emp = _emp()
     leave = Leave(
         id=52,
         employee_id="G1",
-        leave_type="Annual Leave - إجازة سنوية",
+        leave_type=leave_type,
         start_date=date(2026, 8, 1),
         end_date=date(2026, 8, 20),
         days=20,
     )
     ar = st.render_leave_amended(leave, emp, "ar", old_days=25, reason="نقص الرصيد")
-    assert "تم تعديل إجازتك السنوية." in ar
+    assert expected_line in ar.splitlines()
     assert "المدة الجديدة: 20 يوم (بدلاً من 25)." in ar
     assert "سبب التعديل: نقص الرصيد" in ar
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "expected_line"),
+    [
+        ("Emergency Leave", "Your leave (Emergency Leave) has been updated."),
+        ("Others", "Your leave (Others) has been updated."),
+    ],
+)
+def test_render_leave_amended_names_the_leave_type(leave_type, expected_line):
+    emp = _emp(msg_language="en")
+    leave = Leave(
+        id=53,
+        employee_id="G1",
+        leave_type=leave_type,
+        start_date=date(2026, 8, 3),
+        end_date=date(2026, 8, 5),
+        days=3,
+    )
+    text = st.render_leave_amended(leave, emp, "en", old_days=3, reason="Travel moved")
+    assert expected_line in text.splitlines()
+    assert "Start: 03/08/2026 (Monday)\n" in text
+
+
+@pytest.mark.parametrize(
+    ("lang", "duration_line", "end_line", "reason", "reason_line"),
+    [
+        (
+            "en",
+            "New duration: 3 day(s) (was 4).",
+            "End: 05/08/2026 (Wednesday)",
+            "Travel moved",
+            "Reason: Travel moved",
+        ),
+        (
+            "ar",
+            "المدة الجديدة: 3 يوم (بدلاً من 4).",
+            "تاريخ النهاية: 05/08/2026 (الأربعاء)",
+            "تغيير موعد السفر",
+            "سبب التعديل: تغيير موعد السفر",
+        ),
+    ],
+)
+def test_render_leave_amended_only_reports_duration_changes(
+    lang, duration_line, end_line, reason, reason_line
+):
+    leave = Leave(
+        id=54,
+        employee_id="G1",
+        leave_type="Emergency Leave",
+        start_date=date(2026, 8, 3),
+        end_date=date(2026, 8, 5),
+        days=3,
+    )
+    emp = _emp()
+    changed = st.render_leave_amended(leave, emp, lang, old_days=4, reason=reason)
+    unchanged = st.render_leave_amended(leave, emp, lang, old_days=3, reason=reason)
+    assert f"{end_line}\n{duration_line}\n{reason_line}\n" in changed
+    assert f"{end_line}\n{reason_line}\n" in unchanged
 
 
 # ── Leave Permit (تصريح خروج) — book-backed, issue time + duration hours ──────

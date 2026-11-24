@@ -7,8 +7,9 @@
  * en.json), so a missing or reworded key fails here rather than shipping.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useController } from 'react-hook-form'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '@/lib/api'
@@ -42,9 +43,12 @@ vi.mock('@/lib/api', async (orig) => {
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ identity: { email: 'me@gssg.ae' }, isAdmin: false }),
 }))
-// HugeRTE can't mount in jsdom — sentinel div (repo-wide convention).
+// HugeRTE can't mount in jsdom; bind a textarea to the same form field.
 vi.mock('@/components/ui/rich-editor', () => ({
-  RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
+  RichEditor: function RichEditor({ name }: { name: 'body' }) {
+    const { field } = useController<{ body: string }>({ name })
+    return <textarea data-testid={`rich-editor-${name}`} {...field} />
+  },
 }))
 vi.mock('@/lib/toast', () => ({
   toast: Object.assign(vi.fn(), { loading: vi.fn(), dismiss: vi.fn(), success: vi.fn(), error: vi.fn() }),
@@ -101,6 +105,7 @@ beforeEach(() => {
 afterEach(async () => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  localStorage.clear()
   await i18n.changeLanguage('en')
 })
 
@@ -122,6 +127,30 @@ describe('OutlookComposePage prefill', () => {
     // A prefilled Cc reveals the row instead of hiding recipients behind a toggle.
     expect(screen.getByText('ops@gssg.ae')).toBeInTheDocument()
     expect(screen.getByText('GS-0048')).toBeInTheDocument()
+  })
+
+  it('keeps a corrected name when the table language is switched twice', async () => {
+    const table = (header: string, name: string) =>
+      `<table data-basket-table="true"><thead><tr><th>#</th><th>ID</th><th>${header}</th></tr></thead>` +
+      `<tbody><tr data-basket-row="0"><td>1</td><td>G3085</td><td>${name}</td></tr></tbody></table>`
+    const ar = table('الاسم', 'عبدالله أباه')
+    const en = table('Name', 'Abdellahi Abah')
+    renderDialog({ prefill: { bodyHtml: ar, tableLanguage: 'ar', tableVariants: { ar, en } } })
+
+    const body = screen.getByTestId<HTMLTextAreaElement>('rich-editor-body')
+    const tableText = () => {
+      const doc = new DOMParser().parseFromString(body.value, 'text/html')
+      return [doc.querySelector('th:last-child')?.textContent, doc.querySelector('td:last-child')?.textContent]
+    }
+    await act(async () => {
+      fireEvent.change(body, { target: { value: table('الاسم', 'Abdellahi Abah') } })
+      await userEvent.click(screen.getByRole('button', { name: 'English' }))
+    })
+    expect(tableText()).toEqual(['Name', 'Abdellahi Abah'])
+    await act(async () => {
+      await userEvent.click(screen.getByRole('button', { name: 'العربية' }))
+    })
+    expect(tableText()).toEqual(['الاسم', 'Abdellahi Abah'])
   })
 })
 

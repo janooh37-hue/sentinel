@@ -102,12 +102,15 @@ def allowed_transitions(leave_type: str, current_status: str) -> frozenset[str]:
 
 
 def can_amend(leave_type: str, current_status: str) -> bool:
-    """Post-approval amendment (end date / days only): Annual Leave + Approved.
+    """Post-approval amendment of start and end dates: request kinds + Approved.
 
-    Distinct from ``can_edit_dates`` (Pending, start+end): an amend
-    keeps the start date fixed and is allowed only after approval.
+    Distinct from ``can_edit_dates`` (Pending): an amend happens only after
+    approval, needs a reason, notifies the employee and keeps the approval
+    chain instead of restarting it.
     """
-    return is_annual(leave_type) and canonical_status(current_status) == "Approved"
+    return classify_group(leave_type) == "request" and (
+        canonical_status(current_status) == "Approved"
+    )
 
 
 def can_edit_dates(leave_type: str, current_status: str) -> bool:

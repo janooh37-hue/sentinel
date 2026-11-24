@@ -103,8 +103,8 @@ export function actionsFor(
     if (s === 'Approved') {
       const acts: LeaveAction[] = isReturnable(leaveType) && isOverdue(endDate, todayIso)
         ? ['return', 'cancel'] : ['cancel']
-      // Post-approval amendment: Annual only (mirrors backend can_amend).
-      if (isReturnable(leaveType) && lifecycleGroup(leaveType) === 'request') acts.unshift('amend')
+      // Post-approval amendment: every request kind (mirrors backend can_amend).
+      acts.unshift('amend')
       return acts
     }
     return []

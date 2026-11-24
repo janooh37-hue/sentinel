@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import UTC, date, datetime
-from typing import Annotated, Any, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
@@ -14,6 +15,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ConflictError, ValidationFailedError
 from app.config import get_settings
+from app.core import clock
 from app.db.models import User
 from app.db.session import get_db
 from app.db.workforce_models import (
@@ -29,6 +31,7 @@ from app.schemas.workforce import (
     AttendanceExceptionRead,
     AttendancePolicyWrite,
     AttendancePunchLogRead,
+    CompanyStatsRead,
     ConfigurationPatch,
     CoverageRowRead,
     CrewMembershipEndWrite,
@@ -72,6 +75,7 @@ from app.services import (
     settings_service,
     workforce_access_service,
     workforce_admin_service,
+    workforce_company_stats_service,
     workforce_dashboard_service,
     workforce_read_service,
     workforce_schedule_service,
@@ -90,6 +94,7 @@ from app.services.workforce_scope_service import (
 router = APIRouter(prefix="/workforce", tags=["workforce"])
 _T = TypeVar("_T")
 _MAX_LIMIT = 500
+_XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
 def _scope(db: Session, user: User) -> WorkforceScope:
@@ -438,6 +443,64 @@ def get_attendance_day(
         cursor=cursor,
     )
     return {"items": items, "next_cursor": next_cursor}
+
+
+@router.get("/attendance/company-stats", response_model=CompanyStatsRead)
+def get_company_attendance_stats(
+    from_date: date,
+    to_date: date,
+    user: Annotated[User, Depends(require_capability("workforce.attendance.review"))],
+    people_user: Annotated[User, Depends(require_capability("workforce.people.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    duty_unit: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=50)] = 10,
+) -> dict[str, Any]:
+    """Compare scoped attendance and leave over closed Dubai calendar days."""
+    return workforce_company_stats_service.company_attendance_stats(
+        db,
+        scope=_scope(db, user),
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        limit=limit,
+        now=clock.utcnow(),
+    )
+
+
+@router.get(
+    "/attendance/company-stats/export",
+    response_class=Response,
+    responses={
+        200: {"content": {_XLSX_MEDIA_TYPE: {"schema": {"type": "string", "format": "binary"}}}}
+    },
+)
+def export_company_attendance_stats(
+    from_date: date,
+    to_date: date,
+    user: Annotated[User, Depends(require_capability("workforce.attendance.review"))],
+    people_user: Annotated[User, Depends(require_capability("workforce.people.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    duty_unit: str | None = None,
+    language: Literal["ar", "en"] = "ar",
+) -> Response:
+    """Download the same scoped report with the complete score ranking."""
+    workbook, filename = workforce_company_stats_service.export_workbook(
+        db,
+        scope=_scope(db, user),
+        from_date=from_date,
+        to_date=to_date,
+        duty_unit=duty_unit,
+        language=language,
+        now=clock.utcnow(),
+    )
+    return Response(
+        workbook,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename, safe='')}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get("/attendance/punches", response_model=CursorPage[AttendancePunchLogRead])

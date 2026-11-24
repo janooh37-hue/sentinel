@@ -25,13 +25,14 @@ import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NATIVE_SELECT } from '@/components/ui/native-select'
 import { cn } from '@/lib/utils'
 
 import { LeaveEmployeePicker } from '../LeaveEmployeePicker'
 import { canonStatus } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
 import {
-  CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
+  CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, SEGMENT_BUTTON, SEGMENT_GROUP,
   SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
 import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'

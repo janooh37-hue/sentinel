@@ -42,6 +42,18 @@ export type AttendanceDayRow = components['schemas']['AttendanceDayRowRead']
 export type AttendanceDayPage = components['schemas']['CursorPage_AttendanceDayRowRead_']
 export type EmployeeAttendanceRange = components['schemas']['EmployeeAttendanceRangeRead']
 export type EmployeeAttendanceDay = components['schemas']['EmployeeAttendanceDayRead']
+export type CompanyStats = components['schemas']['CompanyStatsRead']
+export type CompanyStatsRow = components['schemas']['CompanyStatsRow']
+export type CompanyStatsTotals = components['schemas']['StatsTotals']
+export type CompanyStatsBucket = components['schemas']['StatsBucket']
+export type CompanyStatsEmployee = components['schemas']['StatsEmployeeRow']
+export type CompanyStatsStatus = NonNullable<components['schemas']['StatsCompanyStatus']['overall']>
+export interface CompanyStatsParams {
+  from_date: string
+  to_date: string
+  /** Exact duty_unit snapshot, or `__unassigned__`. */
+  duty_unit?: string
+}
 export type EmployeeAttendanceHistory = components['schemas']['EmployeeAttendanceHistoryRead']
 export type EmployeeAttendanceHistoryDay =
   components['schemas']['EmployeeAttendanceHistoryDayRead']
@@ -1469,6 +1481,13 @@ export const api = {
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   listAttendanceDay: (params: ListAttendanceDayParams) =>
     request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
+  getCompanyStats: (params: CompanyStatsParams) =>
+    request<CompanyStats>('GET', `/workforce/attendance/company-stats${qs({ ...params })}`),
+  fetchCompanyStatsExport: (
+    params: CompanyStatsParams & { language: 'ar' | 'en' },
+    fallbackName: string,
+  ) =>
+    fetchAttachment(`/workforce/attendance/company-stats/export${qs({ ...params })}`, fallbackName),
   listAttendanceExceptions: (params: ListAttendanceExceptionsParams = {}) =>
     request<AttendanceExceptionPage>('GET', `/workforce/attendance/exceptions${qs({ ...params })}`),
   listAttendancePunches: (params: ListAttendancePunchesParams) =>
