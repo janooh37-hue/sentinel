@@ -193,8 +193,12 @@ function Start-Server {
     # Task Scheduler starts it hidden in this user's desktop session instead, where it also
     # outlives this terminal. Elevated, like the SSH and admin shells that write the dev data:
     # those files are owned by Administrators, which a limited token cannot open.
-    $launch = "Start-Process -FilePath '$Py' -ArgumentList 'backend\serve.py' -WorkingDirectory '$Root' " +
-        "-WindowStyle Hidden -RedirectStandardOutput '$Log' -RedirectStandardError '$Log.err'"
+    # Single-quoted literals in generated source: every quote character PowerShell accepts
+    # (' and the typographic U+2018-U+201B) is doubled, so an O'Brien path stays one literal.
+    $qPy, $qRoot, $qOut, $qErr = @($Py, $Root, $Log, "$Log.err") |
+        ForEach-Object { "'" + ($_ -replace '([''\u2018-\u201B])', '$1$1') + "'" }
+    $launch = "Start-Process -FilePath $qPy -ArgumentList 'backend\serve.py' -WorkingDirectory $qRoot " +
+        "-WindowStyle Hidden -RedirectStandardOutput $qOut -RedirectStandardError $qErr"
     $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' +
         [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launch))
     $task = Get-ScheduledTask -TaskName $ServerTask -ErrorAction SilentlyContinue
