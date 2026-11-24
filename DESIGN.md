@@ -528,9 +528,11 @@ or animate the artwork, or crop or ellipsise it.
 
 - **TopNav:** `surface`, `126px` wide (~20px high). Tagline beside the
   mark in the widest tier; see §3.1.
-- **Phone bar (`MobileTopBar`):** `on-dark` on `bg-primary`, `138px`
-  wide (~22px high). Scales down whole and hides below a `72px` brand
-  container.
+- **Phone bar (`MobileTopBar`):** `on-dark`, `138px` wide (~22px high).
+  Scales down whole and hides below a `72px` brand container. The bar is
+  navy `#0d2845` in both themes (`bg-primary`, pinned under
+  `[data-theme="dark"] [data-mobile-topbar]` in `index.css`) with white
+  controls, so the red swoosh never sits on the dark theme's mid-blue.
 - **Nav drawer (`NavDrawer`):** `surface`, `138px` wide. Header `ps-6`
   aligns the mark with the nav icon column. At narrow widths the header
   uses `@max-[200px]:px-2` and the mark can shrink whole.
