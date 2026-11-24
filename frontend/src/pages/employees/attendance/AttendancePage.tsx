@@ -172,7 +172,8 @@ function AttendancePageBody(): React.JSX.Element | null {
   const companies = useMemo(() => {
     const units = new Set<string>()
     for (const row of allRows) {
-      if (row.duty_unit?.trim()) units.add(row.duty_unit)
+      const unit = row.duty_unit?.trim()
+      if (unit) units.add(unit)
     }
     if (company && company !== UNASSIGNED) units.add(company)
     return [...units].sort((a, b) => a.localeCompare(b, i18n.language))

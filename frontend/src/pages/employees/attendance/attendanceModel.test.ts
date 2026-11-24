@@ -569,7 +569,10 @@ describe('company scope', () => {
     expect(matchesCompany(row({ duty_unit: '' }), '__unassigned__')).toBe(true)
     expect(matchesCompany(row({ duty_unit: '   ' }), '__unassigned__')).toBe(true)
     expect(matchesCompany(row({ duty_unit: 'First' }), '__unassigned__')).toBe(false)
-    expect(matchesCompany(row({ duty_unit: ' First ' }), 'First')).toBe(false)
+  })
+
+  it('matches a company when the row has surrounding whitespace', () => {
+    expect(matchesCompany(row({ duty_unit: ' Alpha ' }), 'Alpha')).toBe(true)
   })
 })
 

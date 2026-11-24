@@ -348,7 +348,7 @@ export function stateCounts(
 /** Company is a scope filter, applied before people totals and attendance filters. */
 export function matchesCompany(row: AttendanceRow, company: string | null): boolean {
   if (company === null) return true
-  return company === UNASSIGNED ? !row.duty_unit?.trim() : row.duty_unit === company
+  return company === UNASSIGNED ? !row.duty_unit?.trim() : row.duty_unit?.trim() === company
 }
 
 /** Restore only supported filters, keeping chip order stable and states unique. */

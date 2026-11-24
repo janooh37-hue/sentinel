@@ -53,9 +53,10 @@ export function OnSiteNowSummary({
   const buckets = today ? ON_SITE_BUCKETS : PAST_BUCKETS
   const title = t(today ? 'attendance.onSiteNow.title' : 'attendance.onSiteNow.daySummary')
   const [focusedBucket, setFocusedBucket] = useState<OnSiteBucket | null>(who)
-  const tabStop = focusedBucket && buckets.includes(focusedBucket) && summary[focusedBucket] > 0
+  const bucketEnabled = (bucket: OnSiteBucket): boolean => summary[bucket] > 0 || who === bucket
+  const tabStop = focusedBucket && buckets.includes(focusedBucket) && bucketEnabled(focusedBucket)
     ? focusedBucket
-    : buckets.find((bucket) => summary[bucket] > 0)
+    : buckets.find(bucketEnabled)
   const visualRef = useRef<HTMLDivElement>(null)
   const leadersRef = useRef<SVGSVGElement>(null)
   const segmentRefs = useRef<Partial<Record<OnSiteBucket, HTMLSpanElement | null>>>({})
@@ -114,7 +115,7 @@ export function OnSiteNowSummary({
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
     event.preventDefault()
     event.stopPropagation()
-    const enabled = buckets.filter((key) => summary[key] > 0)
+    const enabled = buckets.filter(bucketEnabled)
     if (enabled.length === 0) return
     const rtl = (document.documentElement.dir || i18n.dir()) === 'rtl'
     const forward = event.key === 'ArrowDown' || event.key === (rtl ? 'ArrowLeft' : 'ArrowRight')
@@ -225,12 +226,12 @@ export function OnSiteNowSummary({
                 ref={(node) => { buttonRefs.current[bucket] = node }}
                 type="button"
                 aria-pressed={who === bucket}
-                aria-disabled={summary[bucket] === 0}
+                aria-disabled={!bucketEnabled(bucket)}
                 tabIndex={tabStop === bucket ? 0 : -1}
                 onFocus={() => setFocusedBucket(bucket)}
                 onKeyDown={(event) => moveFocus(event, bucket)}
                 onClick={() => {
-                  if (summary[bucket] > 0) onWhoChange(who === bucket ? null : bucket)
+                  if (bucketEnabled(bucket)) onWhoChange(who === bucket ? null : bucket)
                 }}
                 className="flex min-h-[58px] min-w-0 flex-col items-start gap-1 rounded-sm border px-[7px] py-1.5 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-surface-raised aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
                 style={{ borderColor: who === bucket ? 'var(--primary)' : 'transparent' }}

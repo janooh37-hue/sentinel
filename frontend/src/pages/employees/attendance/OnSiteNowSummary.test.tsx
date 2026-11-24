@@ -131,7 +131,7 @@ describe('OnSiteNowSummary', () => {
     expect(container.querySelector('.opacity-\\[0\\.22\\]')).not.toBeInTheDocument()
   })
 
-  it('keeps zero keys disabled and unselectable, with no zero bar segment', () => {
+  it('keeps unselected zero keys disabled and unselectable, with no zero bar segment', () => {
     const onWhoChange = vi.fn()
     const { container } = render(<OnSiteNowSummary {...props} rows={[row()]} onWhoChange={onWhoChange} />)
     const key = bucketKey('left')
@@ -141,6 +141,32 @@ describe('OnSiteNowSummary', () => {
     fireEvent.click(key)
     expect(onWhoChange).not.toHaveBeenCalled()
     expect(container.querySelector('[data-bucket="left"]')).not.toBeInTheDocument()
+  })
+
+  it('lets operators reach and clear Left after a scope change drops its count to zero', () => {
+    const onWhoChange = vi.fn()
+    const { rerender, container } = render(<OnSiteNowSummary {...props} rows={allBuckets} who="left" onWhoChange={onWhoChange} />)
+    rerender(<OnSiteNowSummary {...props} rows={[row()]} who="left" onWhoChange={onWhoChange} />)
+
+    const left = bucketKey('left')
+    const leave = bucketKey('leave')
+    expect(left.querySelector('bdi')).toHaveTextContent(/^0$/)
+    expect(left).toHaveAttribute('aria-pressed', 'true')
+    expect(left).not.toHaveAttribute('aria-disabled', 'true')
+    expect(left).toHaveAttribute('tabindex', '0')
+    expect(container.querySelector('[data-bucket="left"]')).not.toBeInTheDocument()
+
+    expect(leave).toHaveAttribute('aria-disabled', 'true')
+    expect(leave).toHaveAttribute('tabindex', '-1')
+    fireEvent.click(leave)
+    expect(onWhoChange).not.toHaveBeenCalled()
+
+    const onSite = bucketKey('onSite')
+    act(() => onSite.focus())
+    fireEvent.keyDown(onSite, { key: 'ArrowDown' })
+    expect(left).toHaveFocus()
+    fireEvent.click(left)
+    expect(onWhoChange).toHaveBeenCalledExactlyOnceWith(null)
   })
 
   it('renders an empty scoped day honestly without any bar segments or enabled keys', () => {

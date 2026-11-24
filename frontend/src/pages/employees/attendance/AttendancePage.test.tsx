@@ -618,6 +618,30 @@ describe('AttendancePage', () => {
     expect(companies).toEqual(['', 'Alpha', 'Bravo', 'Zeta', '__unassigned__'])
   })
 
+  it('offers one trimmed company option and keeps its employees visible when selected', async () => {
+    const user = userEvent.setup()
+    listAttendanceDay.mockResolvedValue({
+      items: [
+        row({ duty_unit: ' Alpha ' }),
+        row({ employee_id: 'G-9002', name_en: 'Salem Obaid', duty_unit: 'Alpha' }),
+        row({ employee_id: 'G-9003', name_en: 'Faisal Hamad', duty_unit: 'Bravo' }),
+      ],
+      next_cursor: null,
+    })
+    renderPage()
+    await screen.findAllByTestId('attendance-register-unit')
+
+    const select = screen.getByRole('combobox', { name: 'Company' })
+    await user.selectOptions(select, 'Alpha')
+
+    expect(registerText()).toContain('Ahmed Ali')
+    expect(registerText()).toContain('Salem Obaid')
+    expect(registerText()).not.toContain('Faisal Hamad')
+    expect(routeParams().get('company')).toBe('Alpha')
+    const alpha = within(select).getByRole('option', { name: 'Alpha' })
+    expect(alpha).toHaveValue('Alpha')
+  })
+
   it('scopes Unassigned to rows without a company', async () => {
     listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
     renderPage('/employees/attendance?company=__unassigned__')
