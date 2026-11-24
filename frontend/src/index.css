@@ -822,6 +822,29 @@
   display: block;
 }
 
+/* MobileTopBar: the light theme's navy in both themes. Dark theme's
+   --primary is a mid-blue that the wordmark's red swoosh vibrates against
+   (~1.4:1), with near-black controls. The bar is pinned here rather than
+   the token, because its account and notification panels render inside
+   it and read --primary too. */
+[data-theme="dark"] [data-mobile-topbar] {
+  background-color: #0d2845;
+  color: #ffffff;
+}
+[data-theme="dark"] [data-mobile-topbar] > button {
+  color: #ffffff;
+}
+/* The account chip (header > controls > AccountMenu root > trigger >
+   Avatar; the bell trigger's spans are all aria-hidden): dark theme's
+   --primary-soft chip and border ring sink into the navy, so it takes the
+   bar's white instead, as the light bar's pale chip does. The panels open
+   deeper in the tree and keep their tokens. */
+[data-theme="dark"] [data-mobile-topbar] > div > div > button > span:not([aria-hidden]) {
+  background-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  --tw-ring-color: rgba(255, 255, 255, 0.3);
+}
+
 /* TopNav adaptation (UI-02). The header is a dense single row: logo + brand
    copy, up to 7 destinations, then AaSlider + language + theme + intake +
    baskets + gateway + bell + settings + avatar. Measured on main before this
