@@ -16,9 +16,14 @@ def workbook():
 
 
 def test_logo_survives(workbook):
-    """The July attendance file on the share lost its logo to an outside tool."""
+    """Sheet1 uses the wide GSSG wordmark, not the retired globe or a distorted image."""
     assert workbook.sheetnames == ["Sheet1", "_parts"]
-    assert len(workbook["Sheet1"]._images) == 1
+    images = workbook["Sheet1"]._images
+    assert len(images) == 1
+    (image,) = images
+    assert image.width / image.height == pytest.approx(6.3, abs=0.05)
+    extent = image.anchor.ext
+    assert extent.cx / extent.cy == pytest.approx(6.3, abs=0.05)
 
 
 def test_header_text_is_verbatim(workbook):
