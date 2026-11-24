@@ -516,9 +516,9 @@ function ReportScope({
 /**
  * The report table: one `<tbody>` per vehicle so a browser keeps a vehicle's
  * block on one sheet where it fits, and so the group header is a real
- * row-group header rather than a styled row. Nothing depends on a fill — the
- * print stylesheet flattens every background in `#root`, so the group and
- * subtotal lines are told apart by weight and rules.
+ * row-group header rather than a styled row. The group and subtotal lines are
+ * also told apart by weight and rules, so they still read when a printer drops
+ * the paper's fills.
  */
 function ReportTable({
   groups,

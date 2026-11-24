@@ -55,7 +55,7 @@ export function MobileTopBar({
         <Menu className="h-[24px] w-[24px]" strokeWidth={1.8} aria-hidden />
       </button>
       {/* Brand takes whatever the controls leave, so a cramped row never pushes a control off-screen. The bar is
-          navy (mid-blue in dark), so the mark is the on-dark file in both themes. It is 22px tall (138px) when the
+          navy in both themes, so the mark is always the on-dark file. It is 22px tall (138px) when the
           row has room, scales down whole as its container narrows (preflight's `max-width:100%`; ~134px on a 320px
           phone), and hides once it would drop below ~11px tall: a logo is never cropped or ellipsised. */}
       <div className="@container flex min-w-0 flex-1 items-center">
