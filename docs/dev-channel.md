@@ -21,6 +21,8 @@ Rebuilds and `publish` refuse when `dev` holds commits of its own (including a m
 
 The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
 
+The script starts the server through the `GSSG Dev Server` scheduled task: hidden, elevated, in the signed-in user's desktop session, so it runs only while that user is signed in. Started directly from an SSH shell it would run in session 0, where Word's `Documents.Open` returns nothing and every generated document (warning, violation, book) is saved without its PDF. Elevated because SSH and admin shells write the dev data as `BUILTIN\Administrators`, which a limited token cannot open. Headless Edge launched from an elevated desktop process relaunches itself de-elevated and prints nothing; `sheet_pdf_service` passes `--do-not-de-elevate` for that.
+
 ## Restore a backup
 
 1. On GSSGLT, confirm **C:** is protected with BitLocker in an **elevated** PowerShell window: `manage-bde -status C:`. Require `Protection Status: Protection On` and `Percentage Encrypted: 100.0%`. Stop if this cannot be confirmed. Do not transfer HR data before this check.
