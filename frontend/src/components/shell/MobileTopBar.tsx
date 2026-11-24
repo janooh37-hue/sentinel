@@ -31,6 +31,7 @@ export function MobileTopBar({
   const { has } = useCapabilities()
   return (
     <header
+      data-mobile-topbar
       // `relative`: the account / notifications panels are positioned against this header (see headerPopover.ts).
       // Inline padding clears the notch in landscape; env() insets are physical, so the larger one is used on
       // both sides, which keeps the bar symmetric and direction-agnostic.
