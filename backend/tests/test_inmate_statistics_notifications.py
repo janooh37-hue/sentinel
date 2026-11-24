@@ -1,10 +1,9 @@
 """Notifications follow the selected reviewer and approver only."""
 
-from backend.tests import test_inmate_statistics_workflow as fixtures
-
 from app.db.models import UserPermission
 from app.services import inmate_statistics_service as workflow
 from app.services import notification_service as notifications
+from tests import test_inmate_statistics_workflow as fixtures
 
 api_db = fixtures.api_db
 people = fixtures.people
