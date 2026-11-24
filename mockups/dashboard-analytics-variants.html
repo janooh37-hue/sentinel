@@ -96,7 +96,7 @@
       background: rgba(255,255,255,.96);
     }
     .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
-    .brand img { width: 43px; height: 43px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 1px var(--border); }
+    .brand img { width: auto; height: 20px; }
     .brand-name { font-size: 15px; font-weight: 780; letter-spacing: .03em; }
     .brand-sub { margin-top: 1px; color: var(--muted); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
     .navlinks { display: flex; align-items: stretch; justify-content: center; min-width: 0; }
@@ -359,7 +359,7 @@
       width: 100%;
       min-width: 0;
       display: grid;
-      grid-template-columns: 54px minmax(0, 1fr);
+      grid-template-columns: minmax(0, 1fr);
       gap: 13px;
       align-items: center;
       padding: 13px 14px;
@@ -367,23 +367,6 @@
       border-radius: 17px;
       background: linear-gradient(115deg, rgba(255, 255, 255, .105), rgba(255, 255, 255, .045));
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07), 0 12px 30px rgba(0, 0, 0, .13);
-    }
-    .movement-crest {
-      width: 50px;
-      height: 50px;
-      display: grid;
-      place-items: center;
-      border: 1px solid rgba(255, 255, 255, .15);
-      border-radius: 50%;
-      background: rgba(255, 255, 255, .055);
-      box-shadow: 0 0 0 5px rgba(255, 255, 255, .03);
-    }
-    .movement-crest img {
-      width: 44px;
-      height: 44px;
-      border-radius: 50%;
-      object-fit: cover;
-      animation: movement-crest-spin 90s linear infinite;
     }
     .movement-body { min-width: 0; }
     .movement-head {
@@ -474,13 +457,6 @@
       color: rgba(255, 255, 255, .76);
       font: 680 8px/1 var(--mono);
       white-space: nowrap;
-    }
-    @keyframes movement-crest-spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .movement-crest img { animation: none; }
     }
 
     /* V6 — approved hybrid: four reorderable cards + selectable comparison */
@@ -779,9 +755,7 @@
       .v6 .content { padding: 14px; }
       .v6 .hero { grid-template-columns: 1fr; gap: 18px; padding: 20px; }
       .v6 .movement-hero { min-height: 0; gap: 14px; }
-      .movement-brief { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 11px 12px; }
-      .movement-crest { width: 40px; height: 40px; }
-      .movement-crest img { width: 35px; height: 35px; }
+      .movement-brief { gap: 10px; padding: 11px 12px; }
       .movement-row:last-child,
       .hero-insight { display: none; }
       .movement-row:nth-child(2) .movement-marker::after { display: none; }
@@ -904,7 +878,7 @@
 
     const nav = () => `
       <header class="topnav">
-        <div class="brand"><img src="../frontend/public/brand/gssg-logo.png" alt=""><div><div class="brand-name">GSSG</div><div class="brand-sub">Operations Portal</div></div></div>
+        <div class="brand"><img src="../frontend/public/brand/gssg-wordmark.png" alt=""><div><div class="brand-name">GSSG</div><div class="brand-sub">Operations Portal</div></div></div>
         <nav class="navlinks" aria-label="Primary">
           ${[['▦','Dashboard'],['♟','Employees'],['≡','Ledger'],['◫','Leaves'],['✦','Services'],['▤','Records'],['✓','Permits']].map(([i,n],idx)=>`<div class="navlink ${idx===0?'active':''}"><b>${i}</b>${n}</div>`).join('')}
         </nav>
@@ -930,9 +904,6 @@
           <p class="hero-insight">Operations are steady. 3 employees return before Thursday.</p>
         </div>
         <aside class="movement-brief" aria-label="Daily employee movement brief">
-          <div class="movement-crest">
-            <img src="../frontend/public/brand/gssg-logo.png" alt="" aria-hidden="true">
-          </div>
           <div class="movement-body">
             <div class="movement-head">
               <strong>Daily movement</strong>

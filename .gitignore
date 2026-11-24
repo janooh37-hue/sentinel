@@ -26,6 +26,7 @@ frontend/.vite/
 # Built artifacts (frontend → backend bundle)
 backend/app/static/assets/
 backend/app/static/index.html
+backend/app/static/brand/
 
 # Runtime data
 data/

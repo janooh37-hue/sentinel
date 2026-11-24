@@ -336,22 +336,7 @@ blank text, or text containing a NUL, which cannot be quoted. Callers must check
 
 ## Templates
 
-Tokenized templates live in `backend/templates/`. Pristine v3 originals
-are snapshotted to `backend/templates/_originals/` on first run of
-`scripts/tokenize_all_templates.py`.
-
-When templates need changes:
-
-* **For form-layout edits** — open the template in Word, edit, save
-  back into `backend/templates/`. Don't re-run the tokenizer; you'll
-  blow away your edits.
-* **For wholesale re-tokenization** — delete the relevant template from
-  `backend/templates/`, re-run `scripts/tokenize_all_templates.py`. It
-  re-derives the tokenized file from `_originals/`.
-
-If HR edits the v3 templates in the field (in their own working copy of
-v3.5.4), those edits don't automatically flow into v4. Re-snapshot by
-copying the new v3 files into `_originals/` and re-running the tokenizer.
+Templates live in `backend/templates/`; `backend/templates/_originals/` holds reference originals of the pre-tokenized v3 forms and is not read at runtime.
 
 ---
 
