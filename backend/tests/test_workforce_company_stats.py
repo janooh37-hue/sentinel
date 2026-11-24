@@ -243,6 +243,27 @@ def test_filter_uses_snapshot_and_keeps_comparison_and_transfer(
     assert unassigned_data["ranking"]["rows"][0]["transfer"] is None
 
 
+def test_filtered_ranking_shows_the_transfer_touching_the_selected_company(
+    api_db: Session, admin_client: TestClient
+) -> None:
+    seed = _seed_case(api_db)
+    seed.duty_unit_snapshot = "Alpha"
+    _case(api_db, seed, seed.employee_id, date(2026, 8, 18), "Beta")
+    _case(api_db, seed, seed.employee_id, END, "Gamma")
+    api_db.commit()
+
+    def row(**params: str) -> tuple[str, dict[str, str]]:
+        ranked = _stats(admin_client, **params)["ranking"]["rows"][0]
+        return ranked["duty_unit"], ranked["transfer"]
+
+    alpha_to_beta = {"from_unit": "Alpha", "to_unit": "Beta", "on_date": "2026-08-18"}
+    beta_to_gamma = {"from_unit": "Beta", "to_unit": "Gamma", "on_date": "2026-08-19"}
+    assert row(duty_unit="Alpha") == ("Alpha", alpha_to_beta)
+    assert row(duty_unit="Beta") == ("Beta", beta_to_gamma)
+    assert row(duty_unit="Gamma") == ("Gamma", beta_to_gamma)
+    assert row() == ("Gamma", beta_to_gamma)
+
+
 def test_company_selection_and_workbook_share_natural_company_order(
     api_db: Session, admin_client: TestClient
 ) -> None:

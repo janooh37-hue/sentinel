@@ -357,7 +357,12 @@ def _current_cases(
             prior_case[employee_id] = unit, absent
 
         # Work from all authorized snapshots; a filter must not erase a real transfer.
-        if prior is not None and unit != prior[0]:
+        # A filtered row keeps the latest transfer into or out of the selected company.
+        if (
+            prior is not None
+            and unit != prior[0]
+            and (duty_unit is None or _selected(unit, duty_unit) or _selected(prior[0], duty_unit))
+        ):
             data.transfers[employee_id] = {"from_unit": prior[0], "to_unit": unit, "on_date": day}
 
         if not _selected(unit, duty_unit):
