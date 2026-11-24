@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import { Trans, useTranslation } from 'react-i18next'
 
@@ -6,6 +6,7 @@ import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { cn } from '@/lib/utils'
 
 import { daySummary, ON_SITE_BUCKETS, siteTime, type AttendanceRow, type DaySummary, type OnSiteBucket } from './attendanceModel'
+import { moveRovingFocus, pageDirection } from './rovingFocus'
 
 interface Props {
   rows: readonly AttendanceRow[]
@@ -60,7 +61,6 @@ export function OnSiteNowSummary({
   const visualRef = useRef<HTMLDivElement>(null)
   const leadersRef = useRef<SVGSVGElement>(null)
   const segmentRefs = useRef<Partial<Record<OnSiteBucket, HTMLSpanElement | null>>>({})
-  const buttonRefs = useRef<Partial<Record<OnSiteBucket, HTMLButtonElement | null>>>({})
   const swatchRefs = useRef<Partial<Record<OnSiteBucket, HTMLSpanElement | null>>>({})
   const [leaders, setLeaders] = useState<Leader[]>([])
 
@@ -72,7 +72,7 @@ export function OnSiteNowSummary({
     const measure = (): void => {
       const bounds = svg.getBoundingClientRect()
       if (bounds.width === 0) return
-      const rtl = (document.documentElement.dir || i18n.dir()) === 'rtl'
+      const rtl = pageDirection(i18n) === 'rtl'
       // Read every endpoint before writing paths. Lane order prevents crossings.
       const lines = buckets.flatMap((bucket) => {
         const segment = segmentRefs.current[bucket]
@@ -111,27 +111,11 @@ export function OnSiteNowSummary({
     }
   }, [buckets, summary, i18n, i18n.language])
 
-  const moveFocus = (event: KeyboardEvent<HTMLButtonElement>, bucket: OnSiteBucket): void => {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
-    event.preventDefault()
-    event.stopPropagation()
-    const enabled = buckets.filter(bucketEnabled)
-    if (enabled.length === 0) return
-    const rtl = (document.documentElement.dir || i18n.dir()) === 'rtl'
-    const forward = event.key === 'ArrowDown' || event.key === (rtl ? 'ArrowLeft' : 'ArrowRight')
-    const index = event.key === 'Home' ? 0
-      : event.key === 'End' ? enabled.length - 1
-        : (enabled.indexOf(bucket) + (forward ? 1 : -1) + enabled.length) % enabled.length
-    const next = enabled[index]
-    setFocusedBucket(next)
-    buttonRefs.current[next]?.focus()
-  }
-
   return (
     <section aria-labelledby={`${id}-title`} className="my-3 grid gap-0 rounded-2xl border border-border bg-surface lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
       <div className="grid min-w-0 gap-5 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:p-5">
         <div className="min-w-0 self-center">
-          <h2 id={`${id}-title`} className="mb-1.5 text-[14px] font-semibold sm:text-[15px]">{title}</h2>
+          <h2 id={`${id}-title`} className="mb-1.5 text-[0.875rem] font-semibold sm:text-[0.9375rem]">{title}</h2>
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted-foreground">
             <span>
               <Trans
@@ -154,13 +138,14 @@ export function OnSiteNowSummary({
               aria-describedby={`${id}-residual-hint`}
               className="inline-flex min-h-[44px] items-center gap-2 rounded-sm text-start text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-6 [@media(pointer:coarse)]:min-h-[44px]"
             >
-              <span aria-hidden="true" className="size-2 shrink-0 rounded-full border border-faint" />
+              <span aria-hidden="true" className="size-2 shrink-0 rounded-full border" style={{ borderColor: 'var(--text-faint)' }} />
               <span>{t('attendance.onSiteNow.residual')} · <bdi dir="ltr" className="font-mono tabular-nums">{summary.residual}</bdi></span>
             </button>
             <span
               id={`${id}-residual-hint`}
               role="tooltip"
-              className="block text-xs leading-relaxed text-muted-foreground sm:invisible sm:absolute sm:bottom-full sm:start-0 sm:z-10 sm:mb-2 sm:w-60 sm:max-w-[calc(100vw-3rem)] sm:rounded-sm sm:border sm:border-border-strong sm:bg-surface sm:px-3 sm:py-2 sm:text-foreground sm:shadow-lg sm:group-focus-within:visible sm:group-hover:visible"
+              className="block text-xs leading-relaxed text-muted-foreground sm:invisible sm:absolute sm:bottom-full sm:start-0 sm:z-10 sm:mb-2 sm:w-60 sm:max-w-[calc(100vw-3rem)] sm:rounded-sm sm:border sm:bg-surface sm:px-3 sm:py-2 sm:text-foreground sm:shadow-lg sm:group-focus-within:visible sm:group-hover:visible"
+              style={{ borderColor: 'var(--border-strong)' }}
             >
               {t('attendance.onSiteNow.residualHint')}
             </span>
@@ -218,22 +203,21 @@ export function OnSiteNowSummary({
           <div
             role="group"
             aria-labelledby={`${id}-who`}
+            onKeyDown={(event) => moveRovingFocus(event, i18n, 'enabled')}
             className={cn('mt-2 grid grid-cols-2 gap-2 sm:mt-0 sm:gap-1', today ? 'sm:grid-cols-5' : 'sm:grid-cols-4')}
           >
             {buckets.map((bucket) => (
               <button
                 key={bucket}
-                ref={(node) => { buttonRefs.current[bucket] = node }}
                 type="button"
                 aria-pressed={who === bucket}
                 aria-disabled={!bucketEnabled(bucket)}
                 tabIndex={tabStop === bucket ? 0 : -1}
                 onFocus={() => setFocusedBucket(bucket)}
-                onKeyDown={(event) => moveFocus(event, bucket)}
                 onClick={() => {
                   if (bucketEnabled(bucket)) onWhoChange(who === bucket ? null : bucket)
                 }}
-                className="flex min-h-[58px] min-w-0 flex-col items-start gap-1 rounded-sm border px-[7px] py-1.5 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-surface-raised aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
+                className="flex min-h-[58px] min-w-0 flex-col items-start gap-1 rounded-sm border px-[7px] py-1.5 text-start hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-surface-raised aria-disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:hover:bg-transparent"
                 style={{ borderColor: who === bucket ? 'var(--primary)' : 'transparent' }}
               >
                 <span className="flex items-center gap-2.5">
@@ -243,11 +227,11 @@ export function OnSiteNowSummary({
                     className={cn('size-2 shrink-0 rounded-[2px]', BUCKET_MARK[bucket])}
                     style={{ borderColor: bucket === 'left' ? 'var(--primary)' : undefined }}
                   />
-                  <bdi dir="ltr" className="font-mono text-[22px] font-medium leading-tight tabular-nums">{summary[bucket]}</bdi>
+                  <bdi dir="ltr" className="font-mono text-[1.375rem] font-medium leading-tight tabular-nums">{summary[bucket]}</bdi>
                 </span>
-                <span className="text-[11px] leading-relaxed text-muted-foreground rtl:text-[12px]">{t(`attendance.onSiteNow.${bucket}`)}</span>
+                <span className="text-xs leading-relaxed text-muted-foreground">{t(`attendance.onSiteNow.${bucket}`)}</span>
                 {bucket === 'notArrived' && (summary.absent > 0 || summary.awaited > 0) && (
-                  <span className="whitespace-nowrap text-[11px] leading-relaxed text-muted-foreground rtl:text-[12px]">
+                  <span className="whitespace-nowrap text-xs leading-relaxed text-muted-foreground">
                     {summary.absent > 0 && <span>{t('attendance.onSiteNow.splitAbsent')} <bdi dir="ltr" className="font-mono tabular-nums">{summary.absent}</bdi></span>}
                     {summary.absent > 0 && summary.awaited > 0 && <>{' '}<span aria-hidden="true">·</span>{' '}</>}
                     {summary.awaited > 0 && <span>{t('attendance.onSiteNow.splitAwaited')} <bdi dir="ltr" className="font-mono tabular-nums">{summary.awaited}</bdi></span>}

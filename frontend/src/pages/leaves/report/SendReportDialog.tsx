@@ -15,8 +15,9 @@ import { toast } from '@/lib/toast'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
+import { NATIVE_SELECT } from '@/components/ui/native-select'
 
-import { FIELD_LABEL, NATIVE_SELECT } from './controls'
+import { FIELD_LABEL } from './controls'
 
 interface SendReportDialogProps {
   open: boolean

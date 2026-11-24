@@ -271,7 +271,7 @@ describe('AttendancePrintSheet', () => {
         rows: [row({ late_minutes: 47, corrected: true, final_out_at: MORNING_END })],
       })
       const declaration = screen.getByTestId('attendance-print-declaration')
-      expect(declaration).toHaveTextContent('Filtered: Who: Left')
+      expect(declaration).toHaveTextContent('Filtered: People: Left')
       expect(declaration).toHaveTextContent('Row status: Late past grace, Single punch')
       expect(declaration).toHaveTextContent('Corrected · Company: Alpha · Morning · search "rashid"')
       expect(declaration).toHaveTextContent('1 of 6 rows · as of 16:00')
@@ -294,21 +294,50 @@ describe('AttendancePrintSheet', () => {
     for (const declaration of declarations) {
       expect(declaration).toHaveTextContent('All rows · Company: All companies · 6 of 6 rows · as of 16:00')
       expect(declaration.querySelectorAll('bdi[dir="ltr"]')).toHaveLength(3)
-      expect(declaration).not.toHaveTextContent('Filtered:')
+      expect(declaration).not.toHaveTextContent('Filtered')
     }
   })
 
   it.each([
     ['Alpha', 'Alpha'],
     ['__unassigned__', 'Unassigned'],
-  ])('declares company-only scope %s without claiming a tier filter', (company, label) => {
+  ])('declares company-only scope %s as filtered without claiming a tier filter', (company, label) => {
     renderSheet({ company, rows: [row({ duty_unit: company === '__unassigned__' ? null : company })] })
 
     const declaration = screen.getByTestId('attendance-print-declaration')
-    expect(declaration).toHaveTextContent(`All rows · Company: ${label} · 1 of 6 rows · as of 16:00`)
-    expect(declaration).not.toHaveTextContent('Filtered:')
-    expect(declaration).not.toHaveTextContent('Who:')
+    expect(declaration).toHaveTextContent(new RegExp(`^Filtered · Company: ${label} · 1 of 6 rows · as of 16:00$`))
+    expect(declaration).not.toHaveTextContent('People:')
     expect(declaration).not.toHaveTextContent('Row status:')
+  })
+
+  it.each([
+    ['company', { company: 'Alpha' }, 'Company: Alpha'],
+    ['shift', { shiftCode: 'morning' }, 'Morning'],
+    ['search', { search: 'Ahmed' }, 'search "Ahmed"'],
+  ] as const)('declares an active %s filter even when every row matches', (_scope, props, clause) => {
+    renderSheet({ rows: [row({ duty_unit: 'Alpha' })], totalRows: 1, ...props })
+
+    const declaration = screen.getByTestId('attendance-print-declaration')
+    expect(declaration).toHaveTextContent(/^Filtered ·/)
+    expect(declaration).toHaveTextContent(`${clause} · 1 of 1 row`)
+  })
+
+  it('declares a partial register as filtered even with no active filter', () => {
+    renderSheet({ rows: [row()] })
+
+    expect(screen.getByTestId('attendance-print-declaration')).toHaveTextContent(
+      /^Filtered · Company: All companies · 1 of 6 rows · as of 16:00$/,
+    )
+  })
+
+  it('declares Arabic company-only scope as filtered', async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await act(() => i18n.changeLanguage('ar'))
+    renderSheet({ company: 'السرية الثانية', rows: [row()] })
+
+    expect(screen.getByTestId('attendance-print-declaration')).toHaveTextContent(
+      /^مُرشَّح · السرية: السرية الثانية · الصفوف: 1 من 6 · حتى 16:00$/,
+    )
   })
 
   it('isolates Arabic declaration counts, time and the search query without English fallbacks', async () => {

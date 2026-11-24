@@ -17,7 +17,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { siteToday } from '@/components/employees/useAttendanceAttention'
 import { api } from '@/lib/api'
-import { UNASSIGNED } from '@/lib/dutyUnits'
+import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
@@ -122,6 +122,7 @@ function AttendancePageBody(): React.JSX.Element | null {
     },
     [updateParams],
   )
+  const onDateChange = useCallback((iso: string) => setParam('date', iso >= today ? null : iso), [setParam, today])
   // A patch, not a whole filter: merged onto the newest params, a tier change
   // cannot resurrect another tier's previous value.
   const patchFilter = useCallback((patch: Partial<AttendanceFilter>) => {
@@ -170,21 +171,21 @@ function AttendancePageBody(): React.JSX.Element | null {
   const anyWindowOpen = useMemo(() => isWindowOpen(allRows, now), [allRows, now])
 
   const companies = useMemo(() => {
-    const units = new Set<string>()
-    for (const row of allRows) {
-      const unit = row.duty_unit?.trim()
-      if (unit) units.add(unit)
-    }
-    if (company && company !== UNASSIGNED) units.add(company)
-    return [...units].sort((a, b) => a.localeCompare(b, i18n.language))
-  }, [allRows, company, i18n.language])
+    const options = unitOptions(allRows)
+    if (company && company !== UNASSIGNED && !options.includes(company)) options.push(company)
+    return options
+  }, [allRows, company])
 
-  const scopedRows = useMemo(() => {
-    const needle = search.trim().toLowerCase()
-    return allRows.filter((row) => {
-      if (shiftCode && row.shift_code !== shiftCode) return false
-      if (!matchesCompany(row, company)) return false
-      if (!needle) return true
+  const companyRows = useMemo(
+    () => company ? allRows.filter((row) => matchesCompany(row, company)) : allRows,
+    [allRows, company],
+  )
+  const needle = search.trim().toLowerCase()
+  // Shift buttons show the cost of switching: company and search apply, but
+  // the current shift doesn't narrow the counts for the other shifts.
+  const shiftCountRows = useMemo(() => {
+    if (!needle) return companyRows
+    return companyRows.filter((row) => {
       const name = pickEmployeeName(
         { name_en: row.name_en, name_ar: row.name_ar ?? null },
         i18n.language,
@@ -195,12 +196,17 @@ function AttendancePageBody(): React.JSX.Element | null {
         (row.duty_post ?? '').toLowerCase().includes(needle)
       )
     })
-  }, [allRows, company, i18n.language, search, shiftCode])
+  }, [companyRows, i18n.language, needle])
+  const matchesShift = useCallback((row: AttendanceRow) => row.shift_code === shiftCode, [shiftCode])
+  const scopedRows = useMemo(
+    () => shiftCode ? shiftCountRows.filter(matchesShift) : shiftCountRows,
+    [matchesShift, shiftCode, shiftCountRows],
+  )
   const filteredRows = useMemo(() => applyAttendanceFilter(scopedRows, filter, { now }), [scopedRows, filter, now])
   const counts = useMemo(() => stateCounts(scopedRows, filter, { now }), [scopedRows, filter, now])
   const peopleShown = useMemo(() => new Set(filteredRows.map((row) => row.employee_id)).size, [filteredRows])
-  const searchEmptiedScope = scopedRows.length === 0 && search.trim().length > 0 &&
-    allRows.some((row) => (!shiftCode || row.shift_code === shiftCode) && matchesCompany(row, company))
+  const searchEmptiedScope = scopedRows.length === 0 && needle.length > 0 &&
+    (shiftCode ? companyRows.some(matchesShift) : companyRows.length > 0)
 
   const attention = exceptionsQuery.isSuccess
     ? exceptionsQuery.data.items.length
@@ -250,9 +256,10 @@ function AttendancePageBody(): React.JSX.Element | null {
       const target = event.target as HTMLElement | null
       if (target && (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable ||
         target.closest('[contenteditable]:not([contenteditable="false"])'))) return
-      if (event.key === 'ArrowLeft') setParam('date', shiftIsoDate(operationalDate, -1))
-      else if (event.key === 'ArrowRight') setParam('date', shiftIsoDate(operationalDate, 1))
-      else if (['1', '2', '3', '4'].includes(event.key)) {
+      if (event.key === 'ArrowLeft') onDateChange(shiftIsoDate(operationalDate, -1))
+      else if (event.key === 'ArrowRight') {
+        if (operationalDate < today) onDateChange(shiftIsoDate(operationalDate, 1))
+      } else if (['1', '2', '3', '4'].includes(event.key)) {
         const code = SHIFT_KEYS[Number(event.key) - 1]
         setParam('shift', shiftCode === code ? null : code)
       } else if (event.key === '/') {
@@ -265,7 +272,7 @@ function AttendancePageBody(): React.JSX.Element | null {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [canReview, clearFilters, filterActive, operationalDate, overlayOpen, setParam, shiftCode])
+  }, [canReview, clearFilters, filterActive, onDateChange, operationalDate, overlayOpen, setParam, shiftCode, today])
 
   const body = (): React.JSX.Element => {
     if (dayQuery.isPending) {
@@ -293,7 +300,8 @@ function AttendancePageBody(): React.JSX.Element | null {
             <button
               type="button"
               onClick={clearFilters}
-              className="min-h-[44px] rounded-md border border-border-strong px-3 text-[0.8em] font-medium hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-h-[44px] rounded-md border px-3 text-[0.8em] font-medium hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              style={{ borderColor: 'var(--border-strong)' }}
             >
               {t('attendance.filter.clear')}
             </button>
@@ -301,7 +309,8 @@ function AttendancePageBody(): React.JSX.Element | null {
             <button
               type="button"
               onClick={() => setSearch('')}
-              className="min-h-[44px] rounded-md border border-border-strong px-3 text-[0.8em] font-medium hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="min-h-[44px] rounded-md border px-3 text-[0.8em] font-medium hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              style={{ borderColor: 'var(--border-strong)' }}
             >
               {t('attendance.results.clearSearch')}
             </button>
@@ -371,15 +380,17 @@ function AttendancePageBody(): React.JSX.Element | null {
       <div className="mx-auto w-full max-w-[1400px] px-8 pb-10 pt-4" data-print-hide>
         <AttendanceToolbar
           operationalDate={operationalDate}
+          today={today}
           dayStrip={dayStrip}
-          rows={allRows}
+          dayRows={allRows}
+          shiftCountRows={shiftCountRows}
           now={now}
           shiftCode={shiftCode}
           company={company}
           companies={companies}
           view={view}
           search={search}
-          onDateChange={(iso) => setParam('date', iso === today ? null : iso)}
+          onDateChange={onDateChange}
           onShiftChange={(code) => setParam('shift', code)}
           onCompanyChange={(next) => setParam('company', next)}
           onViewChange={(next) => setParam('view', next === 'register' ? null : next)}
@@ -404,6 +415,7 @@ function AttendancePageBody(): React.JSX.Element | null {
           <div className="min-w-0 pt-3">
             <AttendanceStateFilter
               counts={counts}
+              resultCount={filteredRows.length}
               states={filter.states}
               corrected={filter.corrected}
               onStatesChange={(states) => patchFilter({ states })}
@@ -448,7 +460,7 @@ function AttendancePageBody(): React.JSX.Element | null {
             )}
             <AttentionQueue
               id={attentionTargetId}
-              labelledBy={attentionAnchorId}
+              labelledBy={dayQuery.isSuccess ? attentionAnchorId : undefined}
               rows={allRows}
               exceptionRows={exceptionsQuery.isSuccess ? exceptionsQuery.data.items : undefined}
               now={now}

@@ -7,16 +7,16 @@
  * `seen/due`, so switching is a decision, not a probe.
  */
 
-import { useId } from 'react'
+import { useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { NATIVE_SELECT } from '@/components/ui/native-select'
 import { UNASSIGNED } from '@/lib/dutyUnits'
 import { cn } from '@/lib/utils'
-import { NATIVE_SELECT } from '@/pages/leaves/report/controls'
 
 import type { PrintLayout } from './AttendancePrintSheet'
-import type { AttendanceRow, ShiftCount } from './attendanceModel'
-import { shiftCounts } from './attendanceModel'
+import type { AttendanceRow } from './attendanceModel'
+import { shiftCounts, shiftIsoDate } from './attendanceModel'
 
 export type AttendanceView = 'register' | 'board' | 'timeline'
 
@@ -33,8 +33,10 @@ export interface DayStripEntry {
 
 interface Props {
   operationalDate: string
+  today: string
   dayStrip: readonly DayStripEntry[]
-  rows: readonly AttendanceRow[]
+  dayRows: readonly AttendanceRow[]
+  shiftCountRows: readonly AttendanceRow[]
   now: Date
   shiftCode: string | null
   company: string | null
@@ -58,18 +60,19 @@ const PRINT_LAYOUTS: ReadonlyArray<readonly [PrintLayout, string]> = [
   ['shift', 'attendance.print.layoutShift'],
 ]
 
-function orderedShifts(counts: Record<string, ShiftCount>): string[] {
-  const present = Object.keys(counts)
-  return [
-    ...SHIFT_ORDER.filter((code) => present.includes(code)),
-    ...present.filter((code) => !SHIFT_ORDER.includes(code)).sort(),
-  ]
+function orderedShifts(rows: readonly AttendanceRow[]): string[] {
+  const present = new Set<string>()
+  for (const row of rows) present.add(row.shift_code ?? '—')
+  const ordered = SHIFT_ORDER.filter((code) => present.delete(code))
+  return ordered.concat([...present].sort())
 }
 
 export function AttendanceToolbar({
   operationalDate,
+  today,
   dayStrip,
-  rows,
+  dayRows,
+  shiftCountRows,
   now,
   shiftCode,
   company,
@@ -85,12 +88,8 @@ export function AttendanceToolbar({
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const companyId = useId()
-  const counts = shiftCounts(rows, { now })
-  const shifts = orderedShifts(counts)
-  const today = dayStrip.at(-1)?.iso ?? operationalDate
-  const companyOptions = company && company !== UNASSIGNED && !companies.includes(company)
-    ? [...companies, company]
-    : companies
+  const counts = useMemo(() => shiftCounts(shiftCountRows, { now }), [shiftCountRows, now])
+  const shifts = useMemo(() => orderedShifts(dayRows), [dayRows])
 
   return (
     <div data-print-hide>
@@ -99,7 +98,7 @@ export function AttendanceToolbar({
           <button
             type="button"
             aria-label={t('attendance.toolbar.previousDay')}
-            onClick={() => onDateChange(shiftDay(operationalDate, -1))}
+            onClick={() => onDateChange(shiftIsoDate(operationalDate, -1))}
             className="px-2.5 py-1.5 text-muted-foreground hover:bg-surface-tinted"
           >
             ‹
@@ -122,8 +121,9 @@ export function AttendanceToolbar({
           <button
             type="button"
             aria-label={t('attendance.toolbar.nextDay')}
-            onClick={() => onDateChange(shiftDay(operationalDate, 1))}
-            className="px-2.5 py-1.5 text-muted-foreground hover:bg-surface-tinted"
+            disabled={operationalDate >= today}
+            onClick={() => onDateChange(shiftIsoDate(operationalDate, 1))}
+            className="px-2.5 py-1.5 text-muted-foreground enabled:hover:bg-surface-tinted disabled:cursor-not-allowed disabled:opacity-50"
           >
             ›
           </button>
@@ -139,7 +139,7 @@ export function AttendanceToolbar({
 
         <div role="group" aria-label={t('attendance.title')} className="flex overflow-hidden rounded-xl border border-border">
           {shifts.map((code) => {
-            const count = counts[code] ?? { seen: 0, due: 0 }
+            const count = counts[code]
             const active = shiftCode === code
             return (
               <button
@@ -153,7 +153,7 @@ export function AttendanceToolbar({
               >
                 {t(`attendance.shift.${code}`, code)}
                 <span className="font-mono text-[0.88em] font-bold opacity-75">
-                  {count.due === 0 ? '—' : `${count.seen}/${count.due}`}
+                  {count?.due ? `${count.seen}/${count.due}` : '—'}
                 </span>
               </button>
             )
@@ -171,7 +171,7 @@ export function AttendanceToolbar({
             className={cn(NATIVE_SELECT, 'min-h-[44px] w-full lg:min-h-9 lg:w-auto lg:max-w-[200px]')}
           >
             <option value="">{t('leaves.report.allCompanies')}</option>
-            {companyOptions.filter((candidate) => candidate !== UNASSIGNED).map((candidate) => (
+            {companies.filter((candidate) => candidate !== UNASSIGNED).map((candidate) => (
               <option key={candidate} value={candidate}>{candidate}</option>
             ))}
             <option value={UNASSIGNED}>{t('dutyLocations.unassigned')}</option>
@@ -277,13 +277,4 @@ function Kbd({ children }: { children: React.ReactNode }): React.JSX.Element {
       {children}
     </kbd>
   )
-}
-
-/** Local-time day step, kept here so the toolbar owns no date library. */
-function shiftDay(iso: string, days: number): string {
-  const [year, month, day] = iso.split('-').map(Number)
-  const at = new Date(year, (month ?? 1) - 1, day ?? 1)
-  at.setDate(at.getDate() + days)
-  const pad = (value: number): string => String(value).padStart(2, '0')
-  return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`
 }

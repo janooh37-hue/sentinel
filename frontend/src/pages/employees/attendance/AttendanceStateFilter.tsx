@@ -1,5 +1,5 @@
 /** Row-status filters: OR within the states, with Corrected as an AND modifier. */
-import { useId, useRef, useState, type KeyboardEvent } from 'react'
+import { useId, useRef, useState } from 'react'
 import { SlidersHorizontal, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -9,9 +9,11 @@ import { cn } from '@/lib/utils'
 import { AttendanceStatusDot } from './AttendanceStatusDot'
 import { STATE_CHIP_ORDER, type RowState, type StateCounts } from './attendanceModel'
 import { attendanceStatusLabel } from './attendanceStatusLabel'
+import { moveRovingFocus, pageDirection } from './rovingFocus'
 
 interface Props {
   counts: StateCounts
+  resultCount: number
   states: readonly RowState[]
   corrected: boolean
   onStatesChange: (states: RowState[]) => void
@@ -22,12 +24,12 @@ interface Props {
 type ChipKey = RowState | 'corrected'
 
 const CHIP_KEYS: readonly ChipKey[] = [...STATE_CHIP_ORDER, 'corrected']
-const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--primary))] focus-visible:ring-offset-2 focus-visible:ring-offset-background'
-const CHIP = 'inline-flex items-center gap-[7px] rounded-sm border px-[9px] py-[5px] text-start text-[11px] rtl:text-[12px]'
+const FOCUS = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
+const CHIP = 'inline-flex items-center gap-[7px] rounded-sm border px-[9px] py-[5px] text-start text-[0.75rem]'
 const SELECTED = 'bg-primary-soft text-primary-text'
 const PRIMARY_BORDER = { borderColor: 'var(--primary)' }
-const UNSELECTED = 'border-border bg-surface text-foreground hover:border-border-strong hover:bg-surface-raised'
-const DISABLED = 'cursor-default border-dashed text-muted-foreground opacity-55 hover:border-border hover:bg-surface'
+const UNSELECTED = 'bg-surface text-foreground hover:bg-surface-raised'
+const DISABLED = 'cursor-not-allowed border-dashed text-muted-foreground opacity-50 hover:bg-surface'
 
 function StateChips({
   counts,
@@ -36,33 +38,12 @@ function StateChips({
   onStatesChange,
   onCorrectedChange,
   mobile = false,
-}: Omit<Props, 'onClear'> & { mobile?: boolean }): React.JSX.Element {
+}: Omit<Props, 'onClear' | 'resultCount'> & { mobile?: boolean }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [focusKey, setFocusKey] = useState<ChipKey>('verified')
   const pressed = (key: ChipKey): boolean => key === 'corrected' ? corrected : states.includes(key)
   const enabled = (key: ChipKey): boolean => counts[key] > 0 || pressed(key)
   const tabStop = CHIP_KEYS.find((key) => key === focusKey && enabled(key)) ?? CHIP_KEYS.find(enabled) ?? 'verified'
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return
-    event.preventDefault()
-    event.stopPropagation()
-    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-state-filter]'))
-    const current = event.target instanceof Element ? event.target.closest('button') : null
-    const index = buttons.findIndex((button) => button === current)
-    if (index < 0) return
-    const rtl = (document.documentElement.dir || i18n.dir()) === 'rtl'
-    const forward = event.key === 'ArrowDown' || (event.key === 'ArrowRight' && !rtl) || (event.key === 'ArrowLeft' && rtl)
-    const step = event.key === 'Home' ? 1 : event.key === 'End' ? -1 : forward ? 1 : -1
-    const origin = event.key === 'Home' ? -1 : event.key === 'End' ? buttons.length : index
-    for (let offset = 1; offset <= buttons.length; offset += 1) {
-      const next = buttons[(origin + step * offset + buttons.length) % buttons.length]
-      if (next && next.getAttribute('aria-disabled') !== 'true') {
-        next.focus()
-        break
-      }
-    }
-  }
 
   const chipClass = cn(CHIP, FOCUS, mobile ? 'min-h-[44px] w-full' : 'min-h-[33px]')
   const countClass = cn('font-mono tabular-nums', mobile && 'ms-auto')
@@ -71,7 +52,7 @@ function StateChips({
     <div
       role="group"
       aria-label={t('attendance.filter.rowStatus')}
-      onKeyDown={onKeyDown}
+      onKeyDown={(event) => moveRovingFocus(event, i18n)}
       className={mobile ? 'grid grid-cols-2 gap-2' : 'flex flex-wrap items-center gap-1.5'}
     >
       {STATE_CHIP_ORDER.map((state) => {
@@ -119,23 +100,20 @@ function StateChips({
           <span>{t('attendance.state.corrected')}</span>{' '}
           <bdi dir="ltr" className={countClass}>{counts.corrected}</bdi>
         </button>
-        <p className="text-[11px] text-muted-foreground rtl:text-[12px]">{t('attendance.legend.hint')}</p>
+        <p className="text-[0.75rem] text-muted-foreground">{t('attendance.legend.hint')}</p>
       </div>
     </div>
   )
 }
 
-export function AttendanceStateFilter({ counts, states, corrected, onStatesChange, onCorrectedChange, onClear }: Props): React.JSX.Element {
+export function AttendanceStateFilter({ counts, resultCount, states, corrected, onStatesChange, onCorrectedChange, onClear }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const direction = document.documentElement.dir || i18n.dir()
+  const direction = pageDirection(i18n)
   const titleId = useId()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const activeStates = STATE_CHIP_ORDER.filter((state) => states.includes(state))
   const activeCount = activeStates.length + Number(corrected)
-  const resultCount = corrected ? counts.corrected : STATE_CHIP_ORDER.reduce(
-    (total, state) => total + (activeStates.length === 0 || states.includes(state) ? counts[state] : 0), 0,
-  )
   const chipProps = { counts, states, corrected, onStatesChange, onCorrectedChange }
 
   const removeState = (state: RowState): void => {
@@ -152,7 +130,8 @@ export function AttendanceStateFilter({ counts, states, corrected, onStatesChang
             <button
               ref={triggerRef}
               type="button"
-              className={cn('inline-flex min-h-[44px] items-center gap-2 rounded-md border border-border-strong bg-surface px-3 text-[0.75em] font-semibold text-foreground hover:bg-surface-tinted lg:hidden', FOCUS)}
+              className={cn('inline-flex min-h-[44px] items-center gap-2 rounded-md border bg-surface px-3 text-[0.75em] font-semibold text-foreground hover:bg-surface-tinted lg:hidden', FOCUS)}
+              style={{ borderColor: 'var(--border-strong)' }}
             >
               <SlidersHorizontal className="h-4 w-4" strokeWidth={1.8} aria-hidden />
               <span>{t('attendance.filter.button')}{activeCount > 0 && <> <bdi dir="ltr" className="font-mono tabular-nums">({activeCount})</bdi></>}</span>

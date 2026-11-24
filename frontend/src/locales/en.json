@@ -7452,7 +7452,7 @@
       "openEmployee": "Open employee file · {{name}} · {{employeeId}}"
     },
     "print": {
-      "whoFilter": "Who: {{who}}",
+      "whoFilter": "People: {{who}}",
       "statesFilter": "Row status: {{states}}",
       "companyFilter": "Company: <0>{{company}}</0>",
       "searchDeclaration": "search \"<0>{{term}}</0>\"",
@@ -7464,6 +7464,7 @@
       "titlePeer": "سجل الحضور اليومي",
       "subtitleSheet": "{{date}} · duty register by shift, unit and post",
       "subtitleShift": "{{date}} · one sheet per shift · sheet {{index}} of {{total}}",
+      "filteredLabel": "Filtered",
       "filtered": "Filtered: {{filter}}",
       "date": "Date",
       "shifts": "Shifts",

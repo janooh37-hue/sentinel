@@ -242,8 +242,12 @@ export function AttendancePrintSheet({
     }))
   }
   if (filter.corrected) tiers.push(t('attendance.state.corrected'))
+  const searchTerm = search.trim()
+  const partialScope = company || shiftCode || searchTerm || rows.length < totalRows
   const clauses: React.ReactNode[] = [
-    tiers.length > 0 ? t('attendance.print.filtered', { filter: tiers.join(' · ') }) : t('attendance.print.allRows'),
+    tiers.length > 0
+      ? t('attendance.print.filtered', { filter: tiers.join(' · ') })
+      : t(partialScope ? 'attendance.print.filteredLabel' : 'attendance.print.allRows'),
     <Trans
       key="company"
       i18nKey="attendance.print.companyFilter"
@@ -252,11 +256,11 @@ export function AttendancePrintSheet({
     />,
   ]
   if (shiftCode) clauses.push(t(`attendance.shift.${shiftCode}`, shiftCode))
-  if (search.trim()) {
+  if (searchTerm) {
     clauses.push(
       <Trans
         i18nKey="attendance.print.searchDeclaration"
-        values={{ term: search.trim() }}
+        values={{ term: searchTerm }}
         components={[<bdi dir="auto" key="search" />]}
       />,
     )

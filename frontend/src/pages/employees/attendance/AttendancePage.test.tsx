@@ -317,6 +317,24 @@ describe('AttendancePage', () => {
     expect(new Date(secondDate).getTime()).toBeLessThan(new Date(firstDate).getTime())
   })
 
+  it.each(['next-day button', 'ArrowRight'])('returns to the default date and stops at today with %s', async (method) => {
+    const user = userEvent.setup()
+    renderPage('/employees/attendance?date=2026-08-18')
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledWith({ operational_date: '2026-08-18', limit: 500 }))
+    const nextDay = screen.getByRole('button', { name: 'Next day' })
+    const stepForward = () => method === 'ArrowRight' ? user.keyboard('{ArrowRight}') : user.click(nextDay)
+
+    await stepForward()
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledWith({ operational_date: '2026-08-19', limit: 500 }))
+    expect(routeParams().has('date')).toBe(false)
+
+    await stepForward()
+    expect(screen.getByLabelText('Choose day')).toHaveValue('2026-08-19')
+    expect(routeParams().has('date')).toBe(false)
+    expect(listAttendanceDay).toHaveBeenCalledTimes(2)
+    expect(nextDay).toBeDisabled()
+  })
+
   it('suspends all page shortcuts while the correction evidence overlay is open', async () => {
     const user = userEvent.setup()
     renderPage()
@@ -421,6 +439,28 @@ describe('AttendancePage', () => {
     expect(within(states).getByRole('button', { name: /^Not due yet/ })).toHaveTextContent('1')
     expect(routeParams().get('company')).toBe('Alpha')
     expect(routeParams().get('state')).toBe('late')
+  })
+
+  it('recounts shift buttons for company and search without narrowing them to the selected shift', async () => {
+    const user = userEvent.setup()
+    listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
+    renderPage()
+
+    const morning = await screen.findByRole('button', { name: /^Morning/ })
+    const night = screen.getByRole('button', { name: /^Night/ })
+    expect(morning).toHaveTextContent('2/3')
+    expect(night).toHaveTextContent('0/2')
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Company' }), 'Alpha')
+    expect(morning).toHaveTextContent('2/2')
+    expect(night).toHaveTextContent('0/1')
+
+    await user.click(morning)
+    expect(morning).toHaveAttribute('aria-pressed', 'true')
+    expect(night).toHaveTextContent('0/1')
+    await user.type(screen.getByRole('searchbox'), 'Ahmed')
+    expect(morning).toHaveTextContent('1/1')
+    expect(night).toHaveTextContent('—')
   })
 
   it('shows people and row totals for the unfiltered day without a Clear filters action', async () => {
@@ -608,14 +648,36 @@ describe('AttendancePage', () => {
     expect(anchor.id).not.toBe('')
   })
 
-  it('offers distinct company options and retains a company missing from the loaded day', async () => {
-    listAttendanceDay.mockResolvedValue({ items: FILTER_ROWS, next_cursor: null })
+  it('lists seed companies in Leaves report order, then extras and the selected missing company', async () => {
+    listAttendanceDay.mockResolvedValue({
+      items: [
+        row({ duty_unit: 'السرية الثالثة' }),
+        row({ duty_unit: 'السرية الثانية' }),
+        row({ duty_unit: 'Bravo' }),
+        row({ duty_unit: 'Alpha' }),
+        row({ duty_unit: 'Bravo' }),
+        row({ duty_unit: null }),
+      ],
+      next_cursor: null,
+    })
     renderPage('/employees/attendance?company=Zeta')
     await screen.findByRole('region', { name: 'On site now' })
     const select = screen.getByRole('combobox', { name: 'Company' })
     expect(select).toHaveValue('Zeta')
     const companies = within(select).getAllByRole('option').map((option) => option.getAttribute('value'))
-    expect(companies).toEqual(['', 'Alpha', 'Bravo', 'Zeta', '__unassigned__'])
+    expect(companies).toEqual([
+      '',
+      'الدوام الرسمي',
+      'السرية الأولى',
+      'السرية الثانية',
+      'السرية الثالثة',
+      'السرية الرابعة',
+      'السرية الخامسة',
+      'Bravo',
+      'Alpha',
+      'Zeta',
+      '__unassigned__',
+    ])
   })
 
   it('offers one trimmed company option and keeps its employees visible when selected', async () => {
@@ -737,6 +799,28 @@ describe('AttendancePage', () => {
     const queue = screen.getByTestId('attendance-attention-queue')
     expect(within(queue).getByText('Faisal Hamad')).toBeInTheDocument()
     expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
+  })
+
+  it('uses the desktop queue’s own heading when the day fails but exceptions load', async () => {
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockImplementation((query) => ({
+      matches: query === '(min-width: 64rem)', media: query, onchange: null,
+      addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      dispatchEvent: () => false,
+    }))
+    try {
+      listAttendanceDay.mockRejectedValue(new Error('day unavailable'))
+      renderPage()
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Attendance could not be loaded')
+      await screen.findByRole('button', { name: /Review Ahmed Ali/i })
+      const queue = screen.getByRole('complementary', { name: 'Needs a decision' })
+      const heading = within(queue).getByRole('heading', { name: 'Needs a decision' })
+      expect(heading).toBeVisible()
+      // jsdom does not apply the Tailwind desktop media query.
+      expect(heading.parentElement).not.toHaveClass('lg:hidden')
+    } finally {
+      matchMedia.mockRestore()
+    }
   })
 
   it.each(['workforce.people.view', 'workforce.attendance.review'])(

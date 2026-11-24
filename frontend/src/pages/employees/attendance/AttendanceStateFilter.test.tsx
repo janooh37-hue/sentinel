@@ -20,6 +20,7 @@ type FilterProps = ComponentProps<typeof AttendanceStateFilter>
 function renderFilter(overrides: Partial<FilterProps> = {}) {
   const props: FilterProps = {
     counts: COUNTS,
+    resultCount: 21,
     states: [],
     corrected: false,
     onStatesChange: vi.fn(),
@@ -110,7 +111,7 @@ describe('AttendanceStateFilter', () => {
     const onKeyDown = vi.fn()
     const onStatesChange = vi.fn()
     render(<div onKeyDown={onKeyDown}>
-      <AttendanceStateFilter counts={{ ...COUNTS, grace: 0 }} states={[]} corrected={false}
+      <AttendanceStateFilter counts={{ ...COUNTS, grace: 0 }} resultCount={19} states={[]} corrected={false}
         onStatesChange={onStatesChange} onCorrectedChange={vi.fn()} onClear={vi.fn()} />
     </div>)
     const group = screen.getByRole('group', { name: i18n.t('attendance.filter.rowStatus') })
@@ -156,12 +157,26 @@ describe('AttendanceStateFilter', () => {
     expect(opener).toHaveAccessibleName(`${i18n.t('attendance.filter.button')} (1)`)
   })
 
+  it('shows the supplied result count instead of recounting the available chips', async () => {
+    const user = userEvent.setup()
+    const { props, rerender } = renderFilter({ resultCount: 4 })
+    await user.click(screen.getByRole('button', { name: i18n.t('attendance.filter.button') }))
+    const dialog = await screen.findByRole('dialog')
+    const showResults = within(dialog).getByRole('button', {
+      name: (name) => name.startsWith(i18n.t('attendance.filter.showResults')),
+    })
+    expect(showResults).toHaveAccessibleName(`${i18n.t('attendance.filter.showResults')} · 4`)
+
+    rerender(<AttendanceStateFilter {...props} resultCount={0} />)
+    expect(showResults).toHaveAccessibleName(`${i18n.t('attendance.filter.showResults')} · 0`)
+  })
+
   it('opens a labelled mobile sheet, traps and returns focus, and keeps picks on Escape', async () => {
     const user = userEvent.setup()
     const onClear = vi.fn()
     function ControlledFilter(): React.JSX.Element {
       const [states, setStates] = useState<RowState[]>(['late'])
-      return <AttendanceStateFilter counts={COUNTS} states={states} corrected={false}
+      return <AttendanceStateFilter counts={COUNTS} resultCount={4} states={states} corrected={false}
         onStatesChange={setStates} onCorrectedChange={vi.fn()} onClear={onClear} />
     }
     render(<ControlledFilter />)
