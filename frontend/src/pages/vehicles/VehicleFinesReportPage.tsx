@@ -409,27 +409,18 @@ export function VehicleFinesReportPage(): React.JSX.Element {
               )}
             </section>
 
-            {/* The document. `print-vehicle-report` takes the named A4 page
-                that carries a real per-sheet margin (index.css), and
-                `print:block` is what puts the paper on the printer from a
-                phone as well as from a desk. */}
+            {/* The document. `print:block` is what puts the paper on the
+                printer from a phone as well as from a desk; PaperSheet's own
+                print rules (index.css) give it the page. */}
             <section
               aria-labelledby={paperHeadingId}
-              className="print-vehicle-report hidden overflow-hidden rounded-xl border border-border bg-surface md:block print:block print:rounded-none print:border-0"
+              className="hidden overflow-hidden rounded-xl border border-border bg-surface md:block print:block print:rounded-none print:border-0"
             >
               <h2 id={paperHeadingId} className="sr-only">
                 {t('vehicles.finesReport')}
               </h2>
               <div className="overflow-x-auto p-3 print:p-0">
-                {/* The `print-report-*` classes carry nothing on screen: they
-                    are the named hooks the print stylesheet re-declares each
-                    intended fill through, since the global rule flattens every
-                    background inside `#root` so the shell cannot ink a sheet. */}
-                <PaperSheet
-                  reference={REPORT_REFERENCE}
-                  title={t('vehicles.finesReport', { lng: 'ar' })}
-                  className="print-report-sheet print:w-full print:px-0"
-                >
+                <PaperSheet reference={REPORT_REFERENCE} title={t('vehicles.finesReport', { lng: 'ar' })}>
                   <ReportScope
                     site={selectedSite}
                     from={from}
@@ -437,11 +428,7 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                     recordCount={recordCount}
                   />
 
-                  {hideNames && (
-                    <div className="print-report-note">
-                      <PaperNote>{t('vehicles.anonymousNote', { lng: 'ar' })}</PaperNote>
-                    </div>
-                  )}
+                  {hideNames && <PaperNote>{t('vehicles.anonymousNote', { lng: 'ar' })}</PaperNote>}
 
                   <ReportTable groups={groups} hideNames={hideNames} />
 
@@ -513,7 +500,7 @@ function ReportScope({
   })
 
   return (
-    <dl className="print-report-scope mb-4 flex flex-wrap items-baseline justify-center gap-x-5 gap-y-1 border border-[#333] bg-[#fafafa] px-3 py-2 text-[0.62rem]">
+    <dl className="mb-4 flex flex-wrap items-baseline justify-center gap-x-5 gap-y-1 border border-[#333] bg-[#fafafa] px-3 py-2 text-[0.62rem]">
       {entries.map((entry) => (
         <div key={entry.label} className="flex items-baseline gap-1">
           <dt className="text-[#3c3c3c]">{entry.label}:</dt>
@@ -567,7 +554,7 @@ function ReportTable({
         groups.map((group) => (
           <tbody key={group.vehicleId} className="break-inside-avoid">
             <tr>
-              <th scope="rowgroup" colSpan={cols} className="print-report-group !bg-[#f0efe9]">
+              <th scope="rowgroup" colSpan={cols} className="!bg-[#f0efe9]">
                 <bdi dir="ltr" className="font-mono">
                   {group.plate}
                 </bdi>

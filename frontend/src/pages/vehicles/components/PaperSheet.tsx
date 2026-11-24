@@ -11,6 +11,10 @@
  * Ink is hard-coded rather than tokenised for the same reason
  * `AttendancePrintSheet` pins its colours: a dark-theme operator must not
  * print near-white text onto white paper.
+ *
+ * Printed from the browser, the page prints this sheet and nothing around it
+ * (`print-vehicle-paper` in index.css), so the paper on the printer is the
+ * preview: letterhead, fills and all.
  */
 
 import { useContext } from 'react'
@@ -57,7 +61,7 @@ export function PaperSheet({
     <article
       dir="rtl"
       className={cn(
-        'mx-auto w-[min(760px,100%)] border border-[#d8d5cd] bg-[#fffdf8] px-[34px] pb-7 pt-8',
+        'print-vehicle-paper mx-auto w-[min(760px,100%)] border border-[#d8d5cd] bg-[#fffdf8] px-[34px] pb-7 pt-8',
         'text-[#111] shadow-[0_5px_18px_rgba(13,40,69,0.1)]',
         'print:border-0 print:shadow-none',
         className,
