@@ -17,6 +17,7 @@ import { X } from 'lucide-react'
 
 import { api, ApiError } from '@/lib/api'
 import type { components } from '@/lib/api.types'
+import { formatDmy } from '@/lib/formatDmy'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -43,19 +44,13 @@ const CELL_MIN_WIDTH: Record<string, string> = {
 }
 const TEXT_CELL_MIN_WIDTH = 'min-w-[8rem]'
 
-/** ISO date → the paper's dd/mm/yyyy (docx_engine `_TODAY_FMT`). */
-function paperDate(iso: string | null | undefined): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
-}
-
 /** Prefill for one template column from the lookup. Arabic first: the papers are Arabic. */
 function prefillCell(emp: EmployeeLookup, key: string): string {
   switch (key) {
     case 'position':
       return emp.position_ar || emp.position || ''
     case 'uae_id_expiry':
-      return paperDate(emp.uae_id_expiry)
+      return emp.uae_id_expiry ? formatDmy(emp.uae_id_expiry) : ''
     default: {
       const value = (emp as unknown as Record<string, unknown>)[key]
       return typeof value === 'string' ? value : ''

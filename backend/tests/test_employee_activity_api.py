@@ -240,19 +240,21 @@ def test_service_employee_lookup_does_not_grant_profile_access(
     assert operator_client.get("/api/v1/employees/G100/detail").status_code == 403
 
 
+_PP = "books.service.Passport Release List"
+_UAE = "books.service.UAE ID Release List"
+_WORK = "books.service.Work ID Release List"
+
+
 @pytest.mark.parametrize(
     ("denied", "hidden"),
     [
-        (("Passport Release List",), {"passport_no"}),
-        (("UAE ID Release List",), {"uae_id_no", "uae_id_expiry"}),
-        (
-            ("Passport Release List", "UAE ID Release List"),
-            {"passport_no", "uae_id_no", "uae_id_expiry"},
-        ),
-        (
-            ("Passport Release List", "UAE ID Release List", "Work ID Release List"),
-            {"passport_no", "uae_id_no", "uae_id_expiry", "nationality"},
-        ),
+        ((), set()),
+        ((_PP,), {"passport_no"}),
+        ((_UAE,), {"uae_id_no", "uae_id_expiry"}),
+        ((_WORK,), set()),
+        ((_PP, _UAE), {"passport_no", "uae_id_no", "uae_id_expiry"}),
+        ((_PP, _UAE, _WORK), {"passport_no", "uae_id_no", "uae_id_expiry", "nationality"}),
+        (("documents.generate",), {"passport_no", "uae_id_no", "uae_id_expiry", "nationality"}),
     ],
 )
 def test_lookup_returns_each_document_field_only_with_its_release_service(
@@ -267,17 +269,24 @@ def test_lookup_returns_each_document_field_only_with_its_release_service(
     user = User(email="release-scope@x.ae", password_hash="x", role="operator", status="active")
     api_db.add(user)
     api_db.flush()
-    for service in denied:
-        api_db.add(
-            UserPermission(user_id=user.id, capability=f"books.service.{service}", effect="deny")
-        )
+    for capability in denied:
+        api_db.add(UserPermission(user_id=user.id, capability=capability, effect="deny"))
+    # Keeps the lookup route open when documents.generate is the denied cap.
+    api_db.add(UserPermission(user_id=user.id, capability="uniform.edit", effect="grant"))
     api_db.commit()
     selected = _client(api_db, user).get("/api/v1/employees/lookup/G100")
     assert selected.status_code == 200
     body = selected.json()
     assert body["id"] == "G100"
-    prefill = {"passport_no", "nationality", "uae_id_no", "uae_id_expiry"}
-    assert {key for key in prefill if body[key] is None} == hidden
+    expected = {
+        "passport_no": "PASSPORT100",
+        "nationality": "Egyptian",
+        "uae_id_no": "784-1990-1234567-1",
+        "uae_id_expiry": "2028-03-14",
+    }
+    assert {key: body[key] for key in expected} == {
+        key: None if key in hidden else value for key, value in expected.items()
+    }
 
 
 def test_employee_lookup_forbids_user_without_picker_capabilities(api_db: Session):

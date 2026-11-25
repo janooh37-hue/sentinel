@@ -218,8 +218,12 @@ def get_employee_lookup(
     row = employee_service.get_employee(db, employee_id)
     out = EmployeeLookupRead.model_validate(row)
 
+    # Using a service means generating it (frontend: documents.generate + its
+    # service cap); the route also admits uniform/user-management pickers.
+    can_generate = perm_service.has_capability(db, user, "documents.generate")
+
     def can(service: str) -> bool:
-        return perm_service.has_capability(db, user, f"books.service.{service}")
+        return can_generate and perm_service.has_capability(db, user, f"books.service.{service}")
 
     # Each release list prefills only its own document's fields; nobody else gets them.
     passport = can("Passport Release List")
