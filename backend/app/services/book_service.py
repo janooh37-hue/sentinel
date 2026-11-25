@@ -20,6 +20,7 @@ from typing import Any, Final, Literal, NamedTuple, cast
 
 from sqlalchemy import (
     Integer,
+    Select,
     and_,
     case,
     exists,
@@ -1435,7 +1436,8 @@ def service_facets(
         .scalar_subquery()
     )
     active_word_draft = _active_word_draft_clause()
-    stmt = select(
+    # Eight columns is past select()'s typed overloads; spell out the row type.
+    stmt: Select[str | None, str, str | None, int, str, str, str | None, bool] = select(
         Book.subject,
         Book.approval_state,
         newest_template_id,
@@ -1460,7 +1462,7 @@ def service_facets(
         subject,
         approval_state,
         template_id,
-        n_versions,
+        version_count,
         category_id,
         ref_number,
         classification_code,
@@ -1470,7 +1472,7 @@ def service_facets(
             word_draft_service(category_id, ref_number, classification_code)
             if active_draft
             else None
-        ) or resolve_service(subject, template_id, versioned=n_versions > 0)
+        ) or resolve_service(subject, template_id, versioned=version_count > 0)
         state = approval_state or "none"
         all_states[state] += 1
         per_service.setdefault(service_id, Counter())[state] += 1
@@ -2187,10 +2189,14 @@ def _approval_context(
         "employee_name_snapshot": book.employee_name_snapshot,
         "submitted_by_user_id": submitted_by_user_id,
         "submitted_by_name": names.get(submitted_by_user_id) if submitted_by_user_id else None,
-        "submitted_by_name_ar": names_ar.get(submitted_by_user_id),
+        "submitted_by_name_ar": (
+            names_ar.get(submitted_by_user_id) if submitted_by_user_id is not None else None
+        ),
         "doc_manager_user_id": manager_user_id,
         "doc_manager_name": names.get(manager_user_id) if manager_user_id else None,
-        "doc_manager_name_ar": names_ar.get(manager_user_id),
+        "doc_manager_name_ar": (
+            names_ar.get(manager_user_id) if manager_user_id is not None else None
+        ),
         "submitted_at": instant.isoformat() if instant else None,
     }
 
@@ -3701,7 +3707,7 @@ def _build_worklist_item(
     *,
     names_by_id: tuple[dict[int, str], dict[int, str | None]],
 ) -> ApprovalLogItem:
-    names_by_id, names_ar_by_id = names_by_id
+    names_en_by_id, names_ar_by_id = names_by_id
     book, version, full = row.book, row.version, row.access_scope == "full"
     approver_steps = [
         s for s in version.approval_steps if _received_step_kind(book, s.kind) == "approver"
@@ -3713,13 +3719,13 @@ def _build_worklist_item(
     raw_priority = context.get("priority")
     priority = raw_priority if isinstance(raw_priority, str) else (book.priority if full else None)
     doc_manager_user_id, doc_manager_name = _worklist_doc_manager(
-        db, book, version, full=full, names_by_id=names_by_id
+        db, book, version, full=full, names_by_id=names_en_by_id
     )
     raw_submitted_by_name = context.get("submitted_by_name")
     submitted_by_name = (
         raw_submitted_by_name
         if isinstance(raw_submitted_by_name, str)
-        else (names_by_id.get(book.submitted_by_user_id or 0) if full else None)
+        else (names_en_by_id.get(book.submitted_by_user_id or 0) if full else None)
     )
     raw_category_ar = context.get("category_name_ar")
     raw_category_en = context.get("category_name_en")
@@ -3734,6 +3740,9 @@ def _build_worklist_item(
         else (book.category.name_en if full and book.category is not None else None)
     )
     verdict = row.status if row.status in _APPROVAL_VERDICTS else None
+    submitter_key = context.get("submitted_by_user_id") or (
+        book.submitted_by_user_id if full else None
+    )
     decided_stamps = [s.decided_at for s in _approver_steps(version) if s.decided_at is not None]
     return ApprovalLogItem(
         book_id=book.id,
@@ -3748,21 +3757,20 @@ def _build_worklist_item(
         submitted_by_name=submitted_by_name,
         submitted_by_name_ar=context.get(
             "submitted_by_name_ar",
-            names_ar_by_id.get(
-                context.get("submitted_by_user_id") or (book.submitted_by_user_id if full else None)
-            ),
+            names_ar_by_id.get(submitter_key) if isinstance(submitter_key, int) else None,
         ),
         doc_manager_user_id=doc_manager_user_id,
         doc_manager_name=doc_manager_name,
         doc_manager_name_ar=context.get(
-            "doc_manager_name_ar", names_ar_by_id.get(doc_manager_user_id)
+            "doc_manager_name_ar",
+            names_ar_by_id.get(doc_manager_user_id) if doc_manager_user_id is not None else None,
         ),
-        approver_name=names_by_id.get(signer_step.assignee_user_id) if signer_step else None,
+        approver_name=names_en_by_id.get(signer_step.assignee_user_id) if signer_step else None,
         approver_name_ar=(
             names_ar_by_id.get(signer_step.assignee_user_id) if signer_step else None
         ),
         reviewer_names=[
-            names_by_id.get(s.assignee_user_id, "")
+            names_en_by_id.get(s.assignee_user_id, "")
             for s in version.approval_steps
             if _received_step_kind(book, s.kind) == "reviewer"
         ],

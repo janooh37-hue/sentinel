@@ -7,6 +7,7 @@ Revises: 0111_step_outcome_seen
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -17,7 +18,7 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-def _created_at() -> sa.Column:
+def _created_at() -> sa.Column[datetime]:
     return sa.Column(
         "created_at", sa.DateTime(), nullable=False, server_default=sa.func.current_timestamp()
     )
