@@ -61,3 +61,40 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: tsc
         run: pnpm exec tsc -b --noEmit
+
+  # FastAPI -> backend/openapi.json -> frontend/src/lib/api.types.ts, regenerated
+  # with the sync-api-types generators. A route or schema change committed
+  # without both regenerated files fails here, diff printed.
+  api-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - name: Regenerate backend/openapi.json
+        env:
+          # Importing the app creates its data folder; keep it out of the checkout.
+          GSSG_DATA_DIR: ${{ runner.temp }}/gssg-data
+        run: python -X utf8 scripts/dump_openapi.py
+      - name: Regenerate frontend/src/lib/api.types.ts
+        run: pnpm run gen:api
+        working-directory: frontend
+      - name: Committed contract matches the backend
+        run: |
+          if ! git diff --exit-code -- backend/openapi.json frontend/src/lib/api.types.ts; then
+            echo "::error::API contract drift: run the sync-api-types skill (scripts/dump_openapi.py, then pnpm -C frontend run gen:api) and commit both files."
+            exit 1
+          fi

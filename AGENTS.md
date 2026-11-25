@@ -31,7 +31,7 @@ pnpm -C frontend run build
 pnpm -C frontend run e2e
 ```
 
-Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, a format check of changed files, `mypy` (zero errors required), and the frontend `tsc -b --noEmit` type check on every pull request.
+Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, a format check of changed files, `mypy` (zero errors required), and the frontend `tsc -b --noEmit` type check on every pull request. Its `api-contract` check regenerates `backend/openapi.json` and `frontend/src/lib/api.types.ts` (the `sync-api-types` skill) and fails if either differs from what is committed.
 
 Service operations:
 
