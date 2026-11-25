@@ -49,6 +49,42 @@ jobs:
           pip install -r requirements.txt
           mypy
 
+  # Whole backend suite, no paths filter: a required check must always report.
+  # GSSG_DATA_DIR keeps app.config from creating a repo data/; no secrets, .env
+  # or network are needed (the gateways are blocked by autouse fixtures).
+  # One unsharded run took 27 min on a 4-vCPU runner, so test files are dealt
+  # round-robin across 4 shards; `backend-tests` (the required check) rolls
+  # them up.
+  backend-tests-shard:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+      - run: pip install -r requirements.txt
+      - name: pytest
+        env:
+          GSSG_DATA_DIR: ${{ runner.temp }}/gssg-data
+        run: |
+          files=$(ls backend/tests/test_*.py | sort | awk -v s=${{ matrix.shard }} 'NR % 4 == s')
+          pytest -n auto $files
+      - name: No repo data/ created
+        run: test ! -e data
+
+  backend-tests:
+    if: always()
+    needs: backend-tests-shard
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.backend-tests-shard.result }}" = success
+
   # The deploy runs `tsc -b && vite build`; type-check here so a broken
   # frontend fails the PR instead of aborting `mng deploy`.
   frontend-static:
