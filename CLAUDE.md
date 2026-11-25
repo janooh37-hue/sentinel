@@ -49,7 +49,8 @@ pnpm -C frontend run e2e                               # playwright
 # Run / operate the service (scripts/mng.ps1; deploy/update auto-elevate via UAC)
 scripts/mng.ps1 status        # service state, health, version, RAM, URL
 scripts/mng.ps1 deploy        # build + restart (apply local code changes)
-scripts/mng.ps1 update        # git pull; if changed -> build + restart
+scripts/mng.ps1 update        # fetch; if origin/main's GitHub checks are green -> pull + build + restart
+scripts/mng.ps1 update -Force # same, skipping the green check (hotfix while CI/GitHub is down)
 scripts/mng.ps1 logs          # tail service log (-Stderr for the error log)
 ```
 

@@ -31,7 +31,7 @@ pnpm -C frontend run build
 pnpm -C frontend run e2e
 ```
 
-Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, a format check of changed files, the full backend suite (`backend-tests`: `pytest -n auto`), and the frontend `tsc -b --noEmit` type check on every pull request.
+Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, a format check of changed files, `mypy` (zero errors required), the full backend suite sharded over 4 runners (`backend-tests`: `pytest -n auto`), the frontend `tsc -b --noEmit` type check, eslint (errors fail, warnings pass) and `vite build` (`frontend-static`), and the full Vitest suite (`frontend-tests`: `pnpm test`) on every pull request. Its `api-contract` check regenerates `backend/openapi.json` and `frontend/src/lib/api.types.ts` (the `sync-api-types` skill) and fails if either differs from what is committed. A new push to a PR cancels that PR's older run.
 
 Service operations:
 
@@ -41,6 +41,8 @@ scripts/mng.ps1 deploy
 scripts/mng.ps1 update
 scripts/mng.ps1 logs
 ```
+
+`update` ships `origin/main` only when its GitHub checks are green; `update -Force` skips that check with a warning, for a hotfix while CI or GitHub is down. Deploys stay manual (`docs/adr/0011-deploys-stay-manual-no-runner-on-production.md`).
 
 ## Architecture
 

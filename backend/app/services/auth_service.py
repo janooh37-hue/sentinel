@@ -245,7 +245,6 @@ def approve_user(
             http_status=409,
         )
     db.refresh(user)
-    g: str | None = None
     if employee_id:
         g = employee_id.strip().upper()
         if db.get(Employee, g) is None:
