@@ -184,6 +184,20 @@ export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
     intent: 'new',
     slug: slugifyQuickActionId('Passport Release List'),
   },
+  'Work ID Release List': {
+    emoji: '📛',
+    artwork: 'work-id-release',
+    href: serviceHref('Work ID Release List'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Work ID Release List'),
+  },
+  'UAE ID Release List': {
+    emoji: '🆔',
+    artwork: 'uae-id-release',
+    href: serviceHref('UAE ID Release List'),
+    intent: 'new',
+    slug: slugifyQuickActionId('UAE ID Release List'),
+  },
   Report: {
     emoji: '📊',
     artwork: 'report',

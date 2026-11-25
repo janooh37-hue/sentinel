@@ -19,6 +19,8 @@ const calibratedArtwork = {
   'Administrative Leave Form': 'administrative-leave',
   'Warning Form': 'warning',
   'Passport Release List': 'passport-release-list',
+  'Work ID Release List': 'work-id-release',
+  'UAE ID Release List': 'uae-id-release',
   Report: 'report',
   'Inmate Conduct Violations': 'inmate-conduct',
 } as const

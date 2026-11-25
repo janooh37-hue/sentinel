@@ -898,7 +898,78 @@
         "type": "employees_table",
         "label_en": "Employees",
         "label_ar": "الموظفون",
-        "required": true
+        "required": true,
+        "columns": [
+          {
+            "key": "nationality",
+            "label_en": "Nationality",
+            "label_ar": "الجنسية"
+          },
+          {
+            "key": "passport_no",
+            "label_en": "Passport No",
+            "label_ar": "رقم جواز السفر"
+          }
+        ]
+      }
+    ]
+  },
+  "Work ID Release List": {
+    "category": "admin",
+    "name_en": "Work ID Release",
+    "name_ar": "استلام بطاقة العمل",
+    "form_number": "300-004c",
+    "fields": [
+      {
+        "key": "items",
+        "type": "employees_table",
+        "label_en": "Employees",
+        "label_ar": "الموظفون",
+        "required": true,
+        "columns": [
+          {
+            "key": "nationality",
+            "label_en": "Nationality",
+            "label_ar": "الجنسية"
+          },
+          {
+            "key": "position",
+            "label_en": "Job Title",
+            "label_ar": "المسمى الوظيفي"
+          }
+        ]
+      }
+    ]
+  },
+  "UAE ID Release List": {
+    "category": "admin",
+    "name_en": "UAE ID Release",
+    "name_ar": "استلام الهوية الإماراتية",
+    "form_number": "300-004d",
+    "fields": [
+      {
+        "key": "items",
+        "type": "employees_table",
+        "label_en": "Employees",
+        "label_ar": "الموظفون",
+        "required": true,
+        "columns": [
+          {
+            "key": "nationality",
+            "label_en": "Nationality",
+            "label_ar": "الجنسية"
+          },
+          {
+            "key": "uae_id_no",
+            "label_en": "Emirates ID No",
+            "label_ar": "رقم الهوية"
+          },
+          {
+            "key": "uae_id_expiry",
+            "label_en": "ID Expiry",
+            "label_ar": "تاريخ انتهاء الهوية"
+          }
+        ]
       }
     ]
   },

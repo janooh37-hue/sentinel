@@ -25,7 +25,8 @@ export const QUICK_ACTION_IDS = [
   'Violation Form', 'Leave Application Form', 'Duty Resumption Form', 'HR Request Form',
   'Salary Deduction Form', 'Employee Clearance Form', 'Passport Release Form',
   'Material Request Form', 'Resignation Letter', 'Administrative Leave Form',
-  'Warning Form', 'Passport Release List', 'Report', 'Inmate Conduct Violations',
+  'Warning Form', 'Passport Release List', 'Work ID Release List', 'UAE ID Release List',
+  'Report', 'Inmate Conduct Violations',
 ] as const
 export type QuickActionId = (typeof QUICK_ACTION_IDS)[number]
 

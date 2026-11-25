@@ -129,6 +129,8 @@ _FORM_CATEGORY: dict[str, str] = {
     "Leave Permit Form": "HR",
     "Administrative Leave Form": "HR",
     "Passport Release List": "HR",
+    "Work ID Release List": "HR",
+    "UAE ID Release List": "HR",
     "Report": "GS",  # minted by the Word handoff (word_book_service), always GS
     "Inmate Conduct Violations": "INV",
     "Vehicle Fines": "VF",

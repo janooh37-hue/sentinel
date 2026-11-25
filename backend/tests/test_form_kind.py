@@ -19,7 +19,8 @@ from app.core.form_kind import (
 def test_service_ids_are_templates_minus_companions_and_aliases() -> None:
     hidden = set(COMPANION_TEMPLATE_IDS) | set(SERVICE_ALIASES)
     assert set(SERVICE_IDS) == set(TEMPLATE_FILES) - hidden
-    assert len(SERVICE_IDS) == 41  # core + Arabic MRF + opt-in HR + monthly vehicle mileage
+    # core + Arabic MRF + opt-in HR + monthly vehicle mileage + Work/UAE ID release lists
+    assert len(SERVICE_IDS) == 43
     # TEMPLATE_FILES order is preserved (drives rail order).
     assert list(SERVICE_IDS) == [t for t in TEMPLATE_FILES if t not in hidden]
 
