@@ -1,39 +1,64 @@
 /**
- * EmployeesTableField — multi-employee picker for the Passport Release list.
+ * EmployeesTableField — multi-employee picker for the release lists
+ * (Passport, Work ID, UAE ID).
  *
  * Search + pick an employee → resolves via GET /employees/lookup/{id} and appends a
- * row auto-filled with ID, Name (Arabic, for the doc), Nationality, Passport
- * No. ＋ adds more; hard cap 15 (the template has 15 data rows). ID + Name
- * are read-only (identity); Nationality + Passport No are editable
- * (correctable when the record is blank). Output shape feeds the backend
- * item(i, field) render: [{ employee_id, name, nationality, passport_no }].
+ * row: ID and Name (Arabic, for the doc) are read-only identity; the template's
+ * `columns` follow as editable cells prefilled from the lookup (correctable
+ * when the record is blank). Hard cap 15 (each template has 15 data rows).
+ * Output shape feeds the backend item(i, field) render:
+ * [{ employee_id, name, <column keys…> }].
  */
 
 import { useState } from 'react'
 import { useFieldArray, useFormContext } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
 
 import { api, ApiError } from '@/lib/api'
+import type { components } from '@/lib/api.types'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
-import type { FieldProps } from '../types'
+import type { FieldProps, TemplateField } from '../types'
 
-interface Row {
-  employee_id: string
-  name: string
-  nationality?: string
-  passport_no?: string
-}
+type EmployeeLookup = components['schemas']['EmployeeLookupRead']
+type Column = NonNullable<TemplateField['columns']>[number]
+type Row = { employee_id: string; name: string } & Record<string, string>
 
 const MAX_ROWS = 15
+
+/** Document numbers and dates read left-to-right in both languages. */
+const LTR_KEYS: Record<string, true> = { passport_no: true, uae_id_no: true, uae_id_expiry: true }
+
+/** ISO date → the paper's dd/mm/yyyy (docx_engine `_TODAY_FMT`). */
+function paperDate(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : ''
+}
+
+/** Prefill for one template column from the lookup. Arabic first: the papers are Arabic. */
+function prefillCell(emp: EmployeeLookup, key: string): string {
+  switch (key) {
+    case 'position':
+      return emp.position_ar || emp.position || ''
+    case 'uae_id_expiry':
+      return paperDate(emp.uae_id_expiry)
+    default: {
+      const value = (emp as unknown as Record<string, unknown>)[key]
+      return typeof value === 'string' ? value : ''
+    }
+  }
+}
 
 export function EmployeesTableField({
   name,
   label_en,
   label_ar,
   required,
-}: FieldProps): React.JSX.Element {
+  columns = [],
+}: FieldProps & { columns?: Column[] }): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
@@ -63,12 +88,9 @@ export function EmployeesTableField({
     setLookupErr(null)
     try {
       const emp = await api.getEmployeeLookup(gid)
-      append({
-        employee_id: emp.id,
-        name: emp.name_ar || emp.name_en || '',
-        nationality: emp.nationality ?? '',
-        passport_no: emp.passport_no ?? '',
-      } satisfies Row)
+      const row: Row = { employee_id: emp.id, name: emp.name_ar || emp.name_en || '' }
+      for (const col of columns) row[col.key] = prefillCell(emp, col.key)
+      append(row)
     } catch (e) {
       setLookupErr(
         e instanceof ApiError && e.code === 'EMPLOYEE_NOT_FOUND'
@@ -101,7 +123,7 @@ export function EmployeesTableField({
             })}
           </p>
         )}
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs tabular-nums text-muted-foreground">
           {t('application.employeesTable.cap', {
             defaultValue: '{{n}}/15',
             n: fields.length,
@@ -126,13 +148,14 @@ export function EmployeesTableField({
                 <th scope="col">
                   {t('application.employeesTable.name', { defaultValue: 'Name' })}
                 </th>
-                <th scope="col" className="w-32">
-                  {t('application.employeesTable.nationality', { defaultValue: 'Nationality' })}
+                {columns.map((col) => (
+                  <th key={col.key} scope="col" className="w-36">
+                    {isAr ? col.label_ar : col.label_en}
+                  </th>
+                ))}
+                <th scope="col" className="w-10">
+                  <span className="sr-only">{t('common.delete', { defaultValue: 'Delete' })}</span>
                 </th>
-                <th scope="col" className="w-36">
-                  {t('application.employeesTable.passport', { defaultValue: 'Passport No' })}
-                </th>
-                <th scope="col" className="w-10" />
               </tr>
             </thead>
             <tbody>
@@ -148,25 +171,30 @@ export function EmployeesTableField({
                       <input type="hidden" {...register(`${name}.${idx}.name`)} />
                       {r.name}
                     </td>
+                    {columns.map((col) => {
+                      const ltr = LTR_KEYS[col.key] === true
+                      return (
+                        <td key={col.key}>
+                          <Input
+                            {...register(`${name}.${idx}.${col.key}`)}
+                            aria-label={`${isAr ? col.label_ar : col.label_en} · ${r.employee_id}`}
+                            className={ltr ? 'h-8 px-2 tabular-nums' : 'h-8 px-2'}
+                            dir={ltr ? 'ltr' : 'auto'}
+                          />
+                        </td>
+                      )
+                    })}
                     <td>
-                      <Input
-                        {...register(`${name}.${idx}.nationality`)}
-                        className="h-8 px-2"
-                        dir="auto"
-                      />
-                    </td>
-                    <td>
-                      <Input {...register(`${name}.${idx}.passport_no`)} className="h-8 px-2" dir="auto" />
-                    </td>
-                    <td>
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => remove(idx)}
-                        aria-label={t('common.delete', { defaultValue: 'Delete' })}
-                        className="text-base leading-none text-destructive hover:underline"
+                        aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${r.employee_id}`}
+                        className="text-destructive"
                       >
-                        ×
-                      </button>
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
                     </td>
                   </tr>
                 )

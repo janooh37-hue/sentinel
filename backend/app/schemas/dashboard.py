@@ -48,6 +48,8 @@ DASHBOARD_QUICK_ACTION_IDS = (
     "Administrative Leave Form",
     "Warning Form",
     "Passport Release List",
+    "Work ID Release List",
+    "UAE ID Release List",
     "Report",
     "Inmate Conduct Violations",
 )
@@ -90,6 +92,8 @@ DashboardQuickActionId = Literal[
     "Administrative Leave Form",
     "Warning Form",
     "Passport Release List",
+    "Work ID Release List",
+    "UAE ID Release List",
     "Report",
     "Inmate Conduct Violations",
 ]

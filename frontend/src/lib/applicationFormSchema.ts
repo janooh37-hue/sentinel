@@ -181,12 +181,10 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         break
 
       case 'employees_table': {
-        const erow = z.object({
-          employee_id: z.string(),
-          name: z.string(),
-          nationality: z.string().optional(),
-          passport_no: z.string().optional(),
-        })
+        // Identity plus the template's columns (passport_no, position, uae_id_no, …).
+        const erow = z
+          .object({ employee_id: z.string(), name: z.string() })
+          .catchall(z.string().optional())
         shape[id] = required
           ? z
               .array(erow)

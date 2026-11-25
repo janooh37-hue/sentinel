@@ -68,6 +68,9 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         # landscape list). The single-employee custody form keeps key
         # "Passport Release Form" but now displays as "Passport Request".
         "Passport Release List": "GSSG-HR_300-004b_Passport_Release_List.docx",
+        # Same multi-employee release paper, for the work ID card and the UAE ID.
+        "Work ID Release List": "GSSG-HR_300-004c_Work_ID_Release_List.docx",
+        "UAE ID Release List": "GSSG-HR_300-004d_UAE_ID_Release_List.docx",
         "Report": "GSSG-GS_300-004_Report.docx",
         "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
         "Vehicle Fines": "GSSG-VF_300-001_Vehicle_Fines.docx",
