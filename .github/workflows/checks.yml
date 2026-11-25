@@ -7,6 +7,14 @@ on:
   push:
     branches: [main]
 
+# A new push to a PR cancels that PR's older run; each push to main runs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
 jobs:
   backend-static:
     runs-on: ubuntu-latest
@@ -61,6 +69,32 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: tsc
         run: pnpm exec tsc -b --noEmit
+      # Errors fail; warnings are reported but pass (no --max-warnings).
+      - name: eslint
+        run: pnpm run lint
+      # The other half of `pnpm build`, which `mng deploy` runs; tsc ran above.
+      - name: vite build
+        run: pnpm exec vite build
+
+  # Whole Vitest suite, no paths filter: a required check must always report.
+  frontend-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: vitest
+        run: pnpm test
 
   # FastAPI -> backend/openapi.json -> frontend/src/lib/api.types.ts, regenerated
   # with the sync-api-types generators. A route or schema change committed
