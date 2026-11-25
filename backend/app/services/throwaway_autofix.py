@@ -8,8 +8,22 @@ DOCUMENTS_ROOT = Path("data/employee_documents")
 
 
 def employee_document_path(employee_code: str, filename: str) -> Path:
-    """Return the stored file for an employee's uploaded document."""
-    return DOCUMENTS_ROOT / employee_code / filename
+    """Return the stored file for an employee's uploaded document.
+
+    Raises ``ValueError`` when ``employee_code`` is not a single directory name, or when
+    the resolved file (symlinks included) is not inside that employee's directory under
+    ``DOCUMENTS_ROOT``.
+    """
+    if employee_code in {"", ".", ".."} or any(sep in employee_code for sep in "/\\:"):
+        raise ValueError(f"invalid employee code: {employee_code!r}")
+    root = DOCUMENTS_ROOT.resolve()
+    employee_dir = (root / employee_code).resolve()
+    if employee_dir.parent != root:
+        raise ValueError("employee directory is outside the documents root")
+    candidate = (employee_dir / filename).resolve()
+    if candidate == employee_dir or not candidate.is_relative_to(employee_dir):
+        raise ValueError("document path is outside the employee directory")
+    return candidate
 
 
 def read_employee_document(employee_code: str, filename: str) -> bytes:
