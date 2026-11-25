@@ -338,6 +338,32 @@ def test_rename_moves_live_references_paths_folder_and_preserves_history(setup):
     assert db.execute(text("PRAGMA foreign_key_check")).all() == []
 
 
+def test_employee_added_keeps_its_identity_when_the_employee_number_changes(setup):
+    _, _, _, client = setup
+
+    def added(employee_id: str):
+        response = client.get(
+            "/api/v1/employees/activity",
+            params={"kind": "employee_added", "employee_id": employee_id},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["total"] == 1
+        (item,) = response.json()["items"]
+        return item
+
+    before = added("G100")
+    response = client.post(
+        "/api/v1/employees/G100/id-change",
+        json={"new_id": "G300", "reason": "Correct the original typo"},
+    )
+    assert response.status_code == 200, response.text
+    after = added("G300")
+    assert after["source_id"] == before["source_id"]
+    assert after["target_id"] == before["target_id"]
+    assert after["occurred_at"] == before["occurred_at"]
+    assert after["employee_id"] == after["reference"] == "G300"
+
+
 def test_change_back_to_own_former_number_preserves_assigned_history(setup):
     db, _user, settings, client = setup
     (settings.vault_dir / "G100").mkdir()

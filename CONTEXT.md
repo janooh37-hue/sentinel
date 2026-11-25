@@ -104,6 +104,16 @@ _Avoid_: Send state (external email delivery)
 The `books.secret` capability that admins and managers grant per user; it
 opens every Secret Record.
 
+### Employee records
+
+**Employee added**:
+The moment an employee's entry is created in GSSG Manager, whatever their
+joining date; an employee entered today who joined in 2019 is added today.
+Employees created by bulk imports and scripted batches were never added.
+Arabic label: موظفون جدد. Most additions are loaned staff, so it is not called
+a hire (تعيين).
+_Avoid_: Hire, joining, onboarding, تعيين جديد (those mean the date of joining)
+
 ### Attendance and leave
 
 **Attendance case**:

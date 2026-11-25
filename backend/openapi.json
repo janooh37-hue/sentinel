@@ -2947,7 +2947,8 @@
                     "ledger",
                     "duty_location",
                     "status",
-                    "id_change"
+                    "id_change",
+                    "employee_added"
                   ],
                   "type": "string"
                 },
@@ -48847,7 +48848,8 @@
               "ledger",
               "duty_location",
               "status",
-              "id_change"
+              "id_change",
+              "employee_added"
             ],
             "title": "Kind"
           },
@@ -49143,6 +49145,18 @@
               }
             ],
             "title": "Actor Name"
+          },
+          "joining_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Joining Date"
           }
         },
         "type": "object",

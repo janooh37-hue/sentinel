@@ -38,6 +38,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    false,
     func,
     text,
 )
@@ -95,6 +96,10 @@ class Employee(Base):
     # operators flip the few non-Arabic speakers to 'en' in the employee form.
     msg_language: Mapped[str] = mapped_column(String(2), default="ar", server_default="ar")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Unknown for historical records; an FK would force a SQLite table rewrite.
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Bulk imports and scripted batches are not employee-added activity.
+    imported: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
     leaves: Mapped[list[Leave]] = relationship(

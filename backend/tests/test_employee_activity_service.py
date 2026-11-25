@@ -38,7 +38,9 @@ def _activity_reader(db_session: Session) -> None:
 
 
 def _employee(db: Session, employee_id: str = "G100", name_en: str = "ALPHA EMPLOYEE") -> Employee:
-    employee = Employee(id=employee_id, name_en=name_en, name_ar="موظف ألف", status="Active")
+    employee = Employee(
+        id=employee_id, name_en=name_en, name_ar="موظف ألف", status="Active", imported=True
+    )
     db.add(employee)
     return employee
 

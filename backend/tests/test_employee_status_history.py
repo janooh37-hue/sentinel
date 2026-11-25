@@ -60,7 +60,9 @@ def _user(db) -> User:
 @pytest.mark.parametrize("status", ["Active", "Loaned"])
 def test_create_working_employee_without_end_date(db_session, status):
     employee_service.create_employee(
-        db_session, EmployeeCreate(id="G7030", name_en="Working employee", status=status)
+        db_session,
+        EmployeeCreate(id="G7030", name_en="Working employee", status=status),
+        actor_user_id=_user(db_session).id,
     )
     row = db_session.get(Employee, "G7030")
     assert (row.status, row.end_date, row.pending_status) == (status, None, None)
@@ -464,7 +466,9 @@ def test_full_form_save_keeps_pending_transfer_fields_through_flip(db_session):
 
 
 def test_create_active_logs_nothing(db_session):
-    employee_service.create_employee(db_session, EmployeeCreate(id="G7010", name_en="A"))
+    employee_service.create_employee(
+        db_session, EmployeeCreate(id="G7010", name_en="A"), actor_user_id=_user(db_session).id
+    )
     assert _events(db_session, "G7010") == []
 
 
@@ -478,7 +482,7 @@ def test_create_non_active_logs_changed(db_session):
             end_date=TODAY,
             transfer_site="Dubai",
         ),
-        actor_user_id=None,
+        actor_user_id=_user(db_session).id,
     )
     (ev,) = _events(db_session, "G7011")
     assert (ev.kind, ev.from_status, ev.to_status, ev.site) == (
@@ -493,6 +497,7 @@ def test_create_future_departure_schedules(db_session):
     employee_service.create_employee(
         db_session,
         EmployeeCreate(id="G7012", name_en="A", status="Resigned", end_date=FUTURE),
+        actor_user_id=_user(db_session).id,
     )
     row = db_session.get(Employee, "G7012")
     assert (row.status, row.pending_status) == ("Active", "Resigned")
@@ -665,7 +670,7 @@ def test_activity_returns_status_items_with_actor_name(db_session):
         db_session, owner_user_id=user.id, employee_id="G7002"
     )
     # The transfer also moved them out of the duty-unit structure.
-    assert {i.kind for i in all_kinds.items} == {"status", "duty_location"}
+    assert {i.kind for i in all_kinds.items} == {"employee_added", "status", "duty_location"}
 
 
 def test_activity_status_without_actor_has_no_actor_name(db_session):

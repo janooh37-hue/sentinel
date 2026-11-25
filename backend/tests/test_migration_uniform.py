@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
-from app.db.models import Base, Employee, UniformItem, UniformSize
+from app.db.models import Base, UniformItem, UniformSize
 from app.db.repos import uniform_repo
 from app.db.session import attach_sqlite_pragmas
 from app.services import uniform_service as svc
@@ -100,7 +100,7 @@ def _item_id(engine: Engine, drawing: str) -> int:
 
 def test_uniform_is_single_head() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == ["0124_id_release_denies"]
+    assert script.get_heads() == ["0125_employee_added_source"]
     assert script.get_revision(HEAD).down_revision == PARENT
 
 
@@ -202,7 +202,13 @@ def test_deleted_greatest_posting_id_is_never_reused(
     # Services retain postings by voiding them. Exercise committed hard deletion
     # directly as well: public audit/confirmation IDs must never name another row.
     with Session(identity_engine) as db:
-        db.add(Employee(id="IDENTITY", name_en="Identity guard"))
+        # The migrated fixture is pinned to 0115, before later Employee columns.
+        db.execute(
+            text(
+                "INSERT INTO employees (id, name_en, created_at, updated_at) "
+                "VALUES ('IDENTITY', 'Identity guard', '2026-01-01', '2026-01-01')"
+            )
+        )
         db.commit()
         item = svc.create_item(
             db,

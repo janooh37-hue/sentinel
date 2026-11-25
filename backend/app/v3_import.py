@@ -201,19 +201,19 @@ def create_backup(src_dir: Path, dest_root: Path) -> Path:
 
 
 _EMPLOYEE_COLUMNS: tuple[tuple[int, str], ...] = (
-    (1, "id"),           # ID  (G-number)
-    (2, "name_en"),      # English name
-    (3, "name_ar"),      # Arabic name
+    (1, "id"),  # ID  (G-number)
+    (2, "name_en"),  # English name
+    (3, "name_ar"),  # Arabic name
     (4, "nationality"),  # الجنسية
-    (5, "contact"),      # رقم الهاتف
-    (6, "uae_id_no"),    # رقم الهوية
-    (7, "position"),     # Tasks (English)
+    (5, "contact"),  # رقم الهاتف
+    (6, "uae_id_no"),  # رقم الهوية
+    (7, "position"),  # Tasks (English)
     (8, "position_ar"),  # المهام
-    (9, "other"),        # آخرى
-    (10, "doj"),         # تاريخ الالتحاق
-    (11, "notes"),       # ملاحظات
-    (13, "status"),      # الحالة (lazy column 13 in v3 — index 13 here too)
-    (14, "end_date"),    # تاريخ نهاية الخدمة
+    (9, "other"),  # آخرى
+    (10, "doj"),  # تاريخ الالتحاق
+    (11, "notes"),  # ملاحظات
+    (13, "status"),  # الحالة (lazy column 13 in v3 — index 13 here too)
+    (14, "end_date"),  # تاريخ نهاية الخدمة
 )
 
 
@@ -258,8 +258,16 @@ def parse_employees(xlsx_path: Path) -> tuple[list[dict[str, Any]], list[str]]:
         seen_ids[emp_id] = row_idx
         emp["id"] = emp_id
         emp["name_en"] = _coerce_str(emp["name_en"]) or ""
-        for k in ("name_ar", "nationality", "contact", "uae_id_no",
-                 "position", "position_ar", "other", "notes"):
+        for k in (
+            "name_ar",
+            "nationality",
+            "contact",
+            "uae_id_no",
+            "position",
+            "position_ar",
+            "other",
+            "notes",
+        ):
             emp[k] = _coerce_str(emp.get(k))
         emp["doj"] = _parse_xlsx_date(emp.get("doj"))
         emp["end_date"] = _parse_xlsx_date(emp.get("end_date"))
@@ -522,10 +530,7 @@ _TRUNCATE_ORDER: tuple[type[Base], ...] = (
 
 def _db_is_empty(session: Session) -> bool:
     """True if every parity table has zero rows."""
-    return all(
-        session.execute(select(model).limit(1)).first() is None
-        for model in _TRUNCATE_ORDER
-    )
+    return all(session.execute(select(model).limit(1)).first() is None for model in _TRUNCATE_ORDER)
 
 
 def _truncate(session: Session) -> None:
@@ -537,15 +542,13 @@ def _truncate(session: Session) -> None:
 def _write_employees(session: Session, rows: Iterable[dict[str, Any]]) -> int:
     count = 0
     for r in rows:
-        session.add(Employee(**r))
+        session.add(Employee(**r, imported=True))
         count += 1
     session.flush()
     return count
 
 
-def _write_categories(
-    session: Session, categories: dict[str, dict[str, str | None]]
-) -> int:
+def _write_categories(session: Session, categories: dict[str, dict[str, str | None]]) -> int:
     count = 0
     for cid, fields in categories.items():
         session.add(
@@ -590,9 +593,7 @@ def _write_leaves(session: Session, rows: Iterable[dict[str, Any]], known: set[s
     return count
 
 
-def _write_violations(
-    session: Session, rows: Iterable[dict[str, Any]], known: set[str]
-) -> int:
+def _write_violations(session: Session, rows: Iterable[dict[str, Any]], known: set[str]) -> int:
     count = 0
     for r in rows:
         if r["employee_id"] not in known:
@@ -667,9 +668,7 @@ def run_import(
     )
 
     known_employees: set[str] = {e["id"] for e in employees}
-    vault_files, skipped_vf = walk_vault_files(
-        src_dir / "employee_files", known_employees
-    )
+    vault_files, skipped_vf = walk_vault_files(src_dir / "employee_files", known_employees)
     summary.skipped.extend(skipped_vf)
 
     summary.employees = len(employees)
