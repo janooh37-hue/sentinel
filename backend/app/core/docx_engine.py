@@ -974,13 +974,14 @@ def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
         float_inline_images_in_cell(cell, bottom_align=True)
 
 
-# Passport Release List: table-0 row index of item slot 0, and the template's
-# slot capacity (mirrored by MAX_ROWS in EmployeesTableField.tsx).
+# Release lists (Passport, Work ID, UAE ID): table-0 row index of item slot 0,
+# and the templates' slot capacity (mirrored by MAX_ROWS in
+# EmployeesTableField.tsx). All three papers share this geometry.
 _ITEM_ROW_0 = 7
 _ITEM_SLOTS = 15
 
 
-def _pp_passport_release_list(doc: Any, ctx: dict[str, Any]) -> None:
+def _pp_release_list(doc: Any, ctx: dict[str, Any]) -> None:
     """Drop the item rows nobody filled.
 
     The template carries 15 fixed ``{{ item(n, ...) }}`` slots and the signature
@@ -998,7 +999,7 @@ def _pp_passport_release_list(doc: Any, ctx: dict[str, Any]) -> None:
         rows = doc.tables[0].rows
         stale = [rows[_ITEM_ROW_0 + slot] for slot in range(used, _ITEM_SLOTS)]
     except IndexError:
-        log.warning("Passport Release List: item rows missing — row trim skipped")
+        log.warning("Release list: item rows missing — row trim skipped")
         return
     for row in reversed(stale):
         if any(cell.text.strip() for cell in row.cells):
@@ -1361,13 +1362,12 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_admin_leave,
     },
     "Warning Form": {"adapter": _adapt_common, "post_process": None},
-    # Multi-employee passport list — rows come from fields["items"], rendered by
+    # Multi-employee release lists — rows come from fields["items"], rendered by
     # the item() Jinja global; no per-employee binding (admin category). The
     # post-process trims the unfilled slots so the paper stays one page.
-    "Passport Release List": {
-        "adapter": _adapt_common,
-        "post_process": _pp_passport_release_list,
-    },
+    "Passport Release List": {"adapter": _adapt_common, "post_process": _pp_release_list},
+    "Work ID Release List": {"adapter": _adapt_common, "post_process": _pp_release_list},
+    "UAE ID Release List": {"adapter": _adapt_common, "post_process": _pp_release_list},
     # Report: no-classification, no-ref General Book paper; reuses the General
     # Book body + footer pipeline, submitter G-number included.
     "Report": {"adapter": _adapt_report, "post_process": _pp_general_book},

@@ -191,12 +191,18 @@ def test_legacy_deny_keeps_the_stray_record_hidden_without_hiding_permit_letters
         repaired = _overrides(connection, user_id)
     assert repaired == {k: v for k, v in merged.items() if k != overreach}
     # The ORM maps the current schema (later ``users`` columns included). Later
-    # revisions leave overrides alone (0119 adds a table, 0120 a nullable users
-    # column, 0121 rewrites only departed employees' duty locations, 0122 only
-    # vehicle_accidents), so the overrides above are unchanged at head.
+    # revisions leave these overrides alone (0119 adds a table, 0120 a nullable
+    # users column, 0121 rewrites only departed employees' duty locations, 0122
+    # only vehicle_accidents) except 0124, which copies a Passport Release deny
+    # onto the Work ID and UAE ID release lists.
+    at_head = dict(repaired)
+    for family in ("books.service.", "books.servicerecords."):
+        if f"{family}Passport Release List" in repaired:
+            for service in ("Work ID Release List", "UAE ID Release List"):
+                at_head[f"{family}{service}"] = repaired[f"{family}Passport Release List"]
     command.upgrade(config, "head")
     with engine.connect() as connection:
-        assert _overrides(connection, user_id) == repaired
+        assert _overrides(connection, user_id) == at_head
     with Session(engine) as db:
         user = db.get(User, user_id)
         assert user is not None

@@ -272,7 +272,7 @@ function renderField(
       )
 
     case 'employees_table':
-      return <EmployeesTableField key={field.id} {...common} />
+      return <EmployeesTableField key={field.id} {...common} columns={field.columns} />
 
     case 'inmates_table':
       return <InmatesTableField key={field.id} {...common} />

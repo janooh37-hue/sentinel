@@ -819,7 +819,7 @@ export interface paths {
         };
         /**
          * Get Employee Lookup
-         * @description Resolve a selection; passport fields only for the Passport Release service.
+         * @description Resolve a selection; document fields only for the release-list service using them.
          */
         get: operations["get_employee_lookup_api_v1_employees_lookup__employee_id__get"];
         put?: never;
@@ -11351,7 +11351,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "General Book" | "Acknowledgment Form" | "Salary Transfer Request" | "Leave Permit Form" | "Violation Form" | "Leave Application Form" | "Duty Resumption Form" | "HR Request Form" | "Salary Deduction Form" | "Employee Clearance Form" | "Passport Release Form" | "Material Request Form" | "Resignation Letter" | "Administrative Leave Form" | "Warning Form" | "Passport Release List" | "Report" | "Inmate Conduct Violations";
+            id: "General Book" | "Acknowledgment Form" | "Salary Transfer Request" | "Leave Permit Form" | "Violation Form" | "Leave Application Form" | "Duty Resumption Form" | "HR Request Form" | "Salary Deduction Form" | "Employee Clearance Form" | "Passport Release Form" | "Material Request Form" | "Resignation Letter" | "Administrative Leave Form" | "Warning Form" | "Passport Release List" | "Work ID Release List" | "UAE ID Release List" | "Report" | "Inmate Conduct Violations";
             /**
              * Visible
              * @default true
@@ -12484,7 +12484,7 @@ export interface components {
         };
         /**
          * EmployeeLookupRead
-         * @description Selected employee prefill for the Passport Release table.
+         * @description Selected employee prefill for the release-list tables (passport, UAE ID).
          */
         EmployeeLookupRead: {
             /** Id */
@@ -12509,6 +12509,10 @@ export interface components {
             nationality: string | null;
             /** Passport No */
             passport_no: string | null;
+            /** Uae Id No */
+            uae_id_no: string | null;
+            /** Uae Id Expiry */
+            uae_id_expiry: string | null;
             /**
              * Has Photo
              * @default false

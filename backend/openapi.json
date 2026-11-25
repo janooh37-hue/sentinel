@@ -2806,7 +2806,7 @@
           "employees"
         ],
         "summary": "Get Employee Lookup",
-        "description": "Resolve a selection; passport fields only for the Passport Release service.",
+        "description": "Resolve a selection; document fields only for the release-list service using them.",
         "operationId": "get_employee_lookup_api_v1_employees_lookup__employee_id__get",
         "parameters": [
           {
@@ -46912,6 +46912,8 @@
               "Administrative Leave Form",
               "Warning Form",
               "Passport Release List",
+              "Work ID Release List",
+              "UAE ID Release List",
               "Report",
               "Inmate Conduct Violations"
             ],
@@ -50529,6 +50531,29 @@
             ],
             "title": "Passport No"
           },
+          "uae_id_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uae Id No"
+          },
+          "uae_id_expiry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uae Id Expiry"
+          },
           "has_photo": {
             "type": "boolean",
             "title": "Has Photo",
@@ -50542,10 +50567,12 @@
           "name_ar",
           "status",
           "nationality",
-          "passport_no"
+          "passport_no",
+          "uae_id_no",
+          "uae_id_expiry"
         ],
         "title": "EmployeeLookupRead",
-        "description": "Selected employee prefill for the Passport Release table."
+        "description": "Selected employee prefill for the release-list tables (passport, UAE ID)."
       },
       "EmployeeLookupResponse": {
         "properties": {

@@ -41,6 +41,8 @@ SIGNING_PATHS: dict[str, SigningPath] = {
     "Acknowledgment Form": "scan",
     "Warning Form": "scan",
     "Passport Release List": "scan",
+    "Work ID Release List": "scan",
+    "UAE ID Release List": "scan",
 }
 
 # These chain forms require a branch approval before the project manager.

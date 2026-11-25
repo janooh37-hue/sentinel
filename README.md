@@ -180,8 +180,11 @@ Service forms can look up employee names with `documents.generate` even when
 the Employees page (`employees.view`) is blocked. `GET /api/v1/employees/lookup`
 returns only the employee ID, English/Arabic names, department, designation, and
 duty unit/post. The selected-employee lookup (`/employees/lookup/{id}`) also
-returns nationality and passport number, only to users who can use the Passport
-Release service (`books.service.Passport Release List`), for its prefill; those
+returns each release list's prefill only to users who can use that service:
+passport number for Passport Release (`books.service.Passport Release List`),
+Emirates ID number and expiry for UAE ID Release (`books.service.UAE ID Release List`),
+and nationality for either of those or for Work ID Release
+(`books.service.Work ID Release List`); those
 fields are never included in search results. Employee profiles, photos, vaults, activity,
 and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use

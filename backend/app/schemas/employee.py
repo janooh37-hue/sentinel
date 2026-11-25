@@ -233,10 +233,12 @@ class EmployeeLookupItem(ORMBase):
 
 
 class EmployeeLookupRead(EmployeeLookupItem):
-    """Selected employee prefill for the Passport Release table."""
+    """Selected employee prefill for the release-list tables (passport, UAE ID)."""
 
     nationality: str | None
     passport_no: str | None
+    uae_id_no: str | None
+    uae_id_expiry: date | None
     has_photo: bool = False
 
 

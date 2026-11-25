@@ -29,7 +29,7 @@ export type FieldType =
   | 'recipient_picker'  // general-book recipient combobox (forms-fix)
   | 'recipient_multi_picker' // general-book CC: multi-select recipient chips
   | 'violation_combo'   // warning-form: multi-select violation types + custom
-  | 'employees_table'   // passport-release list: multi-employee G-number picker
+  | 'employees_table'   // release lists (passport, work ID, UAE ID): multi-employee G-number picker
   | 'employee_picker'  // single-employee picker (full roster); emits employee id string
   | 'inmates_table'    // Inmate Conduct Violations: add/remove inmate row grid
   | 'time'             // native <input type="time">; emits "HH:MM"
@@ -44,8 +44,8 @@ export interface TemplateField {
   options?: string[]
   default?: string
   group?: string
-  /** items_table only: configurable grid columns (falls back to the legacy
-   * Material Request/Acknowledgment fixed shape when absent). */
+  /** items_table / employees_table: configurable grid columns (items_table falls
+   * back to the legacy Material Request/Acknowledgment fixed shape when absent). */
   columns?: { key: string; label_en: string; label_ar: string }[]
   /** items_table only: fixed row capacity backing the DOCX's `item(i, …)` cells. */
   max_rows?: number

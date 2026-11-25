@@ -38,6 +38,7 @@ import salaryAdvanceArtwork from '@/assets/service-icons/salary-advance.webp'
 import salaryDeductionArtwork from '@/assets/service-icons/salary-deduction.webp'
 import salaryTransferArtwork from '@/assets/service-icons/salary-transfer.webp'
 import staffAttendanceArtwork from '@/assets/service-icons/staff-attendance.webp'
+import uaeIdReleaseArtwork from '@/assets/service-icons/uae-id-release.webp'
 import vehicleAccidentArtwork from '@/assets/service-icons/vehicle-accident.webp'
 import vehicleFinesArtwork from '@/assets/service-icons/vehicle-fines.webp'
 import vehicleLicenceRenewalArtwork from '@/assets/service-icons/vehicle-licence-renewal.webp'
@@ -46,6 +47,7 @@ import vehicleRegisterArtwork from '@/assets/service-icons/vehicle-register.webp
 import vehicleSitesArtwork from '@/assets/service-icons/vehicle-sites.webp'
 import violationArtwork from '@/assets/service-icons/violation.webp'
 import warningArtwork from '@/assets/service-icons/warning.webp'
+import workIdReleaseArtwork from '@/assets/service-icons/work-id-release.webp'
 
 import { cn } from '@/lib/utils'
 
@@ -90,6 +92,7 @@ export type ServiceArtworkId =
   | 'salary-deduction'
   | 'salary-transfer'
   | 'staff-attendance'
+  | 'uae-id-release'
   | 'vehicle-accident'
   | 'vehicle-fines'
   | 'vehicle-licence-renewal'
@@ -98,6 +101,7 @@ export type ServiceArtworkId =
   | 'vehicle-sites'
   | 'violation'
   | 'warning'
+  | 'work-id-release'
 
 type ServiceMotion =
   | 'absence'
@@ -162,6 +166,7 @@ const ARTWORK_SRC: Record<ServiceArtworkId, string> = {
   'salary-deduction': salaryDeductionArtwork,
   'salary-transfer': salaryTransferArtwork,
   'staff-attendance': staffAttendanceArtwork,
+  'uae-id-release': uaeIdReleaseArtwork,
   'vehicle-accident': vehicleAccidentArtwork,
   'vehicle-fines': vehicleFinesArtwork,
   'vehicle-licence-renewal': vehicleLicenceRenewalArtwork,
@@ -170,6 +175,7 @@ const ARTWORK_SRC: Record<ServiceArtworkId, string> = {
   'vehicle-sites': vehicleSitesArtwork,
   violation: violationArtwork,
   warning: warningArtwork,
+  'work-id-release': workIdReleaseArtwork,
 }
 
 const MOTION_BY_ARTWORK: Partial<Record<ServiceArtworkId, ServiceMotion>> = {
@@ -191,8 +197,10 @@ const MOTION_BY_ARTWORK: Partial<Record<ServiceArtworkId, ServiceMotion>> = {
   'resignation-letter': 'depart',
   'salary-deduction': 'deduct',
   'salary-transfer': 'deposit',
+  'uae-id-release': 'release-list',
   violation: 'alert',
   warning: 'caution',
+  'work-id-release': 'release-list',
 }
 
 interface ServiceArtworkProps {
