@@ -44,6 +44,7 @@ def test_filename_cannot_escape_employee_directory(documents_root: Path, filenam
     "filename",
     [
         "\\\\attacker\\share\\x.pdf",
+        "//attacker/share/x.pdf",
         "\\\\?\\C:\\Windows\\win.ini",
         "C:\\Windows\\win.ini",
         "D:x.pdf",
@@ -57,7 +58,11 @@ def test_windows_anchored_filename_is_rejected_before_resolving(
     real_resolve = Path.resolve
 
     def guarded_resolve(self: Path, strict: bool = False) -> Path:
-        assert filename not in str(self), f"resolved caller-supplied path {self}"
+        # Substring catches the Linux join; is_relative_to catches Windows, where an
+        # anchored filename replaces the documents root instead of joining under it.
+        assert filename not in str(self) and self.is_relative_to(documents_root), (
+            f"resolved caller-supplied path {self}"
+        )
         return real_resolve(self, strict=strict)
 
     monkeypatch.setattr(Path, "resolve", guarded_resolve)

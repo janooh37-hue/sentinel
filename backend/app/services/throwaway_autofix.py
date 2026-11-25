@@ -10,9 +10,10 @@ DOCUMENTS_ROOT = Path("data/employee_documents")
 def employee_document_path(employee_code: str, filename: str) -> Path:
     """Return the stored file for an employee's uploaded document.
 
-    Raises ``ValueError`` when ``employee_code`` is not a single directory name, or when
-    the resolved file (symlinks included) is not inside that employee's directory under
-    ``DOCUMENTS_ROOT``.
+    Raises ``ValueError`` when ``employee_code`` is not a single directory name, when
+    ``filename`` is absolute, drive-qualified or UNC (POSIX or Windows form, checked
+    before anything is resolved), or when the resolved file (symlinks included) is not
+    inside that employee's directory under ``DOCUMENTS_ROOT``.
     """
     if employee_code in {"", ".", ".."} or any(sep in employee_code for sep in "/\\:"):
         raise ValueError(f"invalid employee code: {employee_code!r}")
