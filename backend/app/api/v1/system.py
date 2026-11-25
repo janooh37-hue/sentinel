@@ -34,6 +34,7 @@ class HealthResponse(BaseModel):
     status: str
     version: str
     uptime_seconds: float
+    probe: str = "drift"
 
 
 class AdminKeyRequest(BaseModel):
