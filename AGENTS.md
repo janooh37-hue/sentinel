@@ -42,6 +42,8 @@ scripts/mng.ps1 update
 scripts/mng.ps1 logs
 ```
 
+`update` ships `origin/main` only when its GitHub checks are green; `update -Force` skips that check with a warning, for a hotfix while CI or GitHub is down. Deploys stay manual (`docs/adr/0011-deploys-stay-manual-no-runner-on-production.md`).
+
 ## Architecture
 
 - Backend request flow: `backend/app/main.py` -> `backend/app/api/v1/` -> `backend/app/services/` -> `backend/app/core/` and `backend/app/db/repos/`.
