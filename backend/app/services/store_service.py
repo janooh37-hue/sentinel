@@ -23,7 +23,8 @@ from typing import Any, Literal
 from rapidfuzz import fuzz, process
 from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import InstrumentedAttribute, Session, selectinload
+from sqlalchemy.sql import Select
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -1771,25 +1772,34 @@ def list_movements(
             "STORE_MOVEMENTS_DATE_RANGE",
             "The start date must be on or before the end date.",
         )
-    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
-    for model, event_date, options, movement_kind in (
-        (
-            StoreDelivery,
-            StoreDelivery.received_on,
-            selectinload(StoreDelivery.lines).options(_line_options()),
-            "in",
-        ),
-        (StoreHandover, StoreHandover.handed_on, _handover_options(), "out"),
-        (StoreDisposal, StoreDisposal.disposed_on, _disposal_options(), "disposed"),
-    ):
-        if kind is not None and kind != movement_kind:
-            continue
-        statement = select(model).options(options)
+
+    def dated[M: StoreDelivery | StoreHandover | StoreDisposal](
+        statement: Select[M], event_date: InstrumentedAttribute[date]
+    ) -> Sequence[M]:
         if from_date is not None:
             statement = statement.where(event_date >= from_date)
         if to_date is not None:
             statement = statement.where(event_date <= to_date)
-        records.extend(db.scalars(statement).all())
+        return db.scalars(statement).all()
+
+    records: list[StoreDelivery | StoreHandover | StoreDisposal] = []
+    if kind in (None, "in"):
+        records.extend(
+            dated(
+                select(StoreDelivery).options(
+                    selectinload(StoreDelivery.lines).options(_line_options())
+                ),
+                StoreDelivery.received_on,
+            )
+        )
+    if kind in (None, "out"):
+        records.extend(
+            dated(select(StoreHandover).options(_handover_options()), StoreHandover.handed_on)
+        )
+    if kind in (None, "disposed"):
+        records.extend(
+            dated(select(StoreDisposal).options(_disposal_options()), StoreDisposal.disposed_on)
+        )
     ids = {row.created_by_user_id for row in records if row.created_by_user_id is not None}
     names = book_service.resolve_names_by_ids(db, ids)
     names_ar = book_service.resolve_names_ar_by_ids(db, ids)

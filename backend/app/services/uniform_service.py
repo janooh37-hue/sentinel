@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.core.clock import organization_today, utcnow
+from app.core.uniform_limits import MAX_QUANTITY
 from app.db.models import (
     Employee,
     UniformAdjustment,
@@ -185,11 +186,7 @@ def _reason(value: str | None) -> str:
 
 
 def _qty(value: int, field: str = "qty") -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 1 <= value <= uniform_repo.MAX_QUANTITY
-    ):
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_QUANTITY:
         raise ValidationFailedError(
             "uniform_invalid_qty", "Quantities must be whole numbers of at least 1.", field=field
         )
@@ -245,11 +242,7 @@ def _check_drawing(value: str | None) -> str:
 
 
 def _check_default_qty(value: int) -> int:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 1 <= value <= uniform_repo.MAX_QUANTITY
-    ):
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_QUANTITY:
         raise ValidationFailedError(
             "uniform_invalid_default_qty", "The default quantity must be at least 1."
         )
@@ -620,11 +613,7 @@ def _label_taken(item: UniformItem, label: str, *, exclude_id: int | None = None
 def _check_min_qty(value: int | None) -> int | None:
     if value is None:
         return None
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or not 0 <= value <= uniform_repo.MAX_QUANTITY
-    ):
+    if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= MAX_QUANTITY:
         raise ValidationFailedError("uniform_invalid_min_qty", "Alert level must be 0 or more.")
     return value
 
@@ -1103,7 +1092,7 @@ def create_adjustments(
         if (
             isinstance(line.delta, bool)
             or not isinstance(line.delta, int)
-            or not 0 < abs(line.delta) <= uniform_repo.MAX_QUANTITY
+            or not 0 < abs(line.delta) <= MAX_QUANTITY
         ):
             raise ValidationFailedError(
                 "uniform_invalid_delta", "Adjustments must change the count.", size_id=line.size_id
@@ -1111,7 +1100,7 @@ def create_adjustments(
         if (
             isinstance(line.expected_on_hand, bool)
             or not isinstance(line.expected_on_hand, int)
-            or not 0 <= line.expected_on_hand <= uniform_repo.MAX_QUANTITY
+            or not 0 <= line.expected_on_hand <= MAX_QUANTITY
         ):
             raise ValidationFailedError(
                 "uniform_invalid_expected_on_hand", "Expected stock must be 0 or more."

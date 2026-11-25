@@ -211,16 +211,14 @@ def to_list_item(row: Permit, *, today: date | None = None) -> PermitListItem:
 # ─── queries ───────────────────────────────────────────────────────────────────
 
 
-def _base_query(*, include_deleted: bool) -> Select[tuple[Permit]]:
+def _base_query(*, include_deleted: bool) -> Select[Permit]:
     stmt = select(Permit).options(selectinload(Permit.people), selectinload(Permit.vehicles))
     if not include_deleted:
         stmt = stmt.where(Permit.deleted_at.is_(None))
     return stmt
 
 
-def _apply_state_filter(
-    stmt: Select[tuple[Permit]], *, state: str | None, today: date
-) -> Select[tuple[Permit]]:
+def _apply_state_filter(stmt: Select[Permit], *, state: str | None, today: date) -> Select[Permit]:
     """Filter by the *derived* lifecycle bucket, expressed in SQL so paging and
     totals stay correct."""
     if not state:

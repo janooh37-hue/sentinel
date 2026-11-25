@@ -64,7 +64,7 @@ def _require_employee(db: Session, employee_id: str) -> None:
 # ─── queries ───────────────────────────────────────────────────────────────────
 
 
-def _base_query() -> Select[tuple[ItemPermit]]:
+def _base_query() -> Select[ItemPermit]:
     return (
         select(ItemPermit)
         .options(selectinload(ItemPermit.employee))

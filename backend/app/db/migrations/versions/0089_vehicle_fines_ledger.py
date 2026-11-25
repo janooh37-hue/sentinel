@@ -82,7 +82,7 @@ def downgrade() -> None:
     # cannot represent; `unknown`/`unpaid` both collapse to "no status" and
     # downgrade cleanly. A receipt, an archive timestamp, or a fractional
     # amount would also be silently discarded, so refuse those too.
-    lossy = conn.execute(
+    lossy: int = conn.execute(
         sa.text(
             "SELECT COUNT(*) FROM vehicle_fines WHERE "
             "receipt_file_id IS NOT NULL OR archived_at IS NOT NULL "
