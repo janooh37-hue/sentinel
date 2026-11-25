@@ -1,0 +1,29 @@
+# PR-Agent settings for Sentinel, applied on top of the shared review rules in
+# janooh37-hue/pr-agent-settings/.pr_agent.toml; a key set here replaces that
+# key there. PR-Agent reads this file from the default branch (main), so a
+# change here takes effect only after it merges.
+#
+# Do not set pr_reviewer.extra_instructions here: it would replace the shared
+# P1/P2 reporting rules the review publisher depends on.
+
+[ignore]
+# Files the reviewer never sees, so the token budget goes on real code.
+glob = [
+    "mockups/**",                     # HTML mockups and planning notes
+    "frontend/src/lib/api.types.ts",  # generated from backend/openapi.json
+    "backend/openapi.json",           # generated from the FastAPI app
+    "**/pnpm-lock.yaml",
+]
+
+[config]
+# House rules given to the reviewer as context, read from the default branch.
+repo_context_files = [
+    "AGENTS.md",
+    ".agents/skills/permissions/SKILL.md",
+    ".agents/skills/new-migration/SKILL.md",
+    ".codex/agents/alembic-migration-reviewer.toml",
+    ".codex/agents/i18n-rtl-reviewer.toml",
+]
+# The files above render to about 420 lines; the upstream default of 500 would
+# truncate them as they grow.
+repo_context_max_lines = 700
