@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
       - run: pip install ruff==0.16.6
       - name: Single Alembic head, unique ADR numbers
         run: python scripts/check_numbering.py
@@ -39,6 +41,13 @@ jobs:
         run: |
           files=$(git diff --name-only --diff-filter=ACMR "origin/${{ github.base_ref }}...HEAD" -- '*.py')
           if [ -n "$files" ]; then ruff format --check $files; fi
+      # mypy needs the real dependencies (SQLAlchemy and pydantic types, the
+      # pydantic plugin). Installed last: requirements.txt would replace the
+      # pinned ruff above. Config lives in pyproject.toml [tool.mypy].
+      - name: mypy
+        run: |
+          pip install -r requirements.txt
+          mypy
 
   # The deploy runs `tsc -b && vite build`; type-check here so a broken
   # frontend fails the PR instead of aborting `mng deploy`.

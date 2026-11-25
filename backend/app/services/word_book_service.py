@@ -309,8 +309,8 @@ def _copy_general_book_body(source_path: Path, destination_path: Path) -> None:
     from docx.oxml.ns import qn
     from docx.parts.numbering import NumberingPart
 
-    source = WordDocument(source_path)
-    destination = WordDocument(destination_path)
+    source = WordDocument(str(source_path))
+    destination = WordDocument(str(destination_path))
 
     def bounds(doc: Any) -> tuple[Any, Any] | None:
         intro = next((p for p in doc.paragraphs if p.text.startswith("يطيب لنا")), None)
@@ -456,7 +456,7 @@ def _copy_general_book_body(source_path: Path, destination_path: Path) -> None:
     for fragment in fragments:
         remap(fragment)
         new_closing.addprevious(fragment)
-    destination.save(destination_path)
+    destination.save(str(destination_path))
 
 
 def get_word_session_detail(db: Session, *, user: User, book_id: int) -> WordSessionDetailRead:
