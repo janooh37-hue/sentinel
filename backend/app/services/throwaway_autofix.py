@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 DOCUMENTS_ROOT = Path("data/employee_documents")
 
@@ -16,6 +16,10 @@ def employee_document_path(employee_code: str, filename: str) -> Path:
     """
     if employee_code in {"", ".", ".."} or any(sep in employee_code for sep in "/\\:"):
         raise ValueError(f"invalid employee code: {employee_code!r}")
+    # Reject absolute, drive and UNC filenames before resolving: on Windows, resolving a
+    # UNC path opens an SMB connection to the named host.
+    if PurePosixPath(filename).anchor or PureWindowsPath(filename).anchor:
+        raise ValueError("document path is outside the employee directory")
     root = DOCUMENTS_ROOT.resolve()
     employee_dir = (root / employee_code).resolve()
     if employee_dir.parent != root:

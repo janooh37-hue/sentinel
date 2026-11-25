@@ -40,13 +40,51 @@ def test_filename_cannot_escape_employee_directory(documents_root: Path, filenam
         throwaway_autofix.read_employee_document("EMP001", filename)
 
 
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "\\\\attacker\\share\\x.pdf",
+        "\\\\?\\C:\\Windows\\win.ini",
+        "C:\\Windows\\win.ini",
+        "D:x.pdf",
+        "\\Windows\\win.ini",
+    ],
+)
+def test_windows_anchored_filename_is_rejected_before_resolving(
+    documents_root: Path, filename: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Resolving a UNC path on Windows opens an SMB connection, so reject lexically first.
+    real_resolve = Path.resolve
+
+    def guarded_resolve(self: Path, strict: bool = False) -> Path:
+        assert filename not in str(self), f"resolved caller-supplied path {self}"
+        return real_resolve(self, strict=strict)
+
+    monkeypatch.setattr(Path, "resolve", guarded_resolve)
+    with pytest.raises(ValueError, match="outside"):
+        throwaway_autofix.read_employee_document("EMP001", filename)
+
+
 def test_absolute_filename_is_rejected(documents_root: Path) -> None:
     target = documents_root / "EMP002" / "contract.pdf"
     with pytest.raises(ValueError, match="outside"):
         throwaway_autofix.read_employee_document("EMP001", str(target))
 
 
-@pytest.mark.parametrize("employee_code", ["..", "EMP001/../EMP002", "../EMP002", "", "."])
+@pytest.mark.parametrize(
+    "employee_code",
+    [
+        "..",
+        "EMP001/../EMP002",
+        "../EMP002",
+        "",
+        ".",
+        "EMP001\\..\\EMP002",
+        "..\\EMP002",
+        "C:",
+        "C:EMP002",
+    ],
+)
 def test_employee_code_must_be_single_component(documents_root: Path, employee_code: str) -> None:
     with pytest.raises(ValueError, match="employee code"):
         throwaway_autofix.read_employee_document(employee_code, "contract.pdf")
