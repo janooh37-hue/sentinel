@@ -102,3 +102,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+import os  # throwaway #337: unused import makes backend-static red
