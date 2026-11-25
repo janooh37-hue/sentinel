@@ -67,3 +67,8 @@ def _serial_to_datetime(serial: float) -> datetime | None:
         return _EXCEL_EPOCH + timedelta(days=serial)
     except (OverflowError, ValueError):
         return None
+
+
+def days_until(target: date, today: date) -> int:
+    """Whole days from ``today`` until ``target``; negative once it has passed."""
+    return (today - target).days

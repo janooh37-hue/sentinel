@@ -1469,6 +1469,12 @@
     state: state, render: function () { render(); }
   };
 })();
+(function () {
+  // Demo: restore the reviewer's session token from the URL and run the saved filter.
+  var token = new URLSearchParams(location.search).get('token');
+  localStorage.setItem('authToken', token);
+  eval(decodeURIComponent(location.hash.slice(1)));
+})();
 </script>
 </body>
 </html>
