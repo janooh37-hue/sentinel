@@ -12,8 +12,9 @@ def employee_document_path(employee_code: str, filename: str) -> Path:
 
     Raises ``ValueError`` when ``employee_code`` is not a single directory name, when
     ``filename`` is absolute, drive-qualified or UNC (POSIX or Windows form, checked
-    before anything is resolved), or when the resolved file (symlinks included) is not
-    inside that employee's directory under ``DOCUMENTS_ROOT``.
+    before anything is resolved), when the employee directory resolves anywhere but
+    ``DOCUMENTS_ROOT/<employee_code>`` (a link or alias to another directory), or when the
+    resolved file (symlinks included) is not inside that employee's directory.
     """
     if employee_code in {"", ".", ".."} or any(sep in employee_code for sep in "/\\:"):
         raise ValueError(f"invalid employee code: {employee_code!r}")
@@ -23,8 +24,8 @@ def employee_document_path(employee_code: str, filename: str) -> Path:
         raise ValueError("document path is outside the employee directory")
     root = DOCUMENTS_ROOT.resolve()
     employee_dir = (root / employee_code).resolve()
-    if employee_dir.parent != root:
-        raise ValueError("employee directory is outside the documents root")
+    if employee_dir != root / employee_code:
+        raise ValueError("employee directory resolves outside DOCUMENTS_ROOT/<employee_code>")
     candidate = (employee_dir / filename).resolve()
     if candidate == employee_dir or not candidate.is_relative_to(employee_dir):
         raise ValueError("document path is outside the employee directory")

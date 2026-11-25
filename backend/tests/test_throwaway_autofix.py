@@ -110,3 +110,9 @@ def test_symlinked_file_outside_employee_directory_is_rejected(documents_root: P
     _symlink(documents_root / "EMP001" / "link.pdf", documents_root / "EMP002" / "contract.pdf")
     with pytest.raises(ValueError, match="outside"):
         throwaway_autofix.read_employee_document("EMP001", "link.pdf")
+
+
+def test_employee_directory_symlinked_to_sibling_employee_is_rejected(documents_root: Path) -> None:
+    _symlink(documents_root / "EMP003", documents_root / "EMP002")
+    with pytest.raises(ValueError, match="outside"):
+        throwaway_autofix.read_employee_document("EMP003", "contract.pdf")
