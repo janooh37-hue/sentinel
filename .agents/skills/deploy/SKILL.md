@@ -7,7 +7,7 @@ description: "Deploy GSSG Manager to the production server (GSSGIT) after the us
 
 Production is the Windows server `GSSGIT`. Its checkout (`C:\Users\Admin\sentinel`) only ever moves by `mng update`, which pulls `origin/main`, syncs dependencies, builds the frontend if it changed, migrates, smoke-checks and restarts. So a change ships by being merged to `origin/main` first. Nothing is edited, committed or built by hand on the server.
 
-Deploy from the laptop (`GSSGLT`): `ssh gssgit` works there with a key, and the session is already administrator. The desktop (`dtop`) has no key for the server. Run the steps in order; stop and report on any failure.
+Deploy from `dtop` or the laptop (`GSSGLT`): `ssh gssgit` works with a key, and the session is already administrator. Run the steps in order; stop and report on any failure.
 
 ## 1. Confirm it is merged
 
