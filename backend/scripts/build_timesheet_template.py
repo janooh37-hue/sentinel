@@ -1,23 +1,29 @@
 # backend/scripts/build_timesheet_template.py
 """Sanitize the June 2026 attendance workbook into the reusable template.
 
-June is the source because it still has the company logo — the July attendance
-file on the share lost its image to an outside tool. One-off; re-run only if the
-client changes the paper.
+June supplies the paper layout. Replace its logo with the canonical GSSG
+wordmark. One-off; re-run only if the client changes the paper.
 
     python backend/scripts/build_timesheet_template.py
 """
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as XLImage
+from openpyxl.drawing.spreadsheet_drawing import OneCellAnchor, TwoCellAnchor
+from openpyxl.drawing.xdr import XDRPositiveSize2D
 from openpyxl.formatting.formatting import ConditionalFormattingList
 from openpyxl.worksheet.datavalidation import DataValidationList
+from openpyxl.worksheet.worksheet import Worksheet
+from PIL import Image
 
 SOURCE = Path(r"E:\Al Watbha Shares\المالية\احصائية 2026\6-Jun\كشف حضور شهر يونيو.xlsx")
 DEST = Path(__file__).resolve().parents[1] / "templates" / "GSSG-HR_Monthly_Time_Sheet.xlsx"
+WORDMARK = Path(__file__).resolve().parents[2] / "frontend/public/brand/gssg-wordmark.png"
 
 FIRST_DATA_ROW = 6
 # June row 6 is the only row carrying the header-boundary rule -- a medium top border
@@ -32,10 +38,39 @@ FOOTER_ROWS = 18  # legend .. Total Days
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
+def _has_wordmark_proportions(width: int, height: int) -> bool:
+    return height > 0 and abs(width / height - 6.3) <= 0.05
+
+
+def _replace_logo(sheet: Worksheet) -> None:
+    assert len(sheet._images) == 1, "expected one June logo to locate the wordmark"
+    source_anchor = sheet._images[0].anchor
+    assert isinstance(source_anchor, (OneCellAnchor, TwoCellAnchor)), (
+        "expected a cell-anchored logo"
+    )
+
+    png = BytesIO()
+    with Image.open(WORDMARK) as wordmark:
+        assert _has_wordmark_proportions(*wordmark.size), "unexpected GSSG wordmark proportions"
+        wordmark.convert("RGBA").resize((1202, 191), Image.Resampling.LANCZOS).save(
+            png, format="PNG"
+        )
+    png.seek(0)
+
+    replacement = XLImage(png)
+    replacement.anchor = OneCellAnchor(
+        _from=source_anchor._from,
+        ext=XDRPositiveSize2D(cx=2_152_272, cy=342_000),
+    )
+    sheet._images.clear()
+    sheet.add_image(replacement)
+
+
 def main() -> None:
     workbook = load_workbook(SOURCE)
     sheet = workbook.worksheets[0]
     assert sheet.title == "Sheet1", sheet.title  # already named this in the source
+    _replace_logo(sheet)
 
     parts = workbook.create_sheet("_parts")
     parts.sheet_state = "hidden"
@@ -112,7 +147,13 @@ def main() -> None:
     print(f"[template] wrote {DEST} ({DEST.stat().st_size} bytes)")
 
     check = load_workbook(DEST)
-    assert len(check["Sheet1"]._images) == 1, "logo lost"
+    images = check["Sheet1"]._images
+    assert len(images) == 1, "expected one GSSG wordmark"
+    (wordmark,) = images
+    assert _has_wordmark_proportions(wordmark.width, wordmark.height), "wrong wordmark image ratio"
+    assert isinstance(wordmark.anchor, OneCellAnchor), "wrong wordmark anchor"
+    extent = wordmark.anchor.ext
+    assert _has_wordmark_proportions(extent.cx, extent.cy), "distorted wordmark display ratio"
     assert check["Sheet1"].max_row == 5, f"stray rows: max_row={check['Sheet1'].max_row}"
     assert check["_parts"]["A21"].value == "Total Days", "footer is not 19 rows"
     assert check["_parts"]["D20"].value == "X", "red block row missing"
@@ -123,7 +164,7 @@ def main() -> None:
         c for c in range(1, 43) if specimens.cell(1, c)._style != specimens.cell(2, c)._style
     }
     assert differing == set(range(37, 43)), f"specimens differ outside AK..AP: {sorted(differing)}"
-    print("[template] logo, strip, autofilter, two specimens and 19-row footer verified")
+    print("[template] wordmark, strip, autofilter, two specimens and 19-row footer verified")
 
 
 if __name__ == "__main__":

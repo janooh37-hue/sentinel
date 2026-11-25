@@ -60,8 +60,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: '/icons/icon-192.png',
-      badge: '/icons/icon-192.png',
+      icon: '/icons/icon-192.png?v=wordmark-1',
+      badge: '/icons/badge-96.png?v=wordmark-1',
       data: { url: data.url },
     }),
   )

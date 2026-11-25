@@ -9,6 +9,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { BrandWordmark } from '@/components/shell/BrandWordmark'
 import type { EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
@@ -54,7 +55,7 @@ export function EmployeeBadgeCard({
       {/* Retractable badge reel — purely decorative */}
       <div aria-hidden data-testid="badge-reel" className="relative z-[2] flex flex-col items-center">
         <div
-          className="relative grid h-[118px] w-[118px] place-items-center rounded-full"
+          className="relative grid h-[88px] w-[88px] place-items-center rounded-full"
           style={{
             background: 'radial-gradient(circle at 35% 28%,#ffffff 0%,#f4f4f2 55%,#e3e3df 100%)',
             boxShadow:
@@ -62,19 +63,17 @@ export function EmployeeBadgeCard({
           }}
         >
           <div
-            className="absolute inset-[13px] rounded-full bg-[#fbfbfa]"
+            className="absolute inset-[10px] rounded-full bg-[#fbfbfa]"
             style={{ boxShadow: 'inset 0 2px 4px rgba(0,0,0,.13),inset 0 -1px 2px rgba(255,255,255,.9)' }}
           />
-          <span className="relative grid h-20 w-20 place-items-center">
-            <svg viewBox="0 0 80 80" fill="none" className="absolute inset-0">
-              <circle
-                cx="40" cy="40" r="34.3" stroke="#cf3238" strokeWidth="8.3"
-                strokeDasharray="46.77 7.1" strokeDashoffset="50.32"
-                transform="rotate(-90 40 40)"
-              />
-            </svg>
-            <img src="/brand/gssg-globe.png" alt="" className="block h-[52px] w-[52px]" />
-          </span>
+          {/* Centre hub: the reel is hardware, not a blank plate for a logo. */}
+          <span
+            className="relative h-[22px] w-[22px] rounded-full"
+            style={{
+              background: 'radial-gradient(circle at 35% 30%,#eef0f2,#b9bec7 68%,#99a0aa)',
+              boxShadow: 'inset 0 0 0 3px #cdd1d7,0 1px 2px rgba(0,0,0,.18)',
+            }}
+          />
         </div>
         <div className="-mt-[3px] h-[15px] w-7" style={{ background: RIBS, clipPath: 'polygon(12% 0,88% 0,72% 100%,28% 100%)' }} />
         <div className="-mt-px h-[13px] w-[17px] rounded-full bg-[#f3f3f1]" style={{ boxShadow: 'inset 0 -2px 3px rgba(0,0,0,.13)' }} />
@@ -109,11 +108,19 @@ export function EmployeeBadgeCard({
           className="absolute left-1/2 top-2.5 z-[2] h-3.5 w-16 -translate-x-1/2 rounded-full bg-[#f0eee8]"
           style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,.25)' }}
         />
-        <div className="px-6 pb-3.5 pt-[30px] text-center text-white" style={{ background: BAND_GRADIENT }}>
-          <p className="text-[11px] font-extrabold uppercase tracking-[.3em] opacity-85">
-            {t('employees.activity.badge.company')}
-          </p>
-          <p className="mt-0.5 text-[10px] uppercase tracking-[.18em] opacity-55">
+        {/* pt clears the punched slot (it ends 24px down) by 22px before the wordmark. */}
+        <div className="px-6 pb-3.5 pt-[46px] text-center text-white" style={{ background: BAND_GRADIENT }}>
+          {/* The printed band is navy in both themes, so the on-dark wordmark. In Arabic the company's Arabic
+              name is printed under it (so the mark itself is decorative there); in English the mark spells it. */}
+          <BrandWordmark
+            tone="on-dark"
+            alt={lang === 'ar' ? '' : t('employees.activity.badge.company')}
+            className="mx-auto w-[150px]"
+          />
+          {lang === 'ar' && (
+            <p className="mt-2.5 text-[12px] font-bold opacity-85">{t('employees.activity.badge.company')}</p>
+          )}
+          <p className="mt-2.5 text-[10px] uppercase tracking-[.18em] opacity-55 rtl:tracking-normal">
             {t('employees.activity.badge.role')}
           </p>
           <span

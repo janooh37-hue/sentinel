@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AccountMenu } from '@/components/shell/AccountMenu'
+import { BrandWordmark } from '@/components/shell/BrandWordmark'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -30,6 +31,7 @@ export function MobileTopBar({
   const { has } = useCapabilities()
   return (
     <header
+      data-mobile-topbar
       // `relative`: the account / notifications panels are positioned against this header (see headerPopover.ts).
       // Inline padding clears the notch in landscape; env() insets are physical, so the larger one is used on
       // both sides, which keeps the bar symmetric and direction-agnostic.
@@ -52,19 +54,12 @@ export function MobileTopBar({
       >
         <Menu className="h-[24px] w-[24px]" strokeWidth={1.8} aria-hidden />
       </button>
-      {/* Brand takes whatever the controls leave. The logo is a fixed 32px circle (never squeezed: `max-w-none`
-          defeats preflight's `max-width:100%`, which collapsed it to a sliver inside a narrow container) and
-          only shows when its container can hold it; the wordmark needs a wider container still. So a cramped
-          row sheds the wordmark, then the logo, instead of pushing the controls off-screen. */}
-      <div className="@container flex min-w-0 flex-1 items-center gap-3">
-        <img
-          src="/brand/gssg-logo.png"
-          alt="GSSG"
-          className="hidden aspect-square h-[32px] w-[32px] max-w-none shrink-0 rounded-full object-cover ring-1 ring-white/25 @[32px]:block"
-        />
-        <span className="hidden text-[1.05em] font-bold leading-none tracking-tight text-primary-foreground @[6.5rem]:inline">
-          GSSG
-        </span>
+      {/* Brand takes whatever the controls leave, so a cramped row never pushes a control off-screen. The bar is
+          navy in both themes, so the mark is always the on-dark file. It is 22px tall (138px) when the
+          row has room, scales down whole as its container narrows (preflight's `max-width:100%`; ~134px on a 320px
+          phone), and hides once it would drop below ~11px tall: a logo is never cropped or ellipsised. */}
+      <div className="@container flex min-w-0 flex-1 items-center">
+        <BrandWordmark tone="on-dark" className="hidden w-[138px] @[72px]:block" />
       </div>
       {/* Bell and avatar triggers are real 44px targets with no padding of their own (their padding is rem and
           would grow the box at large text) and `leading-none`, so the bell glyph's line box (1.05em of a 32px

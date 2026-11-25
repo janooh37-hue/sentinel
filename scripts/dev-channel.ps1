@@ -36,6 +36,7 @@ $Root = Split-Path -Parent $PSScriptRoot
 $Py = Join-Path $Root 'venv\Scripts\python.exe'
 $Port = 8765
 $Log = Join-Path $Root '.tmp\dev-server.log'
+$ServerTask = 'GSSG Dev Server'
 # Branches live on dtop (remote `desk`) while they are written and on origin once pushed.
 $Remotes = @('desk', 'origin')
 Set-Location $Root
@@ -187,20 +188,65 @@ function Stop-Server {
 
 function Start-Server {
     New-Item -ItemType Directory -Force (Split-Path $Log) | Out-Null
-    # Hidden window of its own: survives closing this terminal or the agent session.
-    Start-Process -FilePath $Py -ArgumentList 'backend\serve.py' -WorkingDirectory $Root -WindowStyle Hidden `
-        -RedirectStandardOutput $Log -RedirectStandardError "$Log.err"
+    # Word converts only on a desktop session: started from an SSH shell (session 0),
+    # Documents.Open returns nothing and every generated document is left without a PDF.
+    # Task Scheduler starts it hidden in this user's desktop session instead, where it also
+    # outlives this terminal. Elevated, like the SSH and admin shells that write the dev data:
+    # those files are owned by Administrators, which a limited token cannot open.
+    # Single-quoted literals in generated source: every quote character PowerShell accepts
+    # (' and the typographic U+2018-U+201B) is doubled, so an O'Brien path stays one literal.
+    $qPy, $qRoot, $qOut, $qErr = @($Py, $Root, $Log, "$Log.err") |
+        ForEach-Object { "'" + ($_ -replace '([''\u2018-\u201B])', '$1$1') + "'" }
+    $launch = "Start-Process -FilePath $qPy -ArgumentList 'backend\serve.py' -WorkingDirectory $qRoot " +
+        "-WindowStyle Hidden -RedirectStandardOutput $qOut -RedirectStandardError $qErr"
+    $arguments = '-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand ' +
+        [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($launch))
+    $task = Get-ScheduledTask -TaskName $ServerTask -ErrorAction SilentlyContinue
+    # Task Scheduler's defaults refuse to start a task on battery, and run it below normal
+    # CPU, I/O and memory priority, which the server and the Edge it prints with inherit.
+    if (-not $task -or $task.Actions[0].Arguments -ne $arguments -or $task.Principal.RunLevel -ne 'Highest' -or
+        $task.Settings.DisallowStartIfOnBatteries -or $task.Settings.StopIfGoingOnBatteries -or
+        $task.Settings.Priority -ne 4) {
+        # Not $env:USERDOMAIN: over SSH it is WORKGROUP, which maps to no account.
+        $user = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $arguments
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Priority 4
+        # -ErrorAction Stop: these cmdlets live in a module, which ignores this script's preference.
+        try {
+            Register-ScheduledTask -TaskName $ServerTask -Action $action -Principal $principal -Settings $settings `
+                -Force -ErrorAction Stop | Out-Null
+        }
+        catch { throw "Could not register the '$ServerTask' task ($_). Run this from an elevated shell; SSH from dtop is one." }
+    }
+    # The task's Start-Process recreates both logs, so a missing log means the task never ran.
+    Remove-Item -LiteralPath $Log, "$Log.err" -ErrorAction SilentlyContinue
+    Start-ScheduledTask -TaskName $ServerTask -ErrorAction Stop
     for ($i = 0; $i -lt 40; $i++) {
         if (Get-Health) { Write-Host 'Server: up' -ForegroundColor Green; return }
         Start-Sleep -Seconds 1
+    }
+    if (-not (Test-Path -LiteralPath "$Log.err")) {
+        throw "The '$ServerTask' task did not start the server: it runs only while $env:USERNAME is signed in on the desktop."
     }
     Get-Content "$Log.err" -Tail 30 -ErrorAction SilentlyContinue
     throw "Dev server did not become healthy; full log: $Log.err"
 }
 
-function Restart-Server { Stop-Server; Start-Server }
+# The server runs elevated: a limited shell can neither read its command line nor stop it.
+function Assert-CanStopServer {
+    if (-not (Get-NetTCPConnection -State Listen -LocalPort $Port -ErrorAction SilentlyContinue)) { return }
+    $me = [Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'The dev server runs elevated, so restarting it needs an elevated shell: SSH from dtop, or an admin PowerShell.'
+    }
+}
+
+function Restart-Server { Assert-CanStopServer; Stop-Server; Start-Server }
 
 function Publish([bool] $Frontend = $true) {
+    # Checked before the build and migration, not after them.
+    Assert-CanStopServer
     Install-Pending
     if ($Frontend -or (Get-Pending) -contains 'frontend') {
         Invoke-Native { pnpm -C frontend run build --logLevel warn }

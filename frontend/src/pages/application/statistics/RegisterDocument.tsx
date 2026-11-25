@@ -148,7 +148,7 @@ export function RegisterDocument({
       {forPrint ? <style>{REPORT_PAGE_RULE}</style> : null}
       <div className="inmate-register-content" style={styles.content}>
         <header style={styles.masthead}>
-          <img src="/brand/gssg-logo.png" alt="" style={styles.logo} />
+          <img src="/brand/gssg-wordmark.png" alt="" style={styles.logo} />
           <div>
             <h2 style={styles.heading}>{ar('inmateStats.document.titleAr')}</h2>
             <p style={styles.authority}>{ar('inmateStats.document.authority')}</p>

@@ -666,8 +666,10 @@ function PermitPrintView({
     // print-register = the named @page that carries this printout's 12mm margin
     // (the default @page has none, so the record sheet prints full-bleed).
     <div className="print-register hidden bg-white p-0 text-black print:block">
-      <div className="mb-2 flex items-center gap-3 border-b border-black pb-1.5">
-        <img src="/brand/gssg-logo.png" alt="" className="h-10 w-auto" />
+      <div className="mb-2">
+        <div className="mb-2 border-b-2 pb-2" style={{ borderColor: '#0d2845' }}>
+          <img src="/brand/gssg-wordmark.png" alt="GSSG" width={1440} height={229} className="block h-[9mm] w-auto" />
+        </div>
         <div>
           <h1 className="text-base font-bold">{t('permits.printout.title')}</h1>
           <p className="text-[10px] text-neutral-600">

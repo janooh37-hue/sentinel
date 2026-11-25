@@ -35,6 +35,7 @@ Other pages will be appended under §4 as they're documented.
    1.5  Motion tokens
    1.6  Focus & a11y
    1.7  RTL conventions
+   1.8  GSSG wordmark
 2. Button system
    2.1  Shadcn <Button> matrix
    2.2  Card-as-button
@@ -237,8 +238,8 @@ larger as the font scale moves up. Standard em stops seen on the dashboard:
 | Class            | Use                                                                |
 | ---------------- | ------------------------------------------------------------------ |
 | `text-[2em]`     | Record and people widget metrics (`BIG_NUMBER`, `PEOPLE_BIG`) |
-| `text-[1.6em]`   | Hero headline                                                      |
-| `text-[1.15em]`  | TopNav logo wordmark, LockOverlay welcome line                     |
+| `text-[1.2em]` / `md:text-[1.5em]` | Hero headline                                    |
+| `text-[1.15em]`  | LockOverlay welcome line                                           |
 | `text-[1.05em]`  | NavBell glyph, WidgetEditDialog title                              |
 | `text-[1em]`     | LockOverlay account email                                          |
 | `text-[0.95em]`  | TopNav nav links, AccountMenu name                                 |
@@ -247,7 +248,7 @@ larger as the font scale moves up. Standard em stops seen on the dashboard:
 | `text-[0.86em]`  | WidgetEditDialog description                                       |
 | `text-[0.85em]`  | Widget frame titles, people names, WidgetEditDialog Save button    |
 | `text-[0.82em]`  | LockOverlay paragraph, dialog reset link                           |
-| `text-[0.8em]`   | Quick-action tile labels                                           |
+| `text-[0.8em]`   | Quick-action tile labels, TopNav tagline                           |
 | `text-[0.78em]`  | Footnotes, breakdown rows, last-sync labels                        |
 | `text-[0.75em]`  | Widget support copy, record rows, metadata, footers and View all    |
 | `text-[0.72em]`  | Service-tile description, smaller meta, role chips                 |
@@ -320,9 +321,11 @@ four-column grid.
 uses `mb-3.5`. The board and Add widgets panel sit in
 `flex flex-col items-start gap-4 lg:flex-row`.
 
-**Chrome (TopNav):** `px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]` with `gap-7` between the logo block and
-the nav, and `ms-5` extra start margin on the nav itself. Right cluster
-uses `ms-auto` + `gap-3.5`.
+**Chrome (TopNav):** `pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]`.
+At 1960px and up the header uses `px-8` and `gap-7`, with `ms-5` on the
+destination strip. Below 1960px the header gap is `0.5rem` and the strip
+adds `0.75rem` at inline-start. The right cluster uses `ms-auto`; see
+§3.1 for the compact and large-text rules.
 
 ---
 
@@ -360,26 +363,24 @@ Other durations remain local to their components.
 | --------- | ------------------------------------------------------------ |
 | `120ms`   | Smart-link chip background fade                              |
 | `150ms`   | AaSlider thumb scale hover                                   |
-| `200ms`   | ServiceTile hover lift, NavLink hover, logo scale-up         |
+| `200ms`   | ServiceTile hover lift, NavLink hover, brand-link hover scale |
 | `300ms`   | ServiceTile emoji bob, ThemeToggle slider background swap    |
 | `400ms`   | ThemeToggle thumb translate (`transition: transform 0.4s`)   |
 | `220ms`   | Shared entrance fade-up (`gssg-fade-up`)                      |
 | `5s`      | ThemeToggle moon tilt                                        |
 | `15s`     | ThemeToggle sun rotation                                     |
-| `90s`     | Dashboard hero crest rotation                                |
 
 | Easing                                  | Used by                                                       |
 | --------------------------------------- | ------------------------------------------------------------- |
 | `cubic-bezier(0.16, 1, 0.3, 1)` (out-expo) | `gssg-fade-up` entrance animation                          |
-| `linear`                                | Hero crest rotation, ThemeToggle sun rotate, ThemeToggle moon tilt |
+| `linear`                                | ThemeToggle sun rotate, ThemeToggle moon tilt               |
 | `transition-colors` default (Tailwind, 150ms ease) | Most hover-tone changes                            |
 | `transition-all duration-200`           | Card hover lift + shadow                                      |
 
 **Reduced-motion handling:**
 
-The shared entrance animation and Hero crest rotation have
-`@media (prefers-reduced-motion: reduce)` guards. The entrance rule lives
-in `index.css`:
+The shared entrance animation has a `prefers-reduced-motion: reduce`
+guard in `index.css`:
 
 ```css
 .anim-fade-up {
@@ -433,7 +434,7 @@ Variants per surface:
 
 **ARIA patterns:**
 
-- All decorative icons get `aria-hidden` (WidgetFrame chevron, Hero crest, etc.)
+- All decorative icons get `aria-hidden` (e.g. the WidgetFrame chevron).
 - All icon-only buttons get `aria-label` (TopNav LanguageToggle, ThemeToggle,
   AaSlider buttons, NavBell, Edit pencils on Dashboard, attachment-paperclip)
 - Status pills (delta tags) are plain text — no role, no aria
@@ -493,7 +494,7 @@ mirror — the cases on the Dashboard are:
 
 **No mirror needed:**
 
-- Hero crest rotation — pure rotation, looks the same.
+- The GSSG wordmark keeps its artwork orientation in RTL (§1.8).
 - Card hover lift (`-translate-y-1`) — vertical, direction-agnostic.
 - Widget list links do not use a card-corner chevron or action-arrow nudge.
 
@@ -505,6 +506,70 @@ and the lack of any `lang="ar-u-nu-arab"` override.
 **Date formatting:** DashboardHero uses `date-fns` with
 `format(new Date(), 'EEE, dd MMM', { locale: isAr ? arLocale : undefined })`
 for its Gregorian label.
+
+---
+
+### 1.8 GSSG wordmark
+
+The GSSG wordmark (red swoosh over grey GSSG letters) is the brand mark.
+Size it by width; the files are `1440 × 229` (~6.3:1) and height follows
+the aspect ratio. Never mirror it in RTL, set it in a circle, rotate
+or animate the artwork, or crop or ellipsise it.
+
+**Source:** `frontend/src/components/shell/BrandWordmark.tsx`.
+
+| Prop | Contract |
+| ---- | -------- |
+| `tone="surface"` (default) | Both images are in the DOM. `.brand-wordmark` rules in `index.css` show `/brand/gssg-wordmark.png` by default and `/brand/gssg-wordmark-on-dark.png` under `[data-theme="dark"]`. Tailwind `dark:` is not wired to the app theme. |
+| `tone="on-dark"` | Always `/brand/gssg-wordmark-on-dark.png` for a surface that stays dark in both themes. |
+| `alt` | Defaults to `GSSG`; use `alt=""` when the company name is already written beside the mark. The `surface` wrapper carries the accessible name, not the two images. |
+
+**On screen:**
+
+- **TopNav:** `surface`, `126px` wide (~20px high). Tagline beside the
+  mark in the widest tier; see §3.1.
+- **Phone bar (`MobileTopBar`):** `on-dark`, `138px` wide (~22px high).
+  Scales down whole and hides below a `72px` brand container. The bar is
+  navy `#0d2845` in both themes (`bg-primary`, pinned under
+  `[data-theme="dark"] [data-mobile-topbar]` in `index.css`) with white
+  controls, so the red swoosh never sits on the dark theme's mid-blue.
+- **Nav drawer (`NavDrawer`):** `surface`, `138px` wide. Header `ps-6`
+  aligns the mark with the nav icon column. At narrow widths the header
+  uses `@max-[200px]:px-2` and the mark can shrink whole.
+- **Login:** desktop top chrome uses `surface`, `138px` wide, `alt=""`
+  next to the tagline (`11.5px`; Arabic `12.5px`, no letter-spacing).
+  The eyebrow follows with `16px` of space on either side of its
+  divider. On mobile, `.hero-band::before` shows the on-dark file at
+  `138px`, on the same centre line as the language pill.
+- **Dashboard Hero:** no brand mark; the top bar carries it directly
+  above.
+- **Employee badge (`EmployeeBadgeCard`):** the `88px` reel is plain
+  hardware with a centre hub, not a logo plate. The navy band prints
+  the `on-dark` wordmark `150px` wide. In Arabic the company name is
+  printed underneath and the image has `alt=""`.
+
+**Paper and Word:** print letterheads and paper previews use
+`/brand/gssg-wordmark.png` regardless of the app theme.
+
+| Surface | Image size |
+| ------- | ---------- |
+| `AttendancePrintSheet`, `ReportPaper`, `PermitsPage`, `RegisterDocument` | `9mm` high, width auto |
+| Vehicle `PaperSheet` | `57mm` wide, height auto (~9.1mm) |
+| `StatementLetterhead` | `60mm` wide, height auto (~9.5mm) |
+
+In `backend/templates/*.docx`, the wordmark is the only brand mark; the
+UAE nation-brand logo is not used. The Material Request Form and
+Violation Form centre a `4.4cm` wordmark vertically in the page-1 logo
+block. The Security Permit and Warning Form continuation headers place
+the wordmark and company name (`14/10pt`) in one vertically centred row,
+with the name column taking the rest of the width. The continuation
+footers of those two forms, Report and Inmate Conduct Violations use a
+`4.4cm` wordmark without changing the footer row height.
+
+**App icons:** favicon, Apple touch and PWA icons use the wordmark's
+red swoosh over a light `G` on a navy tile. `frontend/public/icons/`
+contains the PWA icons (including inset maskable variants) and the
+monochrome push badge (`badge-96.png`).
 
 ---
 
@@ -820,16 +885,17 @@ focus-visible:ring-offset-2
 
 - Offset 2px against `bg-surface` (TopNav's own background).
 
-**Logo block:**
+**Brand link:**
 
 ```
-flex items-center gap-7 rounded-md
+flex shrink-0 items-center gap-4 rounded-md
 transition-transform duration-200
 hover:scale-[1.02]
 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
 ```
 
-- 1.02× scale on hover (subtle — the logo doesn't grow conspicuously).
+- The link as a whole scales to 1.02× on hover; the wordmark has no
+  animation of its own.
 
 ---
 
@@ -927,24 +993,19 @@ once so the Dashboard sections (§4) don't repeat the chrome description.
 **Anatomy:**
 
 ```
-┌───────────────────────────────────────────────────────────────────────────┐
-│ <header bg-surface border-b border-border px-8 pb-3.5 pt-(see Container)    │
-│         flex items-center gap-7>                                            │
-│                                                                             │
-│   [Logo block]   [Nav]                       [Right cluster]                │
-│   • gssg crest   • Dashboard                 • AaSlider                     │
-│   • GSSG word-   • Employees   ms-5          • LanguageToggle               │
-│     mark +       • Ledger                    • ThemeToggle                  │
-│     tagline      • Application                 • NavBellPopover             │
-│                  • Books                     • AccountMenu (avatar)         │
-│                  ms-auto on right cluster                                   │
-└───────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│ bg-surface · flex-nowrap · border-b                                 │
+│                                                                     │
+│ [GSSG wordmark │ tagline]  [Destinations]  [Aa · Lang · Theme · …]  │
+│  dashboard link            NAV_ITEMS       utilities · ms-auto      │
+└─────────────────────────────────────────────────────────────────────┘
+   Widest tier shown; see adaptation below.
 ```
 
 **Container:**
 
 ```
-flex items-center gap-7
+flex flex-nowrap items-center gap-7
 border-b border-border bg-surface
 px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]
 ```
@@ -955,35 +1016,54 @@ px-8 pb-3.5 pt-[max(0.875rem, safe-top + 0.75rem)]
   the unchanged 0.875rem; under a status bar / notch inset (a standalone iPad, any >= 768px touch window with a
   top inset) the controls start >= 12px below it, like the phone bar. `[data-topnav]` side padding already
   follows the side insets.
-- `gap-7` (1.75rem) between the logo block and the nav.
+- Header gap: `gap-7` (1.75rem) at 1960px and up; `0.5rem` below, with
+  side padding `max(1rem, --safe-left/--safe-right)` per physical side.
+  Content scales 20–24 also use the compact gap and padding.
 
-**Logo block:**
+**Brand link:**
 
-- `gssg-logo.png` rounded circle, `h-10 w-10`, `object-cover`, `ring-1
-  ring-border`.
-- Wordmark: `text-[1.15em] font-bold tracking-tight text-primary` —
-  bold "GSSG" + a `mt-0.5 block text-[0.72em] font-normal tracking-wider
-  text-muted-foreground` tagline beneath it.
-- Hover: `hover:scale-[1.02]` on the whole link.
+- `BrandWordmark` (`surface`, `w-[126px] shrink-0`), linking to `/`
+  with the localized Dashboard label.
+- Tagline sits beside the mark behind a hairline divider
+  (`border-s border-border ps-4`), in `text-[0.8em]` with
+  `rtl:tracking-normal`. It is visible only from 1960px, and is also
+  hidden at content scales 20–24.
 
 **Nav:**
 
-- 5 items: Dashboard, Employees, Ledger, Application (services), Books.
-- Order is fixed in `NAV_ITEMS` at TopNav:32-38.
-- `ms-5` extra inline-start margin (separates from logo block).
-- `gap-1` between items.
+- `NAV_ITEMS` order (`components/shell/navItems.ts`): Dashboard,
+  Employees, Vehicles, Assets, Ledger, Leaves, Services, Records,
+  Permits. Visibility follows role and capabilities.
+- `.topnav-destinations` uses `ms-5` and `gap-1` in the widest tier.
+  Below 1960px, `margin-inline-start: 0.75rem` keeps the mark from
+  reading as destination zero, and the link gap is `0.125rem`.
+  At content scales 20–24 the extra start margin is zero.
 - `text-[0.95em]`.
 - Inactive / active states: see §2.6.
 
+**Adaptation** (`index.css`, changes accumulate):
+
+| Width | Change |
+| ----- | ------ |
+| Below `1960px` | Hide the tagline; tighten the header and destination gaps. |
+| Below `1640px` | Hide the Aa range and language word; keep the Aa buttons and language icon. |
+| Below `1380px` | Set destination link inline padding to `0.5rem`. |
+| Below `1280px` | Show icon-only destinations; each link keeps its accessible name. |
+
+Content scales 20–24 use icon-only destinations and hide the tagline,
+Aa range and language word at any width; the header font is capped at
+`18px`.
+
 **Right cluster:**
 
-- `ms-auto flex items-center gap-3.5` — pinned to the inline-end.
-- Order is fixed: AaSlider, LanguageToggle, ThemeToggle, NavBellPopover,
-  AccountMenu.
+- `ms-auto flex shrink-0 items-center gap-3.5` — pinned to the inline-end.
+- AaSlider, LanguageToggle and ThemeToggle lead; AccountMenu is last.
+  Intake, email baskets, gateway status, notifications, debug and
+  settings appear between them as permitted.
 
 **Dark theme:** TopNav inherits `bg-surface` and `border-border` which both
 flip via the dark token set — chrome darkens to `#131826` with a `#2a3148`
-underline. The logo + crest images don't theme (they're PNGs).
+underline. The wordmark follows the app theme via `tone="surface"` (§1.8).
 
 **RTL:**
 
@@ -1683,9 +1763,10 @@ replaces the former zones and separate quick-actions band.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│ "Welcome back, Hamdan"                                  [🪯 crest] │
-│ 12 documents · 3 returning this week                                │
-│  (white-on-gradient)                            (rotates 90s)       │
+│ Greeting                                                         │
+│ Welcome back, Hamdan                                             │
+│ Gregorian and Hijri date · [On-leave status]                     │
+│ Leave insight (md+)                                              │
 └──────────────────────────────────────────────────────────────────┘
    rounded-2xl px-4 py-4 md:px-8 md:py-6
    background: var(--hero-grad)
@@ -1699,34 +1780,20 @@ style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}
 ```
 
 - Content-driven height, with `md:min-h-[150px]` on wider screens.
-- `overflow-hidden` because the upper-right circle highlight extends
-  beyond the rounded corners.
+- The top bar carries the wordmark; there is no brand mark in the Hero.
 
-**Upper-right highlight:**
-
-```
-<span aria-hidden
-      class="pointer-events-none absolute -top-20 end-[-80px]
-             h-[280px] w-[280px] rounded-full bg-white/[0.06]"/>
-```
-
-- A faint 6%-white circle, half-clipped by the hero edge. RTL-aware
-  positioning via `end-[-80px]` (sits at the inline-end corner in both
-  directions).
+**Bottom depth:** a decorative `h-14` overlay fades from transparent
+to `black/[0.18]`. `overflow-hidden` keeps it inside the rounded corners.
 
 **Headline:**
 
 ```
-m-0 text-[1.6em] font-semibold tracking-tight text-white
+m-0 text-[1.2em] font-semibold leading-tight tracking-tight md:text-[1.5em]
 ```
 
-Composition (`headline` in code):
-
-- Linked: `"Welcome back, {name}"` (the linked employee's `name_ar` when
-  AR, else `name_en`).
-- Un-linked: i18n string `dashboard.welcomeBackGuest`.
-
-While `summaryQuery.isPending && !name`:
+The headline is `dashboard.welcomeBack` with the employee name, or
+`dashboard.welcomeBackGuest` without one. A time-of-day greeting sits
+above it. While `isLoading && !name`:
 
 ```
 <Skeleton class="h-7 w-72 bg-white/20"/>
@@ -1734,51 +1801,28 @@ While `summaryQuery.isPending && !name`:
 
 (28px tall × 288px wide bar, white at 20% opacity.)
 
-**Subtitle (`sub`):**
+**Date and status strip:**
 
-```
-mt-1.5 text-[0.86em] opacity-90 text-white
-```
-
-Built from two optional parts joined by ` · `:
-
-- `i18n('dashboard.heroSubtitle', { count: docsCount })` — only when
-  `docsCount > 0`.
-- `i18n('dashboard.heroLeavesReturning', { count: leavesReturning })` —
-  only when `leavesReturning > 0`.
-
-If both are 0, the subtitle node doesn't render.
-
-**Crest:**
-
-```
-<img src="/brand/gssg-logo.png" aria-hidden
-     class="dashboard-crest
-            h-[84px] w-[84px] rounded-full object-cover
-            shadow-[0_0_0_2px_rgba(255,255,255,0.18)]"/>
-```
-
-- 84px circle.
-- Drop shadow is a 2px ring at 18%-white (acts as a subtle ring outline
-  against the gradient).
-- Animates `transform: rotate(0deg → 360deg)` over 90s, linear, infinite.
-- Reduced-motion: rotation suppressed.
+- Gregorian date, followed by a Hijri date when available. The Hijri
+  label uses `dir="rtl"` in either locale.
+- Where leave counts are available, show the on-leave count as a button
+  that opens leave review, or show “All present today”.
+- At `md` and up, the insight line adds on-site and upcoming-leave
+  counts or today's returners, with a leave-review link when applicable.
 
 **Dark theme:** hero gradient deepens (`--hero-grad` flips to its dark
 recipe). Text stays explicit `text-white`. Skeleton bar uses `bg-white/20`
 in both themes — slightly more washed-out against the dark hero, but
 still readable.
 
-**RTL:** Crest moves to the *start* edge implicitly (it follows DOM order
-inside a flex container — flex-direction flips with `dir="rtl"`). The
-upper-right highlight uses `end-[-80px]` so it lives at the *inline-end*
-corner in both modes.
+**RTL:** The date and status strip follows the locale's inline direction;
+the bottom overlay spans both edges.
 
 **a11y:**
 
 - Headline is a real `<h2>` (semantic page heading).
-- Crest is `alt=""` + `aria-hidden` — purely decorative.
-- Subtitle is a plain `<p>`.
+- The bottom depth overlay and the returner avatar cluster are
+  decorative (`aria-hidden`).
 
 ---
 
@@ -2305,7 +2349,6 @@ Every named animation on the Dashboard and chrome.
 | Keyframe                  | Where (selector)                                                  | Property animated            | Duration | Easing                   | Iterations | Reduced-motion handling                                          |
 | ------------------------- | ----------------------------------------------------------------- | ---------------------------- | -------- | ------------------------ | ---------- | ---------------------------------------------------------------- |
 | `gssg-fade-up`           | `.anim-fade-up` (app main and Dashboard Hero)                     | opacity 0→1 + translateY 8px→0 | `220ms` | `cubic-bezier(0.16, 1, 0.3, 1)` | once (`both`) | `animation: none` under `prefers-reduced-motion` |
-| `gssg-crest-spin`         | `.dashboard-crest` (Hero crest img)                               | rotate 0→360deg              | `90s`    | `linear`                 | infinite   | rotation cancelled                                               |
 | `theme-switch-sun-rotate` | `.theme-switch-sun svg`                                           | rotate 0→360deg              | `15s`    | `linear`                 | infinite   | `animation: none !important` under reduced-motion                |
 | `theme-switch-moon-tilt`  | `.theme-switch-moon svg`                                          | rotate 0→-10°→+10°→0          | `5s`    | `linear`                 | infinite   | as above                                                         |
 | (thumb slide)             | `.theme-switch .theme-switch-slider::before`                      | transform translateX 0↔26px  | `0.4s`   | default (ease)           | once per toggle | `transition: none !important` under reduced-motion              |
@@ -2314,7 +2357,7 @@ Every named animation on the Dashboard and chrome.
 | Card hover lift           | ServiceTile `transition-all duration-200`                       | translateY 0→-4px + shadow change | `200ms` | default                  | once per hover  | `motion-reduce:!translate-none motion-reduce:transition-none` |
 | Service artwork/emoji bob | ServiceTile `group-hover:-translate-y-1.5`                      | translateY 0→-6px             | `300ms`  | default                  | once per hover  | `motion-reduce:!translate-none motion-reduce:transition-none` |
 | TopNav link micro-lift    | `.hover:-translate-y-0.5` on inactive NavLinks                    | translateY 0→-2px             | `200ms`  | default                  | once per hover  | `motion-reduce:!transform-none` applied                          |
-| Logo scale-up             | `.hover:scale-[1.02]` on TopNav logo                              | scale 1→1.02                  | `200ms`  | default                  | once per hover  | not overridden                                                   |
+| Brand-link hover scale    | `.hover:scale-[1.02]` on the TopNav brand link                    | scale 1→1.02                  | `200ms`  | default                  | once per hover  | not overridden                                                   |
 | Skeleton pulse            | Tailwind `animate-pulse` on Skeleton                              | opacity 1↔0.5                 | `2s`     | cubic-bezier(.4,0,.6,1)  | infinite        | Tailwind suppresses under reduced-motion                         |
 | Smart-link chip hover     | `[data-smart-link='*']:hover` background-color shift              | background-color              | `120ms`  | default                  | once per hover  | not overridden (subtle color shift)                              |
 
@@ -2344,12 +2387,11 @@ documented.
     `0.75rem` — i.e. >= 12px of breathing room above the 44px controls beyond the safe inset (also with no inset,
     e.g. Android or landscape). The `env()` insets are physical, so the larger side is used on both — no LTR/RTL
     variants (`viewport-fit=cover` is set in `index.html`). Pinch zoom stays enabled.
-  - Targets are 44 CSS px (px, not rem, so they stay 44px at any text size). Menu, bell and avatar are 44px; the
-    brand takes the remaining width and sheds first the wordmark (container query) and then the 32px logo
-    (never squeezed: it is a fixed, `max-w-none` circle) before a control would leave the screen. Below 180 CSS px
-    (a 360px phone at 200% zoom) gaps and side padding collapse so three 44px targets still fit. The wordmark is
-    `leading-none` like the bell glyph: at 200% text its inherited 1.5 line box (50px) would otherwise stretch the
-    header past the height arithmetic the popover cap mirrors (99px instead of 93 at 667x375, root 32px).
+  - Menu, bell and avatar targets stay 44 CSS px at any text size. The `bg-primary` phone bar gives the
+    wordmark the remaining width: `on-dark`, up to 138px wide (22px high), scaled down whole and hidden
+    below a 72px brand container. Below 180 CSS px (a 360px phone at 200% zoom), gaps and side padding
+    collapse so all three targets still fit. The bell trigger uses `leading-none` so its glyph line box
+    cannot stretch the header past the popover cap's height calculation.
   - On a coarse pointer (`pointer-coarse:`), EVERY control in the header, the account / notifications panels
     and the drawer is >= 44 x 44: the Aa A / slider / A, language toggle, theme switch, lock-timer steppers,
     layout segments, "Mark all read", "View all in inbox", the nav links and the TopNav utilities. A mouse keeps
@@ -2383,8 +2425,7 @@ documented.
     matters, tap-focus and mouse-event synthesis, whether an outside tap on plain content closes the popovers
     — they close on `window` `mousedown`) and real Android Chrome. The e2e emulates `env()` insets with CDP and
     emulates "taps do not focus buttons" by cancelling `mousedown`; both are Chromium models, not WebKit.
-    The `h-dvh` change is a spec-based expectation, unverified on a phone. At 1240–1400px with all eight destinations on a mouse desktop the existing TopNav row already
-    overflows (unrelated, unchanged).
+    The `h-dvh` change is a spec-based expectation, unverified on a phone.
 - **Pages other than Dashboard.** Employees / Application / Ledger /
   Books / Settings each get their own §4.x section in a follow-up pass.
 - **AccountMenu when on Settings page.** AccountMenu hides the "Email

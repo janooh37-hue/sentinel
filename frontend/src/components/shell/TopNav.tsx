@@ -21,6 +21,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 import { scopedDestinations, scopedRoleOf } from '@/lib/scopedRole'
 
+import { BrandWordmark } from './BrandWordmark'
 import { AaSlider } from './AaSlider'
 import { EmailBasketTray } from './EmailBasketTray'
 import { GatewayIndicator } from './GatewayIndicator'
@@ -63,19 +64,13 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         aria-label={t('nav.dashboard')}
         onPointerEnter={() => prefetchRouteForPath('/')}
         onFocus={() => prefetchRouteForPath('/')}
-        className="flex shrink-0 items-center gap-7 rounded-md transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:justify-center"
+        className="flex shrink-0 items-center gap-4 rounded-md transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] pointer-coarse:justify-center"
       >
-        <img
-          src="/brand/gssg-logo.png"
-          alt="GSSG"
-          className="h-10 w-10 shrink-0 rounded-full object-cover ring-1 ring-border"
-        />
-        <div className="topnav-brand-copy text-[1.15em] font-bold leading-tight tracking-tight text-primary">
-          GSSG
-          <span className="mt-0.5 block whitespace-nowrap text-[0.72em] font-normal tracking-wider text-muted-foreground">
-            {t('branding.tagline')}
-          </span>
-        </div>
+        {/* 20px tall. The link's aria-label names it; below 1960px (index.css tiers) it is the only brand on screen. */}
+        <BrandWordmark className="w-[126px] shrink-0" />
+        <span className="topnav-brand-copy whitespace-nowrap border-s border-border ps-4 text-[0.8em] leading-tight tracking-wide text-muted-foreground rtl:tracking-normal">
+          {t('branding.tagline')}
+        </span>
       </NavLink>
       <nav
         aria-label={t('nav.menu')}

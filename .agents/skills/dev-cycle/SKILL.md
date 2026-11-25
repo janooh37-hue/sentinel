@@ -27,7 +27,7 @@ When the user says "put it on dev", "add this to the worktree too", or "make the
   | `sync` | Rebuild on the latest `origin/main` and the latest of every previewed branch; merged or deleted branches leave the preview. |
   | `publish` / `restart` | Build frontend, migrate, restart / restart only. |
 
-- **Server:** `backend\serve.py` on 127.0.0.1:8765, started detached; log `.tmp\dev-server.log.err`.
+- **Server:** `backend\serve.py` on 127.0.0.1:8765, started elevated by the `GSSG Dev Server` scheduled task in the desktop session; log `.tmp\dev-server.log.err`. Verbs that restart it need an elevated shell (SSH from dtop is one).
 - **URL:** `https://gssglt.<your-tailnet>.ts.net/` (tailnet only; the real host is in the gitignored dev `.env`). The user is on the laptop or a phone: never give a `localhost` link.
 - **Dev data:** `C:\Users\GSSG\gssg-dev-data` (throwaway snapshot; never production).
 - **Production:** GSSGIT, through the `deploy` skill.

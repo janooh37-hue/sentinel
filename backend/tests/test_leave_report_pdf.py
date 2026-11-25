@@ -76,6 +76,32 @@ def test_prints_the_posted_sheet_without_its_scripts(
     assert f"url({(static / 'assets').as_uri()}/f.woff2)" in page
 
 
+def test_an_elevated_server_keeps_the_browser_elevated_so_it_prints(
+    api_db: Session, static: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Edge launched from an elevated process on a desktop session relaunches itself
+    # de-elevated and exits at once without printing, so every print answered 503.
+    seen: list[str] = []
+
+    class FakeBrowser:
+        def __init__(self, args: list[str], **_: object) -> None:
+            seen.extend(args)
+            if "--do-not-de-elevate" in args:
+                out = next(a for a in args if a.startswith("--print-to-pdf=")).split("=", 1)[1]
+                Path(out).write_bytes(b"%PDF-sheet")
+
+        def wait(self, timeout: float | None = None) -> int:
+            return 0
+
+    monkeypatch.setattr(sheet_pdf_service, "find_browser", lambda: Path("msedge.exe"))
+    monkeypatch.setattr(sheet_pdf_service.subprocess, "Popen", FakeBrowser)
+
+    r = _post(api_db, {"html": SHEET, "lang": "en"})
+
+    assert r.status_code == 200, seen
+    assert base64.b64decode(r.text) == b"%PDF-sheet"
+
+
 def test_host_without_a_browser_gets_a_clear_503(
     api_db: Session, static: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

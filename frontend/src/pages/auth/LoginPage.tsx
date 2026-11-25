@@ -25,6 +25,7 @@ import {
   Phone,
 } from 'lucide-react'
 
+import { BrandWordmark } from '@/components/shell/BrandWordmark'
 import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { setLanguage } from '@/lib/i18n'
 import { useAuth } from '@/lib/authContext'
@@ -358,11 +359,9 @@ export function LoginPage(): React.JSX.Element {
       {/* Top chrome */}
       <div className="top-chrome">
         <span className="top-chrome__brand">
-          <img className="top-chrome__logo" src="/brand/gssg-logo.png" alt="" />
-          <span className="top-chrome__mark">
-            <span className="top-chrome__wordmark">GSSG</span>
-            <span className="top-chrome__tagline">{t('branding.tagline')}</span>
-          </span>
+          {/* The company name sits beside the mark, so the mark itself is decorative here. */}
+          <BrandWordmark alt="" className="top-chrome__logo" />
+          <span className="top-chrome__tagline">{t('branding.tagline')}</span>
         </span>
         <span className="top-chrome__eyebrow">{t('auth.eyebrow')}</span>
         <span className="top-chrome__spacer" />
