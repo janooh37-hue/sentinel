@@ -214,13 +214,27 @@ def get_employee_lookup(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(_require_employee_lookup)],
 ) -> EmployeeLookupRead:
-    """Resolve a selection; passport fields only for the Passport Release service."""
+    """Resolve a selection; document fields only for the release-list service using them."""
     row = employee_service.get_employee(db, employee_id)
     out = EmployeeLookupRead.model_validate(row)
-    # Only the Passport Release List prefills these; nobody else gets them.
-    if not perm_service.has_capability(db, user, "books.service.Passport Release List"):
+
+    # Using a service means generating it (frontend: documents.generate + its
+    # service cap); the route also admits uniform/user-management pickers.
+    can_generate = perm_service.has_capability(db, user, "documents.generate")
+
+    def can(service: str) -> bool:
+        return can_generate and perm_service.has_capability(db, user, f"books.service.{service}")
+
+    # Each release list prefills only its own document's fields; nobody else gets them.
+    passport = can("Passport Release List")
+    uae_id = can("UAE ID Release List")
+    if not (passport or uae_id or can("Work ID Release List")):
         out.nationality = None
+    if not passport:
         out.passport_no = None
+    if not uae_id:
+        out.uae_id_no = None
+        out.uae_id_expiry = None
     # The photo route needs employees.view; don't advertise a photo the caller can't load.
     if perm_service.has_capability(db, user, "employees.view"):
         out.has_photo = _photo_fields(db, row.id)["has_photo"] is True

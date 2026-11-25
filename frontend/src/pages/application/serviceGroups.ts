@@ -83,6 +83,8 @@ export const SERVICE_GROUPS: readonly ServiceGroup[] = [
       'HR Request Form',
       'Passport Release Form',
       'Passport Release List',
+      'Work ID Release List',
+      'UAE ID Release List',
       'Employee Performance Appraisal Form',
       'Resignation Letter',
       'Employee Clearance Form',

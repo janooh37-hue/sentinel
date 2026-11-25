@@ -27,6 +27,8 @@ SERVICE_RECORD_CATEGORY: Final[Mapping[str, str]] = MappingProxyType(
         "Vehicle Fines": "7/1",
         "Passport Release Form": "8/1",
         "Passport Release List": "8/1",
+        "Work ID Release List": "8/1",
+        "UAE ID Release List": "8/1",
         "HR Request Form": "8/1",
         "Acknowledgment Form": "9/1",
         "Material Request Form": "10/1",

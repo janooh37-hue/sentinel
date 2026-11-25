@@ -18,7 +18,7 @@ Two defects, both from the original Excel paste (verified by XML dump):
 
 The remaining half of defect 2 — the 15 fixed slots leaving phantom blank rows
 when fewer employees are listed — is handled at render time by
-`_pp_passport_release_list` in `docx_engine.py`, which deletes the unused rows.
+`_pp_release_list` in `docx_engine.py`, which deletes the unused rows.
 
 The modified .docx is committed intentionally (template-churn rule: only THIS
 file changes).

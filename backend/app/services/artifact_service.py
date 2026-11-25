@@ -42,6 +42,8 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "General Book": "GeneralBook",
     "Security Permit": "SecurityPermit",
     "Passport Release List": "PassportReleaseList",
+    "Work ID Release List": "WorkIdReleaseList",
+    "UAE ID Release List": "UaeIdReleaseList",
     "Inmate Conduct Violations": "InmateViolations",
     "Vehicle Fines": "VehicleFines",
     "Vehicle Accident Report": "VehicleAccident",

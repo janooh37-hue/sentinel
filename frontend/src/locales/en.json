@@ -5492,8 +5492,6 @@
       "capReached": "Maximum of {{n}} employees reached.",
       "id": "ID",
       "name": "Name",
-      "nationality": "Nationality",
-      "passport": "Passport No",
       "notFound": "No employee with that G-number.",
       "duplicate": "Already added.",
       "lookupError": "Lookup failed. Try again.",
@@ -5727,6 +5725,8 @@
       "administrative_leave": "Admin Leave",
       "warning": "Warning",
       "passport_release_list": "Passport Release",
+      "work_id_release_list": "Work ID Release",
+      "uae_id_release_list": "UAE ID Release",
       "report": "Report",
       "inmate_conduct_violations": "Inmate Conduct"
     },
@@ -5747,6 +5747,8 @@
       "administrative_leave": "File an administrative leave.",
       "warning": "Issue a formal warning notice.",
       "passport_release_list": "Release passports to a list of employees.",
+      "work_id_release_list": "Release work ID cards to a list of employees.",
+      "uae_id_release_list": "Release Emirates ID cards to a list of employees.",
       "report": "File an incident or duty report.",
       "inmate_conduct_violations": "Record inmate conduct violations."
     },
