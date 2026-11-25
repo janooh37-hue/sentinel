@@ -10,10 +10,12 @@
  *
  * Keyboard: ArrowDown/ArrowUp move a visually-highlighted option (tracked via
  * `aria-activedescendant`, not real DOM focus — focus stays in the input).
- * Enter selects the highlighted option and blocks form submission while the
- * popup is open. Escape closes without changing the selection. Pointer and
- * keyboard selection both funnel through `selectRow` so behavior stays
- * identical either way.
+ * Enter selects the highlighted option (or the only result when nothing is
+ * highlighted) and blocks form submission while the popup is open. Escape
+ * closes without changing the selection. Clicking or typing in the focused
+ * input reopens the popup after a pick, so multi-add callers can keep adding.
+ * Pointer and keyboard selection both funnel through `selectRow` so behavior
+ * stays identical either way.
  */
 
 import { useEffect, useId, useRef, useState } from 'react'
@@ -136,8 +138,9 @@ export function EmployeePicker({
       // Block accidental form submission while the popup is open, whether
       // or not an option is currently highlighted.
       e.preventDefault()
-      if (activeIndex >= 0 && activeIndex < rows.length) {
-        selectRow(rows[activeIndex]!.id)
+      const index = activeIndex >= 0 ? activeIndex : rows.length === 1 ? 0 : -1
+      if (index >= 0 && index < rows.length) {
+        selectRow(rows[index]!.id)
       }
       return
     }
@@ -148,6 +151,13 @@ export function EmployeePicker({
         setActiveIndex(-1)
       }
     }
+  }
+
+  function openList(): void {
+    clearTimeout(blurTimer.current ?? undefined)
+    setOpen(true)
+    setQuery('')
+    setActiveIndex(-1)
   }
 
   const selectedLabel = selectedError
@@ -171,19 +181,25 @@ export function EmployeePicker({
           }
           aria-label={ariaLabel ?? t('application.employeePicker.defaultAriaLabel')}
           autoComplete="off"
-          dir="auto"
           placeholder={t('application.employeePicker.placeholder')}
           value={open ? query : selectedLabel}
-          onFocus={() => {
-            setOpen(true)
-            setQuery('')
-            setActiveIndex(-1)
+          onFocus={openList}
+          onClick={() => {
+            if (!open) openList()
           }}
           onBlur={() => {
             blurTimer.current = setTimeout(() => setOpen(false), 150)
           }}
           onChange={(e) => {
-            setQuery(e.target.value)
+            // Typing while closed reopens the list; the closed input shows the
+            // selected label, so search only what was typed after it.
+            const value = e.target.value
+            const typed =
+              !open && selectedLabel && value.startsWith(selectedLabel)
+                ? value.slice(selectedLabel.length)
+                : value
+            setQuery(typed)
+            setOpen(true)
             setActiveIndex(-1)
           }}
           onKeyDown={onKeyDown}
