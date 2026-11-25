@@ -1,9 +1,9 @@
 /**
  * An IntersectionObserver the test drives, for the pdf.js page stack: nothing
- * is "near the viewport" until `setNearPages` says which page boxes are.
+ * is "near the viewport" until `await setNearPages(...)` says which page boxes are.
  * `installMockIntersectionObserver()` in `beforeEach`, `vi.unstubAllGlobals()` in `afterEach`.
  */
-import { act } from '@testing-library/react'
+import { act, waitFor } from '@testing-library/react'
 import { vi } from 'vitest'
 
 class MockIntersectionObserver {
@@ -50,10 +50,15 @@ export function installMockIntersectionObserver(): void {
 }
 
 /** The "near the viewport" observer is the one `PdfPages` builds with a rootMargin. */
-export function setNearPages(near: number[]): void {
-  // The observer is created in a passive effect that may still be pending; an empty act flushes it.
-  act(() => undefined)
-  const observer = MockIntersectionObserver.instances.find((o) => o.options?.rootMargin !== undefined)
-  if (!observer) throw new Error('near observer not created yet')
+export async function setNearPages(near: number[]): Promise<void> {
+  // PdfPages creates the observer in a passive effect of the commit that rendered the page
+  // boxes. That commit runs outside act (the pdf.js page promises settle on their own), so
+  // React flushes its effects on a later scheduler task, which an empty act() does not run.
+  // Wait for the observer instead of assuming it exists.
+  const observer = await waitFor(() => {
+    const found = MockIntersectionObserver.instances.find((o) => o.options?.rootMargin !== undefined)
+    if (!found) throw new Error('near observer not created yet')
+    return found
+  })
   act(() => observer.fire(near))
 }

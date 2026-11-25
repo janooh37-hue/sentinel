@@ -1270,7 +1270,7 @@ function BookRecordPageBody(): React.JSX.Element {
                     rows={4}
                     className="block w-full rounded-lg border border-hairline bg-background px-3 py-2 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <span className="block text-end text-xs tabular-nums">{t('books.approval.noteCounter', { count: signNote.length, max: 1000 })}</span>
+                  <span className="block text-end text-xs tabular-nums">{t('books.approval.noteCounter', { used: signNote.length, max: 1000 })}</span>
                 </label>
               )}
             </div>

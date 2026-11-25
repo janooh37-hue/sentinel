@@ -6,8 +6,6 @@ from datetime import UTC, date, datetime
 from threading import Event
 
 import pytest
-from backend.tests import test_inmate_statistics as fixtures
-from backend.tests.test_inmate_statistics import _inmate, _record
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select, text
@@ -19,6 +17,8 @@ from app.api.v1.inmate_statistics import router
 from app.db import models as m
 from app.db.session import get_db
 from app.services import inmate_statistics_service as s
+from tests import test_inmate_statistics as fixtures
+from tests.test_inmate_statistics import _inmate, _record
 
 api_db = fixtures.api_db
 

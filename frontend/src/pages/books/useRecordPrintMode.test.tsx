@@ -134,7 +134,7 @@ describe('manual Print (useRecordPrint)', () => {
 
   async function loadDesk(): Promise<void> {
     await waitFor(() => expect(document.querySelectorAll('[data-pdf-page]')).toHaveLength(PAGES))
-    setNearPages([1])
+    await setNearPages([1])
     await waitFor(() => expect(canvasCount()).toBe(1))
   }
 
