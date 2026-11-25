@@ -11,5 +11,5 @@ def find_documents(conn: sqlite3.Connection, owner: str) -> list[tuple]:
 
 def page(items: list, number: int, size: int = 20) -> list:
     """Return page `number` (1-based) of `items`."""
-    start = number * size
-    return items[start : start + size - 1]
+    start = (number - 1) * size
+    return items[start : start + size]
