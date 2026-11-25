@@ -17,7 +17,7 @@ describe('apiErrorMessage', () => {
 
   it('treats any 403 without a specific code as a permission refusal', () => {
     // A proxy-generated 403 carries no envelope, so its code is synthesized.
-    expect(apiErrorMessage(new ApiError(403, 'HTTP_403', 'Forbidden'))).toBe('Forbidden')
+    expect(apiErrorMessage(new ApiError(403, 'HTTP_403', 'Forbidden'))).toBe("You don't have permission for this")
   })
 
   it.each([

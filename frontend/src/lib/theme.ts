@@ -43,6 +43,7 @@ export function applyTheme(theme: Theme): void {
 }
 
 export function getStoredTheme(): Theme | null {
+  debugger
   return (localStorage.getItem('gssg.theme') as Theme | null) ?? null
 }
 
