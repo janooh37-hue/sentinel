@@ -106,6 +106,15 @@ def _add_expiry_column(table: etree._Element, rows: list[etree._Element]) -> Non
             raise ValueError(f"Invalid UAE ID grid spans in row {index}")
 
 
+def _match_rtl_text(cell: etree._Element, reference: etree._Element) -> None:
+    paragraph = cell.find(W + "p")
+    source = reference.find(W + "p")
+    props = paragraph.find(W + "pPr")
+    props.find(W + "spacing").addprevious(deepcopy(source.find(f"{W}pPr/{W}bidi")))
+    run = paragraph.find(W + "r")
+    run.replace(run.find(W + "rPr"), deepcopy(source.find(f"{W}r/{W}rPr")))
+
+
 def _build(source: ZipFile, *, uae: bool) -> None:
     original = source.read(DOCUMENT)
     document = etree.fromstring(original)
@@ -120,6 +129,8 @@ def _build(source: ZipFile, *, uae: bool) -> None:
 
     # Preserve run formatting even where Word split an Arabic phrase.
     _replace_run(cells[5][0], " جواز السفر ", f" {title}")
+    _replace_run(cells[HEADER_ROW][0], "ID", "الرقم الوظيفي")
+    _match_rtl_text(cells[HEADER_ROW][0], cells[HEADER_ROW][1])
     _replace_run(cells[HEADER_ROW][DOCUMENT_COL], "رقم جواز السفر ", column)
     _replace_run(cells[HEADER_ROW][-1], "تاريخ تسليم الجواز", f"تاريخ تسليم {handover}")
     for slot in range(ITEM_SLOTS):
@@ -131,6 +142,8 @@ def _build(source: ZipFile, *, uae: bool) -> None:
         for path in (f"{W}tcPr/{W}vAlign", f"{W}p/{W}pPr/{W}spacing"):
             property_node = item.find(path)
             property_node.getparent().replace(property_node, deepcopy(name.find(path)))
+        if not uae:
+            _match_rtl_text(item, name)
     _replace_run(cells[SIGNATURE_ROW][0], " جوازات ", " بطاقات ")
     _replace_run(cells[SIGNATURE_ROW][0], "السفر  أعلاه", f"{received} أعلاه")
     if uae:

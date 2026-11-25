@@ -41,7 +41,7 @@ SAMPLE = {
     "uae_id_expiry": "14/03/2028",
 }
 
-pytestmark = pytest.mark.parametrize("template_id", list(LISTS))
+all_lists = pytest.mark.parametrize("template_id", list(LISTS))
 
 
 def _items(template_id: str, n: int) -> list[dict[str, str]]:
@@ -67,6 +67,57 @@ def _border(cell: Any, edge: str) -> str | None:
     return None if side is None else str(side.get(qn("w:val")))
 
 
+@pytest.mark.parametrize(
+    ("template_id", "title", "headers"),
+    [
+        (
+            "Work ID Release List",
+            "إستلام بطاقة العمل",
+            (
+                "الرقم الوظيفي",
+                "الإسم",
+                "الجنسية",
+                "المسمى الوظيفي",
+                "تاريخ الإستلام",
+                "توقيع الموظف",
+                "تاريخ تسليم البطاقة",
+            ),
+        ),
+        (
+            "UAE ID Release List",
+            "إستلام الهوية الإماراتية",
+            (
+                "الرقم الوظيفي",
+                "الإسم",
+                "الجنسية",
+                "رقم الهوية",
+                "تاريخ انتهاء الهوية",
+                "تاريخ الإستلام",
+                "توقيع الموظف",
+                "تاريخ تسليم الهوية",
+            ),
+        ),
+    ],
+)
+def test_id_release_list_has_arabic_labels_and_correct_field_direction(
+    template_id: str, title: str, headers: tuple[str, ...]
+) -> None:
+    table = Document(str(TEMPLATES / TEMPLATE_FILES[template_id])).tables[0]
+    assert table._tbl.tblPr.find(qn("w:bidiVisual")) is not None
+    assert table.rows[5].cells[0].text.strip() == title
+    assert tuple(cell.text.strip() for cell in table.rows[6].cells) == headers
+    assert all("جواز" not in cell.text for row in table.rows for cell in row.cells)
+
+    work_id = template_id == "Work ID Release List"
+    end = 4 if work_id else 5
+    for row in table.rows[FIRST_ITEM_ROW : FIRST_ITEM_ROW + ITEM_SLOTS]:
+        for cell in row.cells[3:end]:
+            paragraph = cell.paragraphs[0]
+            assert (paragraph._p.pPr.find(qn("w:bidi")) is not None) == work_id
+            assert paragraph.runs[0].font.rtl is (True if work_id else None)
+
+
+@all_lists
 def test_every_item_slot_is_styled_like_the_first(template_id: str) -> None:
     """Slots 3-14 used to be borderless, left-aligned and a different font, so
     the 4th employee onward rendered as naked text under the table."""
@@ -83,17 +134,18 @@ def test_every_item_slot_is_styled_like_the_first(template_id: str) -> None:
             assert jc is not None and jc.get(qn("w:val")) == "center"
 
 
+@all_lists
 def test_each_document_field_lands_in_its_row(tmp_path: Path, template_id: str) -> None:
     """A placeholder the template forgot (e.g. the UAE expiry) renders as nothing."""
     table = _render(tmp_path, template_id, 2)
     keys, _ = LISTS[template_id]
     for i in range(2):
         texts = [c.text.strip() for c in table.rows[FIRST_ITEM_ROW + i].cells]
-        assert f"G{3000 + i}" in texts
-        for key in keys:
-            assert SAMPLE[key] in texts, key
+        assert texts[0] == f"G{3000 + i}"
+        assert texts[2 : 2 + len(keys)] == [SAMPLE[key] for key in keys]
 
 
+@all_lists
 def test_unfilled_slots_are_removed(tmp_path: Path, template_id: str) -> None:
     """The blank tail rows are what pushed the signature block onto page 2."""
     for n in (0, 1, 8):
@@ -108,12 +160,14 @@ def test_unfilled_slots_are_removed(tmp_path: Path, template_id: str) -> None:
         assert blank_after_header == []
 
 
+@all_lists
 def test_full_list_keeps_all_fifteen_rows(tmp_path: Path, template_id: str) -> None:
     table = _render(tmp_path, template_id, ITEM_SLOTS)
     filled = [r for r in table.rows if r.cells[0].text.strip().startswith("G3")]
     assert len(filled) == ITEM_SLOTS
 
 
+@all_lists
 def test_signature_block_survives_the_trim(tmp_path: Path, template_id: str) -> None:
     """Deleting rows must not touch the block below them (same table)."""
     _, label = LISTS[template_id]
