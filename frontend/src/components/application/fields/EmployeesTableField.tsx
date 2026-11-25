@@ -32,6 +32,17 @@ const MAX_ROWS = 15
 /** Document numbers and dates read left-to-right in both languages. */
 const LTR_KEYS: Record<string, true> = { passport_no: true, uae_id_no: true, uae_id_expiry: true }
 
+/**
+ * Narrowest a cell may get, sized to its longest real value plus the input's
+ * padding: below this the table scrolls instead of clipping digits.
+ */
+const CELL_MIN_WIDTH: Record<string, string> = {
+  passport_no: 'min-w-[calc(10ch_+_1.25rem)]',
+  uae_id_no: 'min-w-[calc(18ch_+_1.25rem)]', // 784-1990-1234567-1
+  uae_id_expiry: 'min-w-[calc(10ch_+_1.25rem)]', // dd/mm/yyyy
+}
+const TEXT_CELL_MIN_WIDTH = 'min-w-[8rem]'
+
 /** ISO date → the paper's dd/mm/yyyy (docx_engine `_TODAY_FMT`). */
 function paperDate(iso: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
@@ -141,7 +152,7 @@ export function EmployeesTableField({
         <div className="overflow-x-auto rounded-md border border-hairline bg-surface-tinted">
           <table className="w-full border-collapse text-sm [&_td]:px-2 [&_td]:py-1.5 [&_th]:px-2 [&_th]:py-2 [&_tbody_tr]:border-t [&_tbody_tr]:border-hairline">
             <thead>
-              <tr className="border-b border-hairline text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground [&_th]:text-start">
+              <tr className="border-b border-hairline text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground rtl:tracking-normal [&_th]:text-start">
                 <th scope="col" className="w-24">
                   {t('application.employeesTable.id', { defaultValue: 'ID' })}
                 </th>
@@ -167,9 +178,10 @@ export function EmployeesTableField({
                       <input type="hidden" {...register(`${name}.${idx}.employee_id`)} />
                       {r.employee_id}
                     </td>
-                    <td dir="auto">
+                    <td className="min-w-[9rem]">
                       <input type="hidden" {...register(`${name}.${idx}.name`)} />
-                      {r.name}
+                      {/* Isolated, but aligned to the page like its header. */}
+                      <bdi>{r.name}</bdi>
                     </td>
                     {columns.map((col) => {
                       const ltr = LTR_KEYS[col.key] === true
@@ -178,7 +190,7 @@ export function EmployeesTableField({
                           <Input
                             {...register(`${name}.${idx}.${col.key}`)}
                             aria-label={`${isAr ? col.label_ar : col.label_en} · ${r.employee_id}`}
-                            className={ltr ? 'h-8 px-2 tabular-nums' : 'h-8 px-2'}
+                            className={`h-8 px-2 ${CELL_MIN_WIDTH[col.key] ?? TEXT_CELL_MIN_WIDTH}${ltr ? ' tabular-nums' : ''}`}
                             dir={ltr ? 'ltr' : 'auto'}
                           />
                         </td>
