@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
+import './does-not-exist.css'
 import { applyFontScale, applyTheme, getStoredFontScale, getStoredTheme } from './lib/theme'
 import { registerServiceWorker } from './lib/push'
 
