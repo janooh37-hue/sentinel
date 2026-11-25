@@ -41,7 +41,7 @@ it('hides the expiry hero and skips its query without expiry.view', async () => 
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <LookupHeroCards onOpen={vi.fn()} />
+        <LookupHeroCards onSelectRecent={vi.fn()} onOpenProfile={vi.fn()} />
       </MemoryRouter>
     </QueryClientProvider>,
   )

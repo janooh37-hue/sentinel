@@ -8,19 +8,23 @@
  */
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
 
 import { BrandWordmark } from '@/components/shell/BrandWordmark'
+import { buttonVariants } from '@/components/ui/button-variants'
 import type { EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { cn } from '@/lib/utils'
 import { StatusPill } from './StatusPill'
 
 export interface EmployeeBadgeCardProps {
   employee: EmployeeListItem
-  onOpenProfile: (employeeId: string) => void
   onClear: () => void
 }
 
+const ACTION_CLASS = 'h-auto min-h-[44px] whitespace-normal rounded-xl px-3 py-2 text-center leading-snug'
 const BAND_GRADIENT = 'linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%)'
 const BARCODE =
   'repeating-linear-gradient(90deg,#0d1421 0 2px,transparent 2px 5px,#0d1421 5px 6px,transparent 6px 8px,#0d1421 8px 11px,transparent 11px 13px,#0d1421 13px 14px,transparent 14px 18px)'
@@ -40,20 +44,21 @@ function initials(name: string): string {
 
 export function EmployeeBadgeCard({
   employee,
-  onOpenProfile,
   onClear,
 }: EmployeeBadgeCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const canEdit = useCapabilities().has('employees.edit')
   const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
   const [photoFailed, setPhotoFailed] = useState(false)
   const name = pickEmployeeName(employee, lang)
   const position = pickPosition(employee, lang)
   const showPhoto = employee.has_photo && !photoFailed
+  const profileHref = `/employees/${encodeURIComponent(employee.id)}`
 
   return (
-    <div>
+    <div className="mx-auto w-full min-w-0 max-w-[340px]">
       {/* Retractable badge reel — purely decorative */}
-      <div aria-hidden data-testid="badge-reel" className="relative z-[2] flex flex-col items-center">
+      <div aria-hidden data-testid="badge-reel" className="relative z-[2] hidden flex-col items-center lg:flex">
         <div
           className="relative grid h-[88px] w-[88px] place-items-center rounded-full"
           style={{
@@ -97,34 +102,33 @@ export function EmployeeBadgeCard({
 
       {/* The badge card */}
       <div
-        className="relative -mt-5 overflow-hidden rounded-[20px] bg-white text-[#1a1d21]"
+        className="relative overflow-hidden rounded-[20px] bg-white text-[#1a1d21] lg:-mt-5 lg:rotate-[1deg]"
         style={{
-          transform: 'rotate(1deg)',
           boxShadow: '0 24px 60px -20px rgba(13,40,69,.35),0 2px 6px rgba(13,40,69,.08)',
         }}
       >
         <span
           aria-hidden
-          className="absolute left-1/2 top-2.5 z-[2] h-3.5 w-16 -translate-x-1/2 rounded-full bg-[#f0eee8]"
+          className="absolute left-1/2 top-2.5 z-[2] hidden h-3.5 w-16 -translate-x-1/2 rounded-full bg-[#f0eee8] lg:block"
           style={{ boxShadow: 'inset 0 1px 3px rgba(0,0,0,.25)' }}
         />
-        {/* pt clears the punched slot (it ends 24px down) by 22px before the wordmark. */}
-        <div className="px-6 pb-3.5 pt-[46px] text-center text-white" style={{ background: BAND_GRADIENT }}>
+        <div className="flex items-center gap-2 px-4 py-3 text-white lg:block lg:px-6 lg:pb-3.5 lg:pt-[46px] lg:text-center" style={{ background: BAND_GRADIENT }}>
           {/* The printed band is navy in both themes, so the on-dark wordmark. In Arabic the company's Arabic
               name is printed under it (so the mark itself is decorative there); in English the mark spells it. */}
           <BrandWordmark
             tone="on-dark"
             alt={lang === 'ar' ? '' : t('employees.activity.badge.company')}
-            className="mx-auto w-[150px]"
+            className="w-[112px] shrink-0 lg:mx-auto lg:w-[150px]"
           />
           {lang === 'ar' && (
-            <p className="mt-2.5 text-[12px] font-bold opacity-85">{t('employees.activity.badge.company')}</p>
+            <p className="min-w-0 flex-1 text-end text-[11px] font-bold opacity-85 lg:mt-2.5 lg:text-center lg:text-[12px]">{t('employees.activity.badge.company')}</p>
           )}
-          <p className="mt-2.5 text-[10px] uppercase tracking-[.18em] opacity-55 rtl:tracking-normal">
+          <p className="mt-2.5 hidden text-[10px] uppercase tracking-[.18em] opacity-55 rtl:tracking-normal lg:block">
             {t('employees.activity.badge.role')}
           </p>
+          {/* On phones the photo sits next to the identity, below the masthead. */}
           <span
-            className="relative z-[1] mx-auto mt-4 grid h-[120px] w-[120px] place-items-center overflow-hidden rounded-2xl bg-[#e8edf3] text-[34px] font-extrabold text-[#0d2845]"
+            className="absolute bottom-4 start-4 z-[1] grid size-16 place-items-center overflow-hidden rounded-2xl bg-[#e8edf3] text-[24px] font-extrabold text-[#0d2845] lg:relative lg:bottom-auto lg:start-auto lg:mx-auto lg:mt-4 lg:size-[120px] lg:text-[34px]"
             style={{ border: '4px solid rgba(255,255,255,.9)', boxShadow: '0 8px 20px rgba(4,15,30,.35)' }}
           >
             {showPhoto && (
@@ -139,30 +143,34 @@ export function EmployeeBadgeCard({
             {!showPhoto && <span aria-hidden>{initials(name)}</span>}
           </span>
         </div>
-        <div className="-mt-[60px] bg-white px-6 pb-[18px] pt-[78px] text-center">
-          <p dir="auto" className="text-[21px] font-extrabold tracking-[-0.01em] text-[#0d2845]">{name}</p>
-          {position && <p dir="auto" className="mt-1 text-[12.5px] text-[#5b6470]">{position}</p>}
-          <div aria-hidden className="mx-auto mt-3.5 h-2.5 w-[70%] rounded-full opacity-80" style={{ background: HOLO, backgroundSize: '300% 100%' }} />
-          <div className="mt-3 flex justify-center"><StatusPill status={employee.status} /></div>
-          <div aria-hidden className="mx-auto mb-1.5 mt-[18px] h-11 w-[78%]" style={{ background: BARCODE }} />
-          <p className="font-mono text-[13px] font-semibold tracking-[.34em] text-[#1a1d21]">{employee.id}</p>
+        <div className="min-h-24 bg-white px-4 py-3 ps-24 text-start lg:-mt-[60px] lg:min-h-0 lg:px-6 lg:pb-[18px] lg:pt-[78px] lg:text-center">
+          <p className="text-[17px] font-extrabold tracking-[-0.01em] text-[#0d2845] rtl:tracking-normal [overflow-wrap:anywhere] lg:text-[21px]"><bdi>{name}</bdi></p>
+          {position && <p className="mt-1 text-[12.5px] text-[#5b6470]"><bdi>{position}</bdi></p>}
+          <div aria-hidden className="mx-auto mt-3.5 hidden h-2.5 w-[70%] rounded-full opacity-80 lg:block" style={{ background: HOLO, backgroundSize: '300% 100%' }} />
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 lg:mt-3 lg:block">
+            <div className="contents lg:flex lg:justify-center"><StatusPill status={employee.status} /></div>
+            <div aria-hidden className="mx-auto mb-1.5 mt-[18px] hidden h-11 w-[78%] lg:block" style={{ background: BARCODE }} />
+            <bdi className="inline-block font-mono text-[13px] font-semibold tracking-[.18em] text-[#1a1d21] lg:tracking-[.34em]">{employee.id}</bdi>
+          </div>
         </div>
       </div>
 
       {/* Actions — theme-token surface, not part of the physical badge */}
-      <div className="mt-5 flex gap-2.5">
-        <button
-          type="button"
-          onClick={() => onOpenProfile(employee.id)}
-          className="flex-1 rounded-xl bg-primary px-3 py-3 text-[13.5px] font-bold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
+      <div className="mt-3 grid grid-cols-2 gap-2 lg:mt-5 lg:gap-2.5">
+        <Link to={profileHref} className={cn(buttonVariants(), ACTION_CLASS)}>
           {t('employees.activity.openProfile')}
-        </button>
-        <button
-          type="button"
-          onClick={onClear}
-          className="flex-1 rounded-xl border border-border-strong bg-surface px-3 py-3 text-[13.5px] font-bold text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        >
+        </Link>
+        {canEdit && (
+          <>
+            <Link to={`${profileHref}/edit`} className={cn(buttonVariants({ variant: 'secondary' }), ACTION_CLASS)}>
+              {t('common.edit')}
+            </Link>
+            <Link to={`${profileHref}?action=status`} className={cn(buttonVariants({ variant: 'secondary' }), ACTION_CLASS)}>
+              {t('employees.statusDialog.title')}
+            </Link>
+          </>
+        )}
+        <button type="button" onClick={onClear} className={cn(buttonVariants({ variant: 'secondary' }), ACTION_CLASS)}>
           {t('employees.activity.clearEmployee')}
         </button>
       </div>

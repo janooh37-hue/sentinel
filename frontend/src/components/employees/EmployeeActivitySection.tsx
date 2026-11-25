@@ -1,18 +1,26 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
-import { useMemo, useState } from 'react'
+import { useInfiniteQuery } from '@tanstack/react-query'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { DutyLocationActivity } from './DutyLocationActivity'
 import { StatusActivity } from './StatusActivity'
-import { EmployeeActivityLookup } from './EmployeeActivityLookup'
+import { StatusPill } from './StatusPill'
+import { ACTIVITY_FILTERS, type ActivityFilter } from './employeeActivityModel'
+import { EMPLOYEE_STATUSES } from './schema'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { bidi } from '@/lib/bidi'
+import { todayIso } from '@/lib/leaveDateMath'
 
 const PAGE_SIZE = 25
 
 const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; icon: React.JSX.Element }> = {
+  employee_added: {
+    soft: 'var(--surface-tinted)',
+    color: 'var(--text-muted)',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="7" r="3.5" /><path d="M2.5 20v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2M19 8v6m-3-3h6" /></svg>,
+  },
   document: {
     soft: '#e6f0f6',
     color: '#0d5c8a',
@@ -52,6 +60,8 @@ const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; i
 
 function activityHref(item: EmployeeActivityItemRead): string {
   switch (item.kind) {
+    case 'employee_added':
+      return `/employees?employee=${encodeURIComponent(item.employee_id)}`
     case 'document':
       return `/books?open=${item.target_id}`
     case 'leave':
@@ -69,15 +79,34 @@ function activityHref(item: EmployeeActivityItemRead): string {
 }
 
 export interface EmployeeActivitySectionProps {
-  onOpenProfile: (employeeId: string) => void
+  employee: EmployeeListItem | null
+  kind: ActivityFilter
+  onKindChange: (kind: ActivityFilter) => void
+  onClearFilters: () => void
 }
 
-export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySectionProps): React.JSX.Element {
+export function EmployeeActivitySection({
+  employee,
+  kind,
+  onKindChange,
+  onClearFilters,
+}: EmployeeActivitySectionProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
-  const queryClient = useQueryClient()
-  const [employee, setEmployee] = useState<EmployeeListItem | null>(null)
-  const [kind, setKind] = useState<EmployeeActivityKind | 'all'>('all')
+  const chipGroupRef = useRef<HTMLDivElement>(null)
+  const employeeId = employee?.id
+
+  useLayoutEffect(() => {
+    // Keep a shared link's selected chip visible without scrolling the page.
+    const group = chipGroupRef.current
+    if (!group || group.scrollWidth <= group.clientWidth) return
+    const selected = group.querySelector('[aria-pressed="true"]')
+    if (!selected) return
+    const { left, right } = group.getBoundingClientRect()
+    const chip = selected.getBoundingClientRect()
+    const offset = chip.left < left ? chip.left - left : Math.max(0, chip.right - right)
+    if (offset) group.scrollBy({ left: offset })
+  }, [employeeId, kind, lang])
 
   const activityQuery = useInfiniteQuery({
     queryKey: ['employee-activity', employee?.id ?? null, kind],
@@ -94,6 +123,8 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     },
     staleTime: 30_000,
     refetchOnMount: 'always',
+    // A different employee or chip starts at page one, including on Back.
+    gcTime: 0,
   })
 
   const dayFormatter = useMemo(
@@ -102,6 +133,12 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
   )
   const timeFormatter = useMemo(
     () => new Intl.DateTimeFormat(lang, { timeStyle: 'short' }),
+    [lang],
+  )
+  const joiningDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(lang === 'ar' ? 'ar-AE' : 'en', {
+      day: 'numeric', month: 'long', year: 'numeric', numberingSystem: 'latn', timeZone: 'UTC',
+    }),
     [lang],
   )
   const pages = activityQuery.data?.pages
@@ -122,146 +159,126 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
     return groups
   }, [dayFormatter, items])
 
-  function removeDestinationCache(employeeId: string | null, nextKind: EmployeeActivityKind | 'all'): void {
-    queryClient.removeQueries({
-      queryKey: ['employee-activity', employeeId, nextKind],
-      exact: true,
-    })
-  }
-
-  function handleEmployeeSelect(nextEmployee: EmployeeListItem): void {
-    removeDestinationCache(nextEmployee.id, kind)
-    setEmployee(nextEmployee)
-  }
-
-  function handleClearEmployee(): void {
-    removeDestinationCache(null, kind)
-    setEmployee(null)
-  }
-
-  function handleKindChange(nextKind: EmployeeActivityKind | 'all'): void {
-    removeDestinationCache(employee?.id ?? null, nextKind)
-    setKind(nextKind)
-  }
-
-  function clearFilters(): void {
-    removeDestinationCache(null, 'all')
-    setEmployee(null)
-    setKind('all')
-  }
-
   return (
-    <section className="w-full border-y border-hairline bg-background px-4 py-8 md:px-8 lg:py-10" aria-labelledby="employee-activity-title">
-      <div className="mx-auto w-full max-w-[1440px]">
-        <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">{t('employees.activity.eyebrow')}</p>
-            <h2 id="employee-activity-title" className="mt-2 text-2xl font-bold tracking-tight text-foreground md:text-3xl">{t('employees.activity.title')}</h2>
-            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('employees.activity.subtitle')}</p>
-          </div>
-          {!activityQuery.isPending && !activityQuery.isError && (
-            <p className="text-sm font-medium text-muted-foreground">
-              {t('employees.activity.resultCount', { count: total })} · {t('employees.activity.showing', { shown: items.length, total })}
-            </p>
-          )}
-        </header>
-
-        <div className={employee ? 'grid gap-8 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start' : ''}>
-          {employee && (
-            <EmployeeBadgeCard employee={employee} onOpenProfile={onOpenProfile} onClear={handleClearEmployee} />
-          )}
-          <div className="min-w-0">
-            <div className="mb-6 flex flex-wrap items-center gap-2.5">
-              <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
-              <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
-                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status', 'id_change'] as const).map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={kind === value}
-                    onClick={() => handleKindChange(value)}
-                    className={
-                      kind === value
-                        ? 'rounded-full bg-primary px-4 py-2.5 text-[12.5px] font-bold text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
-                        : 'rounded-full border border-border bg-surface px-4 py-2.5 text-[12.5px] font-bold text-muted-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                    }
-                  >
-                    {t(value === 'id_change' ? 'employees.idChangeActivity.label' : value === 'all' ? 'employees.activity.all' : `employees.activity.${value}`)}
-                  </button>
-                ))}
-              </div>
+    <section
+      className={`w-full border-y border-hairline bg-background px-4 md:px-8 ${employee ? 'py-5 md:py-6' : 'py-8 lg:py-10'}`}
+      aria-labelledby="employee-activity-title"
+    >
+      <div className={`mx-auto w-full max-w-[1440px] ${employee ? 'grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-8' : ''}`}>
+        {employee && <EmployeeBadgeCard key={employee.id} employee={employee} onClear={onClearFilters} />}
+        <div className="min-w-0">
+          <header className="mb-3 flex flex-col gap-2 sm:mb-6 sm:gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              {!employee && <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-primary rtl:tracking-normal">{t('employees.activity.eyebrow')}</p>}
+              <h2 id="employee-activity-title" className="text-2xl font-bold tracking-tight text-foreground rtl:tracking-normal md:text-3xl">{t('employees.activity.title')}</h2>
+              {!employee && <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{t('employees.activity.subtitle')}</p>}
             </div>
-
-            {activityQuery.isPending && (
-              <div role="status" aria-label={t('employees.activity.loading')} className="space-y-3">
-                <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
-                <div className="h-16 animate-pulse rounded-xl bg-surface-raised" />
-              </div>
+            {!activityQuery.isPending && !activityQuery.isError && (
+              <p className="text-sm font-medium text-muted-foreground">
+                <span className={employee ? 'hidden sm:inline' : undefined}>
+                  {`${t('employees.activity.resultCount', { count: total })} · `}
+                </span>
+                {t('employees.activity.showing', { shown: items.length, total })}
+              </p>
             )}
+          </header>
 
-            {activityQuery.isError && (
-              <div className="rounded-2xl border border-destructive/30 bg-surface p-6 text-center">
-                <p className="text-sm text-destructive">{t('employees.activity.loadError')}</p>
+          <div
+            ref={chipGroupRef}
+            role="group"
+            aria-label={t('employees.activity.typeLabel')}
+            className={`flex gap-1.5 ${employee
+              ? 'mb-3 overflow-x-auto pb-1 [scrollbar-width:thin] sm:mb-6 sm:flex-wrap sm:overflow-visible sm:pb-0'
+              : 'mb-6 flex-wrap'
+            }`}
+          >
+            {ACTIVITY_FILTERS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={kind === value}
+                onClick={() => onKindChange(value)}
+                className={`min-h-[44px] shrink-0 rounded-full px-4 py-2.5 text-[12.5px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset lg:min-h-0 ${
+                  kind === value
+                    ? 'bg-primary text-primary-foreground focus-visible:ring-primary-foreground'
+                    : 'border border-border bg-surface text-muted-foreground hover:bg-surface-raised focus-visible:ring-primary'
+                }`}
+              >
+                {t(value === 'id_change' ? 'employees.idChangeActivity.label' : `employees.activity.${value}`)}
+              </button>
+            ))}
+          </div>
+
+          {activityQuery.isPending && (
+            <div role="status" aria-label={t('employees.activity.loading')} className="space-y-3">
+              <div className="h-16 rounded-xl bg-surface-raised motion-safe:animate-pulse" />
+              <div className="h-16 rounded-xl bg-surface-raised motion-safe:animate-pulse" />
+            </div>
+          )}
+
+          {activityQuery.isError && (
+            <div className="rounded-2xl border border-destructive/30 bg-surface p-6 text-center">
+              <p className="text-sm text-destructive">{t('employees.activity.loadError')}</p>
+              <button
+                type="button"
+                onClick={() => void activityQuery.refetch()}
+                className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {t('employees.activity.retry')}
+              </button>
+            </div>
+          )}
+
+          {!activityQuery.isPending && !activityQuery.isError && items.length === 0 && (
+            <div className="rounded-2xl border border-border bg-surface p-8 text-center">
+              <p className="text-sm text-muted-foreground">
+                {t(filtered ? 'employees.activity.emptyFiltered' : 'employees.activity.empty')}
+              </p>
+              {filtered && (
                 <button
                   type="button"
-                  onClick={() => void activityQuery.refetch()}
-                  className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  onClick={onClearFilters}
+                  className="mt-4 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
-                  {t('employees.activity.retry')}
+                  {t('employees.activity.clearFilters')}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
+          )}
 
-            {!activityQuery.isPending && !activityQuery.isError && items.length === 0 && (
-              <div className="rounded-2xl border border-border bg-surface p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {t(filtered ? 'employees.activity.emptyFiltered' : 'employees.activity.empty')}
-                </p>
-                {filtered && (
-                  <button
-                    type="button"
-                    onClick={clearFilters}
-                    className="mt-4 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                  >
-                    {t('employees.activity.clearFilters')}
-                  </button>
-                )}
-              </div>
-            )}
-
-            {!activityQuery.isPending && !activityQuery.isError && items.length > 0 && (
-              <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-                {dayGroups.map((group) => (
-                  <div key={group.day}>
-                    <h3 className="border-b border-hairline bg-surface-raised px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      {group.day}
-                    </h3>
-                    {group.items.map((item) => (
-                      <ActivityRow
-                        key={`${item.kind}-${item.source_id}`}
-                        item={item}
-                        lang={lang}
-                        dayFormatter={dayFormatter}
-                        timeFormatter={timeFormatter}
-                        showEmployee={employee == null}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                ))}
-                {activityQuery.hasNextPage && (
-                  <button
-                    type="button"
-                    onClick={() => void activityQuery.fetchNextPage()}
-                    disabled={activityQuery.isFetchingNextPage}
-                    className="mx-auto mt-6 block w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60 md:w-auto"
-                  >
-                    {t('employees.activity.loadMore')}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
+          {!activityQuery.isPending && !activityQuery.isError && items.length > 0 && (
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface">
+              {dayGroups.map((group) => (
+                <div key={group.day}>
+                  <h3 className="border-b border-hairline bg-surface-raised px-5 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground rtl:tracking-normal">
+                    {group.day}
+                  </h3>
+                  {group.items.map((item) => (
+                    <ActivityRow
+                      key={`${item.kind}-${item.source_id}`}
+                      item={item}
+                      lang={lang}
+                      dayFormatter={dayFormatter}
+                      timeFormatter={timeFormatter}
+                      joiningDateFormatter={joiningDateFormatter}
+                      showEmployee={employee == null}
+                      t={t}
+                    />
+                  ))}
+                </div>
+              ))}
+              {activityQuery.hasNextPage && (
+                <button
+                  type="button"
+                  onClick={() => void activityQuery.fetchNextPage()}
+                  disabled={activityQuery.isFetchingNextPage}
+                  className="mx-auto mt-6 block w-full rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:cursor-wait disabled:opacity-60 md:w-auto"
+                >
+                  {t('employees.activity.loadMore')}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -273,6 +290,7 @@ interface ActivityRowProps {
   lang: 'en' | 'ar'
   dayFormatter: Intl.DateTimeFormat
   timeFormatter: Intl.DateTimeFormat
+  joiningDateFormatter: Intl.DateTimeFormat
   showEmployee: boolean
   t: (key: string, options?: Record<string, unknown>) => string
 }
@@ -282,6 +300,7 @@ function ActivityRow({
   lang,
   dayFormatter,
   timeFormatter,
+  joiningDateFormatter,
   showEmployee,
   t,
 }: ActivityRowProps): React.JSX.Element {
@@ -289,43 +308,61 @@ function ActivityRow({
     { name_en: item.employee_name_en, name_ar: item.employee_name_ar },
     lang,
   )
-  const initials = employeeName
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join('')
-    .toUpperCase()
+  const isAdded = item.kind === 'employee_added'
+  const showEmployeeColumn = showEmployee && !isAdded
+  const initials = showEmployeeColumn
+    ? employeeName.split(' ').filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase()
+    : ''
+  const addedStatus = isAdded ? EMPLOYEE_STATUSES.find((status) => status === item.status) : undefined
   const date = new Date(item.occurred_at)
-  const action = item.kind === 'duty_location' || item.kind === 'status' || item.kind === 'id_change'
+  const action = isAdded || item.kind === 'duty_location' || item.kind === 'status' || item.kind === 'id_change'
     ? null
     : t(
         `employees.activity.actions.${item.kind}`,
         item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title },
       )
-  const destinationKey = item.kind === 'duty_location'
-    ? 'employees.activity.dutyLocation.openEmployeeActivity'
-    : item.kind === 'status'
-      ? 'employees.activity.statusEvent.openProfile'
-    : {
-        document: 'employees.activity.openDocument',
-        leave: 'employees.activity.openLeave',
-        violation: 'employees.activity.openViolation',
-        ledger: 'employees.activity.openLedger',
-        id_change: 'employees.activity.dutyLocation.openEmployeeActivity',
-      }[item.kind]
+  const destinationKey = {
+    document: 'employees.activity.openDocument',
+    leave: 'employees.activity.openLeave',
+    violation: 'employees.activity.openViolation',
+    ledger: 'employees.activity.openLedger',
+    duty_location: 'employees.activity.openEmployeeActivity',
+    status: 'employees.activity.statusEvent.openProfile',
+    id_change: 'employees.activity.openEmployeeActivity',
+    employee_added: 'employees.activity.openEmployeeActivity',
+  }[item.kind]
   const kindStyle = KIND_STYLES[item.kind]
 
   return (
     <Link
       to={activityHref(item)}
-      className="group flex items-center gap-3.5 border-b border-hairline px-5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+      className="group flex items-center gap-2.5 border-b border-hairline px-3.5 py-3.5 last:border-b-0 hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary sm:gap-3.5 sm:px-5"
     >
       <span aria-hidden className="grid h-9 w-9 shrink-0 place-items-center rounded-[11px]" style={{ background: kindStyle.soft, color: kindStyle.color }}>
         {kindStyle.icon}
       </span>
       <span className="min-w-0 flex-1">
-        {item.kind === 'duty_location' ? (
+        {isAdded ? (
+          <>
+            <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="min-w-0 text-sm font-semibold text-foreground [overflow-wrap:anywhere]">
+                {t(item.actor_name ? 'employees.activity.added.withActor' : 'employees.activity.added.sentence', {
+                  name: bidi(employeeName),
+                  id: bidi(item.employee_id),
+                  ...(item.actor_name ? { actor: bidi(item.actor_name) } : {}),
+                })}
+              </span>
+              {addedStatus && <StatusPill status={addedStatus} />}
+            </span>
+            {item.joining_date && (
+              <time dateTime={item.joining_date} className="mt-1 block text-xs text-muted-foreground">
+                {t(item.joining_date > todayIso() ? 'employees.activity.added.joins' : 'employees.activity.added.joined', {
+                  date: joiningDateFormatter.format(new Date(`${item.joining_date}T00:00:00Z`)),
+                })}
+              </time>
+            )}
+          </>
+        ) : item.kind === 'duty_location' ? (
           <DutyLocationActivity item={item} />
         ) : item.kind === 'status' ? (
           <StatusActivity item={item} />
@@ -342,7 +379,7 @@ function ActivityRow({
           </>
         )}
       </span>
-      {showEmployee && (
+      {showEmployeeColumn && (
         <span className="hidden w-[210px] shrink-0 items-center gap-2.5 md:flex">
           <span aria-hidden className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-[10.5px] font-bold text-primary-on-soft">{initials}</span>
           <span className="min-w-0">
@@ -351,8 +388,8 @@ function ActivityRow({
           </span>
         </span>
       )}
-      <span dir="auto" className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:block">{item.reference}</span>
-      <span className="w-[84px] shrink-0 text-end text-xs tabular-nums text-muted-foreground">
+      {!isAdded && <span dir="auto" className="hidden shrink-0 font-mono text-xs tabular-nums text-muted-foreground sm:block">{item.reference}</span>}
+      <span className="shrink-0 text-end text-xs tabular-nums text-muted-foreground sm:w-[84px]">
         <span className="sr-only">{dayFormatter.format(date)} · </span>{timeFormatter.format(date)}
       </span>
       <span className="sr-only">{t(destinationKey)}</span>

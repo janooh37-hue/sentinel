@@ -1,22 +1,15 @@
 /**
- * EmployeeSearchHero — State A navy search band for the employee lookup page.
- *
- * Renders the full-width hero band with debounced all-status roster search,
- * a results dropdown (avatar, name, G-number, position, status pill) and a
- * "new employee" ghost CTA.  `children` renders below the search column —
- * Task 6 info-cards slot in there.
- *
- * Layout critical: the band is `overflow:visible` with an inner `absolute
- * overflow:hidden` layer carrying the decorative circles, so the results
- * dropdown is never clipped.
+ * The roster search stays visible above both the full lookup view and an
+ * employee's activity. Keep the decorative clip separate from the results.
  */
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-import { api, type ListEmployeesParams } from '@/lib/api'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { api, type EmployeeListItem, type ListEmployeesParams } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import { activityEmployeeKey } from '@/components/employees/employeeActivityModel'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { statusDetailText } from '@/components/employees/statusDetail'
 import { isWorkingStatus } from '@/components/employees/schema'
@@ -31,7 +24,9 @@ interface Props {
   onLeaveIds: ReadonlySet<string>
   /** Dashboard links keep the lookup within their selected roster scope. */
   filters?: ListEmployeesParams
-  /** Optional content rendered below the search column (Task 6 info-cards). */
+  /** Keep only the search bar while the page shows a selected employee. */
+  compact?: boolean
+  /** Additional content under the search in the full lookup view. */
   children?: React.ReactNode
 }
 
@@ -41,25 +36,65 @@ export function EmployeeSearchHero({
   onCreate,
   onLeaveIds,
   filters = {},
+  compact = false,
   children,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
 
+  const queryClient = useQueryClient()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const resultsRef = useRef<HTMLDivElement>(null)
+  const resultsId = useId()
   const [q, setQ] = useState('')
-  const debounced = useDebouncedValue(q, 250)
+  const term = q.trim()
+  const debounced = useDebouncedValue(term, 250)
+  const showDropdown = term.length > 0 && term === debounced
 
-  // Fetch roster — enabled only when there is a non-empty debounced query.
-  const { data, isPending } = useQuery({
+  const { data, isError, isPending } = useQuery({
     queryKey: ['employee-search', debounced, filters],
     queryFn: () => api.listEmployees({ ...filters, q: debounced, limit: 30 }),
-    enabled: debounced.trim().length > 0,
+    enabled: showDropdown,
     staleTime: 30_000,
   })
 
   const items = data?.items ?? []
-  const showDropdown = debounced.trim().length > 0
-  const showNoResults = !isPending && items.length === 0
+
+  function selectEmployee(employee: EmployeeListItem): void {
+    // Search results already include the full roster projection the badge needs.
+    queryClient.setQueryData(activityEmployeeKey(employee.id), employee)
+    setQ('')
+    onSelect(employee.id)
+    inputRef.current?.focus({ preventScroll: true })
+  }
+
+  function submitSearch(event: React.FormEvent<HTMLFormElement>): void {
+    event.preventDefault()
+    if (!showDropdown) return
+    if (items.length === 1) selectEmployee(items[0])
+    else resultsRef.current?.querySelector<HTMLButtonElement>('button[role=option]')?.focus()
+  }
+
+  function handleSearchKey(event: React.KeyboardEvent<HTMLElement>): void {
+    if (!showDropdown) return
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      setQ('')
+      inputRef.current?.focus()
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (event.target === inputRef.current && event.key === 'ArrowDown') {
+        const first = resultsRef.current?.querySelector<HTMLButtonElement>('button[role=option]')
+        if (!first) return
+        event.preventDefault()
+        first.focus()
+      } else if (event.target instanceof HTMLButtonElement && event.target.getAttribute('role') === 'option') {
+        event.preventDefault()
+        const adjacent = event.key === 'ArrowDown' ? event.target.nextElementSibling : event.target.previousElementSibling
+        if (adjacent instanceof HTMLButtonElement) adjacent.focus()
+        else if (event.key === 'ArrowUp') inputRef.current?.focus()
+      }
+    }
+  }
 
   return (
     <section
@@ -77,24 +112,25 @@ export function EmployeeSearchHero({
       {/* ── Main content column ─────────────────────────────────────────── */}
       {/* z-[30]: must out-stack the sibling info-cards wrapper (z-[2]) or the
           results dropdown paints beneath the cards' backdrop-blur. */}
-      <div className="relative z-[30] mx-auto max-w-[720px] px-8 pb-2 pt-[46px] text-center">
-        {/* Eyebrow */}
-        <div className="text-[11px] font-semibold uppercase tracking-[.22em] opacity-65">
-          {t('employees.lookup.eyebrow')}
-        </div>
-
-        {/* Headline */}
-        <h1 className="mb-1 mt-2 text-[27px] font-bold tracking-[-0.01em]">
+      <div className={`relative z-[30] mx-auto max-w-[720px] px-4 text-center sm:px-8 ${compact ? 'py-3' : 'pb-2 pt-[46px]'}`}>
+        {!compact && (
+          <div className="text-[11px] font-semibold uppercase tracking-[.22em] opacity-65 rtl:tracking-normal">
+            {t('employees.lookup.eyebrow')}
+          </div>
+        )}
+        <h1 className={compact ? 'sr-only' : 'mb-1 mt-2 text-[27px] font-bold tracking-[-0.01em] rtl:tracking-normal'}>
           {t('employees.lookup.title')}
         </h1>
+        {!compact && <p className="text-[13.5px] opacity-75">{t('employees.lookup.subtitle')}</p>}
 
-        {/* Subtitle */}
-        <p className="text-[13.5px] opacity-75">{t('employees.lookup.subtitle')}</p>
-
-        {/* ── Search wrap — position:relative anchors the dropdown ─── */}
-        <div className="relative mt-[22px] text-start">
-          {/* Pill searchbox */}
-          <div className="flex h-14 items-center gap-3 rounded-full bg-white px-5 shadow-[0_18px_44px_-18px_rgba(0,0,0,.5)] transition-shadow focus-within:ring-2 focus-within:ring-white/70 focus-within:ring-offset-2 focus-within:ring-offset-primary">
+        {/* Positioning anchors the results below the search pill. */}
+        <form
+          role="search"
+          onSubmit={submitSearch}
+          onKeyDown={handleSearchKey}
+          className={`relative text-start ${compact ? '' : 'mt-[22px]'}`}
+        >
+          <div className="flex h-14 items-center gap-2 rounded-full bg-surface ps-4 pe-2 shadow-[0_18px_44px_-18px_rgba(0,0,0,.5)] transition-shadow focus-within:ring-2 focus-within:ring-white/70 focus-within:ring-offset-2 focus-within:ring-offset-primary sm:gap-3 sm:ps-5">
             {/* Search icon */}
             <svg
               aria-hidden
@@ -113,19 +149,22 @@ export function EmployeeSearchHero({
 
             {/* Input — type="search" gives implicit role="searchbox" */}
             <input
+              ref={inputRef}
               data-employee-hero-search-input
               type="search"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t('employees.lookup.placeholder')}
+              aria-label={t('employees.lookup.placeholder')}
+              aria-controls={showDropdown ? resultsId : undefined}
               autoComplete="off"
-              className="min-w-0 flex-1 border-0 bg-transparent font-[inherit] text-base text-foreground outline-none placeholder:text-faint [&::-webkit-search-cancel-button]:hidden"
+              className="min-w-0 flex-1 border-0 bg-transparent font-[inherit] text-base text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
             />
 
             {/* Submit button */}
             <button
-              type="button"
-              className="shrink-0 cursor-pointer rounded-full bg-accent px-5 py-2 text-[13px] font-bold text-white transition-colors hover:bg-accent-hover"
+              type="submit"
+              className="min-h-[44px] shrink-0 cursor-pointer rounded-full bg-accent px-3 text-[13px] font-bold text-white transition-colors hover:bg-accent-hover sm:px-5"
             >
               {t('employees.lookup.searchBtn')}
             </button>
@@ -134,12 +173,15 @@ export function EmployeeSearchHero({
           {/* ── Results dropdown ─────────────────────────────────────── */}
           {showDropdown && (
             <div
+              id={resultsId}
+              ref={resultsRef}
               role="listbox"
+              aria-label={t('employees.lookup.results')}
               className="absolute start-0 end-0 top-[calc(100%+8px)] z-[30] overflow-hidden rounded-2xl border border-border bg-surface text-foreground shadow-[0_24px_60px_-24px_rgba(13,40,69,.55)]"
             >
               {/* Header row */}
               {items.length > 0 && (
-                <div className="flex justify-between border-b border-hairline px-[18px] pb-2 pt-[10px] text-[11px] font-semibold uppercase tracking-[.1em] text-faint">
+                <div className="flex justify-between border-b border-hairline px-[18px] pb-2 pt-[10px] text-[11px] font-semibold uppercase tracking-[.1em] text-faint rtl:tracking-normal">
                   <span>{t('employees.lookup.results')}</span>
                   <span>{t('employees.lookup.resultCount', { count: items.length })}</span>
                 </div>
@@ -183,7 +225,7 @@ export function EmployeeSearchHero({
                         type="button"
                         role="option"
                         aria-selected={false}
-                        onClick={() => onSelect(row.id)}
+                        onClick={() => selectEmployee(row)}
                         className={`flex w-full cursor-pointer items-center gap-3 border-0 bg-transparent px-[18px] py-[11px] text-start font-[inherit] transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary ${idx > 0 ? 'border-t border-hairline' : ''}`}
                       >
                         {/* Avatar */}
@@ -242,8 +284,9 @@ export function EmployeeSearchHero({
                       </button>
                     )
                   })
-                : /* No results */
-                  showNoResults && (
+                : isPending ? <p role="status" className="px-[18px] py-3 text-sm text-muted-foreground">{t('common.loading')}</p>
+                : isError ? <p role="alert" className="px-[18px] py-3 text-sm text-destructive-text">{t('common.loadError')}</p>
+                : (
                     <div className="px-[18px] py-[22px] text-center text-[13px] text-muted-foreground">
                       {t('employees.lookup.noResults')}
                       <br />
@@ -266,28 +309,28 @@ export function EmployeeSearchHero({
               )}
             </div>
           )}
-        </div>
+        </form>
 
-        {/* ── New-employee ghost button ────────────────────────────── */}
-        <div className="mt-4 flex justify-center">
-          <button
-            type="button"
-            onClick={onCreate}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/30 bg-white/10 px-5 py-[9px] font-[inherit] text-[13px] font-semibold text-white transition-colors hover:bg-white/[.18]"
-          >
-            <span
-              aria-hidden
-              className="grid h-[18px] w-[18px] place-items-center rounded-full bg-accent text-[13px] font-extrabold leading-none"
+        {!compact && (
+          <div className="mt-4 flex justify-center">
+            <button
+              type="button"
+              onClick={onCreate}
+              className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/30 bg-white/10 px-5 py-[9px] font-[inherit] text-[13px] font-semibold text-white transition-colors hover:bg-white/[.18]"
             >
-              +
-            </span>
-            {t('employees.lookup.newEmployee')}
-          </button>
-        </div>
+              <span
+                aria-hidden
+                className="grid h-[18px] w-[18px] place-items-center rounded-full bg-accent text-[13px] font-extrabold leading-none"
+              >
+                +
+              </span>
+              {t('employees.lookup.newEmployee')}
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* ── Children slot (Task 6 info-cards) ─────────────────────────────── */}
-      {children != null && (
+      {!compact && children != null && (
         <div className="relative z-[2] mx-auto max-w-[1020px] px-8 pb-[46px]">
           {children}
         </div>

@@ -1,9 +1,8 @@
 /**
- * EmployeeLookupPage — search-first employee hub (replaces the roster list).
+ * EmployeeLookupPage — all activity or a selected employee's badge and feed.
  *
- * State A composition:
- *   • EmployeeSearchHero (navy band) with LookupHeroCards as children
- *   • Recent activity, followed by the inline EmployeeForm card when creating.
+ * The lookup URL holds the selected employee and activity kind. Dashboard
+ * roster filters are a separate view, replaced when an employee is selected.
  *
  * Intake handoff: the create form is addressed by `?create=1`; its extraction
  * payload stays in history state because it is not shareable.
@@ -22,15 +21,23 @@ import { EmployeeActivitySection } from '@/components/employees/EmployeeActivity
 import { EmployeeSearchHero } from '@/components/employees/EmployeeSearchHero'
 import { EmployeesSectionTabs } from '@/components/employees/EmployeesSectionTabs'
 import { LookupHeroCards } from '@/components/employees/LookupHeroCards'
+import { ACTIVITY_FILTERS, activityEmployeeKey, resolveActivityEmployee, type ActivityFilter } from '@/components/employees/employeeActivityModel'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
 import { EMPLOYEE_STATUSES } from '@/components/employees/schema'
 import { Button } from '@/components/ui/button'
 import { pickEmployeeName } from '@/lib/employeeName'
+import { recordRecentEmployee } from '@/lib/employeeRecents'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeCreate, ListEmployeesParams } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { useUrlOverlay } from '@/lib/urlState'
+
+const ROSTER_PARAMS = ['status', 'pending', 'violations', 'open_violations', 'working', 'present', 'on_leave', 'page'] as const
+
+function clearRosterParams(params: URLSearchParams): void {
+  for (const key of ROSTER_PARAMS) params.delete(key)
+}
 
 export function EmployeeLookupPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -38,6 +45,69 @@ export function EmployeeLookupPage(): React.JSX.Element {
   const location = useLocation()
   const qc = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const pendingParams = useRef<URLSearchParams | null>(null)
+  const pageRef = useRef<HTMLDivElement>(null)
+  const employeeParam = searchParams.get('employee')
+  const requestedId = employeeParam?.trim() || null
+  const kindParam = searchParams.get('kind')
+  const kind = ACTIVITY_FILTERS.find((value) => value === kindParam) ?? 'all'
+  const selectionQuery = useQuery({
+    queryKey: activityEmployeeKey(requestedId),
+    queryFn: () => requestedId ? resolveActivityEmployee(requestedId) : null,
+    enabled: requestedId !== null,
+    staleTime: (query) => query.state.data ? 30_000 : 0,
+  })
+  const employee = selectionQuery.data ?? null
+  const employeeNotFound = requestedId !== null && selectionQuery.data === null && !selectionQuery.isFetching
+
+  useEffect(() => {
+    pendingParams.current = null
+  }, [location.key])
+
+  const updateParams = useCallback((update: (next: URLSearchParams) => void, replace = false) => {
+    // Multiple actions can run before React Router commits the first navigation.
+    const base = pendingParams.current ?? searchParams
+    const next = new URLSearchParams(base)
+    update(next)
+    if (next.toString() === base.toString()) return
+    pendingParams.current = next
+    setSearchParams(next, {
+      replace: replace || base.get('create') === '1',
+      state: location.state,
+      preventScrollReset: true,
+    })
+  }, [location.state, searchParams, setSearchParams])
+
+  useEffect(() => {
+    if (employeeParam === null && (kindParam === null || kind !== 'all')) return
+    if (employee && employee.id !== employeeParam) {
+      // Canonicalize former numbers and case variants without another lookup.
+      qc.setQueryData(activityEmployeeKey(employee.id), employee)
+    }
+    updateParams((next) => {
+      if (kind === 'all' && next.get('kind') === kindParam) next.delete('kind')
+      if (employeeParam === null || next.get('employee') !== employeeParam) return
+      clearRosterParams(next)
+      if (requestedId === null || employeeNotFound) {
+        next.delete('employee')
+        if (employeeNotFound) {
+          next.delete('kind')
+          toast.info(t('employees.activity.employeeNotFound'))
+        }
+      } else if (employee) {
+        next.set('employee', employee.id)
+      }
+    }, true)
+  }, [employee, employeeNotFound, employeeParam, kind, kindParam, qc, requestedId, t, updateParams])
+
+  useEffect(() => {
+    if (employee) recordRecentEmployee(employee)
+  }, [employee])
+
+  useEffect(() => {
+    if (requestedId && pageRef.current) pageRef.current.scrollTop = 0
+  }, [requestedId])
+
   const filters: ListEmployeesParams = {
     status: EMPLOYEE_STATUSES.find((status) => status === searchParams.get('status')),
     pending: ['1', 'true'].includes(searchParams.get('pending') ?? '') || undefined,
@@ -46,7 +116,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
     present: searchParams.get('present') === 'true' || undefined,
     on_leave: searchParams.get('on_leave') === 'true' || undefined,
   }
-  const filtered = Object.values(filters).some(Boolean)
+  const filtered = requestedId === null && Object.values(filters).some(Boolean)
   const rawPage = Number(searchParams.get('page') ?? 1)
   const page = Number.isSafeInteger(rawPage) && rawPage > 0 ? rawPage : 1
   const filteredQuery = useQuery({
@@ -54,10 +124,8 @@ export function EmployeeLookupPage(): React.JSX.Element {
     queryFn: () => api.listEmployees({ ...filters, limit: 30, offset: (page - 1) * 30 }),
     enabled: filtered,
   })
-  const changePage = (nextPage: number) => setSearchParams((previous) => {
-    const next = new URLSearchParams(previous)
+  const changePage = (nextPage: number) => updateParams((next) => {
     next.set('page', String(nextPage))
-    return next
   })
 
   // Intake keeps its large extraction payload in history state, not the URL.
@@ -129,10 +197,20 @@ export function EmployeeLookupPage(): React.JSX.Element {
     await createMutation.mutateAsync(createValues satisfies EmployeeCreate)
   }
 
-  const handleSelect = useCallback(
-    (id: string) => navigate(`/employees/${encodeURIComponent(id)}`),
-    [navigate],
-  )
+  const handleSelect = (id: string) => updateParams((next) => {
+    clearRosterParams(next)
+    next.set('employee', id)
+  })
+
+  const handleKindChange = (value: ActivityFilter) => updateParams((next) => {
+    if (value === 'all') next.delete('kind')
+    else next.set('kind', value)
+  })
+
+  const clearActivityFilters = () => updateParams((next) => {
+    next.delete('employee')
+    next.delete('kind')
+  })
 
   const handleCreate = useCallback(() => {
     overlay.open('1')
@@ -140,25 +218,45 @@ export function EmployeeLookupPage(): React.JSX.Element {
   }, [overlay.open])
 
   return (
-    <div className="flex flex-1 flex-col overflow-auto bg-background">
+    <div ref={pageRef} className="flex flex-1 flex-col overflow-auto bg-background">
       {/* ───── Navy hero band (always visible) ───── */}
       <EmployeeSearchHero
         onSelect={handleSelect}
         onCreate={handleCreate}
         onLeaveIds={onLeaveIds}
-        filters={filters}
+        filters={requestedId === null ? filters : undefined}
+        compact={requestedId !== null}
       >
-        <LookupHeroCards
-          onOpen={handleSelect}
-          extraCard={<AttendanceHeroCard onOpen={() => navigate('/employees/attendance')} />}
-        />
-        {/* The lookup band is centre-composed, so the strip sits on its axis. */}
-        <div className="mt-7 flex justify-center">
-          <EmployeesSectionTabs attentionCount={attendance.attention} />
-        </div>
+        {requestedId === null && (
+          <>
+            <LookupHeroCards
+              onSelectRecent={handleSelect}
+              onOpenProfile={(id) => navigate(`/employees/${encodeURIComponent(id)}`)}
+              extraCard={<AttendanceHeroCard onOpen={() => navigate('/employees/attendance')} />}
+            />
+            {/* The lookup band is centre-composed, so the strip sits on its axis. */}
+            <div className="mt-7 flex justify-center">
+              <EmployeesSectionTabs attentionCount={attendance.attention} />
+            </div>
+          </>
+        )}
       </EmployeeSearchHero>
 
-      {filtered ? (
+      {requestedId !== null && !employee ? (
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-6 text-sm md:px-8">
+          {selectionQuery.isError ? (
+            <>
+              <p role="alert" className="text-destructive-text">{t('employees.activity.employeeLoadError')}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => void selectionQuery.refetch()}>{t('common.retry')}</Button>
+                <Button variant="ghost" onClick={clearActivityFilters}>{t('employees.activity.clearEmployee')}</Button>
+              </div>
+            </>
+          ) : (
+            <p role="status" className="text-muted-foreground">{t('common.loading')}</p>
+          )}
+        </div>
+      ) : filtered ? (
         <section className="mx-auto w-full max-w-[1180px] px-4 py-6 md:px-8" aria-label={t('dashboard.widgets.workspace.results')}>
           <div className="flex flex-wrap items-center justify-between gap-2 pb-3">
             <h2 className="text-[0.9em] font-semibold">{t('dashboard.widgets.workspace.results')}{filteredQuery.data ? ` · ${filteredQuery.data.total}` : ''}</h2>
@@ -182,7 +280,14 @@ export function EmployeeLookupPage(): React.JSX.Element {
             <Button variant="ghost" disabled={page * 30 >= filteredQuery.data.total} onClick={() => changePage(page + 1)}>{t('dashboard.widgets.workspace.next')}</Button>
           </nav>}
         </section>
-      ) : <EmployeeActivitySection onOpenProfile={(employeeId) => navigate(`/employees/${encodeURIComponent(employeeId)}`)} />}
+      ) : (
+        <EmployeeActivitySection
+          employee={employee}
+          kind={kind}
+          onKindChange={handleKindChange}
+          onClearFilters={clearActivityFilters}
+        />
+      )}
 
       {creating && (
         <div ref={createFormRef} className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-6 md:px-8">

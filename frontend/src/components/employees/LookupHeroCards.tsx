@@ -7,7 +7,7 @@
  *   2. وثائق تنتهي قريباً   — Soon-expiring documents: count badge + top-2
  *      rows sorted by days_remaining ascending; footer link → /expiry.
  *   3. ملفات ناقصة البيانات  — Data-gap summary: completeness badge +
- *      localized top-missing field labels; CTA calls onOpen(first_incomplete_id).
+ *      localized top-missing field labels; CTA opens the first incomplete profile.
  *
  * Styling mirrors `.hcard` / `.rchip` from the employee-page prototype
  * (glass: bg-white/[.07] border-white/[.14] rounded-2xl).
@@ -171,8 +171,10 @@ const PersonIcon = (
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface Props {
-  /** Called when the user picks an employee (recent chip or gaps CTA). */
-  onOpen: (id: string) => void
+  /** Open a recently viewed employee's activity on the lookup page. */
+  onSelectRecent: (id: string) => void
+  /** Open the profile directly from an expiry row or the gaps CTA. */
+  onOpenProfile: (id: string) => void
   /**
    * An optional fourth card (Attendance). Rendered first so the live signal
    * leads; the grid widens to four columns only when one is supplied, so a user
@@ -183,7 +185,7 @@ interface Props {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element {
+export function LookupHeroCards({ onSelectRecent, onOpenProfile, extraCard }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const { has } = useCapabilities()
@@ -241,7 +243,7 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
               return (
                 <Chip
                   key={emp.id}
-                  onClick={() => onOpen(emp.id)}
+                  onClick={() => onSelectRecent(emp.id)}
                   avatar={twoChars(name)}
                   label={name}
                   meta={emp.id}
@@ -274,7 +276,7 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
                 return (
                   <Chip
                     key={`${item.employee_id}-${item.doc_type}`}
-                    onClick={() => onOpen(item.employee_id)}
+                    onClick={() => onOpenProfile(item.employee_id)}
                     avatar={twoChars(name)}
                     label={`${name} — ${docLabel}`}
                     meta={t('employees.lookup.daysLeft', { count: item.days_remaining })}
@@ -326,7 +328,7 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
           <div className="mt-[10px]">
             <button
               type="button"
-              onClick={() => onOpen(firstIncompleteId)}
+              onClick={() => onOpenProfile(firstIncompleteId)}
               className="cursor-pointer border-0 bg-transparent p-0 text-[11.5px] font-semibold text-white/75 hover:text-white"
             >
               {t('employees.lookup.gapsCta')}
