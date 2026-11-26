@@ -603,6 +603,7 @@
       "expiryNone": "No documents expiring within 90 days",
       "gapsNone": "No files with missing data",
       "miniPlaceholder": "New search — type a name or employee ID…",
+      "clearSearch": "Clear search",
       "fileTitle": "Employee file",
       "daysLeft": "{{count}} days"
     },
@@ -615,7 +616,6 @@
       "employeeNotFound": "Employee not found.",
       "employeeLoadError": "The selected employee could not be loaded.",
       "openProfile": "Open profile",
-      "clearEmployee": "Reset search",
       "typeLabel": "Activity type",
       "all": "All activity",
       "employee_added": "New employees",

@@ -18,10 +18,9 @@ vi.mock('@/lib/api', async (orig) => {
 })
 
 vi.mock('./EmployeeBadgeCard', () => ({
-  EmployeeBadgeCard: ({ employee, onClear }: { employee: EmployeeListItem; onClear: () => void }) => (
+  EmployeeBadgeCard: ({ employee }: { employee: EmployeeListItem }) => (
     <div data-testid="badge-card">
       <span>badge:{employee.id}</span>
-      <button type="button" onClick={onClear}>mock-clear-employee</button>
     </div>
   ),
 }))
@@ -76,6 +75,7 @@ function ActivityFixture(): React.JSX.Element {
   return (
     <>
       <button type="button" onClick={() => setEmployee(abdulla)}>Select employee fixture</button>
+      <button type="button" onClick={() => { setEmployee(null); setKind('all') }}>Clear employee fixture</button>
       <EmployeeActivitySection
         employee={employee}
         kind={kind}
@@ -194,7 +194,7 @@ describe('EmployeeActivitySection', () => {
     await screen.findByText('Employment Certificate')
     await userEvent.click(screen.getByRole('button', { name: 'Select employee fixture' }))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ employee_id: 'G3190', limit: 25, offset: 0 }))
-    await userEvent.click(screen.getByRole('button', { name: 'mock-clear-employee' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear employee fixture' }))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ limit: 25, offset: 0 }))
   })
 
@@ -272,7 +272,7 @@ describe('EmployeeActivitySection', () => {
     await screen.findByText('Document 1')
     await userEvent.click(screen.getByRole('button', { name: /load more activity/i }))
     await screen.findByText('Document 26')
-    await userEvent.click(screen.getByRole('button', { name: 'mock-clear-employee' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear employee fixture' }))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ limit: 25, offset: 0 }))
     await userEvent.click(screen.getByRole('button', { name: 'Select employee fixture' }))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ employee_id: 'G3190', limit: 25, offset: 0 }))
@@ -389,7 +389,7 @@ describe('EmployeeActivitySection', () => {
     expect(screen.queryByTestId('badge-card')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Select employee fixture' }))
     expect(await screen.findByTestId('badge-card')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'mock-clear-employee' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Clear employee fixture' }))
     await waitFor(() => expect(screen.queryByTestId('badge-card')).not.toBeInTheDocument())
   })
 

@@ -640,6 +640,7 @@
       "expiryNone": "لا وثائق تنتهي خلال ٩٠ يوماً",
       "gapsNone": "لا ملفات ناقصة البيانات",
       "miniPlaceholder": "بحث جديد — اكتب الاسم أو الرقم الوظيفي…",
+      "clearSearch": "إعادة ضبط البحث",
       "fileTitle": "ملف موظف",
       "daysLeft": "{{count}} يوماً"
     },
@@ -656,7 +657,6 @@
       "employeeNotFound": "الموظف غير موجود.",
       "employeeLoadError": "تعذّر تحميل بيانات الموظف المحدد.",
       "openProfile": "فتح الملف",
-      "clearEmployee": "إعادة ضبط البحث",
       "typeLabel": "نوع النشاط",
       "all": "كل الأنشطة",
       "employee_added": "موظفون جدد",

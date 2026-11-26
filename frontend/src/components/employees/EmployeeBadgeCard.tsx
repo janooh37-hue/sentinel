@@ -21,7 +21,6 @@ import { StatusPill } from './StatusPill'
 
 export interface EmployeeBadgeCardProps {
   employee: EmployeeListItem
-  onClear: () => void
 }
 
 const ACTION_CLASS = 'h-auto min-h-[44px] whitespace-normal rounded-xl px-3 py-2 text-center leading-snug'
@@ -42,10 +41,7 @@ function initials(name: string): string {
     .toUpperCase()
 }
 
-export function EmployeeBadgeCard({
-  employee,
-  onClear,
-}: EmployeeBadgeCardProps): React.JSX.Element {
+export function EmployeeBadgeCard({ employee }: EmployeeBadgeCardProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const canEdit = useCapabilities().has('employees.edit')
   const lang = i18n.language.startsWith('ar') ? 'ar' : 'en'
@@ -170,9 +166,9 @@ export function EmployeeBadgeCard({
             </Link>
           </>
         )}
-        <button type="button" onClick={onClear} className={cn(buttonVariants({ variant: 'secondary' }), ACTION_CLASS)}>
-          {t('employees.activity.clearEmployee')}
-        </button>
+        <Link to={`${profileHref}?tab=attendance`} className={cn(buttonVariants({ variant: 'secondary' }), ACTION_CLASS)}>
+          {t('employee.tab.attendance')}
+        </Link>
       </div>
     </div>
   )

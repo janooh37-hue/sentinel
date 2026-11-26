@@ -226,6 +226,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
         onLeaveIds={onLeaveIds}
         filters={requestedId === null ? filters : undefined}
         compact={requestedId !== null}
+        onClear={requestedId !== null ? clearActivityFilters : undefined}
       >
         {requestedId === null && (
           <>
@@ -247,9 +248,8 @@ export function EmployeeLookupPage(): React.JSX.Element {
           {selectionQuery.isError ? (
             <>
               <p role="alert" className="text-destructive-text">{t('employees.activity.employeeLoadError')}</p>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2">
                 <Button variant="secondary" onClick={() => void selectionQuery.refetch()}>{t('common.retry')}</Button>
-                <Button variant="ghost" onClick={clearActivityFilters}>{t('employees.activity.clearEmployee')}</Button>
               </div>
             </>
           ) : (

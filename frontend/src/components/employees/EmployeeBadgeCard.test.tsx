@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EmployeeListItem } from '@/lib/api'
@@ -23,10 +22,10 @@ const abdulla: EmployeeListItem = {
   has_photo: false,
 }
 
-function renderBadge(employee = abdulla, onClear = () => {}) {
+function renderBadge(employee = abdulla) {
   return render(
     <MemoryRouter>
-      <EmployeeBadgeCard employee={employee} onClear={onClear} />
+      <EmployeeBadgeCard employee={employee} />
     </MemoryRouter>,
   )
 }
@@ -56,12 +55,10 @@ describe('EmployeeBadgeCard', () => {
     expect(img).not.toBeNull()
   })
 
-  it('links to the profile and delegates Reset search', async () => {
-    const onClear = vi.fn()
-    renderBadge(abdulla, onClear)
+  it('links to the profile and the profile attendance tab', () => {
+    renderBadge()
     expect(screen.getByRole('link', { name: 'Open profile' })).toHaveAttribute('href', '/employees/G3190')
-    await userEvent.click(screen.getByRole('button', { name: 'Reset search' }))
-    expect(onClear).toHaveBeenCalledOnce()
+    expect(screen.getByRole('link', { name: 'Attendance' })).toHaveAttribute('href', '/employees/G3190?tab=attendance')
   })
 
   it('does not render Edit or Change status without employees.edit', () => {

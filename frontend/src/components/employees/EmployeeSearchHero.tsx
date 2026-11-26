@@ -26,6 +26,8 @@ interface Props {
   filters?: ListEmployeesParams
   /** Keep only the search bar while the page shows a selected employee. */
   compact?: boolean
+  /** Shows the clear button while the page holds a selection; called after the text clears. */
+  onClear?: () => void
   /** Additional content under the search in the full lookup view. */
   children?: React.ReactNode
 }
@@ -37,6 +39,7 @@ export function EmployeeSearchHero({
   onLeaveIds,
   filters = {},
   compact = false,
+  onClear,
   children,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -50,6 +53,13 @@ export function EmployeeSearchHero({
   const term = q.trim()
   const debounced = useDebouncedValue(term, 250)
   const showDropdown = term.length > 0 && term === debounced
+  const canClear = q.length > 0 || onClear !== undefined
+
+  function clearSearch(): void {
+    setQ('')
+    onClear?.()
+    inputRef.current?.focus({ preventScroll: true })
+  }
 
   const { data, isError, isPending } = useQuery({
     queryKey: ['employee-search', debounced, filters],
@@ -160,6 +170,20 @@ export function EmployeeSearchHero({
               autoComplete="off"
               className="min-w-0 flex-1 border-0 bg-transparent font-[inherit] text-base text-foreground outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
             />
+
+            {canClear && (
+              <button
+                type="button"
+                onClick={clearSearch}
+                aria-label={t('employees.lookup.clearSearch')}
+                title={t('employees.lookup.clearSearch')}
+                className="grid h-11 w-11 shrink-0 cursor-pointer place-items-center rounded-full text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <svg aria-hidden width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
 
             {/* Submit button */}
             <button

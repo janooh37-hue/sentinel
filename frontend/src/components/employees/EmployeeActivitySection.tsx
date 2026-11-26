@@ -165,7 +165,7 @@ export function EmployeeActivitySection({
       aria-labelledby="employee-activity-title"
     >
       <div className={`mx-auto w-full max-w-[1440px] ${employee ? 'grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-8' : ''}`}>
-        {employee && <EmployeeBadgeCard key={employee.id} employee={employee} onClear={onClearFilters} />}
+        {employee && <EmployeeBadgeCard key={employee.id} employee={employee} />}
         <div className="min-w-0">
           <header className="mb-3 flex flex-col gap-2 sm:mb-6 sm:gap-3 md:flex-row md:items-end md:justify-between">
             <div>

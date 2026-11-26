@@ -167,7 +167,7 @@ describe('EmployeeLookupPage', () => {
     Element.prototype.scrollIntoView = scrollIntoView
   })
 
-  it('opens a search result in the activity view, records it, and restores the directory on Reset search', async () => {
+  it('opens a search result in the activity view, records it, and restores the directory from the search clear button', async () => {
     const user = userEvent.setup()
     setup()
     expect(screen.getByText(lookup.recentTitle)).toBeInTheDocument()
@@ -187,7 +187,8 @@ describe('EmployeeLookupPage', () => {
     await waitFor(() => expect(getRecentEmployees()[0]?.id).toBe('G3190'))
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith({ employee_id: 'G3190', limit: 25, offset: 0 }))
 
-    await user.click(screen.getByRole('button', { name: activity.clearEmployee }))
+    await user.click(screen.getByRole('button', { name: lookup.clearSearch }))
+    expect(screen.queryByRole('button', { name: lookup.clearSearch })).not.toBeInTheDocument()
     expect(screen.getByTestId('location').textContent).toBe('/employees')
     expect(screen.getByText(lookup.recentTitle)).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: sectionTabs.aria })).toBeInTheDocument()
