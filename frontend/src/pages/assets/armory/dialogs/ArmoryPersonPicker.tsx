@@ -2,6 +2,7 @@ import { useId, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import type { ArmoryPersonCandidateRead, ArmoryPeopleFilters } from '@/lib/api'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { Ltr } from '../ArmoryLtr'
@@ -89,7 +90,7 @@ export function ArmoryPersonPicker({ purpose, safeId, label, value, onChange, ex
         <Button type="button" variant="ghost" className="min-h-11" onClick={() => void people.refetch()}>{t('assets.armory.retry')}</Button>
       </div>}
       {people.data && ordered.length === 0 && <p className="p-3 text-sm text-muted-foreground">
-        {debounced ? t('assets.armory.noGuardFound', { query: debounced }) : t('assets.armory.noGuardsMatch')}
+        {debounced ? t('assets.armory.noGuardFound', { query: isolateBidi(debounced) }) : t('assets.armory.noGuardsMatch')}
       </p>}
       {groups.filter(group => group.rows.length > 0).map(group => <section key={group.key} aria-label={group.title ?? label}>
         {group.title && <h3 className="bg-surface-tinted px-3 py-1.5 text-xs font-semibold text-muted-foreground">{group.title}</h3>}

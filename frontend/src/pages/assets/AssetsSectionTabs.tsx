@@ -8,7 +8,9 @@
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
+import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { ARMORY_PATH } from './armory/armoryUrl'
 
 const BASE =
   'inline-flex min-h-11 items-center gap-2 rounded-t-xl px-4 py-2.5 text-[0.84em] font-semibold transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70'
@@ -36,6 +38,11 @@ export function AssetsSectionTabs(): React.JSX.Element {
       {has('uniform.view') && (
         <NavLink to="/holdings/uniform" className={tabClass}>
           {t('assets.sectionTabs.uniform')}
+        </NavLink>
+      )}
+      {has(ARMORY_VIEW_CAP) && (
+        <NavLink to={ARMORY_PATH} className={tabClass}>
+          {t('assets.armory.armory')}
         </NavLink>
       )}
     </nav>
