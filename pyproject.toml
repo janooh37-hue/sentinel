@@ -52,8 +52,6 @@ allowed-confusables = ["ا"]  # Arabic alef: Arabic is a peer UI language, not a
 "backend/tests/**" = ["B011"]
 
 [tool.mypy]
-# Checked against SQLAlchemy 2.1 typing (variadic Select[A, B]), what CI
-# installs. Production runs 2.0.x; see "Commands" in AGENTS.md.
 python_version = "3.12"
 strict = true
 files = ["backend/app", "backend/main.py"]
