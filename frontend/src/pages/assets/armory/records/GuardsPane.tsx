@@ -12,7 +12,8 @@ import type { ArmoryAssignmentSummary, ArmoryGuardPage, ArmoryGuardRead, ArmoryQ
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { cn } from '@/lib/utils'
 
-import { displayDate, licenceStatusKey, Ltr, useArmoryLocale, type ArmoryLicenceStatus } from '../armoryFormat'
+import { Ltr } from '../ArmoryLtr'
+import { displayDate, licenceStatusKey, useArmoryLocale, type ArmoryLicenceStatus } from '../armoryFormat'
 import { armoryErrorMessage, useArmoryAccess, useArmoryGuard, useArmoryGuards } from '../armoryQueries'
 import { armoryLink, patchArmoryParams } from '../armoryUrl'
 import { GuardQualificationDialog } from './GuardQualificationDialog'

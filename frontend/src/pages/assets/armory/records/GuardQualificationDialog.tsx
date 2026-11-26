@@ -7,7 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { ArmoryGuardRead, ArmoryPersonCandidateRead, Versioned } from '@/lib/api'
 import { normalizeDigits } from '@/lib/utils'
 
-import { Ltr, orgDateIso, useArmoryLocale } from '../armoryFormat'
+import { Ltr } from '../ArmoryLtr'
+import { orgDateIso, useArmoryLocale } from '../armoryFormat'
 import { armoryErrorMessage, armoryErrorRecovery, isArmoryAccessError, useArmoryAccess, useArmoryGuard, useSaveArmoryQualification } from '../armoryQueries'
 import { ArmoryPersonPicker } from '../dialogs/ArmoryPersonPicker'
 

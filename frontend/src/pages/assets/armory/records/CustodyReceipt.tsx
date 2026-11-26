@@ -6,7 +6,8 @@ import type { ArmoryCustodyReceiptRead } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import type { Lang } from '@/lib/i18n'
 
-import { Ltr, orgDateTime } from '../armoryFormat'
+import { Ltr } from '../ArmoryLtr'
+import { orgDateTime } from '../armoryFormat'
 import './custodyReceipt.css'
 
 /** A printable document only: nothing in the live assignment can change its contents. */

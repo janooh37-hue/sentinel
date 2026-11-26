@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 
 import { Button } from '@/components/ui/button'
 import type { ArmoryAssignmentSummary } from '@/lib/api'
-import { Ltr, displayDate, licenceStatusKey, orgDateTime, useArmoryLocale } from '@/pages/assets/armory/armoryFormat'
+import { Ltr } from '@/pages/assets/armory/ArmoryLtr'
+import { displayDate, licenceStatusKey, orgDateTime, useArmoryLocale } from '@/pages/assets/armory/armoryFormat'
 import { useArmoryEmployee } from '@/pages/assets/armory/armoryQueries'
 import { armoryLink } from '@/pages/assets/armory/armoryUrl'
 

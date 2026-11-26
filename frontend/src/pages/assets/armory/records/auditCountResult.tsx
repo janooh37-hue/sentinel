@@ -2,7 +2,8 @@ import { Trans, useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import type { ArmoryCheckReconciliation, ArmoryCountLineRead, ArmoryCountRead, ArmoryShiftWindowRead } from '@/lib/api'
-import { Ltr, serialStateKey, useArmoryLocale } from '../armoryFormat'
+import { Ltr } from '../ArmoryLtr'
+import { serialStateKey, useArmoryLocale } from '../armoryFormat'
 import { armoryLink } from '../armoryUrl'
 import { AuditActor, AuditFact, AuditInstant, AuditMonth, AuditPerson, AuditPostingTime } from './auditDisplay'
 
