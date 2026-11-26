@@ -85,7 +85,7 @@ it('accepts a unique complete scan but not an ambiguous suffix or an unexpected 
   expect(screen.getByText('Checked:', { exact: false })).toBeVisible()
 })
 
-it('redrafts after stale 409, clears observations and never reposts automatically', async () => {
+it('redrafts after stale 409, keeps matching observations and never reposts automatically', async () => {
   const load = vi.mocked(api.getArmoryShiftCheckDraft)
   load.mockResolvedValueOnce(testDraft).mockResolvedValue({ ...testDraft, snapshot_token: 'test-check-fresh', expected: [serial] })
   const post = vi.spyOn(api, 'createArmoryShiftCheck').mockRejectedValueOnce(new ApiError(409, 'armory_stale_check', 'Backend-only message'))
@@ -97,10 +97,14 @@ it('redrafts after stale 409, clears observations and never reposts automaticall
   await chooseWitness(user)
   await user.click(screen.getByRole('button', { name: 'Save shift check' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('The safe changed since the check started.')
-  const checkbox = await screen.findByRole('checkbox', { name: 'TEST-R-0001' })
-  await waitFor(() => expect(checkbox).toBeEnabled())
-  expect(checkbox).not.toBeChecked()
+  const keep = await screen.findByRole('button', { name: 'Keep my entries' })
+  expect(screen.getByRole('checkbox', { name: 'TEST-R-0001' })).toBeChecked()
   expect(screen.queryByRole('checkbox', { name: 'TEST-S-0001' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Review check' })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Discard entries' }))
+  expect(keep).not.toBeInTheDocument()
+  expect(screen.getByRole('checkbox', { name: 'TEST-R-0001' })).not.toBeChecked()
+  expect(screen.getByRole('button', { name: 'Review check' })).toBeEnabled()
   expect(load).toHaveBeenCalledTimes(2)
   expect(post).toHaveBeenCalledTimes(1)
 })
@@ -141,6 +145,41 @@ it('keeps observations while paused, then prompts and clears them on explicit di
   expect(onPausedChange).toHaveBeenLastCalledWith(false)
   await user.click(screen.getByRole('button', { name: 'Open test check' }))
   expect(await screen.findByRole('checkbox', { name: 'TEST-R-0001' })).not.toBeChecked()
+})
+
+it('preserves observations and the witness when a firearm returns during a pause', async () => {
+  const load = vi.mocked(api.getArmoryShiftCheckDraft)
+  const post = vi.spyOn(api, 'createArmoryShiftCheck').mockResolvedValue(savedCount)
+  mount()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('checkbox', { name: 'TEST-R-0001' }))
+  await user.click(screen.getByRole('button', { name: 'Review check' }))
+  await chooseWitness(user)
+  await user.click(screen.getByRole('checkbox', { name: 'I report 1 firearm missing' }))
+  await user.click(screen.getByRole('button', { name: 'Pause' }))
+  const returned = { ...serial, id: 3, serial_code: 'TEST-R-0003' }
+  load.mockResolvedValue({ ...testDraft, snapshot_token: 'test-check-returned', expected: [...testDraft.expected, returned] })
+  await user.click(screen.getByRole('button', { name: 'Open test check' }))
+
+  const newlyExpected = await screen.findByRole('checkbox', { name: 'TEST-R-0003' })
+  expect(screen.getByRole('checkbox', { name: 'TEST-R-0001' })).toBeChecked()
+  expect(newlyExpected).not.toBeChecked()
+  expect(screen.getByText('The safe changed since the check started. Review the refreshed list, then keep or discard your entries.')).toBeVisible()
+  const review = screen.getByRole('button', { name: 'Review check' })
+  expect(review).toBeDisabled()
+  expect(post).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Keep my entries' }))
+  await user.click(review)
+  expect(screen.getByText('Test Witness', { selector: 'bdi' })).toBeVisible()
+  const confirmation = screen.getByRole('checkbox', { name: 'I report 2 firearms missing' })
+  const save = screen.getByRole('button', { name: 'Report missing and save' })
+  expect(confirmation).not.toBeChecked()
+  expect(save).toBeDisabled()
+  await user.click(confirmation)
+  await user.click(save)
+  await waitFor(() => expect(post).toHaveBeenCalledExactlyOnceWith(1, {
+    snapshot_token: 'test-check-returned', observed_serial_ids: [1], confirm_missing: true, witness_employee_id: 'T-0003',
+  }))
 })
 
 it('requires fresh observations when the organization shift changes during a pause', async () => {

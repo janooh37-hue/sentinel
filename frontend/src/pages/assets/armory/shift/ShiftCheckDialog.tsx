@@ -1,4 +1,4 @@
-import { useRef, useState, type RefObject } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 
 import { Button } from '@/components/ui/button'
 import type { ArmoryCountRead, ArmoryPersonCandidateRead, ArmorySerialRead, ArmoryShiftCheckDraftRead } from '@/lib/api'
@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { Ltr } from '../ArmoryLtr'
 import { serialStateKey, useArmoryLocale } from '../armoryFormat'
-import { armoryErrorMessage, armoryErrorRecovery, isArmoryAccessError, useArmoryAccess, useArmoryShiftCheckDraft, useCreateArmoryShiftCheck } from '../armoryQueries'
+import { armoryErrorMessage, isArmoryAccessError, useArmoryAccess, useArmoryShiftCheckDraft, useCreateArmoryShiftCheck } from '../armoryQueries'
 import { ArmoryPersonPicker } from '../dialogs/ArmoryPersonPicker'
 import { ShiftCopy, ShiftHolder, ShiftReadError, ShiftWindowMeta } from './shiftPresentation'
 import { EvidenceCheckbox, ShiftScanner, ShiftTaskDialog } from './shiftTaskControls'
@@ -46,8 +46,8 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
   const draft = useArmoryShiftCheckDraft(safeId, open)
   const mutation = useCreateArmoryShiftCheck()
   const [work, setWork] = useState(emptyWork)
-  const [revision, setRevision] = useState<{ window: string; token: string } | null>(null)
-  const [notice, setNotice] = useState<'newShiftStarted' | 'errors.staleCheck' | null>(null)
+  const [revision, setRevision] = useState<{ window: string; token: string; reviewPending: boolean } | null>(null)
+  const [newShiftStarted, setNewShiftStarted] = useState(false)
   const [recordedWindow, setRecordedWindow] = useState<string | null>(null)
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const [filter, setFilter] = useState<Filter>('all')
@@ -55,6 +55,7 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
   const [scanFeedback, setScanFeedback] = useState<ScanFeedback | null>(null)
   const scanRef = useRef<HTMLInputElement>(null)
   const reviewRef = useRef<HTMLHeadingElement>(null)
+  const keepEntriesRef = useRef<HTMLButtonElement>(null)
 
   const denied = isArmoryAccessError(draft.error) || isArmoryAccessError(mutation.error)
   const current = denied || draft.isError ? undefined : draft.data
@@ -63,20 +64,35 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
   const missing = current?.expected.filter(serial => !work.observed.has(serial.id)) ?? []
   const dirty = work.observed.size > 0 || !!work.witness || work.confirmMissing || !!scan.trim()
   const busy = draft.isFetching || mutation.isPending
-  const canAct = !!current && !busy && !periodRecorded
+  const draftAvailable = !!current && !busy && !periodRecorded
+  const reviewPending = revision?.reviewPending === true
+  const reviewReady = draftAvailable && reviewPending
+  const canAct = draftAvailable && revision?.reviewPending === false
+  const staleCheck = mutation.error instanceof ApiError && mutation.error.code === 'armory_stale_check'
   const hasWitness = !!actorId && !!work.witness && actorId !== work.witness.person.employee_id
 
-  // Resume only against a fresh draft for this window and snapshot. Newly returned
-  // stock can change the expected set, but cannot create an observation.
+  useEffect(() => {
+    if (open && reviewReady && !confirmDiscard) keepEntriesRef.current?.focus()
+  }, [open, reviewReady, confirmDiscard])
+
+  // A new window needs fresh observations. A new snapshot within this window
+  // retains matching evidence, but never attests to newly expected serials.
   if (open && current && windowKey && !busy && (revision?.window !== windowKey || revision.token !== current.snapshot_token)) {
-    if (revision) {
-      setNotice(revision.window !== windowKey ? 'newShiftStarted' : 'errors.staleCheck')
-      setWork(emptyWork)
+    const windowChanged = revision !== null && revision.window !== windowKey
+    const needsReview = revision !== null && !windowChanged && (dirty || reviewPending)
+    setNewShiftStarted(windowChanged)
+    if (windowChanged) {
+      resetObservations()
+    } else if (needsReview) {
+      const observed = new Set<number>()
+      for (const { id } of current.expected) {
+        if (work.observed.has(id)) observed.add(id)
+      }
+      setWork({ ...work, observed, reviewing: false, confirmMissing: false })
       setFilter('all')
-      setScan('')
       setScanFeedback(null)
     }
-    setRevision({ window: windowKey, token: current.snapshot_token })
+    setRevision({ window: windowKey, token: current.snapshot_token, reviewPending: needsReview })
   }
   if (denied && (dirty || revision || scanFeedback || confirmDiscard)) {
     setWork(emptyWork)
@@ -96,7 +112,7 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
   function finish() {
     resetObservations()
     setRevision(null)
-    setNotice(null)
+    setNewShiftStarted(false)
     setRecordedWindow(null)
     setConfirmDiscard(false)
     mutation.reset()
@@ -106,7 +122,7 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
 
   function requestClose() {
     if (mutation.isPending) return
-    if (dirty && !denied) setConfirmDiscard(true)
+    if ((dirty || reviewPending) && !denied) setConfirmDiscard(true)
     else finish()
   }
 
@@ -133,11 +149,19 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
     setScanFeedback({ kind: 'found', serial: hit })
   }
 
+  function resolveReview(keep: boolean) {
+    if (!reviewReady || !revision) return
+    if (!keep) resetObservations()
+    setRevision({ ...revision, reviewPending: false })
+    mutation.reset()
+    requestAnimationFrame(() => scanRef.current?.focus())
+  }
+
   function save() {
-    if (!canAct || !current || !windowKey || !work.witness || !hasWitness || !work.reviewing || (missing.length > 0 && !work.confirmMissing)) return
-    setNotice(null)
+    if (!canAct || !current || !revision || !work.witness || !hasWitness || !work.reviewing || (missing.length > 0 && !work.confirmMissing)) return
+    setNewShiftStarted(false)
     mutation.mutate({ safeId, body: {
-      snapshot_token: current.snapshot_token,
+      snapshot_token: revision.token,
       observed_serial_ids: current.expected.filter(serial => work.observed.has(serial.id)).map(serial => serial.id),
       confirm_missing: missing.length > 0 && work.confirmMissing,
       witness_employee_id: work.witness.person.employee_id,
@@ -148,10 +172,17 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
           resetObservations()
           setRevision(null)
           onPausedChange(false)
-        } else if (error instanceof ApiError && error.status === 409 && armoryErrorRecovery(error) === 'redraft') {
-          // The shared redraft recovery invalidates the live draft. Never replay the post.
-          resetObservations()
-          if (error.code === 'armory_period_already_recorded') setRecordedWindow(windowKey)
+        } else if (error instanceof ApiError && error.status === 409) {
+          // The shared recovery refreshes the draft; it must never replay this post.
+          if (error.code === 'armory_period_already_recorded') {
+            resetObservations()
+            setRecordedWindow(revision.window)
+          } else if (error.code === 'armory_stale_check') {
+            setRevision({ ...revision, reviewPending: true })
+            setWork(previous => ({ ...previous, reviewing: false, confirmMissing: false }))
+            setFilter('all')
+            setScanFeedback(null)
+          }
         }
       },
     })
@@ -165,7 +196,7 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
   }} /> : scanFeedback ? t(`assets.armory.${scanFeedback.kind}`) : undefined
 
   return <ShiftTaskDialog open={open} title={t('assets.armory.shiftCheck')} onClose={requestClose} busy={mutation.isPending}
-    returnFocusRef={returnFocusRef} initialFocusRef={work.reviewing ? reviewRef : scanRef}
+    returnFocusRef={returnFocusRef} initialFocusRef={reviewReady ? keepEntriesRef : work.reviewing ? reviewRef : scanRef}
     subtitle={current && <><bdi>{name(current.safe)}</bdi> · <ShiftWindowMeta window={current.window} /></>}
     discard={confirmDiscard && !denied ? {
       title: t('assets.armory.discardCheck'), message: t('assets.armory.shiftPane.discardCheckHint'),
@@ -180,7 +211,7 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
         <Button type="button" variant="ghost" className="min-h-11" disabled={mutation.isPending} onClick={requestClose}>{t(denied || periodRecorded ? 'assets.armory.close' : 'assets.armory.cancel')}</Button>
         {current && !periodRecorded && <>
           <Button type="button" variant="secondary" className="min-h-11" disabled={busy} onClick={() => {
-            if (!canAct) return
+            if (!draftAvailable) return
             onPausedChange(true)
             onOpenChange(false)
           }}>{t('assets.armory.pause')}</Button>
@@ -198,8 +229,15 @@ function ShiftCheckTask({ open, safeId, onOpenChange, onPausedChange, onSaved, r
     <div className="space-y-4">
       {draft.isFetching && !mutation.isPending && <p role="status" className="text-sm text-muted-foreground">{t('assets.armory.loadingText')}</p>}
       {draft.isError && !isArmoryAccessError(mutation.error) && <ShiftReadError error={draft.error} retry={() => void draft.refetch()} />}
-      {mutation.isError && <p role="alert" className="text-sm font-medium text-destructive-text">{armoryErrorMessage(mutation.error)}</p>}
-      {notice && !denied && (!mutation.isError || notice === 'newShiftStarted') && <p role="status" className="rounded-md bg-warning-soft p-3 text-sm text-warning">{t(`assets.armory.${notice}`)}</p>}
+      {mutation.isError && !(reviewReady && staleCheck) && <p role="alert" className="text-sm font-medium text-destructive-text">{armoryErrorMessage(mutation.error)}</p>}
+      {newShiftStarted && !denied && <p role="status" className="rounded-md bg-warning-soft p-3 text-sm text-warning">{t('assets.armory.newShiftStarted')}</p>}
+      {reviewReady && <div className="space-y-2 rounded-md bg-warning-soft p-3">
+        <p role={staleCheck ? 'alert' : 'status'} className="text-sm font-medium text-warning">{t('assets.armory.shiftPane.checkSnapshotChanged')}</p>
+        <div className="flex flex-wrap gap-2">
+          <Button ref={keepEntriesRef} type="button" variant="outline" className="min-h-11" onClick={() => resolveReview(true)}>{t('assets.armory.items.keepEntries')}</Button>
+          <Button type="button" variant="outline" className="min-h-11" onClick={() => resolveReview(false)}>{t('assets.armory.items.discardEntries')}</Button>
+        </div>
+      </div>}
       {current && !periodRecorded && <>
         {work.reviewing ? <section className="space-y-3">
           <h3 ref={reviewRef} tabIndex={-1} className="font-semibold">{t('assets.armory.checkReviewTitle')}</h3>

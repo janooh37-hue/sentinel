@@ -3851,6 +3851,7 @@
         "licenceWarningRecorded": "Licence warning acknowledgement recorded.",
         "noReturns": "No returns have been recorded for this issue.",
         "noCheckHistory": "No shift check slots for this safe yet.",
+        "checkSnapshotChanged": "The safe changed since the check started. Review the refreshed list, then keep or discard your entries.",
         "noOpenFirearm": "No open firearm record.",
         "discardCheckHint": "Unsaved observations and witness selection will be cleared.",
         "discardReturnHint": "Unsaved return confirmations and counts will be cleared.",
