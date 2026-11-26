@@ -91,7 +91,8 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
   const [offDutyNote, setOffDutyNote] = useState('')
   const [acknowledged, setAcknowledged] = useState(false)
   const [excessReason, setExcessReason] = useState('')
-  const [dueInput, setDue] = useState<string | null>(null)
+  const [dueDateInput, setDueDate] = useState<string | null>(null)
+  const [dueTimeInput, setDueTime] = useState<string | null>(null)
   const [conditionNote, setConditionNote] = useState('')
   const [notice, setNotice] = useState('')
   const [dirty, setDirty] = useState(false)
@@ -129,7 +130,9 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
   const today = shift.data ? orgDateIso(shift.data.attention.now_at, window?.time_zone) : null
   const expiringDays = firearm !== null && today && person?.licence_status === 'expiring' && person.licence_expires_on
     ? Math.round((Date.parse(person.licence_expires_on) - Date.parse(today)) / 86_400_000) : null
-  const due = dueInput ?? (mode === 'shift' && window ? orgDateTimeInput(window.ends_at, window.time_zone) : '')
+  const dueDefault = mode === 'shift' && window ? orgDateTimeInput(window.ends_at, window.time_zone) : ''
+  const dueDate = dueDateInput ?? dueDefault.slice(0, 10)
+  const dueTimeText = dueTimeInput ?? dueDefault.slice(11)
 
   useEffect(() => {
     if (lastResume.current === resumeSignal) return
@@ -195,7 +198,7 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
   const overStock = chosenSlots.find(({ line }) => (line.item.kind === 'quantity' || line.item.kind === 'ammunition') && (qtyOf(line) ?? 0) > available(line.item.id))
   const badQty = chosenSlots.find(({ line }) => (line.item.kind === 'quantity' || line.item.kind === 'ammunition') && qtyOf(line) === null)
   const excess = firearm !== null && chosenSlots.some(({ line }) => line.item.kind === 'ammunition' && (qtyOf(line) ?? 0) > line.default_qty)
-  const dueInstant = mode === 'shift' ? orgInputToInstant(due, window?.time_zone) : null
+  const dueInstant = mode === 'shift' && /^([01]\d|2[0-3]):[0-5]\d$/.test(dueTimeText) ? orgInputToInstant(`${dueDate}T${dueTimeText}`, window?.time_zone) : null
   const dueTime = dueInstant ? Date.parse(dueInstant) : NaN
 
   const reason = (() => {
@@ -391,11 +394,11 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
             <legend className="text-sm font-semibold">{t('assets.armory.dueBack')}</legend>
             <div className="flex flex-wrap gap-3">
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">{t('assets.armory.date')}
-                <Input type="date" dir="ltr" className="min-h-11 w-fit font-mono" value={due.slice(0, 10)} onChange={event => { touch(); setDue(`${event.target.value}T${due.slice(11)}`) }} />
+                <Input type="date" dir="ltr" className="min-h-11 w-fit font-mono" value={dueDate} onChange={event => { touch(); setDueDate(event.target.value) }} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-muted-foreground">{t('assets.armory.dueTime')}
-                <Input type="text" inputMode="numeric" dir="ltr" maxLength={5} placeholder="18:00" className="min-h-11 w-24 font-mono" value={due.slice(11)}
-                  onChange={event => { touch(); setDue(`${due.slice(0, 10)}T${normalizeDigits(event.target.value)}`) }} />
+                <Input type="text" inputMode="numeric" dir="ltr" maxLength={5} placeholder="18:00" className="min-h-11 w-24 font-mono" value={dueTimeText}
+                  onChange={event => { touch(); setDueTime(normalizeDigits(event.target.value)) }} />
               </label>
             </div>
             <span className="text-xs text-muted-foreground">{t('assets.armory.dueDefault')} {t('assets.armory.date24Hint')} {t('assets.armory.dueCap')}</span>
@@ -442,7 +445,7 @@ function SerialSelect({ itemId, safeId, label, value, onChange, required = false
     <select id={id} className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value ?? ''}
       disabled={!detail.data || serials.length === 0} onChange={event => onChange(event.target.value ? Number(event.target.value) : null)}>
       <option value="">{detail.isPending ? t('assets.armory.loadingText') : serials.length ? t(required ? 'assets.armory.chooseSerial' : 'assets.armory.none') : t('assets.armory.unavailableSerials')}</option>
-      {serials.map(serial => <option key={serial.id} value={serial.id}>{serial.serial_code}</option>)}
+      {serials.map(serial => <option key={serial.id} value={serial.id}>{`\u2066${serial.serial_code}\u2069`}</option>)}
     </select>
   </label>
 }
@@ -459,7 +462,7 @@ function BatchSelect({ itemId, safeId, value, onChange, itemName }: { itemId: nu
       <select id={id} className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value.batchId ?? ''}
         disabled={batches.length === 0} onChange={event => onChange({ batchId: event.target.value ? Number(event.target.value) : null })}>
         <option value="">{batches.length ? t('assets.armory.none') : t('assets.armory.assignment.noBatches')}</option>
-        {batches.map(row => <option key={row.batch.id} value={row.batch.id}>{row.batch.batch_ref} · {displayDate(row.batch.expires_on)}</option>)}
+        {batches.map(row => <option key={row.batch.id} value={row.batch.id}>{`\u2066${row.batch.batch_ref}\u2069 · \u2066${displayDate(row.batch.expires_on)}\u2069`}</option>)}
       </select>
     </label>
     {chosen && <Quantity itemName={itemName} value={value.qty || '0'} max={chosen.on_hand} onChange={qty => onChange({ qty })} />}
