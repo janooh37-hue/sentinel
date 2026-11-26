@@ -18,6 +18,7 @@ interface Props {
   open: boolean
   safeId: number
   onOpenChange(open: boolean): void
+  /** Called when a successful save closes the dialog. */
   onSaved(results: ArmoryReturnRead[]): void
   returnFocusRef: RefObject<HTMLElement | null>
 }
@@ -120,7 +121,20 @@ function BulkReturnTask({ open, safeId, onOpenChange, onSaved, returnFocusRef }:
   function recordReturns() {
     if (busy || !group || inputs.length === 0) return
     mutation.mutate({ safe_id: safeId, records: inputs }, {
-      onSuccess: results => { close(); onSaved(results) },
+      onSuccess: results => {
+        const postedIds = new Set(results.map(({ assignment }) => assignment.id))
+        const remaining = new Map(staged)
+        for (const [lineId, { assignmentId }] of staged) {
+          if (postedIds.has(assignmentId)) remaining.delete(lineId)
+        }
+        if (remaining.size) {
+          setStaged(remaining)
+          setFeedback(null)
+          return
+        }
+        close()
+        onSaved(results)
+      },
       onError: error => {
         if (isArmoryAccessError(error)) {
           setStaged(emptyLines)
@@ -147,6 +161,7 @@ function BulkReturnTask({ open, safeId, onOpenChange, onSaved, returnFocusRef }:
       title: t('assets.armory.discardReturn'), message: t('assets.armory.shiftPane.discardReturnHint'), keep: () => setConfirmDiscard(false), confirm: close,
     } : undefined}
     footer={<div className="space-y-2">
+      {mutation.isSuccess && !denied && <p role="status" className="text-sm font-medium text-foreground">{t('assets.armory.savedBulkReturn')}</p>}
       {mutation.isPending ? <p role="status" className="text-sm text-muted-foreground">{t('common.saving')}</p> : records.length > 0 && <>
         <p role="status" className="text-sm text-muted-foreground"><ShiftCopy id="returnProgress" values={{ ready: <Ltr>{inputs.length}</Ltr>, total: <Ltr>{records.length}</Ltr> }} /></p>
         {!inputs.length && <p className="text-sm text-warning">{t('assets.armory.needReadyReturn')}</p>}

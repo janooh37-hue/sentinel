@@ -6,7 +6,7 @@ import { beforeEach, expect, it, vi } from 'vitest'
 import { api, ApiError } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { BulkReturnDialog } from './BulkReturnDialog'
-import { candidates, firearmLine, issue, otherSafe, renderArmory, returnPosting, roundsLine, slingLine, testSafe, testShift } from './shiftFixtures'
+import { candidates, firearmLine, issue, otherIssue, otherSafe, renderArmory, returnPosting, roundsLine, slingLine, testSafe, testShift } from './shiftFixtures'
 
 const caps = vi.hoisted(() => ({ view: true, edit: true }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({
@@ -96,18 +96,42 @@ it('holds zero rounds until the shortfall and independent witness are fully reco
   }] }))
 })
 
-it('leaves an unfinished record out of the batch even when one of its lines was ticked', async () => {
-  const post = vi.spyOn(api, 'createArmoryBulkReturn').mockResolvedValue(saved)
-  mount()
+it('records only the ready return and keeps the unfinished shortfall open after refresh', async () => {
+  const load = vi.mocked(api.getArmoryShift)
+  load.mockResolvedValueOnce(testShift).mockResolvedValue({ ...testShift, safes: [{
+    ...testShift.safes[0], out: [issue],
+  }] })
+  const [readyLine] = otherIssue.lines
+  const post = vi.spyOn(api, 'createArmoryBulkReturn').mockResolvedValue([{
+    assignment: { ...otherIssue, state: 'ended', lines: [{ ...readyLine, remaining_qty: 0 }] },
+    posting: {
+      ...returnPosting, related_posting_id: otherIssue.id, witness: null, person: otherIssue.holder.employee, discrepancy_ids: [],
+      lines: [{
+        ...returnPosting.lines[0], item: readyLine.item, qty: 1, stock_delta: 1, serial_id: readyLine.serial_id,
+        serial_code: readyLine.serial_code, before_on_hand: 0, after_on_hand: 1, assignment_line_id: readyLine.id,
+        remaining_before: 1, condition: 'ok',
+      }],
+    },
+  }])
+  const onSaved = mount()
   const user = userEvent.setup()
-  await user.click(await screen.findByRole('checkbox', { name: /TEST-R-0001/ }))
-  await user.type(screen.getByRole('spinbutton', { name: 'Rounds returned' }), '0')
-  await user.click(screen.getByRole('checkbox', { name: /TEST-S-0001/ }))
+  await user.click(await screen.findByRole('checkbox', { name: /TEST-S-0001/ }))
+  await user.click(screen.getByRole('checkbox', { name: /TEST-R-0001/ }))
+  await user.type(screen.getByRole('spinbutton', { name: 'Rounds returned' }), '2')
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Reason' }), 'incident')
+  await user.type(screen.getByRole('textbox', { name: 'Reference' }), 'TEST-INC-42')
   await user.click(screen.getByRole('button', { name: 'Record 1 return' }))
-  await waitFor(() => expect(post).toHaveBeenCalledExactlyOnceWith({ safe_id: 1, records: [{
+  await waitFor(() => expect(screen.queryByRole('checkbox', { name: /TEST-S-0001/ })).not.toBeInTheDocument())
+  expect(post).toHaveBeenCalledExactlyOnceWith({ safe_id: 1, records: [{
     assignment_id: 11, witness_employee_id: null,
     lines: [{ assignment_line_id: 111, expected_remaining_qty: 1, returned_qty: 1, condition: 'ok', shortfall: null }],
-  }] }))
+  }] })
+  expect(screen.queryByRole('dialog', { name: 'Bulk return' })).toBeInTheDocument()
+  expect(screen.getByRole('spinbutton', { name: 'Rounds returned' })).toHaveValue(2)
+  expect(screen.getByRole('textbox', { name: 'Reference' })).toHaveValue('TEST-INC-42')
+  expect(screen.getByRole('checkbox', { name: /TEST-R-0001/ })).toBeChecked()
+  expect(screen.getByText('Confirmed returns recorded.', { selector: '[role=status]' })).toBeInTheDocument()
+  expect(onSaved).not.toHaveBeenCalled()
 })
 
 it('refetches on 409 and retains only the still-matching confirmation without auto retry', async () => {
