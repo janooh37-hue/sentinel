@@ -1,0 +1,2239 @@
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Assets: Armory (approval mockup)</title>
+<link rel="icon" href="data:,">
+<style>
+@font-face{font-family:Inter;src:url("./fonts/inter-latin-wght-normal.woff2") format("woff2");font-weight:100 900;font-display:swap}
+@font-face{font-family:"Noto Sans Arabic";src:url("./fonts/noto-sans-arabic-arabic-400-normal.woff2") format("woff2");font-weight:400 600;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+@font-face{font-family:"Noto Sans Arabic";src:url("./fonts/noto-sans-arabic-arabic-700-normal.woff2") format("woff2");font-weight:700 900;font-display:swap;unicode-range:U+0600-06FF,U+0750-077F,U+08A0-08FF,U+200C-200E,U+FB50-FDFF,U+FE70-FEFC}
+
+/* Uniform's achromatic ledger with the app's Assets band and semantic status tokens. */
+:root{
+  --ground:#f5f4f1;--surface:#fff;--raised:#f0eee8;--active:#e9e7e1;
+  --border:#e6e4dd;--rule:#efece5;--control:#d4d1c8;--text:#1c1f24;--muted:#5a6068;
+  --primary:#1c1f24;--on-primary:#fff;--data:#0d2845;--focus:#0d2845;--data-soft:#e8edf3;
+  --danger:#b91c1c;--danger-soft:#fbe5e8;--warning:#92400e;--warning-soft:#fef3c7;
+  --info:#1d4ed8;--info-soft:#e0e8f8;--success:#047857;--success-soft:#d6f0e4;
+  --art:#fafaf6;--brand-band:#0d2845;--missing-fill:#b91c1c;--missing-ink:#fff;
+  --radius-card:8px;--radius-control:6px;--gap:24px;--pad:20px;--edge:24px;
+  font-size:16px;color-scheme:light
+}
+:root[data-theme=dark]{
+  --ground:#0a0e18;--surface:#131826;--raised:#1a2034;--active:#1f263b;
+  --border:#2a3148;--rule:#1f263b;--control:#3a4360;--text:#e6e9f2;--muted:#a3adc1;
+  --primary:#e6e9f2;--on-primary:#0a0e18;--data:#a7bdf5;--focus:#a7bdf5;--data-soft:#1c2849;
+  --danger:#fca5a5;--danger-soft:#3a1820;--warning:#fbbf24;--warning-soft:#3b2f11;
+  --info:#60a5fa;--info-soft:#1c2940;--success:#34d399;--success-soft:#142d23;
+  --brand-band:#101b30;--missing-fill:#a32335;--missing-ink:#fff;color-scheme:dark
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--ground);color:var(--text);font:14px/1.46 Inter,system-ui,sans-serif;font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+:lang(ar){font-family:"Noto Sans Arabic",Inter,system-ui,sans-serif}
+:lang(ar) h1{letter-spacing:0}
+[dir=rtl] input[dir=ltr],[dir=rtl] textarea[dir=ltr]{text-align:end}
+button,input,select,textarea{font:inherit;color:inherit;accent-color:var(--data)}
+p{margin:0}
+a{color:inherit;text-underline-offset:3px}
+button{cursor:pointer}
+button:disabled{cursor:not-allowed}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+::selection{color:var(--text);background:var(--data-soft)}
+.skip{position:fixed;inset-inline-start:1rem;inset-block-start:1rem;z-index:4;background:var(--surface);padding:10px;clip-path:inset(50%)}
+.skip:focus{clip-path:none}
+.sr{position:absolute;inline-size:1px;block-size:1px;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.num{font-variant-numeric:tabular-nums}
+bdi{unicode-bidi:isolate;overflow-wrap:anywhere}
+.icon{flex:none;vertical-align:middle}
+[dir=rtl] .mirror{transform:scaleX(-1)}
+.muted,.desc,.dash{color:var(--muted)}
+.desc{display:block;font-size:13px;line-height:1.5}
+.small{font-size:12px;line-height:1.52}
+.name{display:block;font-weight:600;overflow-wrap:anywhere}
+.hero{color:#fff}
+.hero .wrap{padding-inline:32px}
+.hero :focus-visible{outline-color:rgba(255,255,255,.9)}
+.wrap{max-inline-size:1400px;margin-inline:auto;padding-inline:var(--edge)}
+.sectiontabs{display:flex;gap:4px;align-items:flex-end;max-inline-size:100%;overflow-x:auto}
+.sectiontabs a,.sectiontabs span{display:inline-flex;align-items:center;min-block-size:44px;padding-inline:16px;border-start-start-radius:12px;border-start-end-radius:12px;font-size:14px;font-weight:600;color:rgba(255,255,255,.76);text-decoration:none;white-space:nowrap}
+.sectiontabs a:hover{background:rgba(255,255,255,.1);color:#fff}
+.sectiontabs [aria-current=page]{background:var(--ground);color:var(--text)}
+.subtabs{border-block-end:1px solid var(--border)}
+.subtabs .wrap{display:flex;gap:4px;overflow-x:auto;scrollbar-width:thin}
+.subtabs a{display:inline-flex;align-items:center;flex:none;min-block-size:44px;padding-inline:12px;border-block-end:2px solid transparent;font-size:14px;font-weight:500;color:var(--muted);text-decoration:none;white-space:nowrap}
+.subtabs a:hover{color:var(--text)}
+.subtabs a[aria-current=page]{border-color:var(--primary);color:var(--text);font-weight:600}
+.titlerow{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between;padding-block:22px 16px}
+h1,h2,h3,h4{margin:0;overflow-wrap:anywhere}
+h1{font-size:24px;line-height:1.3;font-weight:700;letter-spacing:-.01em}
+h2{font-size:16px;line-height:1.5;font-weight:600}
+h3{font-size:14px;line-height:1.45;font-weight:600}
+h4{font-size:13px;font-weight:600}
+.finding{margin-block-start:5px;color:var(--muted);font-size:14px}
+.primary,.secondary,.ghost,.textbtn,.iconbtn{display:inline-flex;min-block-size:44px;max-inline-size:100%;align-items:center;justify-content:center;gap:7px;padding:6px 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:13px;font-weight:600;text-align:center;text-decoration:none}
+.primary{border-color:var(--primary);background:var(--primary);color:var(--on-primary);padding-inline:16px}
+.primary:disabled{background:var(--raised);border-color:var(--control);color:var(--muted)}
+.secondary:hover,.ghost:hover,.iconbtn:hover,.proto button:hover{background:var(--raised)}
+.ghost{font-weight:500}
+.iconbtn{inline-size:44px;padding:0;flex:none}
+.textbtn{background:transparent;border-color:transparent;color:var(--data);padding-inline:4px;text-decoration:underline;text-underline-offset:3px}
+.textbtn:hover{text-decoration-thickness:2px}
+.textbtn:disabled{text-decoration:none;color:var(--muted)}
+.section{margin-block-end:18px;scroll-margin-block-start:16px}
+.panel{min-inline-size:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-card)}
+.panel-head{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;padding:14px var(--pad) 10px;border-block-end:1px solid var(--rule)}
+.panel-head h2{display:flex;align-items:center;gap:8px}
+.panel-head h2 .icon{color:var(--muted)}
+.content{padding:14px var(--pad)}
+.count-tag,.chip{display:inline-flex;align-items:center;gap:5px;max-inline-size:100%;padding:3px 8px;border-radius:4px;background:var(--raised);color:var(--text);font-size:12px;font-weight:600;line-height:1.45}
+.chip.danger,.danger-tone{color:var(--danger);--tone-bg:var(--danger-soft)}
+.chip.warning,.warning-tone{color:var(--warning);--tone-bg:var(--warning-soft)}
+.chip.info,.info-tone{color:var(--info);--tone-bg:var(--info-soft)}
+.chip.success{color:var(--success);--tone-bg:var(--success-soft)}
+.chip.outline{color:var(--danger);background:transparent;border:1px solid currentColor}
+.chip{background:var(--tone-bg,var(--raised))}
+.chip>span{min-inline-size:0}
+.chip .icon{inline-size:14px;block-size:14px}
+.actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.meta{display:flex;flex-wrap:wrap;gap:3px 10px;align-items:baseline;color:var(--muted);font-size:13px}
+.meta>span{min-inline-size:0}
+.table-wrap{min-inline-size:0}
+table{inline-size:100%;border-collapse:separate;border-spacing:0;text-align:start}
+th{text-align:start}
+th.num,td.num{text-align:end}
+thead th{position:sticky;inset-block-start:0;z-index:1;background:var(--surface);border-block-end:1px solid var(--rule);padding:10px 12px;color:var(--muted);font-size:12px;font-weight:500;line-height:1.4;vertical-align:bottom}
+tbody :is(td,th){padding:8px 12px;vertical-align:middle;border-block-end:1px solid var(--rule)}
+tbody th{font-weight:inherit}
+tbody:last-child tr:last-child>*{border-block-end:0}
+tr>*:first-child{padding-inline-start:var(--pad)}
+tr>*:last-child{padding-inline-end:var(--pad)}
+tbody.group .group-head th{padding:10px var(--pad) 7px;background:var(--raised);font-weight:600;font-size:13px}
+.ident{display:flex;gap:10px;align-items:center;min-inline-size:0}
+.ident .copy{min-inline-size:0}
+.art{flex:none;display:block;inline-size:56px;block-size:44px;border-radius:var(--radius-control);background:var(--art)}
+.art .fill{fill:#e4e9e8}
+.art.lg{inline-size:88px;block-size:64px}
+.list-lines .art,.dense .art{inline-size:44px;block-size:36px}
+.item-link{display:inline-flex;align-items:center;gap:5px;min-block-size:44px;color:var(--text);font-weight:600;text-decoration:none}
+.item-link:hover,.item-link[aria-current=true]{color:var(--data);text-decoration:underline}
+.row-select{display:block;min-block-size:44px;text-decoration:none;align-content:center}
+.row-select:hover .name{text-decoration:underline;text-underline-offset:3px}
+tr.selected>*{background:var(--data-soft)}
+.mobile-key{display:none}
+.master{display:grid;grid-template-columns:minmax(0,1fr) minmax(330px,405px);gap:var(--gap);align-items:start;margin-block-end:24px}
+.detail{position:sticky;inset-block-start:16px;max-block-size:calc(100dvh - 32px);overflow:auto}
+.dhead{display:grid;gap:8px;padding:14px var(--pad);border-block-end:1px solid var(--border)}
+.dhead h2{font-size:18px}
+.back{display:none;justify-self:start}
+.selection-list{margin:0;padding:0;list-style:none}
+.selection-list>li+li{border-block-start:1px solid var(--rule)}
+.selection-list .row-select{padding:13px var(--pad)}
+.selection-list .selected{background:var(--data-soft)}
+.record-top{display:flex;flex-wrap:wrap;gap:5px 10px;align-items:center;justify-content:space-between}
+.list-lines,.serial-list,.safe-checks,.variance-list{margin:0;padding:0;list-style:none}
+.list-lines>li{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;gap:10px;min-block-size:46px}
+.list-lines>li+li,.serial-list>li+li,.safe-checks>li+li,.variance-list>li+li{border-block-start:1px solid var(--rule)}
+.serial-list li,.safe-checks li,.variance-list li{padding:11px var(--pad);overflow-wrap:anywhere}
+.serial-list .meta{margin-block-start:2px}
+.serial-list .record-top{min-block-size:22px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;justify-content:space-between;padding:12px var(--pad);border-block-end:1px solid var(--rule)}
+.search{display:flex;align-items:center;gap:8px;min-inline-size:0;min-block-size:44px;padding-inline-start:10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface)}
+.search:focus-within{outline:2px solid var(--focus);outline-offset:1px}
+.search>.icon{color:var(--muted)}
+.search input{flex:1;min-inline-size:0;min-block-size:42px;padding-inline-end:8px;border:0;background:transparent;outline:none}
+.search input::-webkit-search-cancel-button{display:none}
+.search .iconbtn{border:0;background:none;min-block-size:42px}
+.filters{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.filter{min-block-size:44px;padding:5px 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);text-align:start;font-size:13px}
+.filter[aria-pressed=true]{border-color:var(--data);background:var(--data-soft);color:var(--data);font-weight:600}
+.filter:hover:enabled{background:var(--raised)}
+.filter:disabled{color:var(--muted)}
+.checklabel{display:flex;align-items:center;gap:10px;min-block-size:44px;min-inline-size:0;cursor:pointer}
+.checklabel input{inline-size:17px;block-size:17px;flex:none;margin:0}
+.checklabel span{min-inline-size:0}
+.state{margin-block-end:18px}
+.state .content{display:grid;gap:7px;min-block-size:98px;justify-items:start}
+.bar{display:block;max-inline-size:100%;block-size:14px;border-radius:3px;background:var(--active)}
+.bar.long{inline-size:180px}.bar.short{inline-size:94px}
+.bare-list{list-style:none;margin:0;padding:0}
+.bare-list li{border-block-end:1px solid var(--rule);display:grid;gap:6px;padding-block:9px}
+.toast{position:fixed;z-index:3;inset-block-end:max(16px,env(safe-area-inset-bottom));inset-inline:0;margin-inline:auto;inline-size:max-content;max-inline-size:calc(100% - 32px);padding:12px 16px;border-radius:var(--radius-control);background:var(--text);color:var(--ground);font-size:13px;box-shadow:0 1px 2px rgba(10,20,40,.06),0 12px 32px rgba(10,20,40,.14)}
+
+/* Native modal keeps the page inert. Only the body scrolls, including on the phone. */
+dialog{inline-size:min(760px,calc(100vw - 32px));max-inline-size:calc(100vw - 32px);max-block-size:calc(100dvh - 32px);padding:0;overflow:clip;border:1px solid var(--border);border-radius:var(--radius-card);background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(10,20,40,.06),0 12px 32px rgba(10,20,40,.14)}
+dialog.wide{inline-size:min(880px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(5,10,20,.45)}
+.giveform{display:flex;flex-direction:column;max-block-size:calc(100dvh - 34px)}
+.givehead{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px var(--pad);border-block-end:1px solid var(--border)}
+.givehead h2{font-size:18px;line-height:1.4}
+.givehead .desc{margin-block-start:3px}
+.givebody{min-block-size:0;overflow:auto;overscroll-behavior:contain;padding:14px var(--pad) 18px;scrollbar-gutter:stable}
+.givefoot{flex:none;display:flex;gap:8px 18px;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:10px var(--pad);border-block-start:1px solid var(--border);background:var(--surface)}
+.givefoot .actions{margin-inline-start:auto}
+.reason{color:var(--muted);font-size:13px;line-height:1.5;max-inline-size:52ch}
+.field{display:grid;align-content:start;gap:5px;min-inline-size:0;font-size:13px;font-weight:600}
+.field :is(input,select,textarea){inline-size:100%;min-inline-size:0;min-block-size:44px;padding:7px 10px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);font-size:14px;font-weight:400}
+.field :is(input,textarea)::placeholder,.search input::placeholder{color:var(--muted)}
+.field textarea{resize:block;min-block-size:76px}
+.field input[type=number]{appearance:textfield}
+.field input[type=number]::-webkit-inner-spin-button{appearance:none}
+.fieldpair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px}
+.fieldset{display:grid;gap:8px;min-inline-size:0;margin:14px 0 0;padding:0;border:0}
+.fieldset legend{margin-block-end:6px;padding:0;font-weight:600}
+.flow{display:grid;gap:12px}
+.notice{display:grid;grid-template-columns:18px minmax(0,1fr);align-items:start;gap:8px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--tone-bg,var(--raised));font-size:13px}
+.notice>.icon{margin-block-start:2px}
+.notice .checklabel{color:var(--text)}
+.notice p+p{margin-block-start:4px}
+.chosen{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:5px 12px;padding:5px 10px;border:1px solid var(--border);border-radius:var(--radius-control);background:var(--raised)}
+.results{margin:0;padding:0;list-style:none}
+.results>li+li{border-block-start:1px solid var(--rule)}
+.results>li{display:flex;align-items:center;justify-content:space-between;gap:6px 12px;padding:4px 8px}
+.results .result-label{min-inline-size:0}
+.picker-list{margin-block-start:6px;max-block-size:265px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius-control)}
+.picker-list h4{padding:7px 8px;background:var(--raised);color:var(--muted)}
+.picker-list .picker-none{padding:10px 8px;color:var(--muted)}
+.form-line{display:grid;grid-template-columns:minmax(0,1fr) minmax(130px,260px);gap:8px 14px;align-items:center;padding-block:6px;border-block-end:1px solid var(--rule)}
+.form-line:last-child{border-block-end:0}
+.form-line .art{inline-size:44px;block-size:36px}
+.form-line .stepper{justify-self:start}
+.stepper{display:inline-flex;inline-size:max-content;align-items:center;border:1px solid var(--control);border-radius:var(--radius-control)}
+.stepper button{display:grid;place-items:center;inline-size:44px;block-size:44px;padding:0;border:0;background:transparent;color:var(--text);font-size:17px}
+.stepper button:hover:enabled{background:var(--raised)}
+.stepper button:disabled{color:var(--muted)}
+.stepper input{appearance:textfield;inline-size:52px;block-size:44px;padding:0;border:0;border-inline:1px solid var(--rule);background:transparent;text-align:center!important}
+.stepper input::-webkit-inner-spin-button{appearance:none}
+.clampnotice{display:block;color:var(--muted);font-size:12px}
+.clampnotice:empty{display:none}
+.serial-checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,145px),1fr));gap:4px 10px;margin:0;padding:0;list-style:none}
+.serial-checks .checklabel{padding-inline:8px;border:1px solid var(--border);border-radius:var(--radius-control)}
+.countgroup{border-block-end:1px solid var(--border)}
+.countgroup>summary,.count-result>summary{min-block-size:44px;padding-block:10px;cursor:pointer;font-weight:600}
+.countgroup .form-line>div{min-inline-size:0}
+.countgroup .form-line{grid-template-columns:minmax(0,1fr) minmax(185px,340px)}
+.lookup{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}
+.extras-panel{border-block-start:1px solid var(--rule)}
+.return-meta{display:flex;flex-wrap:wrap;align-items:center;gap:0 12px}
+.return-meta .textbtn{padding-block:0}
+.count-result{padding:0 var(--pad);border-block-end:1px solid var(--rule)}
+.count-result:last-child{border-block-end:0}
+.count-result>summary{overflow-wrap:anywhere}
+.count-result .flow{padding-block-end:12px;gap:6px}
+.held-list{padding-inline-start:20px;margin:0;color:var(--muted)}
+.widget-demo{max-inline-size:660px}
+.widget-demo .alert-count{padding:12px var(--pad);font-size:16px;font-weight:650;color:var(--danger);background:var(--danger-soft);border-block-end:1px solid var(--border);display:flex;align-items:center;gap:8px}
+.widget-demo .widget-footer{display:flex;justify-content:flex-end;padding:4px var(--pad) 6px;border-block-start:1px solid var(--rule)}
+
+/* Bilingual A4 receipt. The paper stays white in both preview themes. */
+.receipt-controls{display:flex;align-items:center;flex-wrap:wrap;justify-content:space-between;gap:8px;padding-block:12px}
+.paper{max-inline-size:210mm;min-block-size:297mm;margin:0 auto 28px;padding:15mm 16mm;background:#fff;color:#1c1f24;border:1px solid #ddd}
+.paper img{display:block;inline-size:min(244px,100%);block-size:auto;margin:0 auto 8px}
+.paper .organization{text-align:center;line-height:1.45;font-size:12px;color:#5a6068}
+.paper h1{margin-block:18px 4px;text-align:center;color:#0d2845;font-size:24px}
+.paper .other-title{text-align:center;color:#0d2845;font-size:17px;font-weight:700;margin-block-end:16px}
+.paper-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 16px;margin:0 0 18px;padding:12px 0;border-block:1px solid #d4d1c8}
+.paper-meta dt,.paper .secondary-language{font-size:12px;color:#49515b}
+.paper-meta dd{margin:2px 0 0;overflow-wrap:anywhere}
+.paper-table{table-layout:fixed}
+.paper-table th,.paper-table td{padding:7px 8px;border-block-end:1px solid #ddd;background:transparent;color:#1c1f24;vertical-align:top;font-size:13px}
+.paper-table thead th{background:#f0eee8;position:static}
+.paper-table col:first-child{inline-size:50%}.paper-table col:nth-child(2){inline-size:35%}
+.paper-table .line-serials{display:flex;flex-wrap:wrap;gap:2px 10px}
+.paper .condition{display:grid;gap:4px;margin-block:16px 28px;font-size:13px}
+.signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px}
+.signatures>div{padding-block-start:8px;border-block-start:1px solid #777}
+:root[data-theme=dark] dialog,:root[data-theme=dark] .givefoot,:root[data-theme=dark] .toast{background:var(--raised)}
+:root[data-theme=dark] dialog{box-shadow:none}
+
+@media(max-width:1000px){
+  .master{grid-template-columns:minmax(0,1fr)}
+  .master.open>.list{display:none}
+  .master:not(.open)>.detail{display:none}
+  .detail{position:static;max-block-size:none}
+  .back{display:inline-flex}
+}
+@media(max-width:799px){
+  :root{--edge:16px;--pad:16px;--gap:16px}
+  .hero .wrap{padding-inline:var(--edge)}
+  .titlerow{padding-block:18px 13px}
+  .responsive thead{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .responsive,.responsive tbody{display:block}
+  .responsive tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 12px;padding:11px var(--pad);border-block-end:1px solid var(--rule)}
+  .responsive tbody:last-child tr:last-child{border-block-end:0}
+  .responsive tr>*{display:block;min-inline-size:0;padding:0!important;border:0;text-align:start}
+  .responsive tr>.lead,.responsive tr>.wide-cell,.responsive tr>.group-title{grid-column:1/-1}
+  .responsive .group-head{border:0;padding:8px var(--pad);background:var(--raised)}
+  .responsive .row-action{grid-column:1/-1;align-self:end;justify-self:end}
+  .responsive .mobile-key{display:block;color:var(--muted);font-size:12px;line-height:1.4;margin-block-end:3px}
+}
+@media(max-width:680px){
+  .subtabs a{padding-inline:9px;font-size:13px}
+  .sectiontabs a,.sectiontabs span{padding-inline:13px}
+  dialog,dialog.wide{inline-size:100%;max-inline-size:100%;block-size:100dvh;max-block-size:100dvh;border:0;border-radius:0;margin:0}
+  .giveform{block-size:100%;max-block-size:100%}
+  .givefoot{padding-block-end:max(10px,env(safe-area-inset-bottom))}
+  .givefoot .actions{inline-size:100%}
+  .givefoot .actions button{flex:1}
+  .form-line{grid-template-columns:minmax(0,1fr) minmax(104px,auto);gap:6px 10px}
+  .form-line .mobile-stretch{grid-column:1/-1}
+  .givebody{flex:1;scrollbar-gutter:auto}
+  .countgroup .form-line{grid-template-columns:minmax(0,1fr)}
+  .paper{min-block-size:0;padding:16px 14px}
+  .paper h1{font-size:21px}
+  .paper-table th,.paper-table td{padding-inline:4px;font-size:12px}
+}
+@media(prefers-reduced-motion:no-preference){
+  :is(.primary,.secondary,.ghost,.filter,.sectiontabs a,.subtabs a,.row-select){transition:background-color 120ms cubic-bezier(.2,0,0,1),border-color 120ms cubic-bezier(.2,0,0,1),color 120ms cubic-bezier(.2,0,0,1)}
+  .primary:active:enabled,.secondary:active:enabled,.ghost:active:enabled{transform:translateY(1px)}
+  .changed{animation:ledger-pulse 600ms cubic-bezier(.2,0,0,1)}
+  @keyframes ledger-pulse{from{background-color:var(--data-soft)}to{background-color:transparent}}
+}
+.chip.navy{color:var(--data);background:var(--data-soft)}
+.receipt-notes{border:1px solid #d4d1c8;padding:6px 8px;margin-block-end:17px;min-block-size:41px}
+.receipt-notes p{margin-block-start:3px}
+.signature-meta{font-size:12px;margin-block-start:5px;color:#49515b}
+.signatures .secondary-language{display:block}
+.results .actions{gap:4px}
+.witness-group{font-size:14px}
+.counted-serials{display:flex;gap:6px;flex-wrap:wrap;padding:0;list-style:none;margin-block:6px}
+.counted-serials li{display:flex;gap:3px;align-items:center;padding-inline-start:7px;border:1px solid var(--border);border-radius:var(--radius-control)}
+.counted-serials .iconbtn{border:0}
+.discard-panel{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;inline-size:100%}
+.discard-panel .actions{margin-inline-start:auto}
+.reason .textbtn{font:inherit;min-block-size:44px}
+.log-filter{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:12px var(--pad);border-block-end:1px solid var(--rule);align-items:end}
+.log-kits{max-inline-size:230px}
+.data-stack{display:grid;gap:4px}
+.countgroup>summary,.count-result>summary,.serial-board>summary,.history-disclosure>summary{display:flex;align-items:center;gap:7px;min-block-size:44px;list-style:none;cursor:pointer}
+.serial-board>summary,.history-disclosure>summary{padding-inline:var(--pad);font-weight:600}
+summary::-webkit-details-marker{display:none}
+details summary .disclosure-icon{inline-size:15px;block-size:15px}
+details[open]>summary .disclosure-icon{transform:rotate(90deg)}
+.count-result .responsive tr>*{padding-inline:8px}
+@media(max-width:799px){
+  .log-filter{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .log-filter .field:last-child{grid-column:1/-1}
+  .log-kits{max-inline-size:none}
+}
+
+@page{size:A4;margin:0 12mm 12mm}
+@media print{
+  :root{color-scheme:light}
+  body{background:#fff}
+  body>:not(#print-preview),.receipt-controls{display:none!important}
+  #print-preview{padding:0;max-inline-size:186mm}
+  .paper{min-block-size:0;max-inline-size:none;margin:0;padding:12mm 0 0;border:0;print-color-adjust:exact}
+  .paper-table tr,.paper-meta,.signatures{break-inside:avoid}
+}
+</style>
+<link rel="stylesheet" href="./v2.css">
+</head>
+<body>
+<a class="skip" href="#main" id="skip"></a>
+<div id="app"></div>
+<div id="print-preview" class="wrap" hidden></div>
+<dialog id="editor" aria-labelledby="dlg-title"></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="./data.js"></script>
+<script src="./art.js"></script>
+<script src="./stock.js"></script>
+<script src="./shift.js"></script>
+<script src="./returns.js"></script>
+<script>
+'use strict'
+
+const D = window.ARMORY
+const $ = (selector, scope = document) => scope.querySelector(selector)
+const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)]
+const app = $('#app')
+const dialog = $('#editor')
+const printPreview = $('#print-preview')
+const navTabs = [['shift', 'shift'], ['items', 'itemsTab'], ['custody', 'custody'], ['guards', 'guardsTab'], ['decisions', 'audit']]
+const auditPanes = { decisions: 'decisions', counts: 'counts', movements: 'log' }
+const auditTab = key => Object.values(auditPanes).includes(key)
+const tabs = [...navTabs.map(([id]) => id), 'counts', 'log']
+const modes = ['edit', 'readonly', 'loading', 'error', 'empty']
+const state = {
+  tab: 'shift', lang: 'en', theme: 'light', view: 'edit', access: 'edit',
+  item: null, custody: null, receipt: null, widget: false, custodyDetail: false,
+  guardFilter: 'all', showFormer: false, guardQuery: '', custodyFilter: 'active', listScroll: 0,
+  query: '', scopeSafe: 'S2', equipmentSerial: '', logSerial: '', logGuard: '', logFrom: '', logTo: '', logType: '',
+  category: '', stockView: 'all', itemPane: 'stock', rackFilter: '', shiftLane: 'out', returnSelection: new Set(),
+}
+
+const T = {
+  en: {
+    docTitle: 'Assets: Armory (approval mockup)', previewLabel: 'Approval mockup controls',
+    proto: 'Approval mockup. People, sites and movements are examples. Records reset when you reload.',
+    skip: 'Skip to content', preview: 'Preview', languageToggle: 'العربية', lightTheme: 'Light theme', darkTheme: 'Dark theme',
+    edit: 'Armorer', readonly: 'View only', loading: 'Loading', error: 'Load failed', empty: 'Empty',
+    assets: 'Assets', tagline: 'Equipment stock and custody across sites.', armory: 'Armory', sections: 'Assets sections', armoryPages: 'Armory sections',
+    store: 'Store', uniform: 'Uniform', today: 'Today', equipment: 'Equipment', custody: 'Custody', guards: 'Qualified guards', counts: 'Counts',
+    todayHint: 'Shift sign-outs and returns for {date}.', equipmentHint: 'Stock in each safe, on shift, in custody and in repair.',
+    custodyHint: 'Long-term custody held by a guard or a site.', guardsHint: 'Weapons course and licence records for guards.',
+    countsHint: 'Shift checks, monthly counts and differences to review.', readonlyHint: 'View only',
+    dashboard: 'Dashboard', widgetPreview: 'Home widget preview', widgetBlurb: 'Armory alerts as they appear on the dashboard.',
+    widgetTitle: 'Armory exceptions', openArmory: 'Open Armory',
+    alertStrip: 'Armory alerts', noAlerts: 'No armory alerts.', overdue: 'Overdue', overdueN: 'Overdue: {n}',
+    decisionN: 'Needs a decision: {n}', missingCheckN: 'Shift check missing: {n}', missingCheck: 'Shift check missing',
+    expiredBatchN: 'Expired: {n} {n#batch|batches}', expiringBatchN: 'Expiring soon: {n} {n#batch|batches}',
+    licenceHeader: 'Licences', licenceAlertSoon: '{n} {n#expires|expire} in {days} {days#day|days}',
+    licenceAlertWindow: '{n} expiring within {days} days', missingN: '{n} missing', expiredN: '{n} expired',
+    valid: 'Valid', missing: 'Missing', expired: 'Expired',
+    outNow: 'Out now', backToday: 'Back today', signout: 'Issue', signin: 'Return', signedOutAt: 'Issued at', signedInAt: 'Returned at',
+    dueBack: 'Due back', dueTime: 'Time', guard: 'Guard', date: 'Date', safe: 'Safe', siteKind: 'Site',
+    reference: 'Reference', actor: 'Armorer', witness: 'Witness', chooseWitness: 'Choose a witness',
+    action: 'Action', status: 'Status', onTime: 'On shift', accepted: 'Licence warning accepted',
+    noneOut: 'No equipment is out on shift.', noneBack: 'No equipment has been signed in today.',
+    outDetail: 'Signed out on {date}', stillOut: '{n} {n#item|items} still out',
+    fullReturn: 'Returned in full', returnReview: 'Shortfall recorded', includeRepair: 'Sent to repair',
+    roundsBack: '{returned} of {issued} rounds returned', partialReturn: 'Partial return', alreadyOut: 'Signed out to {holder}',
+    kit: 'Kit', rifle: 'Sultan rifle kit', pistol: 'Caracal pistol kit', equipmentKit: 'Equipment only',
+    item: 'Item', serialNumber: 'Serial number', quantity: 'Quantity', trackSerial: 'Serial', trackQuantity: 'Quantity',
+    inSafe: 'In safe', signedOut: 'Signed out', inCustody: 'In custody', inRepair: 'In repair', lost: 'Lost', writtenOff: 'Written off',
+    onShift: 'Out on shift', total: 'Total', notCounted: 'Not counted', notApplicable: 'Not applicable', since: 'Since', holder: 'Holder',
+    unrecordedN: 'Serials not recorded: {n}', recordSerials: 'Record serials', serialList: 'Serial register', batches: 'Expiry batches',
+    batchExpiry: 'Expiry date', noSerials: 'No serials have been recorded.', batchStockN: 'In safe: {n}',
+    batchExpired: 'Expired', batchExpiring: 'Expiring soon', batchValid: 'Valid',
+    expiryN: '{n#Expires in one day|Expires in {n} days}', choose: 'Choose', chooseSerial: 'Choose a serial',
+    none: 'None', chooseGuard: 'Choose a guard.', searchGuard: 'Search by name or G-number', clearSearch: 'Clear search filter',
+    noGuardsMatch: 'No guards match the search.', noGuardFound: 'No employee matches {query}.', change: 'Change',
+    onDutyHere: 'On duty here', otherGuards: 'Other employees', noCourse: 'No weapons course on record',
+    offDuty: 'Not on duty at this site', offDutyReason: 'Reason for issuing to this guard',
+    licenceMissingWarning: 'Licence details are missing.', licenceExpiredWarning: 'The licence has expired.',
+    licenceAck: 'I saw the licence card of {name}. Issue anyway.', custodyAck: 'I saw the licence card of {name}. Hand over custody anyway.',
+    needAck: 'Acknowledge the licence warning to continue.', needReason: 'Choose a reason for issuing to an off-duty guard.',
+    needSerial: 'Choose an available firearm serial.', needEquipment: 'Select at least one item.',
+    needDue: 'Enter a due time after issue.', dueDefault: 'Defaults to shift end.',
+    options: 'Kit contents', extras: 'Optional equipment', holster: 'Holster', onlyLeft: 'Only {n} left.', unavailableSerials: 'No serials available',
+    decrease: 'Decrease {item}', increase: 'Increase {item}', numberNeeded: 'Enter a licence security number and expiry date.',
+    condition: 'Condition', returned: 'Returned', ok: 'OK', needsRepair: 'Needs repair',
+    ammunition: 'Ammunition', roundsIssued: 'Issued: {n}', roundsReturned: 'Rounds returned',
+    shortfall: 'Ammunition shortfall: {n} {n#round|rounds}', shortfallHint: 'Record the reason, reference and witness. The shortfall goes to Needs a decision.',
+    reason: 'Reason', training: 'Training', incident: 'Incident', other: 'Other', lostReason: 'Lost', chooseReason: 'Choose a reason',
+    needReturn: 'Tick at least one returned item or confirm the rounds count.', needShortfall: 'Choose a reason and witness, and enter a reference of at least 3 characters.',
+    savedIssue: 'Issue recorded in this preview.', savedReturn: 'Return recorded in this preview.',
+    active: 'Active', ended: 'Ended', all: 'All', custodyNoRows: 'No custody records match.',
+    custodyReceipt: 'Custody receipt', receiptNumber: 'Receipt number', receivedFrom: 'Issued from', person: 'Person', custodyKind: 'Custody recipient',
+    handover: 'Hand over custody', endCustody: 'Return custody items',
+    endedOn: 'Custody ended', printReceipt: 'Print receipt', receiptPreview: 'A4 print preview', print: 'Print', receiptClose: 'Back to custody',
+    conditionStatement: 'The items listed above were received in serviceable condition unless noted.', custodyCondition: 'Condition on handover',
+    conditionNote: 'Condition note', signatureHolder: 'Guard / site supervisor signature', signatureArmorer: 'Armorer signature',
+    org: 'Global Security Services Group', savedCustody: 'Custody handover recorded in this preview.', savedEnd: 'Custody ended in this preview.',
+    chooseSite: 'Choose a site.', siteSupervisor: 'Site supervisor', supervisorHint: 'Choose the qualified guard responsible for this firearm at the site.',
+    courseRound: 'Course round', securityNumber: 'Licence security number', securityExpiry: 'Licence expiry', licenceState: 'Licence status',
+    missingFilter: 'Licence missing', expiringFilter: 'Expiring', filters: 'Filters ({n})', clearFilters: 'Clear filters',
+    showFormer: 'Show former guards', resigned: 'Resigned', terminated: 'Terminated', transferred: 'Transferred',
+    holdsNow: 'What they hold now', holdsNone: 'Nothing held', addLicence: 'Add licence', updateLicence: 'Update licence',
+    guardCount: '{n} {n#guard|guards}', savedLicence: 'Licence updated in this preview.',
+    shiftChecks: 'Shift checks', monthlyCounts: 'Monthly counts', newCount: 'New monthly count', shiftCheck: 'Shift check',
+    day: 'Day shift', night: 'Night shift', period: 'From {from} to {to}', done: 'Completed', checkIt: 'Record check',
+    checkHint: 'Tick each firearm serial you find in this safe. Leave a missing serial unticked.',
+    checkNone: 'No firearm serials are expected in this safe.', checkAway: 'Firearms signed out',
+    checkCount: 'Present: {present} of {expected}', createsFindings: 'Missing serials go to Needs a decision.',
+    needWitness: 'Choose a witness other than the armorer.', saveCheck: 'Save shift check', savedCheck: 'Shift check recorded in this preview.',
+    discrepancies: 'Discrepancies', needsDecision: 'Needs a decision', resolved: 'Resolved', review: 'Record decision', decisionNote: 'Decision note',
+    needDecision: 'Choose an outcome and witness, and enter a decision note.', savedDecision: 'Decision recorded in this preview.',
+    expected: 'Expected', found: 'Counted', noBaseline: 'No expected quantity is recorded.', comparison: 'Expected: {expected} · Counted: {found}',
+    noDiscrepancies: 'No discrepancies to review.', noCounts: 'No monthly counts have been recorded.',
+    blindHint: 'Enter what you count in one safe. The expected quantities appear only after you save.',
+    blindQuantity: 'Counted quantity', blindSerials: 'Serial numbers counted', countSearch: 'Enter a serial', add: 'Add', countConfirmed: 'Serial count complete',
+    countEnter: 'Enter a serial to add it.', countUnknown: 'This serial is not in the register.',
+    countItemN: 'Lines counted: {n}', differenceN: 'Differences: {n}', unrecordedQty: 'Units without a serial number', noDifferences: 'No differences found.',
+    needCount: 'Count {item}. Enter zero if none are present.', saveCount: 'Save monthly count', savedCount: 'Monthly count recorded. Differences appear below.',
+    serialEntry: 'Enter one serial number per line.', needSerialEntry: 'Enter at least one serial number.',
+    serialDuplicate: 'A serial number is already recorded or listed twice.', serialLimit: 'Up to {n} serials can be recorded for this safe.',
+    savedSerials: 'Serials recorded in this preview.',
+    save: 'Save', cancel: 'Cancel', close: 'Close', back: 'Back to the list', retry: 'Retry',
+    loadFailed: 'Could not load this armory section.', nothingHere: 'No armory records yet.', loadingText: 'Loading armory records…',
+    log: 'Movements', logHint: 'Review the stock and custody trail.', dateFrom: 'From date', dateTo: 'To date',
+    dateRangeInvalid: 'The end date must be on or after the start date.', noLog: 'No movements match these filters.',
+    logCount: '{n} {n#movement|movements}', tags: 'Tags', history: 'History', openLog: 'View movements', noHistory: 'No movements recorded.',
+    allSafes: 'All safes', allGuards: 'All guards', searchEquipment: 'Search by item or serial', searchMovements: 'Search guard name, G-number or serial',
+    movementPlaceholder: 'Guard or serial',
+    searchCustody: 'Search holder, receipt or serial', noEquipment: 'No equipment matches these filters.', noMatchingIssues: 'No records match these filters.',
+    overdueBy: 'Overdue by {duration}', elapsedHours: '{n} h', elapsedMinutes: '{n} min',
+    graceHint: 'Overdue after the {n}-minute grace period.', issuedBy: 'Issued by {name}', changedKit: 'Changed kit', holding: 'Holds: {items}',
+    moreItems: '+ {n} {n#item|items}', lineQty: '{n} × {item}', magazineUnits: '{n} {n#magazine|magazines}', slingUnits: '{n} {n#sling|slings}',
+    radioUnits: '{n} TETRA {n#radio|radios}',
+    holsterUnits: '{n} {n#holster|holsters}', roundUnits: '{n} {n#round|rounds}', shift: 'Shift', shiftFirst: 'Return the {item} {serial} first.',
+    custodyFirst: 'End custody for {item} {serial} first.', dueCap: 'Use Hand over custody for longer periods.',
+    cover: 'Cover', escort: 'Escort', reasonDetail: 'Describe the reason', needReasonDetail: 'Enter a reason of at least 3 characters.',
+    excessRounds: 'Reason for exceeding the kit’s standard rounds', needExcess: 'Enter a reason for issuing more rounds than the standard kit.',
+    licenceExpiringWarning: 'The licence expires in {n} {n#day|days}.', licenceWarningDate: '{warning} ({date})',
+    addLicenceNow: 'Add licence now', updateLicenceNow: 'Update licence now', pastLicenceDate: 'This date is in the past. The licence will show as Expired.',
+    checkedSerial: 'Serial checked: {serial}', fault: 'Fault', needFault: 'Describe the fault before sending the item to repair.',
+    roundsCounted: 'I counted the returned rounds', chooseCountWitness: 'Choose a count witness',
+    countWitness: 'Count witness', decisionWitness: 'Decision witness', pendingAuthorisation: 'Needs a decision by a second authorised person.',
+    outcome: 'Outcome', chooseOutcome: 'Choose an outcome', foundOutcome: 'Found', trainingOutcome: 'Used in training', lostOutcome: 'Lost',
+    recordingError: 'Recording error', decidedBy: 'Decided by {name} · {date}', ammoFinding: 'Issued {issued} · Returned {returned} · Short {short}',
+    openCount: '{n} open', difference: 'Difference', missingSerial: 'Missing, under review', missingFirearmN: '{n} {n#firearm|firearms} missing',
+    firearmsMissing: '{n} {n#firearm|firearms} missing', reportMissing: 'I report {n} {n#firearm|firearms} missing',
+    confirmMissing: 'Confirm the firearms missing to save.', owned: 'Assigned firearms', notPresent: 'Previously reported missing or lost',
+    checkEquation: '{safe} in safe + {issued} signed out + {custody} in custody + {repair} in repair{extra} = {total}',
+    checkUnavailable: ' + {n} not present', checkHistory: 'Last 7 days',
+    serialBoard: 'Firearm serial board', changeState: 'Change state',
+    returnRepair: 'Back from repair', sendRepair: 'Send to repair', markLost: 'Mark lost', writeOff: 'Write off', moveSafe: 'Move to another safe',
+    destination: 'Destination safe', chooseState: 'Choose a state change', needState: 'Choose a state change, enter a reason, and choose a witness.',
+    savedState: 'Serial state recorded in this preview.', expended: 'Expended', openingN: 'Opening {n}', expendedN: 'Expended {n}',
+    awaitingN: '{n} awaiting decision', expiredUnits: '{n} expired, not usable', writtenOffN: 'Written off: {n}',
+    countProgress: 'Counted {counted} of {total}', discardCount: 'Discard this count?', discardCheck: 'Discard this shift check?',
+    discard: 'Discard', keepEditing: 'Keep editing', removeSerial: 'Remove serial {serial}', formerGuards: 'Former guards',
+    armorerFull: 'Armorer', notes: 'Notes', name: 'Name', acting: 'Acting as', secondActor: 'Second approver',
+    clearanceCustody: 'Open custody on clearance',
+    shiftDesk: 'Shift handover', shiftMeta: '{shift} · {period} · {date}', itemsTab: 'Items', catalogueTitle: 'Item catalogue', custodyLedger: 'Custody register',
+    guardsTab: 'Guards', audit: 'Audit', decisions: 'Decisions', checkRecords: 'Count records', movementRecords: 'Movement log',
+    stockBySafe: 'Stock by safe', itemCount: '{n} catalogue {n#item|items}', scopeLabel: 'Safe',
+    firearmsAtSafe: 'Firearm rack', rackHint: 'One tile per active serial. Open a tile to see its record.',
+    rackBalance: 'Firearm balances', rackSafeN: '{n} of {total} in safe', assignedN: '{n} assigned',
+    noMatchingSerials: 'No serials match this state.', noFirearmsHere: 'No firearm serials registered at this safe.',
+    shiftActivity: 'Shift activity', out: 'Out', dutyRoster: 'On duty', returnedToday: 'Returned',
+    noRoster: 'No employees are on duty at the selected safe.', dueAt: 'Due {time}',
+    selectedN: '{n} selected', clearSelection: 'Clear selection', selectReturnFor: 'Select return from {name}',
+    returnSelected: 'Return selected ({n})', handoverShift: 'Handover tasks', shiftEndsAt: 'This shift ends at {time}',
+    takeBack: 'Record returns', outWithCount: '{n} still out', checkSafe: 'Check the safe', startCheck: 'Start check',
+    issueEquipment: 'Record issues', individualIssueHint: 'One guard per record. Verify eligibility before saving.',
+    needsAttention: 'Needs attention', licenceAttentionN: '{n} {n#licence needs|licences need} attention', stockTasks: 'Stock',
+    movementDetails: 'Movement details', viewRecord: 'View record', copySerial: 'Copy serial', copiedSerial: 'Serial copied.', copyFailed: 'Could not copy. Select the serial to copy it.',
+    recentMovements: 'Recent movements', recentSerials: 'Recent serials', openItem: 'Open item',
+    find: 'Find', findArmory: 'Find in Armory', findHint: 'Searches every safe. Enter a serial, G-number, name or receipt number.',
+    findPlaceholder: 'Serial, G-number, name or receipt', nothingFound: 'No records match {query}.', receiveUnknownSerial: 'Receive an unregistered serial',
+    addItem: 'Add item', saveItem: 'Save item', receiveStock: 'Receive stock', createItemHint: 'Create one catalogue entry. Add opening stock now or receive it later.',
+    kindLabel: 'Kind', itemDetails: 'Item details', openingStock: 'Opening stock', whatKind: 'What are you adding?',
+    kind_firearm: 'Firearm', kind_ammunition: 'Ammunition', kind_serial: 'Equipment with a serial', kind_quantity: 'Equipment by count', kind_expiry: 'Stock with an expiry date',
+    kind_firearm_hint: 'One record per serial', kind_ammunition_hint: 'Counted in rounds', kind_serial_hint: 'Radios, cameras and other numbered equipment',
+    kind_quantity_hint: 'Accessories and other counted equipment', kind_expiry_hint: 'Quantity and expiry per batch',
+    kind_firearm_rule: 'Each serial goes on the rack and in shift checks. The existing course, licence and one-firearm rules still apply.',
+    kind_ammunition_rule: 'Rounds are counted back when returned. A shortfall needs a reason, reference and witness.',
+    kind_serial_rule: 'Each recorded serial has its own state and movement history.',
+    kind_quantity_rule: 'The ledger keeps a separate quantity for each safe.',
+    kind_expiry_rule: 'Expiry is recorded for each batch. Expired stock is not usable.',
+    kindLocked: 'The kind sets the tracking method.', chooseKind: 'Choose what kind of item you are adding.',
+    needBothNames: 'Enter both the English and Arabic name.', nameEn: 'Name in English', nameAr: 'Name in Arabic',
+    category: 'Category', allCategories: 'All categories', drawing: 'Drawing', kitMembership: 'Kit membership',
+    kitMembershipHint: 'Catalogue links do not change the standard issue quantities.', noKits: 'No kit memberships.',
+    kitLinks: 'Kits', openingHint: 'Enter stock by safe. A blank balance is not counted; enter zero to record none.',
+    stockOpeningHint: 'Opening stock not counted.', countedZero: 'Counted: no batches', zeroOrBatches: 'Record batches or confirm zero, not both.',
+    receivedN: 'Received: {n}', stockUnknownPreview: 'Not counted before receipt · add {n}',
+    next: 'Next', previous: 'Back', addAnother: 'Add another after saving',
+    itemExists: '{item} is already in the catalogue.', duplicateItem: 'Use Receive stock for the existing item.',
+    scanSerials: 'Scan serials', serialEntryLabel: 'Serials to record', serialEntryPlaceholder: 'Scan, type or paste serials',
+    serialPadHint: 'Use a keyboard scanner or paste a column. Separate serials with Enter, spaces or commas.',
+    serialReadyN: '{n} ready', serialFixN: '{n} to fix', moreSerials: 'More serials ({n})',
+    invalidStockCode: 'Use Latin letters, digits, dots, underscores, slashes or hyphens.', serialAlready: 'Already recorded at {safe}', serialRepeated: 'Entered more than once',
+    fixSerials: 'Correct the listed serials before saving.', serialsLater: 'Quantity known, serials later', expiryTracking: 'Expiry batch',
+    batchNumber: 'Batch reference', addBatch: 'Add batch', removeBatch: 'Remove batch',
+    expiryFormat: '{date} or {month}. Month-only dates expire on the last day.', batchExpiryConflict: 'This batch reference already has a different expiry.',
+    dateFormat: 'Day/month/year, e.g. {example}.', openingDate: 'Opening date',
+    batchRepeated: 'Use one line for each batch in each safe.', needBatchDetails: 'Enter a batch reference, valid expiry and positive quantity.',
+    needStockQuantity: 'Enter a whole quantity of zero or more.', stockDate: 'Received date', needStockDate: 'Enter a valid date on or before today.',
+    needStockReference: 'Enter a receipt or opening-stock reference.', discardItem: 'Discard this catalogue entry?', savedItem: 'Item added to the catalogue in this preview.',
+    receiveHint: 'Post stock to one safe. Each line previews the resulting balance.',
+    receiptItems: 'Items received', addReceiptLine: 'Add line', removeReceiptLine: 'Remove line', notListedAdd: 'Not listed? Add item',
+    deliveryDetails: 'Receipt details', toSafe: 'Receiving safe', deliverySource: 'Received from', supplier: 'Supplier', headOffice: 'Head office',
+    chooseItem: 'Choose an item.', duplicateReceiptItem: 'Combine repeated items on one receipt line.', enterStock: 'Enter units to receive.',
+    stockPreview: 'In safe: {before} → {after}', discardReceipt: 'Discard this stock receipt?', savedStock: 'Stock received and recorded in Movements.',
+    stockReceived: 'Stock received', stockViews: 'Stock view', needsWork: 'Needs attention', trackedBy: 'Tracked by', stockNote: 'Stock notes',
+    stockRowSummary: 'In safe {safe} · Out {out} · Custody {custody}', notCountedInventory: 'Baseline not counted',
+    noBatches: 'No expiry batches recorded.', stockHistory: 'Item history', stockHome: 'Back to items', noKnownStock: 'No stock has been counted for this safe.',
+    eventFilters: 'Movement filters', eventType: 'Movement type', allEvents: 'All movements', movementSummary: '{action} · {items}',
+    movementWithGuard: '{action} · {items} · {guard}', noLines: 'No items on this record.',
+    bulkReturn: 'Bulk return', returnKitsN: '{n} {n#record|records}', returnSameSafe: 'Select records from one safe at a time.',
+    saveReturns: 'Record returns', scanReturn: 'Scan or type a return serial', scanReturnHint: 'Enter a serial or its last four characters. Check each kit and count its rounds separately.',
+    lastReturnScan: 'Serial seen: {serial} · {name}', serialSeen: 'Serial seen', accessories: 'Accessories', confirmAccessories: 'Confirm all listed accessories returned',
+    allRounds: 'All {n}', countRoundsPrecisely: 'Enter a whole count between zero and the issued quantity.',
+    notReadyReturn: 'Not confirmed. This record stays open.', readyReturn: 'Ready to record confirmed lines.',
+    returnProgress: '{ready} of {total} records ready. Unconfirmed items stay out.', recordReturnsN: 'Record {n} {n#return|returns}',
+    needReadyReturn: 'Confirm at least one return line.', discardReturn: 'Discard this return draft?', savedBulkReturn: 'Confirmed returns recorded in this preview.',
+    ambiguousSerial: 'More than one match. Enter the full serial.', unlistedReturnSerial: 'That serial is not in these return records.',
+    scanCheck: 'Scan or type a firearm serial', lastCheckScan: 'Checked: {serial} · {item}', notExpectedSerial: 'That serial is not on this safe’s check list.',
+    toCheck: 'To check', checkedItems: 'Checked', accountedElsewhere: 'Reconciliation and equipment elsewhere',
+    reviewCheck: 'Review check', checkReviewTitle: 'Review observed serials', resumeCounting: 'Back to counting',
+    reportAndSaveCheck: 'Report missing and save', pause: 'Pause', checkPaused: 'Check paused in this preview.',
+    changeDue: 'Change due time', date24Hint: 'Use 24-hour time.',
+  },
+  ar: {
+    docTitle: 'الأصول: خزنة السلاح (نموذج للاعتماد)', previewLabel: 'عناصر التحكم في نموذج الاعتماد',
+    proto: 'نموذج للاعتماد. الأشخاص والمواقع والحركات أمثلة. تُصفّر السجلات عند إعادة التحميل.',
+    skip: 'الانتقال إلى المحتوى', preview: 'المعاينة', languageToggle: 'English', lightTheme: 'المظهر الفاتح', darkTheme: 'المظهر الداكن',
+    edit: 'أمين الخزنة', readonly: 'عرض فقط', loading: 'جارٍ التحميل', error: 'تعذّر التحميل', empty: 'فارغ',
+    assets: 'الأصول', tagline: 'أرصدة المعدات والعهد في كل موقع.', armory: 'خزنة السلاح', sections: 'أقسام الأصول', armoryPages: 'أقسام خزنة السلاح',
+    store: 'المخزن', uniform: 'الملابس', today: 'اليوم', equipment: 'المعدات', custody: 'العهد', guards: 'الحراس المؤهلون', counts: 'الجرد',
+    todayHint: 'صرف المعدات وإرجاعها في الوردية بتاريخ {date}.', equipmentHint: 'الرصيد في كل خزنة، والمصروف للوردية، وما في العهدة، وما قيد الإصلاح.',
+    custodyHint: 'عهد طويلة الأجل مسلّمة إلى حارس أو موقع.', guardsHint: 'سجل دورات السلاح ورخص الحراس.',
+    countsHint: 'فحوص الورديات والجرد الشهري والفروقات للمراجعة.', readonlyHint: 'عرض فقط',
+    dashboard: 'لوحة التحكم', widgetPreview: 'معاينة بطاقة لوحة التحكم', widgetBlurb: 'تنبيهات خزنة السلاح كما تظهر في لوحة التحكم.',
+    widgetTitle: 'تنبيهات خزنة السلاح', openArmory: 'فتح خزنة السلاح',
+    alertStrip: 'تنبيهات خزنة السلاح', noAlerts: 'لا توجد تنبيهات لخزنة السلاح.', overdue: 'متأخر', overdueN: 'متأخر: {n}',
+    decisionN: 'يحتاج قرارًا: {n}', missingCheckN: 'فحص الوردية غير مسجّل: {n}', missingCheck: 'فحص الوردية غير مسجّل',
+    expiredBatchN: 'دفعات منتهية الصلاحية: {n}', expiringBatchN: 'دفعات قاربت على الانتهاء: {n}',
+    licenceHeader: 'الرخص', licenceAlertSoon: '{n#لا رخص تنتهي|رخصة واحدة تنتهي|رخصتان تنتهيان|{n} رخص تنتهي|{n} رخصة تنتهي|{n} رخصة تنتهي} {days#اليوم|خلال يوم واحد|خلال يومين|خلال {days} أيام|خلال {days} يومًا|خلال {days} يوم}',
+    licenceAlertWindow: 'رخص تنتهي خلال {days} يومًا: {n}', missingN: 'غير مسجّلة: {n}', expiredN: 'منتهية: {n}',
+    valid: 'سارية', missing: 'غير مسجّلة', expired: 'منتهية',
+    outNow: 'خارج الخزنة الآن', backToday: 'أُعيد اليوم', signout: 'صرف', signin: 'إرجاع', signedOutAt: 'وقت الصرف', signedInAt: 'وقت الإرجاع',
+    dueBack: 'موعد الإرجاع', dueTime: 'الوقت', guard: 'الحارس', date: 'التاريخ', safe: 'الخزنة', siteKind: 'موقع',
+    reference: 'المرجع', actor: 'أمين الخزنة', witness: 'الشاهد', chooseWitness: 'اختر الشاهد',
+    action: 'الإجراء', status: 'الحالة', onTime: 'في الوردية', accepted: 'تم تجاوز تنبيه الرخصة',
+    noneOut: 'لا توجد معدات مصروفة للوردية.', noneBack: 'لم تُرجع أي معدات اليوم.',
+    outDetail: 'صُرف في {date}', stillOut: 'أصناف لم تُعد: {n}',
+    fullReturn: 'إرجاع كامل', returnReview: 'تم تسجيل النقص', includeRepair: 'أُحيل إلى الإصلاح',
+    roundsBack: 'الطلقات المعادة: {returned} من {issued}', partialReturn: 'إرجاع جزئي', alreadyOut: 'مصروف إلى {holder}',
+    kit: 'الطقم', rifle: 'طقم بندقية سلطان', pistol: 'طقم مسدس كراكال', equipmentKit: 'معدات فقط',
+    item: 'الصنف', serialNumber: 'الرقم التسلسلي', quantity: 'الكمية', trackSerial: 'بالرقم التسلسلي', trackQuantity: 'بالكمية',
+    inSafe: 'في الخزنة', signedOut: 'مصروف', inCustody: 'في العهدة', inRepair: 'قيد الإصلاح', lost: 'مفقود', writtenOff: 'مشطوب',
+    onShift: 'مصروف للوردية', total: 'الإجمالي', notCounted: 'لم يُعدّ', notApplicable: 'لا ينطبق', since: 'منذ', holder: 'المستلم',
+    unrecordedN: 'أرقام تسلسلية غير مسجّلة: {n}', recordSerials: 'تسجيل الأرقام التسلسلية', serialList: 'سجل الأرقام التسلسلية', batches: 'دفعات الصلاحية',
+    batchExpiry: 'تاريخ الانتهاء', noSerials: 'لم تُسجّل أرقام تسلسلية.', batchStockN: 'في الخزنة: {n}',
+    batchExpired: 'منتهي الصلاحية', batchExpiring: 'قارب على الانتهاء', batchValid: 'صالح',
+    expiryN: '{n#تنتهي اليوم|تنتهي خلال يوم واحد|تنتهي خلال يومين|تنتهي خلال {n} أيام|تنتهي خلال {n} يومًا|تنتهي خلال {n} يوم}', choose: 'اختيار', chooseSerial: 'اختر رقمًا تسلسليًا',
+    none: 'بدون', chooseGuard: 'اختر حارسًا.', searchGuard: 'ابحث بالاسم أو الرقم الوظيفي', clearSearch: 'إلغاء تصفية البحث',
+    noGuardsMatch: 'لا يوجد حراس مطابقون للبحث.', noGuardFound: 'لا يوجد موظف مطابق للبحث «{query}».', change: 'تغيير',
+    onDutyHere: 'على رأس العمل في هذا الموقع', otherGuards: 'موظفون آخرون', noCourse: 'لا توجد دورة سلاح مسجّلة',
+    offDuty: 'ليس على رأس العمل في هذا الموقع', offDutyReason: 'سبب الصرف لهذا الحارس',
+    licenceMissingWarning: 'بيانات الرخصة غير مسجّلة.', licenceExpiredWarning: 'انتهت صلاحية الرخصة.',
+    licenceAck: 'اطّلعت على بطاقة رخصة {name}. صرف رغم التنبيه.', custodyAck: 'اطّلعت على بطاقة رخصة {name}. تسليم العهدة رغم التنبيه.',
+    needAck: 'أكّد أنك تحققت من الرخصة للمتابعة.', needReason: 'اختر سبب الصرف لهذا الحارس.',
+    needSerial: 'اختر الرقم التسلسلي لسلاح متاح.', needEquipment: 'اختر صنفًا واحدًا على الأقل.',
+    needDue: 'أدخل موعد إرجاع بعد وقت الصرف.', dueDefault: 'الموعد الافتراضي هو نهاية الوردية.',
+    options: 'محتويات الطقم', extras: 'معدات اختيارية', holster: 'غمد المسدس', onlyLeft: 'المتبقي {n} فقط.', unavailableSerials: 'لا توجد أرقام متاحة',
+    decrease: 'إنقاص {item}', increase: 'زيادة {item}', numberNeeded: 'أدخل الرقم الأمني للرخصة وتاريخ انتهائها.',
+    condition: 'الحالة', returned: 'أُعيد', ok: 'سليم', needsRepair: 'يحتاج إلى إصلاح',
+    ammunition: 'الذخيرة', roundsIssued: 'عدد الطلقات المصروفة: {n}', roundsReturned: 'الطلقات المعادة',
+    shortfall: 'النقص في الذخيرة: {n}', shortfallHint: 'سجّل السبب والمرجع والشاهد. يظهر النقص في قائمة «يحتاج قرارًا».',
+    reason: 'السبب', training: 'تدريب', incident: 'واقعة', other: 'أخرى', lostReason: 'فقدان', chooseReason: 'اختر السبب',
+    needReturn: 'حدّد صنفًا مُعادًا أو أكّد عدّ الطلقات.', needShortfall: 'اختر السبب والشاهد وأدخل مرجعًا من 3 أحرف على الأقل.',
+    savedIssue: 'سُجّل الصرف في هذه المعاينة.', savedReturn: 'سُجّل الإرجاع في هذه المعاينة.',
+    active: 'سارية', ended: 'منتهية', all: 'الكل', custodyNoRows: 'لا توجد عهد مطابقة.',
+    custodyReceipt: 'سند استلام عهدة', receiptNumber: 'رقم السند', receivedFrom: 'خزنة الصرف', person: 'موظف', custodyKind: 'مستلم العهدة',
+    handover: 'تسليم عهدة', endCustody: 'إرجاع أصناف العهدة',
+    endedOn: 'تاريخ إنهاء العهدة', printReceipt: 'طباعة سند الاستلام', receiptPreview: 'معاينة طباعة A4', print: 'طباعة', receiptClose: 'العودة إلى العهد',
+    conditionStatement: 'استُلِمت الأصناف أعلاه بحالة صالحة للاستخدام ما لم يُذكر خلاف ذلك.', custodyCondition: 'الحالة عند التسليم',
+    conditionNote: 'ملاحظة عن الحالة', signatureHolder: 'توقيع الحارس أو مشرف الموقع', signatureArmorer: 'توقيع أمين خزنة السلاح',
+    org: 'المجموعة العالمية للخدمات الأمنية', savedCustody: 'سُجّل تسليم العهدة في هذه المعاينة.', savedEnd: 'أُنهِيت العهدة في هذه المعاينة.',
+    chooseSite: 'اختر موقعًا.', siteSupervisor: 'مشرف الموقع', supervisorHint: 'اختر الحارس المؤهل المسؤول عن هذا السلاح في الموقع.',
+    courseRound: 'رقم الدورة', securityNumber: 'الرقم الأمني للرخصة', securityExpiry: 'تاريخ انتهاء الرخصة', licenceState: 'حالة الرخصة',
+    missingFilter: 'رخصة غير مسجّلة', expiringFilter: 'قاربت على الانتهاء', filters: 'المرشحات ({n})', clearFilters: 'مسح المرشحات',
+    showFormer: 'إظهار الحراس السابقين', resigned: 'مستقيل', terminated: 'مفصول', transferred: 'منقول',
+    holdsNow: 'ما بحوزته الآن', holdsNone: 'لا شيء بحوزته', addLicence: 'إضافة رخصة', updateLicence: 'تحديث الرخصة',
+    guardCount: 'الحراس: {n}', savedLicence: 'حُدّثت الرخصة في هذه المعاينة.',
+    shiftChecks: 'فحوص الورديات', monthlyCounts: 'الجرد الشهري', newCount: 'جرد شهري جديد', shiftCheck: 'فحص الوردية',
+    day: 'الوردية النهارية', night: 'الوردية الليلية', period: 'من {from} إلى {to}', done: 'مكتمل', checkIt: 'تسجيل الفحص',
+    checkHint: 'حدّد الرقم التسلسلي لكل سلاح تجده في الخزنة. اترك رقم السلاح المفقود دون تحديد.',
+    checkNone: 'لا توجد أسلحة متوقعة في هذه الخزنة.', checkAway: 'الأسلحة المصروفة للوردية',
+    checkCount: 'الموجود: {present} من {expected}', createsFindings: 'تظهر الأرقام المفقودة في قائمة «يحتاج قرارًا».',
+    needWitness: 'اختر شاهدًا غير أمين الخزنة.', saveCheck: 'حفظ فحص الوردية', savedCheck: 'سُجّل فحص الوردية في هذه المعاينة.',
+    discrepancies: 'الفروقات', needsDecision: 'يحتاج قرارًا', resolved: 'تمت المعالجة', review: 'تسجيل القرار', decisionNote: 'ملاحظة القرار',
+    needDecision: 'اختر النتيجة والشاهد وأدخل ملاحظة القرار.', savedDecision: 'سُجّل القرار في هذه المعاينة.',
+    expected: 'المتوقّع', found: 'المعدود', noBaseline: 'لا توجد كمية متوقعة مسجّلة.', comparison: 'المتوقّع: {expected} · المعدود: {found}',
+    noDiscrepancies: 'لا توجد فروقات للمراجعة.', noCounts: 'لم يُسجّل أي جرد شهري.',
+    blindHint: 'أدخل ما عددته في خزنة واحدة. تظهر الكميات المتوقعة بعد الحفظ فقط.',
+    blindQuantity: 'الكمية المعدودة', blindSerials: 'الأرقام التسلسلية المعدودة', countSearch: 'أدخل رقمًا تسلسليًا', add: 'إضافة', countConfirmed: 'اكتمل جرد الأرقام التسلسلية',
+    countEnter: 'أدخل رقمًا تسلسليًا لإضافته.', countUnknown: 'هذا الرقم غير موجود في السجل.',
+    countItemN: 'الأصناف المعدودة: {n}', differenceN: 'الفروقات: {n}', unrecordedQty: 'الوحدات دون رقم تسلسلي', noDifferences: 'لم تُسجّل فروقات.',
+    needCount: 'أكمل عدّ «{item}». أدخل صفرًا عند عدم وجوده.', saveCount: 'حفظ الجرد الشهري', savedCount: 'سُجّل الجرد الشهري. تظهر الفروقات أدناه.',
+    serialEntry: 'أدخل رقمًا تسلسليًا واحدًا في كل سطر.', needSerialEntry: 'أدخل رقمًا تسلسليًا واحدًا على الأقل.',
+    serialDuplicate: 'أحد الأرقام مسجّل سابقًا أو أُدرج مرتين.', serialLimit: 'الحد الأقصى للأرقام في هذه الخزنة: {n}.',
+    savedSerials: 'سُجّلت الأرقام التسلسلية في هذه المعاينة.',
+    save: 'حفظ', cancel: 'إلغاء', close: 'إغلاق', back: 'العودة إلى القائمة', retry: 'إعادة المحاولة',
+    loadFailed: 'تعذّر تحميل قسم خزنة السلاح.', nothingHere: 'لا توجد سجلات لخزنة السلاح بعد.', loadingText: 'جارٍ تحميل سجلات خزنة السلاح…',
+    log: 'الحركات', logHint: 'راجع سجل المخزون والعهد.', dateFrom: 'من تاريخ', dateTo: 'إلى تاريخ',
+    dateRangeInvalid: 'يجب ألا يسبق تاريخ النهاية تاريخ البداية.', noLog: 'لا توجد حركات مطابقة للمرشحات.',
+    logCount: 'الحركات: {n}', tags: 'العلامات', history: 'السجل', openLog: 'عرض الحركات', noHistory: 'لا توجد حركات مسجّلة.',
+    allSafes: 'كل الخزنات', allGuards: 'كل الحراس', searchEquipment: 'ابحث بالصنف أو الرقم التسلسلي', searchMovements: 'ابحث باسم الحارس أو رقمه أو الرقم التسلسلي',
+    movementPlaceholder: 'الحارس أو الرقم',
+    searchCustody: 'ابحث بالمستلم أو رقم السند أو الرقم التسلسلي', noEquipment: 'لا توجد معدات مطابقة للمرشحات.', noMatchingIssues: 'لا توجد سجلات مطابقة للمرشحات.',
+    overdueBy: 'متأخر منذ {duration}', elapsedHours: '{n} س', elapsedMinutes: '{n} د',
+    graceHint: 'يُعدّ الإرجاع متأخرًا بعد مهلة {n} دقيقة.', issuedBy: 'صرفه: {name}', changedKit: 'طقم معدّل', holding: 'بحوزته: {items}',
+    moreItems: 'أصناف إضافية: {n}', lineQty: '{item}: {n}', magazineUnits: 'المخازن: {n}', slingUnits: 'الحمالات: {n}',
+    radioUnits: 'أجهزة تترا: {n}',
+    holsterUnits: 'الأغماد: {n}', roundUnits: 'الطلقات: {n}', shift: 'الوردية', shiftFirst: 'أرجع {item} {serial} أولًا.',
+    custodyFirst: 'أنه عهدة {item} {serial} أولًا.', dueCap: 'استخدم «تسليم عهدة» للفترات الأطول.',
+    cover: 'تغطية', escort: 'مرافقة', reasonDetail: 'اشرح السبب', needReasonDetail: 'أدخل سببًا من 3 أحرف على الأقل.',
+    excessRounds: 'سبب تجاوز كمية الطلقات المعتادة للطقم', needExcess: 'أدخل سبب صرف طلقات أكثر من كمية الطقم المعتادة.',
+    licenceExpiringWarning: '{n#تنتهي الرخصة اليوم.|تنتهي الرخصة خلال يوم واحد.|تنتهي الرخصة خلال يومين.|تنتهي الرخصة خلال {n} أيام.|تنتهي الرخصة خلال {n} يومًا.|تنتهي الرخصة خلال {n} يوم.}',
+    licenceWarningDate: '{warning} ({date})', addLicenceNow: 'إضافة رخصة الآن', updateLicenceNow: 'تحديث الرخصة الآن',
+    pastLicenceDate: 'هذا التاريخ قد مضى. ستظهر الرخصة على أنها منتهية.',
+    checkedSerial: 'تحققت من الرقم التسلسلي: {serial}', fault: 'العطل', needFault: 'اذكر العطل قبل الإحالة إلى الإصلاح.',
+    roundsCounted: 'عددت الطلقات المعادة', chooseCountWitness: 'اختر شاهد الجرد',
+    countWitness: 'شاهد الجرد', decisionWitness: 'شاهد القرار', pendingAuthorisation: 'يحتاج قرارًا من شخص آخر مخوّل.',
+    outcome: 'النتيجة', chooseOutcome: 'اختر النتيجة', foundOutcome: 'عُثر عليه', trainingOutcome: 'استُخدمت في التدريب', lostOutcome: 'فُقد',
+    recordingError: 'خطأ في التسجيل', decidedBy: 'اتخذ القرار: {name} · {date}', ammoFinding: 'المصروف: {issued} · المعاد: {returned} · الناقص: {short}',
+    openCount: 'مفتوحة: {n}', difference: 'الفرق', missingSerial: 'مفقود قيد المراجعة', missingFirearmN: 'أسلحة مفقودة: {n}',
+    firearmsMissing: 'أسلحة مفقودة: {n}', reportMissing: 'أؤكد الإبلاغ عن أسلحة مفقودة: {n}',
+    confirmMissing: 'أكّد الإبلاغ عن الأسلحة المفقودة قبل الحفظ.', owned: 'الأسلحة المسندة إلى الخزنة', notPresent: 'أسلحة سبق الإبلاغ عن فقدها',
+    checkEquation: 'في الخزنة: {safe} + مصروف: {issued} + في العهدة: {custody} + قيد الإصلاح: {repair}{extra} = الإجمالي: {total}',
+    checkUnavailable: ' + غير موجود: {n}', checkHistory: 'آخر 7 أيام',
+    serialBoard: 'لوحة الأرقام التسلسلية للأسلحة', changeState: 'تغيير الحالة',
+    returnRepair: 'إرجاع من الإصلاح', sendRepair: 'إحالة إلى الإصلاح', markLost: 'تسجيل فقدان', writeOff: 'شطب', moveSafe: 'نقل إلى خزنة أخرى',
+    destination: 'الخزنة المستلمة', chooseState: 'اختر تغيير الحالة', needState: 'اختر تغيير الحالة وأدخل السبب واختر شاهدًا.',
+    savedState: 'سُجّل تغيير الحالة في هذه المعاينة.', expended: 'مستهلك', openingN: 'الرصيد الافتتاحي: {n}', expendedN: 'المستهلك: {n}',
+    awaitingN: 'بانتظار القرار: {n}', expiredUnits: 'منتهية وغير صالحة: {n}', writtenOffN: 'مشطوب: {n}',
+    countProgress: 'المعدود: {counted} من {total}', discardCount: 'هل تريد تجاهل هذا الجرد؟', discardCheck: 'هل تريد تجاهل فحص الوردية؟',
+    discard: 'تجاهل', keepEditing: 'متابعة التحرير', removeSerial: 'إزالة الرقم التسلسلي {serial}', formerGuards: 'الحراس السابقون',
+    armorerFull: 'أمين خزنة السلاح', notes: 'ملاحظات', name: 'الاسم', acting: 'المستخدم', secondActor: 'المعتمد الثاني',
+    clearanceCustody: 'عهدة مفتوحة عند إخلاء الطرف',
+    shiftDesk: 'تسليم الوردية', shiftMeta: '{shift} · {period} · {date}', itemsTab: 'الأصناف', catalogueTitle: 'دليل الأصناف', custodyLedger: 'سجل العهد',
+    guardsTab: 'الحراس', audit: 'التدقيق', decisions: 'القرارات', checkRecords: 'سجل الجرد', movementRecords: 'سجل الحركات',
+    stockBySafe: 'الرصيد حسب الخزنة', itemCount: 'الأصناف في الدليل: {n}', scopeLabel: 'الخزنة',
+    firearmsAtSafe: 'لوحة الأسلحة', rackHint: 'خانة لكل رقم تسلسلي نشط. افتح الخانة لعرض السجل.',
+    rackBalance: 'أرصدة الأسلحة', rackSafeN: 'في الخزنة: {n} من {total}', assignedN: 'المسندة: {n}',
+    noMatchingSerials: 'لا توجد أرقام تسلسلية بهذه الحالة.', noFirearmsHere: 'لا توجد أرقام أسلحة مسجّلة في هذه الخزنة.',
+    shiftActivity: 'حركة الوردية', out: 'المصروف', dutyRoster: 'في الوردية', returnedToday: 'المعاد',
+    noRoster: 'لا يوجد موظفون في الوردية في الخزنة المحددة.', dueAt: 'الإرجاع في {time}',
+    selectedN: 'المحدد: {n}', clearSelection: 'إلغاء التحديد', selectReturnFor: 'حدّد إرجاع {name}',
+    returnSelected: 'إرجاع المحدد ({n})', handoverShift: 'مهام تسليم الوردية', shiftEndsAt: 'تنتهي هذه الوردية في {time}',
+    takeBack: 'تسجيل الإرجاع', outWithCount: 'المتبقي خارج الخزنة: {n}', checkSafe: 'فحص الخزنة', startCheck: 'بدء الفحص',
+    issueEquipment: 'تسجيل الصرف', individualIssueHint: 'سجل لكل حارس. تحقّق من الأهلية قبل الحفظ.',
+    needsAttention: 'يحتاج متابعة', licenceAttentionN: 'الرخص التي تحتاج متابعة: {n}', stockTasks: 'المخزون',
+    movementDetails: 'تفاصيل الحركة', viewRecord: 'عرض السجل', copySerial: 'نسخ الرقم التسلسلي', copiedSerial: 'نُسخ الرقم التسلسلي.', copyFailed: 'تعذّر النسخ. حدّد الرقم التسلسلي لنسخه.',
+    recentMovements: 'أحدث الحركات', recentSerials: 'أرقام تسلسلية حديثة', openItem: 'فتح الصنف',
+    find: 'بحث', findArmory: 'البحث في خزنة السلاح', findHint: 'يشمل البحث كل الخزنات. أدخل رقمًا تسلسليًا أو وظيفيًا أو اسمًا أو رقم سند.',
+    findPlaceholder: 'رقم تسلسلي أو وظيفي أو اسم أو سند', nothingFound: 'لا توجد سجلات تطابق «{query}».', receiveUnknownSerial: 'استلام رقم تسلسلي غير مسجّل',
+    addItem: 'إضافة صنف', saveItem: 'حفظ الصنف', receiveStock: 'استلام مخزون', createItemHint: 'أضف صنفًا إلى الدليل. سجّل رصيده الافتتاحي الآن أو استلم المخزون لاحقًا.',
+    kindLabel: 'النوع', itemDetails: 'تفاصيل الصنف', openingStock: 'الرصيد الافتتاحي', whatKind: 'ما نوع الصنف؟',
+    kind_firearm: 'سلاح ناري', kind_ammunition: 'ذخيرة', kind_serial: 'معدات برقم تسلسلي', kind_quantity: 'معدات بالعدد', kind_expiry: 'مخزون بتاريخ صلاحية',
+    kind_firearm_hint: 'سجل لكل رقم تسلسلي', kind_ammunition_hint: 'تُعدّ بالطلقات', kind_serial_hint: 'أجهزة لاسلكية وكاميرات ومعدات مرقّمة أخرى',
+    kind_quantity_hint: 'الملحقات والمعدات المعدودة', kind_expiry_hint: 'كمية وصلاحية لكل دفعة',
+    kind_firearm_rule: 'يظهر كل رقم في اللوحة وفحوص الورديات. تبقى شروط الدورة والرخصة وسلاح واحد لكل حارس سارية.',
+    kind_ammunition_rule: 'تُعدّ الطلقات عند الإرجاع. يحتاج النقص إلى سبب ومرجع وشاهد.',
+    kind_serial_rule: 'لكل رقم مسجّل حالة وسجل حركات مستقلان.',
+    kind_quantity_rule: 'يفصل السجل كمية كل خزنة عن الأخرى.',
+    kind_expiry_rule: 'تُسجّل صلاحية كل دفعة على حدة. لا يُستخدم مخزون منتهي الصلاحية.',
+    kindLocked: 'يحدّد النوع طريقة التتبع.', chooseKind: 'اختر نوع الصنف الذي تريد إضافته.',
+    needBothNames: 'أدخل اسم الصنف بالعربية والإنجليزية.', nameEn: 'الاسم بالإنجليزية', nameAr: 'الاسم بالعربية',
+    category: 'الفئة', allCategories: 'كل الفئات', drawing: 'الرسم', kitMembership: 'ارتباط الصنف بالأطقم',
+    kitMembershipHint: 'لا يغيّر ربط الصنف بالطقم كميات الصرف المعتادة.', noKits: 'الصنف غير مرتبط بأي طقم.',
+    kitLinks: 'الأطقم', openingHint: 'أدخل رصيد كل خزنة. الخانة الفارغة تعني أن الرصيد لم يُعدّ. أدخل صفرًا إذا لم يوجد مخزون.',
+    stockOpeningHint: 'لم يُعدّ الرصيد الافتتاحي.', countedZero: 'تم العدّ: لا توجد دفعات', zeroOrBatches: 'أدخل الدفعات أو أكّد أن الرصيد صفر، لا كليهما.',
+    receivedN: 'المستلم: {n}', stockUnknownPreview: 'الرصيد قبل الاستلام غير معدود · الإضافة: {n}',
+    next: 'التالي', previous: 'السابق', addAnother: 'إضافة صنف آخر بعد الحفظ',
+    itemExists: 'الصنف «{item}» موجود في الدليل.', duplicateItem: 'استخدم «استلام مخزون» للصنف الموجود.',
+    scanSerials: 'قراءة الأرقام', serialEntryLabel: 'الأرقام التسلسلية للتسجيل', serialEntryPlaceholder: 'اقرأ الأرقام أو اكتبها أو الصقها',
+    serialPadHint: 'استخدم قارئًا يعمل كلوحة مفاتيح أو الصق عمودًا. افصل الأرقام بسطر جديد أو مسافة أو فاصلة.',
+    serialReadyN: 'جاهزة: {n}', serialFixN: 'تحتاج تصحيحًا: {n}', moreSerials: 'أرقام إضافية ({n})',
+    invalidStockCode: 'استخدم حروفًا لاتينية أو أرقامًا، مع النقاط والشرطات والشرطات السفلية والمائلة.', serialAlready: 'مسجّل في {safe}', serialRepeated: 'مُدخل أكثر من مرة',
+    fixSerials: 'صحّح الأرقام المبينة قبل الحفظ.', serialsLater: 'الكمية معروفة والأرقام لاحقًا', expiryTracking: 'بدُفعات الصلاحية',
+    batchNumber: 'مرجع الدفعة', addBatch: 'إضافة دفعة', removeBatch: 'إزالة الدفعة',
+    expiryFormat: '{date} أو {month}. عند إدخال الشهر فقط تنتهي الصلاحية في آخر يوم منه.', batchExpiryConflict: 'مرجع الدفعة مسجّل بتاريخ انتهاء مختلف.',
+    dateFormat: 'اليوم/الشهر/السنة، مثل {example}.', openingDate: 'تاريخ الرصيد الافتتاحي',
+    batchRepeated: 'استخدم سطرًا واحدًا لكل دفعة في كل خزنة.', needBatchDetails: 'أدخل مرجع دفعة وتاريخ انتهاء صحيحًا وكمية أكبر من صفر.',
+    needStockQuantity: 'أدخل عددًا صحيحًا يساوي صفرًا أو أكبر.', stockDate: 'تاريخ الاستلام', needStockDate: 'أدخل تاريخًا صحيحًا لا يتجاوز تاريخ اليوم.',
+    needStockReference: 'أدخل مرجع الاستلام أو الرصيد الافتتاحي.', discardItem: 'هل تريد تجاهل هذا الصنف؟', savedItem: 'أُضيف الصنف إلى الدليل في هذه المعاينة.',
+    receiveHint: 'سجّل الاستلام في خزنة واحدة. يبيّن كل سطر الرصيد بعد الاستلام.',
+    receiptItems: 'الأصناف المستلمة', addReceiptLine: 'إضافة سطر', removeReceiptLine: 'إزالة السطر', notListedAdd: 'الصنف غير موجود؟ أضف صنفًا',
+    deliveryDetails: 'تفاصيل الاستلام', toSafe: 'الخزنة المستلمة', deliverySource: 'جهة التوريد', supplier: 'المورّد', headOffice: 'الإدارة الرئيسية',
+    chooseItem: 'اختر صنفًا.', duplicateReceiptItem: 'اجمع الصنف المكرر في سطر استلام واحد.', enterStock: 'أدخل الوحدات المستلمة.',
+    stockPreview: 'في الخزنة: من {before} إلى {after}', discardReceipt: 'هل تريد تجاهل مسودة الاستلام؟', savedStock: 'أُضيف الرصيد وسُجّل الاستلام في الحركات.',
+    stockReceived: 'استلام مخزون', stockViews: 'عرض المخزون', needsWork: 'يحتاج متابعة', trackedBy: 'طريقة التتبع', stockNote: 'ملاحظات الرصيد',
+    stockRowSummary: 'في الخزنة: {safe} · مصروف: {out} · في العهدة: {custody}', notCountedInventory: 'الرصيد الأساسي غير معدود',
+    noBatches: 'لا توجد دفعات صلاحية مسجّلة.', stockHistory: 'سجل الصنف', stockHome: 'العودة إلى الأصناف', noKnownStock: 'لم يُعدّ مخزون هذه الخزنة.',
+    eventFilters: 'مرشحات الحركات', eventType: 'نوع الحركة', allEvents: 'كل الحركات', movementSummary: '{action} · {items}',
+    movementWithGuard: '{action} · {items} · {guard}', noLines: 'لا توجد أصناف في هذا السجل.',
+    bulkReturn: 'إرجاع جماعي', returnKitsN: 'السجلات: {n}', returnSameSafe: 'حدّد سجلات خزنة واحدة في كل مرة.',
+    saveReturns: 'تسجيل الإرجاع', scanReturn: 'اقرأ الرقم التسلسلي المُعاد أو اكتبه', scanReturnHint: 'أدخل الرقم التسلسلي أو آخر أربع خانات منه. تحقّق من كل طقم وعدّ طلقاته على حدة.',
+    lastReturnScan: 'تم التحقق من الرقم: {serial} · {name}', serialSeen: 'تم التحقق من الرقم', accessories: 'الملحقات', confirmAccessories: 'تأكيد إرجاع الملحقات المدرجة',
+    allRounds: 'إرجاع كامل ({n})', countRoundsPrecisely: 'أدخل عددًا صحيحًا بين صفر والكمية المصروفة.',
+    notReadyReturn: 'غير مؤكّد. يبقى هذا السجل مفتوحًا.', readyReturn: 'الأصناف المؤكدة جاهزة للتسجيل.',
+    returnProgress: 'جاهز للتسجيل: {ready} من {total}. تبقى الأصناف غير المؤكدة خارج الخزنة.', recordReturnsN: 'تسجيل الإرجاع ({n})',
+    needReadyReturn: 'أكّد إرجاع صنف واحد على الأقل.', discardReturn: 'هل تريد تجاهل مسودة الإرجاع؟', savedBulkReturn: 'سُجّلت عمليات الإرجاع المؤكّدة في هذه المعاينة.',
+    ambiguousSerial: 'يوجد أكثر من تطابق. أدخل الرقم كاملًا.', unlistedReturnSerial: 'هذا الرقم غير موجود في سجلات الإرجاع المحددة.',
+    scanCheck: 'اقرأ الرقم التسلسلي للسلاح أو اكتبه', lastCheckScan: 'تم التحقق: {serial} · {item}', notExpectedSerial: 'هذا الرقم غير مدرج في قائمة فحص هذه الخزنة.',
+    toCheck: 'لم يُفحص', checkedItems: 'تم الفحص', accountedElsewhere: 'المطابقة والمعدات خارج الخزنة',
+    reviewCheck: 'مراجعة الفحص', checkReviewTitle: 'مراجعة الأرقام التي تم التحقق منها', resumeCounting: 'العودة إلى الفحص',
+    reportAndSaveCheck: 'الإبلاغ عن المفقود والحفظ', pause: 'إيقاف مؤقت', checkPaused: 'أُوقف الفحص مؤقتًا في هذه المعاينة.',
+    changeDue: 'تغيير موعد الإرجاع', date24Hint: 'استخدم نظام 24 ساعة.',
+  },
+}
+
+const escape = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const isol = x => `<bdi dir="ltr">${escape(x)}</bdi>`
+const isoTime = x => `\u2066${x}\u2069`
+const scoped = (lang, fn) => `<span lang="${lang}" dir="${lang === 'ar' ? 'rtl' : 'ltr'}">${fn(lang)}</span>`
+const local = (value, lang = state.lang) => escape(value?.[lang] ?? '')
+const numeric = Object.fromEntries(['en', 'ar'].map(lang => [lang, new Intl.NumberFormat(lang === 'ar' ? 'ar-AE' : 'en-GB', { numberingSystem: 'latn' })]))
+const plurals = { en: new Intl.PluralRules('en'), ar: new Intl.PluralRules('ar') }
+const fmt = (n, lang = state.lang) => numeric[lang].format(n)
+const fmtN = n => isol(fmt(n))
+function t(key, values = {}, lang = state.lang) {
+  const str = T[lang][key]
+  if (str === undefined) throw new Error(`Unknown string: ${lang}.${key}`)
+  const choose = (_, param, alternatives) => {
+    const category = plurals[lang].select(values[param])
+    const forms = alternatives.split('|')
+    const order = lang === 'en' ? ['one', 'other'] : ['zero', 'one', 'two', 'few', 'many', 'other']
+    return forms[order.indexOf(category)] ?? forms.at(-1)
+  }
+  return str.replace(/\{(\w+)#((?:[^{}]|\{\w+\})+)\}/g, choose).replace(/\{(\w+)\}/g, (_, param) => {
+    const value = values[param]
+    return typeof value === 'number' ? isol(fmt(value, lang)) : value ?? ''
+  })
+}
+const tPlain = (key, values) => t(key, values).replace(/<\/?bdi(?: [^>]*)?>/g, '')
+const dateText = iso => dateInputValue(iso)
+const timeText = iso => iso?.slice(11, 16) || ''
+const stamp = (iso, withDate = true) => `${withDate ? isol(dateText(iso)) : ''}${timeText(iso) ? `${withDate ? ' · ' : ''}${isol(timeText(iso))}` : ''}`
+const round = n => state.lang === 'ar' ? ['', 'الأولى', 'الثانية', 'الثالثة', 'الرابعة', 'الخامسة', 'السادسة', 'السابعة', 'الثامنة', 'التاسعة'][n] : fmtN(n)
+const edit = () => state.view === 'edit' || (state.view === 'empty' && state.access === 'edit')
+const showData = () => ['edit', 'readonly'].includes(state.view)
+const itemName = item => local(D.item(item))
+const safeName = safe => local(D.safe(safe))
+const personName = id => local(D.guard(id))
+const custodian = record => record.kind === 'person' ? D.guard(record.holder) : D.safe(record.holder).site
+const art = (item, cls) => window.armoryArt(item.art, cls)
+const icon = (name, cls) => window.armoryIcon(name, cls)
+const dash = () => `<span class="dash" aria-label="${t('notApplicable')}">-</span>`
+const chip = (label, tone = '', glyph) => `<span class="chip ${tone}">${glyph ? icon(glyph) : ''}<span>${label}</span></span>`
+const glyphs = { inRepair: 'info', lost: 'outline', missingSerial: 'outline', signedOut: 'navy' }
+const statusChip = status => chip(t(status), glyphs[status] || '')
+const licenceChip = status => status.kind === 'expiring' ? chip(t('expiryN', { n: status.days }), 'warning') : chip(t(status.kind), { expired: 'danger', missing: 'warning', valid: 'success' }[status.kind] || '')
+const safePeriod = shift => t('period', { from: isol(shift.start), to: isol(shift.end) })
+const periodTitle = shift => t('period', { from: isoTime(shift.start), to: isoTime(shift.end) })
+const valueOf = (name, scope = dialog) => $(`[name="${name}"]`, scope)?.value.trim() || ''
+const clamp = (value, min, max) => Math.max(min, Math.min(max, Math.floor(Number(value) || 0)))
+const joined = bits => bits.filter(Boolean).join(state.lang === 'ar' ? '، ' : ', ')
+const keyAttr = value => escape(String(value))
+const jump = id => `#${id}`
+const route = options => {
+  const query = new URLSearchParams()
+  const opts = { tab: state.tab, safe: state.scopeSafe || 'all', lang: state.lang, theme: state.theme, view: state.view, ...(D.currentUser === D.reviewer.id && { actor: 'reviewer' }), ...options }
+  if (auditTab(opts.tab)) {
+    opts.pane = Object.keys(auditPanes).find(key => auditPanes[key] === opts.tab)
+    opts.tab = 'audit'
+  }
+  for (const [k, v] of Object.entries(opts)) if (v !== null && v !== undefined && v !== false && v !== '') query.set(k, v === true ? '1' : v)
+  return '?' + query
+}
+const detailPreset = () => ({
+  item: state.tab === 'items' ? state.item : null,
+  serial: state.tab === 'items' ? state.equipmentSerial : state.tab === 'log' ? state.logSerial : null,
+  guard: state.tab === 'log' ? state.logGuard : null,
+  event: state.tab === 'log' ? state.logType : null,
+  filter: state.tab === 'guards' && state.guardFilter !== 'all' ? state.guardFilter : null,
+  custody: state.tab === 'custody' && state.custodyDetail ? state.custody : null,
+  receipt: state.receipt,
+  widget: state.widget,
+})
+const normalise = (value, options, standard) => options.includes(value) ? value : standard
+const disclosure = label => `<summary>${icon('chevron', 'mirror disclosure-icon')}<span>${label}</span></summary>`
+const issuePerson = record => record.guard || (record.kind === 'person' ? record.holder : record.supervisor)
+const readableNote = note => typeof note === 'string' ? `<bdi>${escape(note)}</bdi>` : local(note)
+const rowMatches = (query, ...words) => !query.trim() || words.some(word => String(word ?? '').toLowerCase().includes(query.trim().toLowerCase()))
+const duration = r => {
+  const mins = D.overdueMinutes(r)
+  return t('overdueBy', { duration: [Math.floor(mins / 60) && t('elapsedHours', { n: Math.floor(mins / 60) }), mins % 60 && t('elapsedMinutes', { n: mins % 60 })].filter(Boolean).join(' ') })
+}
+const button = (label, action, { id, cls = 'ghost', glyph, accessible, attrs = '' } = {}) =>
+  `<button type="button" class="${cls}" data-action="${action}"${id === undefined ? '' : ` data-id="${keyAttr(id)}"`}${accessible ? ` aria-label="${keyAttr(accessible)}"` : ''}${attrs ? ` ${attrs}` : ''}>${glyph ? icon(glyph, ['back', 'arrow', 'chevron', 'return'].includes(glyph) ? 'mirror' : '') : ''}${label}</button>`
+const link = (label, href, action, { id, cls = 'textbtn', glyph, attrs = '' } = {}) =>
+  `<a class="${cls}" href="${escape(href)}" data-action="${action}"${id === undefined ? '' : ` data-id="${keyAttr(id)}"`}${attrs ? ` ${attrs}` : ''}>${label}${glyph ? icon(glyph, ['back', 'arrow', 'chevron'].includes(glyph) ? 'mirror' : '') : ''}</a>`
+const heading = (id, label, suffix = '', glyph = '') =>
+  `<div class="panel-head"><h2 id="${id}" tabindex="-1">${glyph ? icon(glyph) : ''}${label}</h2>${suffix}</div>`
+const countTag = n => `<span class="count-tag">${fmtN(n)}</span>`
+const mobileKey = label => `<span class="mobile-key" aria-hidden="true">${label}</span>`
+const col = (label, cls = '') => `<th role="columnheader" scope="col"${cls ? ` class="${cls}"` : ''}>${label}</th>`
+const table = (label, headers, body, cls = '', cols = 0) =>
+  `<table role="table" class="responsive ${cls}"><caption class="sr">${label}</caption>${cols ? '<colgroup>' + '<col>'.repeat(cols) + '</colgroup>' : ''}<thead role="rowgroup"><tr role="row">${headers.join('')}</tr></thead>${body}</table>`
+const row = (body, attrs = '') => `<tr role="row"${attrs ? ` ${attrs}` : ''}>${body}</tr>`
+const rows = body => `<tbody role="rowgroup">${body}</tbody>`
+const cell = (content, cls = '', label = '', span = 1) => `<td role="cell"${cls ? ` class="${cls}"` : ''}${span > 1 ? ` colspan="${span}"` : ''}>${label ? mobileKey(label) : ''}${content}</td>`
+const rowHeader = (content, cls = 'lead') => `<th scope="row" role="rowheader" class="${cls}">${content}</th>`
+const timePair = iso => iso.startsWith(D.today) ? isol(timeText(iso)) : stamp(iso)
+const dueStamp = iso => stamp(iso)
+
+
+function unitIdentity(line, subline = '', classes = '') {
+  const item = D.item(line.item)
+  return `<div class="ident ${classes}">${art(item)}<span class="copy"><span class="name">${local(item)}</span>${line.serial ? `<span class="desc">${isol(line.serial)}</span>` : ''}${subline}</span></div>`
+}
+const mainLine = lines => lines.find(line => D.item(line.item).group === 'firearms') || lines.find(line => !D.isAmmo(line.item)) || lines[0]
+const guardIdentity = id => `<span class="name">${personName(id)}</span><span class="desc">${isol(id)}</span>`
+function kitSummary(lines, omitted = null) {
+  const parts = []
+  for (const l of lines) {
+    if (l === omitted) continue
+    const units = D.units(l)
+    const key = l.item.endsWith('-mag') ? 'magazineUnits'
+      : D.isAmmo(l.item) ? 'roundUnits' : l.item === 'sling' ? 'slingUnits' : l.item.endsWith('-holster') ? 'holsterUnits' : null
+    parts.push(key ? t(key, { n: units }) : l.serial ? `${itemName(l.item)} ${isol(l.serial)}` : t('lineQty', { n: units, item: itemName(l.item) }))
+  }
+  return parts.join(' · ')
+}
+function itemSummary(lines) {
+  const main = mainLine(lines)
+  if (!main) return t('holdsNone')
+  const aggregate = groupedLines(lines)
+  const first = aggregate.find(g => g.item.id === main.item)
+  const item = first.qty === 1 && main.serial ? `${local(first.item)} ${isol(main.serial)}`
+    : first.item.id === 'radio' ? t('radioUnits', { n: first.qty }) : t('lineQty', { n: first.qty, item: local(first.item) })
+  return `${item}${aggregate.length > 1 ? ` ${t('moreItems', { n: aggregate.length - 1 })}` : ''}`
+}
+function holdingsOverview(id, inline = false) {
+  const tag = inline ? 'span' : 'p', held = D.holdings(id)
+  return held.length ? held.map(h => `<${tag}>${itemSummary(h.lines)} · ${t(h.kind)}${h.overdue ? ` · <b class="danger-tone">${t('overdue')}</b>` : ''}</${tag}>`).join(inline ? ' · ' : '') : `<span class="muted">${t('holdsNone')}</span>`
+}
+
+/* The catalogue is a state ledger, not a collection of safe-specific columns. */
+function equipmentView() {
+  const selected = D.item(state.item)
+  if (selected) return equipmentDetail(selected)
+  const batches = D.batches(), groups = []
+  const heads = [col(t('item')), col(t('trackedBy')), col(t('inSafe'), 'num'), col(t('onShift'), 'num'), col(t('inCustody'), 'num'), col(t('inRepair'), 'num'), col(t('total'), 'num'), col(t('stockNote'))]
+  for (const group of D.groups) {
+    if (state.category && group.id !== state.category) continue
+    const records = D.items.filter(i => i.group === group.id && rowMatches(state.query, i.en, i.ar, ...(i.serials || []).map(s => s.id))).map(item => {
+      const ledger = D.rollup(item), r = ledger.bySafe[state.scopeSafe] || ledger
+      const pending = state.scopeSafe ? item.unrecorded?.[state.scopeSafe] : D.unrecorded(item)
+      const here = batches.filter(b => b.item === item && (!state.scopeSafe || b.stock[state.scopeSafe]))
+      const expiry = here.filter(b => b.status === 'expired').reduce((n, b) => n + (state.scopeSafe ? b.stock[state.scopeSafe] : b.total), 0)
+      const soon = here.some(b => b.status === 'expiring')
+      const missing = ledger.states.filter(s => inScope(s) && s.state === 'missingSerial').length
+      const notes = [
+        missing && `<span class="danger-tone">${t('missingFirearmN', { n: missing })}</span>`,
+        expiry && `<span class="warning-tone">${t('expiredUnits', { n: expiry })}</span>`,
+        soon && `<span class="warning-tone">${t('batchExpiring')}</span>`,
+        pending && t('unrecordedN', { n: pending }),
+        r.writtenOff && t('writtenOffN', { n: r.writtenOff }),
+        r.awaiting && link(t('awaitingN', { n: r.awaiting }), route({ tab: 'decisions' }), 'tab', { id: 'decisions', cls: 'textbtn' }),
+        r.expended && t('expendedN', { n: r.expended }),
+        r.received && t('receivedN', { n: r.received }),
+      ].filter(Boolean).join(' · ')
+      return { item, r, notes, attention: Boolean(missing || expiry || soon || pending || r.repair || r.awaiting) }
+    }).filter(({ r, attention }) => state.stockView === 'all' || state.stockView === 'uncounted' && r.total === null || state.stockView === 'attention' && attention)
+    if (records.length) groups.push(`<tbody class="group" role="rowgroup">${row(`<th class="group-title" scope="rowgroup" colspan="${heads.length}">${local(group)}</th>`, 'class="group-head"')}
+      ${records.map(({ item, r, notes }) => {
+        const name = link(local(item), route({ tab: 'items', item: item.id }), 'item', { id: item.id, cls: 'item-link', glyph: 'chevron' })
+        const mobile = r.inSafe === null ? t('notCountedInventory') : t('stockRowSummary', { safe: r.inSafe, out: r.onShift, custody: r.custody })
+        return row(rowHeader(`<div class="ident">${art(item)}<div class="copy">${name}<span class="item-meta-mobile desc">${trackingLabel(item)} · ${mobile}${r.repair ? ` · ${t('inRepair')}: ${fmtN(r.repair)}` : ''}</span></div></div>`)
+          + cell(trackingLabel(item), 'desktop-stock') + [r.inSafe, r.onShift, r.custody, r.repair].map(n => cell(n === null ? dash() : fmtN(n), 'num desktop-stock')).join('')
+          + cell(r.total === null ? `<span class="desc">${t('notCounted')}</span>` : fmtN(r.total), 'num stock-total')
+          + cell(notes ? `<span class="small-stock-note">${notes}</span>` : dash(), 'stock-note'), `data-item-row="${item.id}"`)
+      }).join('')}</tbody>`)
+  }
+  const filters = `<div class="item-toolbar">${searchField('scope-search', state.query, t('searchEquipment'))}
+    ${select(t('category'), 'item-category', [['', t('allCategories')], ...D.groups.map(g => [g.id, local(g)])], state.category)}
+    ${select(t('stockViews'), 'stock-view', [['all', t('all')], ['attention', t('needsWork')], ['uncounted', t('notCounted')]], state.stockView)}</div>`
+  return `<section class="panel section" aria-label="${t('itemsTab')}">${filters}
+    ${groups.length ? table(t('itemsTab'), heads, groups.join(''), 'item-table', heads.length) : `<p class="content muted">${t('noEquipment')}</p>`}</section>`
+}
+const batchLabel = status => t({ expired: 'batchExpired', expiring: 'batchExpiring', valid: 'batchValid' }[status])
+function equipmentDetail(item) {
+  const ledger = D.rollup(item), unrecorded = D.unrecorded(item)
+  const group = D.groups.find(g => g.id === item.group), other = state.lang === 'ar' ? 'en' : 'ar'
+  const panes = [['stock', item.tracking === 'serial' ? 'serialList' : item.batches ? 'batches' : 'stockBySafe'], ['kits', 'kitLinks'], ['history', 'stockHistory']]
+  const links = panes.map(([key, label]) => button(t(label), 'item-pane', { id: key, cls: 'segment', attrs: `aria-pressed="${state.itemPane === key}"` })).join('')
+  let body = ''
+  if (state.itemPane === 'kits') {
+    const member = Object.keys(D.kits).filter(key => D.kits[key].weapon === item.id || D.kits[key].quantities.some(([id]) => id === item.id) || item.kits?.includes(key))
+    body = `<div class="content">${member.length ? `<ul class="event-mini">${member.map(k => `<li>${t(k === 'equipment' ? 'equipmentKit' : k)}</li>`).join('')}</ul>` : `<p class="desc">${t('noKits')}</p>`}</div>`
+  } else if (state.itemPane === 'history') {
+    const history = D.log().filter(r => r.lines.some(l => l.item === item.id))
+    body = history.length ? movementList(history) : `<p class="content desc">${t('noHistory')}</p>`
+  } else {
+    body = `<ul class="safe-balances">${D.safes.map(s => {
+      const r = ledger.bySafe[s.id]
+      return `<li><h3>${local(s)}</h3>${r.inSafe === null ? `<span class="desc">${t('noKnownStock')}${r.received ? ` · ${t('receivedN', { n: r.received })}` : ''}</span>`
+        : `<span>${t('stockRowSummary', { safe: r.inSafe, out: r.onShift, custody: r.custody })}</span>${D.isAmmo(item.id) ? `<p class="desc">${t('openingN', { n: r.opening })}${r.received ? ` · ${t('receivedN', { n: r.received })}` : ''} · ${t('expendedN', { n: r.expended })}</p>` : ''}`}</li>`
+    }).join('')}</ul>
+    ${unrecorded ? `<div class="content record-top"><span>${t('unrecordedN', { n: unrecorded })}</span>${edit() ? button(t('recordSerials'), 'serials', { id: item.id, cls: 'secondary' }) : ''}</div>` : ''}
+    ${item.tracking === 'serial' ? ledger.states.length ? serialTable(item, ledger.states) : `<p class="content desc">${t('noSerials')}</p>` : ''}
+    ${item.batches ? item.batches.length ? `<ul class="serial-list">${D.batches().filter(b => b.item === item).sort((a, b) => a.expiry.localeCompare(b.expiry)).map(b => `<li>
+      <div class="record-top"><b>${isol(b.id)}</b>${chip(batchLabel(b.status), b.status === 'valid' ? '' : 'warning', 'calendar')}</div>
+      <span class="desc">${t('batchExpiry')}: ${isol(dateText(b.expiry))}</span><div class="meta"><span>${t('batchStockN', { n: b.total })}</span>
+      ${D.safes.map(s => `<span>${local(s.site)}: ${fmtN(b.stock[s.id])}</span>`).join('')}</div></li>`).join('')}</ul>`
+      : `<p class="content desc">${t('noBatches')}</p>` : ''}`
+  }
+  return `<section class="panel section" aria-labelledby="equipment-detail"><div class="stock-summary"><div class="ident">${art(item, 'lg')}<div>
+    <h2 id="equipment-detail" tabindex="-1">${local(group)} · ${trackingLabel(item)}</h2><p class="desc">${scoped(other, lang => local(item, lang))}</p></div></div>
+    <div class="segments" role="group" aria-label="${t('itemDetails')}">${links}</div></div>${body}</section>`
+}
+function serialTable(item, states) {
+  const out = D.out()
+  return D.safes.map(safe => {
+    const found = states.filter(s => s.safe === safe.id).sort((a, b) => Number(a.state === 'inSafe') - Number(b.state === 'inSafe'))
+    if (!found.length) return ''
+    return `<section><h3 class="unit-site">${local(safe)}</h3><ul class="unit-records">
+      ${found.map(s => {
+        const issue = out.find(r => r.remaining.some(l => l.serial === s.id)), status = serialState(s, issue)
+        return `<li data-serial-line="${keyAttr(s.id)}">${button(`<b>${isol(s.id)}</b>
+          <span class="unit-state">${chip(t(status), status === 'overdue' || status === 'missingSerial' ? 'danger' : glyphs[s.state], stateGlyph[status])}</span>
+          <span class="desc unit-holder">${s.holder ? `${local(s.holder)}${s.holder.id ? ` · ${isol(s.holder.id)}` : ''}` : (s.note ? readableNote(s.note) : dash())}</span>
+          <span class="desc unit-since">${stamp(s.since)}</span>`, 'serial-detail', {
+          cls: `unit-record${s.id === state.equipmentSerial ? ' selected' : ''}`, id: s.id, glyph: 'chevron',
+          attrs: `data-serial-row="${keyAttr(s.id)}"`,
+          accessible: `${item[state.lang]}, \u2066${s.id}\u2069, ${t(status)}`,
+        })}</li>`
+      }).join('')}</ul></section>`
+  }).join('')
+}
+
+/* Custody: newest active records first, then closed records. Phone Back restores the row. */
+const custodyOrder = (a, b) => Number(Boolean(a.ended)) - Number(Boolean(b.ended)) || b.since.localeCompare(a.since)
+function custodyView() {
+  const records = D.custodies.filter(c => (state.custodyFilter === 'all' || Boolean(c.ended) === (state.custodyFilter === 'ended'))
+    && inScope(c) && rowMatches(state.query, c.id, c.holder, custodian(c).en, custodian(c).ar, ...c.lines.map(l => l.serial))).sort(custodyOrder)
+  const selected = records.find(c => c.id === state.custody) || records[0]
+  const filters = ['active', 'ended', 'all'].map(key => button(t(key), 'custody-filter', { id: key, cls: 'filter', attrs: `aria-pressed="${state.custodyFilter === key}"` })).join('')
+  const list = `<section class="panel list" aria-label="${t('custody')}"><div class="toolbar"><div class="filters" role="group" aria-label="${t('status')}">${filters}</div>${countTag(records.length)}${searchField('scope-search', state.query, t('searchCustody'))}</div>
+    ${records.length ? `<ul class="selection-list">${records.map(c => {
+      const active = c === selected, lines = c.ended ? c.lines : D.remaining(c)
+      const dates = c.ended ? t('period', { from: stamp(c.since), to: stamp(c.ended) }) : stamp(c.since)
+      return `<li>${link(`<span class="record-top"><span class="name">${local(custodian(c))}</span>${chip(t(c.ended ? 'ended' : 'active'), c.ended ? '' : 'success')}</span>
+          <span class="desc">${isol(c.id)} · ${t(c.kind === 'site' ? 'siteKind' : 'person')} · ${dates}</span><span class="desc">${itemSummary(lines)}</span>`,
+        route({ tab: 'custody', custody: c.id }), 'custody', { id: c.id, cls: `row-select${active ? ' selected' : ''}`, attrs: active ? 'aria-current="true"' : '' })}</li>`
+    }).join('')}</ul>` : `<p class="content muted">${t('custodyNoRows')}</p>`}
+  </section>`
+  return `<div class="master${state.custodyDetail && selected ? ' open' : ''}">${list}${selected ? custodyDetail(selected) : ''}</div>`
+}
+function groupedLines(lines) {
+  const byItem = new Map()
+  for (const line of lines) {
+    const acc = byItem.get(line.item) || { item: D.item(line.item), qty: 0, serials: [] }
+    acc.qty += D.units(line)
+    if (line.serial) acc.serials.push(line.serial)
+    byItem.set(line.item, acc)
+  }
+  return [...byItem.values()]
+}
+function listLines(lines) {
+  return `<ul class="list-lines">${groupedLines(lines).map(l => `<li>${art(l.item)}<span><span class="name">${local(l.item)}</span>
+    ${l.serials.length ? `<span class="desc">${joined(l.serials.map(isol))}</span>` : ''}</span><b>${fmtN(l.qty)}</b></li>`).join('')}</ul>`
+}
+function custodyDetail(record) {
+  const back = link(t('back'), route({ tab: 'custody' }), 'custody-back', { cls: 'secondary back', glyph: 'back' })
+  return `<section class="panel detail" aria-labelledby="custody-detail">
+    <div class="dhead">${back}<div class="record-top"><h2 id="custody-detail" tabindex="-1">${local(custodian(record))}</h2>${chip(t(record.ended ? 'ended' : 'active'), record.ended ? '' : 'success')}</div>
+      <p class="meta"><span>${isol(record.id)}</span><span>${t(record.holderRole || (record.kind === 'site' ? 'siteKind' : 'person'))}${record.kind === 'person' ? ` · ${isol(record.holder)}` : ''}</span></p>
+      <p class="desc">${t('since')} ${stamp(record.since)} · ${safeName(record.safe)}</p>
+      <p class="desc">${t('actor')}: ${personName(record.actor)}</p>
+      ${record.ended ? `<p class="desc">${t('endedOn')}: ${stamp(record.ended)} · ${personName(record.endedBy)}</p>` : ''}
+      ${!record.ended && D.guard(issuePerson(record))?.former ? `<p class="desc">${t('clearanceCustody')}</p>` : ''}
+      ${record.supervisor ? `<p class="desc">${t('siteSupervisor')}: ${personName(record.supervisor)}</p>` : ''}
+      ${record.licenceWarning ? chip(t('accepted'), 'warning') : ''}
+    </div>
+    <div class="content flow">${listLines(record.ended ? record.lines : D.remaining(record))}
+      ${record.note ? `<p class="desc">${t('custodyCondition')}: <bdi>${escape(record.note)}</bdi></p>` : ''}
+      <div class="actions">
+        ${link(t('printReceipt'), route({ tab: 'custody', receipt: record.id }), 'receipt', { id: record.id, cls: 'secondary', glyph: 'print' })}
+        ${edit() && !record.ended ? button(t('endCustody'), 'end-custody', { id: record.id }) : ''}
+      </div>
+    </div></section>`
+}
+function paperField(label, value) {
+  return `<div><dt>${pair(label)}</dt><dd>${value}</dd></div>`
+}
+const pair = label => `${scoped(state.lang, lang => t(label, {}, lang))}<br><span class="secondary-language">${scoped(state.lang === 'en' ? 'ar' : 'en', lang => t(label, {}, lang))}</span>`
+const pairValue = value => `${scoped(state.lang, lang => local(value, lang))}<br><span class="secondary-language">${scoped(state.lang === 'en' ? 'ar' : 'en', lang => local(value, lang))}</span>`
+function receiptView(r) {
+  const current = state.lang, other = current === 'en' ? 'ar' : 'en'
+  const labelled = (key, fn) => [current, other].map(lang => scoped(lang, () => `${t(key, {}, lang)}: ${fn(lang)}`)).join('<br>')
+  const signature = (label, person, role = '') => `<div>${pair(label)}<div class="signature-meta">
+    <p>${labelled('name', lang => `${local(person, lang)}${role ? ` (${t(role, {}, lang)})` : ''}`)}</p>
+    <p>${labelled('date', lang => isol(dateText(r.since, lang)))}</p></div></div>`
+  return `<div class="receipt-controls"><div class="actions">${link(t('receiptClose'), route({ tab: 'custody', custody: r.id }), 'receipt-close', { id: r.id, cls: 'secondary', glyph: 'back' })}<span class="desc">${t('receiptPreview')}</span></div>${button(t('print'), 'print', { cls: 'primary', glyph: 'print' })}</div>
+    <article id="main" class="paper" aria-labelledby="receipt-title">
+      <img src="../../frontend/public/brand/gssg-wordmark.png" alt="" width="1440" height="229">
+      <p class="organization">${scoped(current, lang => t('org', {}, lang))}<br>${scoped(other, lang => t('org', {}, lang))}</p>
+      <h1 id="receipt-title" tabindex="-1">${t('custodyReceipt')}</h1><p class="other-title">${scoped(other, lang => t('custodyReceipt', {}, lang))}</p>
+      <dl class="paper-meta">
+        ${paperField('receiptNumber', isol(r.id))}
+        ${paperField('date', `${isol(dateText(r.since, current))}<br><span class="secondary-language">${scoped(other, lang => isol(dateText(r.since, lang)))}</span>`)}
+        ${paperField(r.holderRole || 'holder', pairValue(custodian(r)) + (r.kind === 'person' ? `<br>${isol(r.holder)}` : r.supervisor ? `<br>${pairValue(D.guard(r.supervisor))}` : '')
+          + (r.lines.some(l => D.item(l.item).group === 'firearms') ? `<div class="secondary-language">${pair('securityNumber')}<br>${r.licenceNumber ? isol(r.licenceNumber) : pair('missing')}</div>` : ''))}
+        ${paperField('receivedFrom', pairValue(D.safe(r.safe)))}
+      </dl>
+      <table class="paper-table"><caption class="sr">${t('custodyReceipt')}</caption><colgroup><col><col><col></colgroup><thead><tr>
+        <th scope="col">${pair('item')}</th><th scope="col">${pair('serialNumber')}</th><th scope="col" class="num">${pair('quantity')}</th></tr></thead>
+        <tbody>${groupedLines(r.lines).map(l => `<tr><th scope="row">${pairValue(l.item)}</th><td><span class="line-serials">${l.serials.length ? l.serials.map(isol).join('') : dash()}</span></td><td class="num">${fmtN(l.qty)}</td></tr>`).join('')}</tbody>
+      </table>
+      <div class="condition"><p>${scoped(current, lang => t('conditionStatement', {}, lang))}</p><p>${scoped(other, lang => t('conditionStatement', {}, lang))}</p></div>
+      <div class="receipt-notes">${t('notes')} / ${scoped(other, lang => t('notes', {}, lang))}${r.note ? `<p>${readableNote(r.note)}</p>` : ''}</div>
+      <div class="signatures">${signature('signatureHolder', D.guard(issuePerson(r)) || custodian(r))}${signature('signatureArmorer', D.guard(r.actor), 'armorerFull')}</div>
+    </article>`
+}
+
+/* Qualified guards: filter counts track the active/former scope, not the current chip. */
+function matchesPerson(person, search) {
+  const q = search.trim().toLowerCase()
+  return !q || [person.id, person.en, person.ar].some(value => value.toLowerCase().includes(q))
+}
+function searchField(name, value, placeholder, label = placeholder) {
+  return `<div class="search">${icon('search')}<label class="sr" for="${name}">${label}</label>
+    <input type="search" id="${name}" name="${name}" placeholder="${placeholder}" value="${escape(value)}" autocomplete="off">
+    ${button(icon('close'), 'clear-search', { id: name, cls: 'iconbtn', accessible: t('clearSearch'), attrs: value ? '' : 'hidden' })}</div>`
+}
+function guardsView() {
+  const all = (state.showFormer ? D.guards.filter(g => g.course) : D.activeGuards()).filter(g => matchesPerson(g, state.guardQuery))
+  const filtered = all.filter(g => state.guardFilter === 'all' || !g.former && D.licenceStatus(g).kind === state.guardFilter)
+  const order = { expiring: 0, expired: 1, missing: 2, valid: 3 }
+  filtered.sort((a, b) => Number(Boolean(a.former)) - Number(Boolean(b.former)) || order[D.licenceStatus(a).kind] - order[D.licenceStatus(b).kind] || a.id.localeCompare(b.id))
+  const filters = [['all', 'all'], ['missing', 'missingFilter'], ['expiring', 'expiringFilter'], ['expired', 'expired'], ['valid', 'valid']].map(([value, label]) => {
+    const n = all.filter(g => value === 'all' || !g.former && D.licenceStatus(g).kind === value).length, active = state.guardFilter === value
+    return button(`<span>${t(label)} ${fmtN(n)}</span>`, 'guard-filter', { id: value, cls: 'filter', attrs: `aria-pressed="${active}"${!n && !active ? ' disabled' : ''}` })
+  }).join('')
+  const applied = Number(state.guardFilter !== 'all') + Number(state.showFormer) + Number(Boolean(state.guardQuery))
+  const toolbar = `<div class="toolbar">
+    <div class="filters" role="group" aria-label="${tPlain('filters', { n: applied })}">${filters}</div>
+    <label class="checklabel"><input id="show-former" type="checkbox"${state.showFormer ? ' checked' : ''}><span>${t('showFormer')}</span></label>
+    <div class="actions">${searchField('guard-search', state.guardQuery, t('searchGuard'))}${applied ? button(t('clearFilters'), 'clear-guard-filters', { cls: 'textbtn' }) : ''}</div>
+    <span class="desc" role="status">${t('guardCount', { n: filtered.length })}</span>
+    </div>`
+  const headers = [col(t('guard')), col(t('courseRound')), col(t('securityNumber')), col(t('securityExpiry')), col(t('licenceState')), col(t('holdsNow'))]
+  if (edit()) headers.push(col(`<span class="sr">${t('action')}</span>`))
+  const guardRow = g => {
+    const holdings = holdingsOverview(g.id)
+    const status = g.former ? chip(t(g.former)) : licenceChip(D.licenceStatus(g))
+    const identity = button(guardIdentity(g.id), 'guard-detail', { id: g.id, cls: 'guard-name' })
+    const editor = edit() && !g.former ? button(t(g.licence ? 'updateLicence' : 'addLicence'), 'licence', { id: g.id, cls: 'textbtn', accessible: `${t(g.licence ? 'updateLicence' : 'addLicence')}: ${g[state.lang]}` }) : ''
+    const clearance = g.former && D.holdings(g.id).length ? `<span class="desc">${t('clearanceCustody')}</span>` : ''
+    return row(rowHeader(`${identity}${g.former ? `<span class="guard-former">${status}</span>` : ''}
+      <div class="guard-compact"><div class="meta">${status}${g.licence ? stamp(g.licence.expiry) : ''}</div>${holdings}${clearance}</div>`)
+      + cell(round(g.course), 'guard-desktop')
+      + cell(g.licence ? isol(g.licence.number) : dash(), 'guard-desktop')
+      + cell(g.licence ? stamp(g.licence.expiry) : dash(), 'guard-desktop')
+      + cell(g.former ? dash() : status, 'guard-desktop')
+      + cell(`${holdings}${clearance}`, 'guard-desktop') + (edit() ? cell(editor, 'row-action') : ''), `data-guard-row="${g.id}"`)
+  }
+  const former = filtered.filter(g => g.former)
+  const body = rows(filtered.filter(g => !g.former).map(guardRow).join('')) + (former.length
+    ? `<tbody class="group" role="rowgroup">${row(`<th scope="rowgroup" colspan="${headers.length}" class="group-title">${t('formerGuards')}</th>`, 'class="group-head"')}${former.map(guardRow).join('')}</tbody>` : '')
+  return `<section class="panel section" aria-label="${t('guards')}">${toolbar}${filtered.length ? table(t('guards'), headers, body, 'guard-table') : `<p class="content muted">${t('noGuardsMatch')}</p>`}</section>`
+}
+
+/* Count history and discrepancies are separate ledgers. Inspecting a result never edits stock. */
+function countStatus(v) {
+  return v.decision ? chip(t('resolved'), 'success') : chip(t('needsDecision'), 'warning')
+}
+function varianceDetails(v) {
+  const facts = [
+    v.guard && [t('guard'), `${personName(v.guard)} · ${isol(v.guard)}`],
+    v.actor && [t('actor'), personName(v.actor)],
+    v.reason && [t('reason'), `${t(v.reason)}${v.note ? ` · ${readableNote(v.note)}` : ''}`],
+    v.reference && [t('reference'), isol(v.reference)],
+    [t('countWitness'), personName(v.witness)],
+    v.decision && [t('outcome'), `${t(v.decision.outcome)} · ${readableNote(v.decision.note)}`],
+    v.decision && [t('decisionWitness'), personName(v.decision.witness)],
+  ].filter(Boolean)
+  return `<p class="variance-arithmetic">${v.kind === 'ammunition' ? t('ammoFinding', { issued: v.expected, returned: v.found, short: v.spent }) : t('comparison', { expected: v.expected, found: v.found })}</p>
+    ${v.serials?.length ? `<p class="desc danger-tone">${v.serials.map(isol).join(' · ')}</p>` : ''}
+    <dl class="fact-grid">${facts.map(([name, value]) => `<div><dt>${name}</dt><dd>${value}</dd></div>`).join('')}</dl>
+    ${v.decision ? `<p class="desc">${t('decidedBy', { name: personName(v.decision.actor), date: stamp(v.decision.at) })}</p>` : ''}`
+}
+function countComparison(differences) {
+  return table(t('difference'), [col(t('item')), col(t('expected'), 'num'), col(t('found'), 'num'), col(t('difference'), 'num')],
+    rows(differences.map(v => {
+      const diff = v.found - v.expected, signed = diff > 0 ? `+${fmt(diff)}` : fmt(diff)
+      return row(rowHeader(`${itemName(v.item)} ${countStatus(v)}${v.serials?.length ? `<span class="desc">${v.serials.map(isol).join(' · ')}</span>` : ''}`)
+        + cell(fmtN(v.expected), 'num', t('expected')) + cell(fmtN(v.found), 'num', t('found')) + cell(isol(signed), `num${diff ? ' danger-tone' : ''}`, t('difference')))
+    }).join('')))
+}
+function shiftStatus(c) {
+  return !c || c.missed ? chip(t('missingCheck'), 'warning', 'alert')
+    : c.missing?.length ? chip(t('firearmsMissing', { n: c.missing.length }), 'danger', 'alert') : chip(t('done'), 'success', 'check')
+}
+function checkHistory() {
+  const records = D.checks.filter(c => inScope(c) && c.date >= D.daysAgo(6)).sort((a, b) => b.date.localeCompare(a.date) || b.shift.localeCompare(a.shift) || a.safe.localeCompare(b.safe))
+  return `<details class="history-disclosure">${disclosure(t('checkHistory'))}${table(t('checkHistory'),
+    [col(t('date')), col(t('shift')), col(t('safe')), col(t('actor')), col(t('countWitness')), col(t('status'))],
+    rows(records.map(c => row(rowHeader(stamp(c.date)) + cell(t(c.shift), '', t('shift')) + cell(safeName(c.safe), '', t('safe'))
+      + cell(c.actor ? personName(c.actor) : dash(), '', t('actor')) + cell(c.witness ? personName(c.witness) : dash(), '', t('countWitness'))
+      + cell(shiftStatus(c), '', t('status')))).join('')))}</details>`
+}
+function countsView() {
+  const checks = scopedSafes().map(s => {
+    const check = D.checkFor(s.id)
+    return `<li data-safe-row="${s.id}"><div class="record-top"><h3>${local(s)}</h3>${shiftStatus(check)}</div>
+      <div class="record-top"><div>${check ? `<p class="desc">${isol(timeText(check.at))} · ${t('actor')}: ${personName(check.actor)} · ${t('countWitness')}: ${personName(check.witness)}</p>` : ''}
+        ${check?.expected ? `<p class="desc">${t('checkCount', { present: check.present.length, expected: check.expected.length })}${check.missing?.length ? ` · ${check.missing.map(isol).join(' · ')}` : ''}</p>` : ''}</div>
+        ${!check && edit() ? link(t('openArmory'), route({ tab: 'shift' }), 'tab', { id: 'shift', cls: 'textbtn' }) : ''}
+      </div>
+    </li>`
+  }).join('')
+  const shift = D.shiftNow()
+  const period = `<p class="desc" title="${escape(periodTitle(shift))}">${t(shift.id)} · ${safePeriod(shift)}</p>`
+  const discrepancies = D.discrepancies().filter(v => !v.safe || inScope(v))
+  const history = [...D.counts].filter(c => !state.scopeSafe || c.safes.includes(state.scopeSafe)).sort((a, b) => b.at.localeCompare(a.at)).map(c => {
+    const differences = discrepancies.filter(d => d.source === c.id)
+    const newlySaved = state.lastCount === c.id
+    return `<details class="count-result" data-count-row="${c.id}"${newlySaved ? ' open' : ''}>${disclosure(`${isol(c.id)} · ${stamp(c.at)} · ${t('differenceN', { n: differences.length })}`)}
+      <div class="flow">
+        <p>${joined(c.safes.map(safeName))}</p><p class="desc">${t('actor')}: ${personName(c.actor)} · ${t('countWitness')}: ${personName(c.witness)}</p>
+        ${c.observed ? `<p class="desc">${t('countItemN', { n: c.observed.length })}</p>` : ''}
+        ${differences.length ? countComparison(differences) : `<p class="desc">${t('noDifferences')}</p>`}
+        ${c.observed?.some(l => l.noBaseline) ? `<p class="desc">${t('noBaseline')} ${joined(c.observed.filter(l => l.noBaseline).map(l => `${itemName(l.item)}: ${fmtN(l.qty)}`))}</p>` : ''}
+      </div></details>`
+  }).join('')
+  if (state.tab === 'counts') return `<section class="panel section" aria-labelledby="shift-checks">${heading('shift-checks', t('shiftChecks'), period, 'clipboard')}<ul class="safe-checks">${checks}</ul>${checkHistory()}</section>
+    <section class="panel section" aria-labelledby="monthly-counts">${heading('monthly-counts', t('monthlyCounts'))}${history || `<p class="content muted">${t('noCounts')}</p>`}</section>`
+  return `<section class="panel section" aria-labelledby="discrepancies">${heading('discrepancies', t('discrepancies'), chip(t('openCount', { n: discrepancies.filter(v => !v.decision).length })))}
+      ${discrepancies.length ? `<ul class="variance-list">${discrepancies.map(v => `<li data-variance-row="${v.id}">
+        <div class="record-top"><div><h3>${itemName(v.item)}</h3><p class="desc">${isol(v.source)} · ${stamp(v.at)}${v.safe ? ` · ${safeName(v.safe)}` : ''}</p></div>${countStatus(v)}</div>
+        ${varianceDetails(v)}${!v.decision && edit() ? v.actor === D.currentUser ? `<p class="desc">${t('pendingAuthorisation')}</p>` : button(t('review'), 'decision', { id: v.id }) : ''}
+      </li>`).join('')}</ul>` : `<p class="content muted">${t('noDiscrepancies')}</p>`}
+    </section>`
+}
+
+function widgetView() {
+  const { overdue, missingFirearms } = D.alerts()
+  return `<section class="panel widget-demo" aria-labelledby="widget-title">${heading('widget-title', t('widgetTitle'), '', 'clock')}
+    ${missingFirearms.length ? `<p class="alert-count">${icon('alert')}${t('missingFirearmN', { n: missingFirearms.length })}</p>
+      <ul class="serial-list">${missingFirearms.map(s => `<li>${itemName(s.item)} · ${isol(s.id)} · ${safeName(s.safe)} ${statusChip(s.state)}</li>`).join('')}</ul>` : ''}
+    ${overdue.length ? `<ul class="serial-list">${overdue.map(r => {
+      const line = mainLine(r.remaining)
+      return `<li><div class="record-top"><b>${personName(r.guard)} <span class="desc" style="display:inline">${isol(r.guard)}</span></b>${chip(duration(r), 'danger')}</div>
+        <p class="desc">${itemName(line.item)}${line.serial ? ` · ${isol(line.serial)}` : ''} · ${local(D.safe(r.safe).site)} · ${t('dueBack')}: ${dueStamp(r.due)}</p>
+        ${edit() ? button(t('signin'), 'signin', { id: r.id, cls: 'textbtn' }) : ''}</li>`
+    }).join('')}</ul>` : !missingFirearms.length ? `<p class="content muted">${t('noAlerts')}</p>` : ''}
+    <div class="widget-footer">${link(t('openArmory'), route({ tab: 'today' }), 'open-armory', { glyph: 'arrow' })}</div>
+  </section>`
+}
+
+function movementList(records) {
+  let day = ''
+  return `<ul class="event-list">${records.map(r => {
+    const date = r.at.slice(0, 10), showDay = day !== date
+    day = date
+    const groups = groupedLines(r.lines), primary = mainLine(r.lines), actor = r.actor ? personName(r.actor) : dash()
+    const title = t(r.guard ? 'movementWithGuard' : 'movementSummary', {
+      action: `<b>${t(r.action)}</b>`, items: primary ? `${itemName(primary.item)}${primary.serial ? ` ${isol(primary.serial)}` : D.units(primary) > 1 ? ` · ${fmtN(D.units(primary))}` : ''}${groups.length > 1 ? ` ${t('moreItems', { n: groups.length - 1 })}` : ''}` : dash(),
+      guard: r.guard ? `${personName(r.guard)} ${isol(r.guard)}` : '',
+    })
+    const notes = [
+      r.reference && `${t('reference')}: ${isol(r.reference)}`,
+      r.source && `${t('deliverySource')}: ${t(r.source)}`,
+      r.dutyReason && `${t('offDutyReason')}: ${t(r.dutyReason)}${r.dutyNote ? ` · ${readableNote(r.dutyNote)}` : ''}`,
+      r.excessReason && `${t('excessRounds')}: ${readableNote(r.excessReason)}`,
+      r.shortfall && r.ammo.map(a => `${t('reason')}: ${t(a.reason)} · ${t('reference')}: ${isol(a.reference)}${a.note ? ` · ${readableNote(a.note)}` : ''}`).join('<br>'),
+      r.note && readableNote(r.note),
+    ].filter(Boolean)
+    return `${showDay ? `<li class="event-date"><h3>${stamp(date)}</h3></li>` : ''}<li><details class="movement">
+      <summary><span>${title}${r.licenceWarning ? ` ${chip(t('accepted'), 'warning')}` : ''}${r.shortfall ? ` ${chip(t('returnReview'), 'warning')}` : ''}</span>
+        <span class="desc movement-safe">${r.safe ? safeName(r.safe) : dash()}</span>
+        <span class="movement-time">${stamp(r.at, false)}</span>${icon('chevron', 'mirror disclosure-icon')}</summary>
+      <div class="flow movement-data"><dl class="fact-grid"><div><dt>${t('actor')}</dt><dd>${actor}</dd></div><div><dt>${t('witness')}</dt><dd>${r.witness ? personName(r.witness) : dash()}</dd></div>
+        ${r.to ? `<div><dt>${t('destination')}</dt><dd>${safeName(r.to)}</dd></div>` : ''}</dl>
+        ${r.lines.length ? listLines(r.lines) : `<p class="desc">${t('noLines')}</p>`}
+        ${r.lines.some(l => l.batch) ? `<p class="desc">${t('batchNumber')}: ${joined(r.lines.filter(l => l.batch).map(l => isol(l.batch)))}</p>` : ''}
+        ${notes.map(note => `<p class="desc">${note}</p>`).join('')}${r.outcome ? chip(t(r.outcome)) : ''}</div></details></li>`
+  }).join('')}</ul>`
+}
+const movementTypes = () => [...new Set(D.log().map(r => r.action))]
+function logView() {
+  const invalid = state.logFrom && state.logTo && state.logFrom > state.logTo
+  const records = invalid ? [] : D.log().filter(r => {
+    const date = r.at.slice(0, 10)
+    return (!state.logFrom || state.logFrom <= date) && (!state.logTo || date <= state.logTo)
+      && (inScope(r) || r.to === state.scopeSafe) && (!state.logGuard || r.guard === state.logGuard)
+      && (!state.logType || r.action === state.logType) && rowMatches(state.logSerial, ...r.lines.map(l => l.serial))
+  })
+  const activeFilters = state.logSerial || state.logType || state.logGuard || state.logFrom !== D.daysAgo(13) || state.logTo !== D.today
+  const filter = `<details class="log-tools"${activeFilters ? ' open' : ''}>${disclosure(`${icon('filter')}${t('eventFilters')}`)}<div class="log-filter">
+    ${dmyField(t('dateFrom'), 'log-from', state.logFrom)}${dmyField(t('dateTo'), 'log-to', state.logTo)}
+    ${select(t('eventType'), 'log-type', [['', t('allEvents')], ...movementTypes().map(key => [key, t(key)])], state.logType)}
+    ${select(t('guard'), 'log-guard', [['', t('allGuards')], ...D.guards.map(g => [g.id, `${local(g)} (${isoTime(g.id)})`])], state.logGuard)}
+    ${field(t('serialNumber'), 'log-serial', `type="search" dir="ltr" value="${keyAttr(state.logSerial)}" autocomplete="off"`)}
+  </div></details>`
+  return `<section class="panel section" aria-label="${t('log')}">${filter}<div class="toolbar desc"><span role="status">${t('logCount', { n: records.length })}</span></div>
+    ${records.length ? movementList(records) : `<p class="content ${invalid ? 'danger-tone' : 'muted'}">${t(invalid ? 'dateRangeInvalid' : 'noLog')}</p>`}</section>`
+}
+
+/* Dialog chrome: original opener, an inert page, labelled disabled-save reason. */
+let overlayPreset = {}
+let closeFallback = null
+let toastTimer
+function toast(message) {
+  const node = $('#toast')
+  node.textContent = message
+  node.hidden = false
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { node.hidden = true }, 4200)
+}
+const focusTo = (selector, preventScroll = true) => {
+  const node = selector && $(selector)
+  if (node?.getClientRects().length) {
+    if (!node.matches('a,button,input,select,summary,[tabindex]')) node.tabIndex = -1
+    node.focus({ preventScroll })
+    return true
+  }
+  return false
+}
+const attrSelector = (key, val) => `[${key}="${CSS.escape(String(val))}"]`
+const actionSelector = (action, id) => `[data-action="${action}"]${id === undefined ? '' : attrSelector('data-id', id)}`
+function pulse(selector) {
+  const target = $(selector)
+  if (target && matchMedia('(prefers-reduced-motion: no-preference)').matches) {
+    target.classList.add('changed')
+    target.addEventListener('animationend', () => target.classList.remove('changed'), { once: true })
+  }
+}
+function discardDialog() {
+  dialog.onclose = null
+  dialog.onclick = null
+  dialog.oncancel = null
+  if (dialog.open) dialog.close()
+  overlayPreset = {}
+}
+function modal({ title, subtitle = '', body, submit, opener, first, wide = false, preset = {}, variant = 'task-sheet', onCancel }) {
+  discardDialog()
+  overlayPreset = preset
+  closeFallback = null
+  dialog.classList.toggle('wide', wide)
+  dialog.dataset.variant = variant
+  dialog.innerHTML = `<form class="giveform" novalidate>
+    <div class="givehead"><div><h2 id="dlg-title">${title}</h2>${subtitle ? `<p class="desc">${subtitle}</p>` : ''}</div>
+      ${button(icon('close'), 'dismiss', { cls: 'iconbtn', accessible: t('close') })}</div>
+    <div class="givebody">${body}</div>
+    <div class="givefoot"><div class="reason"><p id="save-progress" aria-live="polite"></p><div id="save-reason" aria-live="polite"></div></div><div class="actions">
+      ${button(t('cancel'), 'dismiss', { cls: 'secondary' })}<button type="submit" class="primary" id="submit" aria-describedby="save-reason" disabled>${submit}</button>
+    </div><div class="discard-panel" hidden></div></div></form>`
+  const form = $('form', dialog), save = $('#submit', dialog), why = $('#save-reason', dialog), progress = $('#save-progress', dialog)
+  const refresh = result => {
+    const { reason, progress: text = '' } = typeof result === 'string' ? { reason: result } : result
+    save.disabled = Boolean(reason)
+    if (progress.innerHTML !== text) progress.innerHTML = text
+    if (why.innerHTML !== reason) why.innerHTML = reason
+    return reason
+  }
+  const start = (validate, onSave, { dirty, discardKey, handleReason } = {}) => {
+    let prior = null
+    const confirmation = $('.discard-panel', dialog), normalActions = $('.givefoot .actions', dialog)
+    const cancel = () => {
+      if (!dirty?.()) { dialog.close(); return }
+      if (!confirmation.hidden) return
+      prior = document.activeElement
+      why.parentElement.hidden = normalActions.hidden = true
+      confirmation.hidden = false
+      confirmation.innerHTML = `<p role="alert">${t(discardKey)}</p><div class="actions">${button(t('keepEditing'), 'keep', { cls: 'secondary' })}${button(t('discard'), 'discard')}</div>`
+      $('[data-action="keep"]', confirmation).onclick = () => {
+        confirmation.hidden = true
+        why.parentElement.hidden = normalActions.hidden = false
+        prior?.focus()
+      }
+      $('[data-action="discard"]', confirmation).onclick = () => dialog.close()
+      $('[data-action="keep"]', confirmation).focus()
+    }
+    $$('[data-action="dismiss"]', dialog).forEach(b => { b.onclick = cancel })
+    dialog.oncancel = event => { event.preventDefault(); cancel() }
+    if (handleReason) why.onclick = handleReason
+    form.addEventListener('input', () => refresh(validate()))
+    form.addEventListener('change', () => refresh(validate()))
+    form.onsubmit = event => {
+      event.preventDefault()
+      const reason = refresh(validate())
+      if (edit() && !reason && confirmation.hidden) onSave()
+    }
+    dialog.onclose = () => {
+      if (dialog.open) return
+      overlayPreset = {}
+      if (onCancel && !closeFallback) { onCancel(); return }
+      sync()
+      if (!closeFallback || !focusTo(closeFallback, false)) if (!focusTo(opener)) focusTo('#screen-title')
+    }
+    const initial = first && $(first, dialog)
+    initial?.setAttribute('autofocus', '')
+    refresh(validate())
+    dialog.showModal()
+    initial?.focus({ preventScroll: true })
+    sync()
+  }
+  return { form, refresh, start }
+}
+function complete(message, fallback = '#screen-title', changed = '') {
+  closeFallback = fallback
+  D.assertLedger()
+  if (state.view === 'empty') state.view = 'edit'
+  dialog.close()
+  render()
+  if (changed) pulse(changed)
+  toast(t(message))
+}
+function field(label, name, attrs = '', hint = '') {
+  return `<label class="field"><span>${label}</span><input name="${name}" id="f-${name}" ${attrs}>${hint ? `<span class="desc">${hint}</span>` : ''}</label>`
+}
+function textarea(label, name, attrs = '') {
+  return `<label class="field"><span>${label}</span><textarea name="${name}" id="f-${name}" ${attrs}></textarea></label>`
+}
+function options(entries, selected) {
+  return entries.map(([value, label, disabled]) => `<option value="${escape(value)}"${value === selected ? ' selected' : ''}${disabled ? ' disabled' : ''}>${label}</option>`).join('')
+}
+function select(label, name, entries, selected = '', extra = '') {
+  return `<label class="field"><span>${label}</span><select name="${name}" id="f-${name}"${extra ? ` ${extra}` : ''}>${options(entries, selected)}</select></label>`
+}
+const safeOptions = () => D.safes.map(s => [s.id, local(s)])
+const currentSafe = () => D.safe(state.scopeSafe)?.id || D.safes[0].id
+const scopedSafeField = (value, name = 'safe') => state.scopeSafe
+  ? `<input type="hidden" name="${name}" value="${value}">`
+  : select(t('safe'), name, safeOptions(), value)
+const witnessOptions = (safe, excluded = [], label = 'witness', selected = '') => {
+  const members = D.witnesses(excluded)
+  const pick = people => options(people.map(g => [g.id, `${local(g)} (${isoTime(g.id)})`]), selected)
+  const here = members.filter(g => g.duty === safe && safe)
+  const other = members.filter(g => !here.includes(g))
+  return options([['', t(label === 'countWitness' ? 'chooseCountWitness' : 'chooseWitness')]], selected)
+    + (here.length ? `<optgroup label="${t('onDutyHere')}">${pick(here)}</optgroup>` : '')
+    + `<optgroup label="${t('otherGuards')}">${pick(other)}</optgroup>`
+}
+const witnessField = (name, safe, excluded = [], label = 'witness') =>
+  `<label class="field"><span>${t(label)}</span><select name="${name}" id="f-${name}" required>${witnessOptions(safe, excluded, label)}</select></label>`
+const checked = (name, label, marked = false, extra = '') =>
+  `<label class="checklabel"><input type="checkbox" name="${name}"${marked ? ' checked' : ''}${extra ? ` ${extra}` : ''}><span>${label}</span></label>`
+const notice = (content, tone = '', glyph = 'alert') => `<div class="notice ${tone}">${icon(glyph)}<div>${content}</div></div>`
+const stepper = (name, item, qty, max, desc = '') => {
+  const min = tPlain('decrease', { item }), plus = tPlain('increase', { item })
+  return `<div data-stepper="${name}">
+    <div class="stepper"><button type="button" data-qty-step="-1" aria-label="${escape(min)}">−</button>
+    <input name="${name}" id="f-${name}" type="number" inputmode="numeric" dir="ltr" min="0" max="${max}" step="1" value="${qty}" aria-label="${escape(item)}" aria-describedby="n-${name}">
+    <button type="button" data-qty-step="1" aria-label="${escape(plus)}">+</button></div>
+    <span class="clampnotice" id="n-${name}" aria-live="polite">${desc}</span></div>`
+}
+function wireSteppers(root) {
+  $$('[data-stepper]', root).forEach(box => {
+    const input = $('input', box), note = $('.clampnotice', box), [minus, plus] = $$('button', box)
+    const visual = (excess = false) => {
+      const n = clamp(input.value, 0, Number(input.max))
+      minus.disabled = n <= 0
+      plus.disabled = n >= Number(input.max)
+      if (excess) note.innerHTML = t('onlyLeft', { n: Number(input.max) })
+      return n
+    }
+    visual()
+    input.addEventListener('input', () => {
+      note.textContent = ''
+      visual(Number(input.value) > Number(input.max))
+    })
+    input.addEventListener('change', () => { input.value = visual(Number(input.value) > Number(input.max)) })
+    for (const b of [minus, plus]) b.onclick = () => {
+      input.value = clamp(Number(input.value) + Number(b.dataset.qtyStep), 0, Number(input.max))
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+  })
+}
+const stepValue = input => clamp(input.value, 0, Number(input.max))
+function serialField(item, name, safe, selected, optional = true) {
+  const available = D.available(item, safe).map(s => [s.id, `\u2066${escape(s.id)}\u2069`])
+  return select(t('serialNumber'), name, [['', available.length ? t(optional ? 'none' : 'chooseSerial') : t('unavailableSerials')], ...available], selected, !available.length ? 'disabled' : '')
+}
+
+/* Both issue forms use the same bounded stock and serial choices. */
+function assignment({ custody = false, kit = 'rifle', guard = '', safe = currentSafe(), preset = false, opener }) {
+  const shiftEnd = D.shiftEnd(), acting = D.guard(D.currentUser)
+  const proposed = normalise(kit, Object.keys(D.kits), 'rifle')
+  let person = D.guards.find(g => g.id === guard && !g.former && g.id !== D.currentUser)?.id || ''
+  let qtyDraft = {}, serialDraft = {}, holster = 'right-holster', query = ''
+  if (preset && D.kits[proposed].weapon) serialDraft.weapon = D.available(D.kits[proposed].weapon, safe)[0]?.id
+  const ui = modal({
+    title: t(custody ? 'handover' : 'signout'),
+    subtitle: `${safeName(safe)} · ${t('actor')}: ${local(acting)}`,
+    body: `<div class="flow">
+      ${scopedSafeField(safe)}
+      ${custody ? `<div class="fieldpair">${select(t('custodyKind'), 'holder-kind', [['person', t('person')], ['site', t('siteKind')]], 'person')}
+        <div id="site-choice" hidden>${select(t('siteKind'), 'site', [['', t('chooseSite')], ...D.safes.map(s => [s.id, local(s.site)])])}</div></div>` : ''}
+      <div id="assignment-picker"></div>
+      <div class="flow" id="eligibility"></div>
+      ${select(t('kit'), 'kit', [['rifle', t('rifle')], ['pistol', t('pistol')], ['equipment', t('equipmentKit')]], proposed)}
+      <section class="flow" id="kit-controls"></section>
+      ${!custody ? `<details class="countgroup">${disclosure(`${t('dueBack')}: ${isol(shiftEnd.time)} · ${t('changeDue')}`)}
+        <div class="fieldpair">${dmyField(t('date'), 'due-date', shiftEnd.date)}
+        ${field(t('dueTime'), 'due-time', `type="text" dir="ltr" value="${shiftEnd.time}" maxlength="5" placeholder="18:00" required`, t('date24Hint'))}
+        </div></details>` : ''}
+      <div id="excess-rounds" hidden>${textarea(t('excessRounds'), 'excess-reason', 'maxlength="160"')}</div>
+      <details id="extras-panel" class="countgroup extras-panel"${proposed === 'equipment' ? ' open' : ''}>${disclosure(t('extras'))}<div id="extra-controls"></div></details>
+      ${custody ? textarea(t('conditionNote'), 'condition-note', 'maxlength="160"') : ''}
+    </div>`,
+    submit: t(custody ? 'handover' : 'signout'), wide: true, variant: 'task-sheet', opener, first: person ? '#f-kit' : '#assignment-search',
+    preset: preset ? { signout: 1, kit: proposed, ...(person && { guard: person }) } : !custody ? { signout: 1 } : {},
+  })
+  const form = ui.form, box = $('#assignment-picker', form), eligibility = $('#eligibility', form)
+  const f = name => form.elements.namedItem(name)
+  const isSite = () => custody && f('holder-kind').value === 'site'
+  const weapon = () => D.kits[f('kit').value].weapon
+  const needsPerson = () => !isSite() || weapon()
+  const blockReason = id => {
+    if (!weapon()) return ''
+    if (!D.guard(id).course) return t('noCourse')
+    const held = D.heldFirearm(id)
+    return held ? t(held.kind === 'shift' ? 'shiftFirst' : 'custodyFirst', { item: itemName(held.item), serial: isol(held.serial) }) : ''
+  }
+  const offDuty = () => Boolean(!custody && person && D.guard(person).duty !== f('safe').value)
+  const warning = () => {
+    if (!person || !weapon() || !D.guard(person).course) return null
+    return D.licenceStatus(D.guard(person))
+  }
+  const requiresAck = () => ['missing', 'expired'].includes(warning()?.kind)
+  const lineSpec = () => D.kits[f('kit').value].quantities.map(([item, qty]) => [item === 'right-holster' ? holster : item, qty])
+  const excessRounds = () => lineSpec().some(([id, standard]) => D.isAmmo(id) && f(id) && stepValue(f(id)) > standard)
+  const balances = id => D.rollup(D.item(id)).bySafe[f('safe').value].inSafe
+  const formState = () => {
+    for (const input of $$('[data-stepper] input', form)) qtyDraft[input.name] = stepValue(input)
+    for (const input of $$('[data-kit-serial] select', form)) serialDraft[input.name] = input.value
+  }
+  const qtyControl = (id, standard) => {
+    const max = balances(id), wanted = qtyDraft[id] ?? standard
+    return stepper(id, `${t('quantity')}: ${D.item(id)[state.lang]}`, Math.min(max, wanted), max, wanted > max ? t('onlyLeft', { n: max }) : '')
+  }
+  const line = (id, control) => `<div class="form-line">${id.endsWith('-holster') ? `<div class="ident">${art(D.item(id))}</div>` : unitIdentity({ item: id })}<div class="mobile-stretch">${control}</div></div>`
+  const drawKit = () => {
+    const gun = weapon(), safe = f('safe').value
+    if (!gun) $('#extras-panel', form).open = true
+    $('#kit-controls', form).innerHTML = gun ? `<div><h3>${t('options')}</h3>
+      ${line(gun, `<div data-kit-serial>${serialField(gun, 'weapon', safe, serialDraft.weapon, false)}</div>`)}
+      ${lineSpec().map(([id, qty]) => line(id, `${['right-holster', 'left-holster'].includes(id) ? select(t('holster'), 'holster-side',
+        ['right-holster', 'left-holster'].map(choice => [choice, itemName(choice)]), holster) : ''}${qtyControl(id, qty)}`)).join('')}</div>` : ''
+    $('#extra-controls', form).innerHTML = D.extras.map(id => {
+      const it = D.item(id)
+      return line(id, it.tracking === 'serial' ? `<div data-kit-serial>${serialField(id, id, safe, serialDraft[id])}</div>` : qtyControl(id, 0))
+    }).join('')
+    const holsterInput = f('holster-side')
+    if (holsterInput) holsterInput.onchange = () => {
+      formState()
+      if (qtyDraft[holster] !== undefined) qtyDraft[holsterInput.value] = qtyDraft[holster]
+      holster = holsterInput.value
+      drawKit()
+      f('holster-side').focus()
+    }
+    wireSteppers($('#kit-controls', form))
+    wireSteppers($('#extra-controls', form))
+  }
+  const personMeta = g => `<div class="actions">${g.course ? licenceChip(D.licenceStatus(g)) : ''}<span class="desc">${t('holding', { items: holdingsOverview(g.id, true) })}</span></div>`
+  const drawEligibility = () => {
+    const licence = warning(), g = person ? D.guard(person) : null, blocked = person && blockReason(person)
+    const previousReason = f('off-duty')?.value
+    const previousNote = f('off-duty-note')?.value
+    const editLicence = g && requiresAck() && !blocked ? `<details class="countgroup">${disclosure(t(g.licence ? 'updateLicenceNow' : 'addLicenceNow'))}
+      <div class="fieldpair">${field(t('securityNumber'), 'inline-number', `dir="ltr" maxlength="80" value="${keyAttr(g.licence?.number || '')}"`)}
+      ${dmyField(t('securityExpiry'), 'inline-expiry', g.licence?.expiry || '')}</div>
+      <p class="desc" id="inline-licence-past" hidden>${t('pastLicenceDate')}</p>
+      ${button(t('save'), 'inline-licence', { attrs: 'disabled aria-describedby="inline-licence-past"' })}</details>` : ''
+    eligibility.innerHTML = `${offDuty() ? notice(`<p><b>${t('offDuty')}</b></p>${select(t('offDutyReason'), 'off-duty', [['', t('chooseReason')], ...D.dutyReasons.map(key => [key, t(key)])], previousReason || '')}
+        <div id="duty-other" hidden>${textarea(t('reasonDetail'), 'off-duty-note', 'maxlength="160"')}</div>`, 'warning-tone') : ''}
+      ${blocked ? notice(`<b>${blocked}</b>`, 'warning-tone') : ''}
+      ${!blocked && licence?.kind === 'expiring' ? notice(`<b>${t('licenceWarningDate', { warning: t('licenceExpiringWarning', { n: licence.days }).replace(/\.$/, ''), date: stamp(g.licence.expiry) })}</b>`, 'warning-tone', 'licence') : ''}
+      ${!blocked && requiresAck() ? notice(`<p><b>${t(licence.kind === 'expired' ? 'licenceExpiredWarning' : 'licenceMissingWarning')}</b></p>
+        ${checked('licence-ack', t(custody ? 'custodyAck' : 'licenceAck', { name: local(g) }), false, 'required')}${editLicence}`, 'warning-tone', 'licence') : ''}`
+    if (previousNote && f('off-duty-note')) f('off-duty-note').value = previousNote
+    const inline = $('[data-action="inline-licence"]', eligibility)
+    if (inline) {
+      const expiry = f('inline-expiry'), number = f('inline-number'), past = $('#inline-licence-past', eligibility)
+      const refreshInline = () => {
+        const parsed = parseStockDate(expiry.value)
+        inline.disabled = !parsed || !number.value.trim()
+        past.hidden = !parsed || parsed >= D.today
+      }
+      expiry.oninput = number.oninput = refreshInline
+      refreshInline()
+      inline.onclick = () => {
+        g.licence = { number: number.value.trim(), expiry: parseStockDate(expiry.value) }
+        drawPicker(); drawEligibility(); render()
+        ui.refresh(validate())
+        $('.chosen button', box)?.focus()
+        toast(t('savedLicence'))
+      }
+    }
+  }
+  const chooseGuard = id => {
+    if (blockReason(id)) return
+    person = id
+    query = ''
+    drawPicker()
+    eligibility.replaceChildren()
+    drawEligibility()
+    ui.refresh(validate())
+    $('.chosen button', box)?.focus()
+  }
+  const drawPicker = (focus = false) => {
+    if ($('#site-choice', form)) $('#site-choice', form).hidden = !isSite()
+    if (!needsPerson()) { box.innerHTML = ''; return }
+    const label = t(isSite() ? 'siteSupervisor' : 'guard')
+    if (person) {
+      const g = D.guard(person), duty = g.duty === f('safe').value
+      box.innerHTML = `<div class="flow"><h3>${label}</h3><div class="chosen"><div>${guardIdentity(person)}${duty && !custody ? `<span class="desc small">${t('onDutyHere')}</span>` : ''}${personMeta(g)}</div>${button(t('change'), 'change-guard')}</div></div>`
+      $('[data-action="change-guard"]', box).onclick = () => {
+        person = ''
+        drawPicker(true)
+        drawEligibility()
+        ui.refresh(validate())
+      }
+      return
+    }
+    box.innerHTML = `<div><h3>${label}</h3>${isSite() ? `<p class="desc">${t('supervisorHint')}</p>` : ''}
+      ${searchField('assignment-search', query, t('searchGuard'))}<div class="picker-list" id="picker-list"></div></div>`
+    const input = $('#assignment-search', box), results = $('#picker-list', box)
+    const enabled = () => $$('[data-action="pick"]:enabled', results)
+    const drawResults = () => {
+      const available = D.guards.filter(g => !g.former && g.id !== D.currentUser && matchesPerson(g, query))
+      results.innerHTML = !available.length ? `<p class="picker-none" role="status">${t('noGuardFound', { query: `<bdi>${escape(query)}</bdi>` })}</p>` :
+        (custody ? [null] : [true, false]).map(here => {
+          const group = available.filter(g => here === null || (g.duty === f('safe').value) === here)
+          if (!group.length) return ''
+          return `<div>${here === null ? '' : `<h4>${t(here ? 'onDutyHere' : 'otherGuards')}</h4>`}<ul class="results">${group.map(g => {
+            const blocked = blockReason(g.id)
+            return `<li><div class="result-label">${guardIdentity(g.id)}${personMeta(g)}${blocked ? `<span class="desc" id="blocked-${g.id}">${blocked}</span>` : ''}</div>
+              ${button(t('choose'), 'pick', { id: g.id, accessible: `${t('choose')}: ${g[state.lang]}`, attrs: blocked ? `disabled aria-describedby="blocked-${g.id}"` : '' })}</li>`
+          }).join('')}</ul></div>`
+        }).join('')
+      $('[data-action="clear-search"]', box).hidden = !query
+      enabled().forEach(b => { b.onclick = () => chooseGuard(b.dataset.id) })
+    }
+    $('[data-action="clear-search"]', box).onclick = () => { input.value = query = ''; drawResults(); input.focus() }
+    input.oninput = () => { query = input.value; drawResults() }
+    input.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        if (e.key === 'Enter' && enabled().length === 1) chooseGuard(enabled()[0].dataset.id)
+        else enabled()[0]?.focus()
+      }
+    }
+    results.onkeydown = e => {
+      if (!['ArrowUp', 'ArrowDown'].includes(e.key)) return
+      const buttons = enabled(), current = buttons.indexOf(document.activeElement)
+      if (current < 0) return
+      e.preventDefault()
+      if (e.key === 'ArrowUp' && current === 0) input.focus()
+      else buttons[clamp(current + (e.key === 'ArrowUp' ? -1 : 1), 0, buttons.length - 1)]?.focus()
+    }
+    drawResults()
+    if (focus) input.focus()
+  }
+  function lines() {
+    const result = []
+    if (weapon() && f('weapon')?.value) result.push({ item: weapon(), serial: f('weapon').value })
+    for (const [id] of lineSpec()) {
+      const qty = stepValue(f(id))
+      if (qty) result.push({ item: id, qty })
+    }
+    for (const id of D.extras) {
+      const input = f(id)
+      if (D.item(id).tracking === 'serial' && input.value) result.push({ item: id, serial: input.value })
+      if (D.item(id).tracking === 'quantity' && stepValue(input)) result.push({ item: id, qty: stepValue(input) })
+    }
+    return result
+  }
+  const due = () => {
+    const date = parseStockDate(f('due-date').value), hm = westernDigits(f('due-time').value).trim()
+    const ok = /^([01]\d|2[0-3]):[0-5]\d$/.test(hm)
+    return date && ok ? D.instant(date, hm) : ''
+  }
+  function validate() {
+    if ($('#duty-other', form)) $('#duty-other', form).hidden = f('off-duty').value !== 'other'
+    $('#excess-rounds', form).hidden = !excessRounds()
+    if (isSite() && !f('site').value) return t('chooseSite')
+    if (needsPerson() && !person) return t('chooseGuard')
+    if (needsPerson() && person && blockReason(person)) return blockReason(person)
+    if (offDuty() && !valueOf('off-duty', form)) return t('needReason')
+    if (offDuty() && f('off-duty').value === 'other' && valueOf('off-duty-note', form).length < 3) return t('needReasonDetail')
+    if (requiresAck() && !f('licence-ack')?.checked) return t('needAck')
+    if (weapon() && !f('weapon')?.value) return t('needSerial')
+    if (excessRounds() && valueOf('excess-reason', form).length < 3) return t('needExcess')
+    if (!lines().length) return t('needEquipment')
+    if (!custody) {
+      const time = Date.parse(due())
+      if (!(time > Date.parse(D.now))) return t('needDue')
+      if (time > Date.parse(D.nextShiftEnd())) return t('dueCap')
+    }
+    return ''
+  }
+  f('safe').onchange = () => {
+    formState()
+    drawKit()
+    drawPicker()
+    drawEligibility()
+  }
+  f('kit').onchange = () => {
+    qtyDraft = {}; serialDraft = {}; holster = 'right-holster'
+    drawKit()
+    drawPicker()
+    drawEligibility()
+  }
+  if (custody) f('holder-kind').onchange = () => { person = ''; drawPicker(); drawEligibility() }
+  drawKit()
+  drawPicker()
+  drawEligibility()
+  ui.start(validate, () => {
+    const common = { safe: f('safe').value, actor: D.currentUser, lines: lines(), licenceWarning: requiresAck() }
+    if (excessRounds()) common.excessReason = valueOf('excess-reason', form)
+    if (custody) {
+      const r = { ...common, id: D.number('CU', D.custodies), kind: isSite() ? 'site' : 'person', holder: isSite() ? f('site').value : person, since: D.today, issuedAt: D.now, note: valueOf('condition-note', form) }
+      if (isSite() && weapon()) r.supervisor = person
+      if (weapon()) r.licenceNumber = D.guard(person)?.licence?.number || ''
+      D.custodies.push(r)
+      selectCustody(r.id)
+      complete('savedCustody', '#custody-detail', actionSelector('custody', r.id))
+    } else {
+      const r = { ...common, id: D.number('SO', D.issues), guard: person, issuedAt: D.now, due: due() }
+      if (offDuty()) { r.dutyReason = f('off-duty').value; r.dutyNote = valueOf('off-duty-note', form) }
+      D.issues.push(r)
+      state.shiftLane = 'out'
+      complete('savedIssue', '#shift-queue', attrSelector('data-record', r.id))
+    }
+  })
+}
+
+function licenceDialog(id, opener) {
+  const g = D.activeGuards().find(g => g.id === id)
+  if (!g) return
+  const ui = modal({
+    title: t(g.licence ? 'updateLicence' : 'addLicence'), subtitle: `${local(g)} · ${isol(g.id)}`,
+    body: `<div class="fieldpair">
+      ${field(t('securityNumber'), 'security-number', `dir="ltr" maxlength="80" value="${keyAttr(g.licence?.number || '')}" required`)}
+      ${dmyField(t('securityExpiry'), 'security-expiry', g.licence?.expiry || '')}
+      </div><p id="date-expired" class="desc warning-tone" hidden>${t('pastLicenceDate')}</p>`,
+    submit: t('save'), opener, first: '#f-security-number', preset: { licence: id },
+  })
+  const number = () => valueOf('security-number', ui.form), expiry = () => parseStockDate(valueOf('security-expiry', ui.form))
+  ui.start(() => {
+    $('#date-expired', ui.form).hidden = !expiry() || expiry() >= D.today
+    return number() && expiry() ? '' : t('numberNeeded')
+  }, () => {
+    g.licence = { number: number(), expiry: expiry() }
+    state.guardFilter = 'all'
+    complete('savedLicence', actionSelector('licence', id), attrSelector('data-guard-row', id))
+  })
+}
+function recordSerials(id, opener) {
+  const item = D.item(id)
+  if (!item || !D.unrecorded(item)) return
+  const choices = safeOptions().filter(([safe]) => item.unrecorded[safe])
+  const ui = modal({
+    title: t('recordSerials'), subtitle: `${local(item)} · ${t('unrecordedN', { n: D.unrecorded(item) })}`,
+    body: `<div class="flow">${select(t('safe'), 'safe', choices, choices[0][0])}
+      ${serialPad('serial-text-serials')}
+      <p id="serial-limit" class="desc"></p></div>`,
+    submit: t('save'), opener, first: '#f-safe',
+  })
+  const serials = () => splitSerials(valueOf('serial-text-serials', ui.form))
+  const existing = registeredSerials()
+  const safe = () => valueOf('safe', ui.form)
+  function validate() {
+    const ids = serials(), limit = item.unrecorded[safe()]
+    $('#serial-limit', ui.form).innerHTML = t('serialLimit', { n: limit })
+    const counts = new Map()
+    ids.forEach(id => counts.set(id, (counts.get(id) || 0) + 1))
+    const errors = serialReview($('[data-serial-pad]', ui.form), ids, existing, counts)
+    if (!ids.length) return t('needSerialEntry')
+    if (errors) return t('fixSerials')
+    return ids.length > limit ? t('serialLimit', { n: limit }) : ''
+  }
+  wireStockTools(ui.form, () => ui.refresh(validate()))
+  ui.start(validate, () => {
+    for (const serial of serials()) {
+      item.serials.push({ id: serial, safe: safe(), since: D.today })
+      item.unrecorded[safe()]--
+    }
+    complete('savedSerials', '#equipment-detail', attrSelector('data-item-row', id))
+  })
+}
+
+/* Blind monthly count: add what was observed without revealing the safe’s book values. */
+function monthlyCount(opener) {
+  const startSafe = currentSafe()
+  const ui = modal({
+    title: t('newCount'), subtitle: stamp(D.now),
+    body: `<div class="flow"><p>${t('blindHint')}</p><div class="fieldpair count-context">${state.scopeSafe ? `<div><h3>${safeName(startSafe)}</h3>${scopedSafeField(startSafe)}</div>` : select(t('safe'), 'safe', safeOptions(), startSafe)}${witnessField('witness', startSafe, [], 'countWitness')}</div>
+      <div id="count-lines"></div></div>`,
+    submit: t('saveCount'), opener, first: state.scopeSafe ? '#f-witness' : '#f-safe', wide: true, variant: 'stock-task', preset: { count: 'new' },
+  })
+  const form = ui.form, container = $('#count-lines', form), f = name => form.elements.namedItem(name)
+  let observed, firstMissing
+  const draw = () => {
+    observed = new Map()
+    container.innerHTML = D.groups.map(group => `<details class="countgroup" open>${disclosure(local(group))}
+      ${D.items.filter(i => i.group === group.id).map(item => {
+        observed.set(item.id, new Set())
+        const quantityInput = item.tracking === 'quantity' || D.unrecorded(item) > 0
+          ? field(t(item.tracking === 'quantity' ? 'blindQuantity' : 'unrecordedQty'), `q-${item.id}`, 'type="number" inputmode="numeric" dir="ltr" min="0" step="1" required') : ''
+        const serialInputs = item.tracking === 'serial' ? `<div data-blind="${item.id}">
+          <p class="desc">${t('blindSerials')}</p><div class="lookup">
+            ${field(t('countSearch'), `s-${item.id}`, 'dir="ltr" maxlength="80" autocomplete="off"')}
+            ${button(t('add'), 'add-serial')}
+          </div><div class="desc" data-match aria-live="polite"></div><ul class="counted-serials" data-serials></ul>
+          ${checked(`complete-${item.id}`, t('countConfirmed'))}</div>` : ''
+        return `<div class="form-line">${unitIdentity({ item: item.id })}<div class="flow mobile-stretch">${serialInputs}${quantityInput}</div></div>`
+      }).join('')}
+    </details>`).join('')
+    $$('[data-blind]', form).forEach(box => {
+      const id = box.dataset.blind, input = f(`s-${id}`), added = observed.get(id)
+      const match = $('[data-match]', box), list = $('[data-serials]', box)
+      const show = () => {
+        list.innerHTML = [...added].map(serial => `<li>${isol(serial)}${button(icon('close'), 'remove-count-serial', {
+          id: serial, cls: 'iconbtn', accessible: tPlain('removeSerial', { serial }),
+        })}</li>`).join('')
+        for (const b of $$('button', list)) b.onclick = () => {
+          added.delete(b.dataset.id)
+          f(`complete-${id}`).checked = false
+          show(); ui.refresh(validate()); input.focus()
+        }
+      }
+      const add = () => {
+        const serial = input.value.trim().toUpperCase()
+        if (!serial) { match.textContent = t('countEnter'); return }
+        const known = D.item(id).serials.find(s => s.id.toUpperCase() === serial)
+        added.add(known?.id || serial)
+        match.textContent = known ? '' : t('countUnknown')
+        f(`complete-${id}`).checked = false
+        input.value = ''
+        show(); ui.refresh(validate()); input.focus()
+      }
+      $('[data-action="add-serial"]', box).onclick = add
+      input.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); add() } }
+    })
+  }
+  const goodQty = input => input.value !== '' && input.validity.valid && Number.isSafeInteger(Number(input.value))
+  function validate() {
+    const missing = D.items.map(item => {
+      const serial = f(`complete-${item.id}`), quantity = f(`q-${item.id}`)
+      return { item, field: serial && !serial.checked ? serial : quantity && !goodQty(quantity) ? quantity : null }
+    }).filter(x => x.field)
+    firstMissing = missing[0] || null
+    const progress = t('countProgress', { counted: D.items.length - missing.length, total: D.items.length })
+    const reason = [(firstMissing && button(t('needCount', { item: local(firstMissing.item) }), 'first-missing', { cls: 'textbtn' })),
+      (!f('witness').value && `<span>${t('needWitness')}</span>`)].filter(Boolean).join(' ')
+    return { reason, progress }
+  }
+  f('safe').onchange = () => {
+    const witness = f('witness')
+    witness.innerHTML = witnessOptions(f('safe').value, [], 'countWitness', witness.value)
+    draw()
+  }
+  draw()
+  ui.start(validate, () => {
+    const safe = f('safe').value
+    const record = { id: D.number('MC', D.counts), safes: [safe], at: D.now, actor: D.currentUser, witness: f('witness').value, observed: [] }
+    for (const item of D.items) {
+      const serials = [...observed.get(item.id)]
+      const qty = Number(f(`q-${item.id}`)?.value || 0) + serials.length
+      const expected = D.rollup(item).bySafe[safe].inSafe
+      const expectedSerials = item.tracking === 'serial' ? D.available(item.id, safe).map(s => s.id) : []
+      const missingSerials = expectedSerials.filter(s => !serials.includes(s))
+      const unexpectedSerials = serials.filter(s => !expectedSerials.includes(s))
+      record.observed.push({ item: item.id, qty, serials, noBaseline: expected === null })
+      if (expected !== null && (expected !== qty || missingSerials.length || unexpectedSerials.length)) D.variances.push({
+        id: `${record.id}-${item.id}`, kind: 'monthly', source: record.id, safe, item: item.id, expected, found: qty,
+        serials: [...missingSerials, ...unexpectedSerials], missingSerials, unexpectedSerials, at: D.now, witness: record.witness, actor: D.currentUser,
+      })
+    }
+    D.counts.push(record)
+    state.lastCount = record.id
+    complete('savedCount', '#monthly-counts', attrSelector('data-count-row', record.id))
+  }, {
+    dirty: () => f('safe').value !== startSafe || Boolean(f('witness').value)
+      || $$('input', container).some(input => input.type === 'checkbox' ? input.checked : input.value.trim())
+      || [...observed.values()].some(s => s.size),
+    discardKey: 'discardCount',
+    handleReason: e => {
+      if (e.target.closest('[data-action="first-missing"]') && firstMissing) {
+        firstMissing.field.closest('details').open = true
+        firstMissing.field.focus()
+      }
+    },
+  })
+}
+function decisionDialog(id, opener) {
+  const row = D.discrepancies().find(d => d.id === id && !d.decision && d.actor !== D.currentUser)
+  if (!row) return
+  const item = D.item(row.item)
+  const ui = modal({
+    title: t('review'), subtitle: `${itemName(row.item)} · ${isol(row.source)}`,
+    body: `<div class="flow"><div>${varianceDetails(row)}</div>
+      ${select(t('outcome'), 'outcome', [['', t('chooseOutcome')], ...D.outcomes.map(key => [key, t(key), key === 'trainingOutcome' && (item.group !== 'ammo' || row.expected <= row.found)])])}
+      ${textarea(t('decisionNote'), 'decision', 'maxlength="240" required')}${witnessField('decision-witness', row.safe, [row.guard, row.actor], 'decisionWitness')}</div>`,
+    submit: t('save'), opener, first: '#f-outcome', preset: { decision: id },
+  })
+  const read = name => valueOf(name, ui.form)
+  ui.start(() => read('decision') && read('decision-witness') && read('outcome') ? '' : t('needDecision'), () => {
+    const outcome = read('outcome')
+    const decision = { actor: D.currentUser, witness: read('decision-witness'), note: read('decision'), outcome, at: D.now }
+    if (row.kind === 'ammunition') {
+      D.decisions.set(row.id, decision)
+    } else {
+      if (outcome === 'trainingOutcome' && row.safe) decision.roundsApplied = Math.min(D.rollup(item).bySafe[row.safe].inSafe, row.expected - row.found)
+      D.variances.find(v => v.id === row.id).decision = decision
+      if (item.tracking === 'serial' && ['lostOutcome', 'foundOutcome'].includes(outcome)) {
+        const wanted = outcome === 'lostOutcome' ? new Set(row.missingSerials || []) : new Set(row.serials || [])
+        for (const serial of D.serialLedger(item)) {
+          if (!wanted.has(serial.id) || serial.safe !== row.safe || !['inSafe', 'missingSerial', 'lost'].includes(serial.state)) continue
+          D.setSerialState(item, serial.id, outcome === 'lostOutcome' ? 'lost' : 'inSafe', { ...decision, action: outcome })
+        }
+      }
+    }
+    complete('savedDecision', '#discrepancies', attrSelector('data-variance-row', id))
+  })
+}
+function stateDialog(itemId, serial, opener) {
+  const item = D.item(itemId), asset = item && D.serialLedger(item).find(s => s.id === serial)
+  const changes = {
+    inSafe: [['sendRepair', 'inRepair'], ['markLost', 'lost'], ['writeOff', 'writtenOff'], ['moveSafe', 'inSafe']],
+    inRepair: [['returnRepair', 'inSafe'], ['markLost', 'lost'], ['writeOff', 'writtenOff']],
+    lost: [['writeOff', 'writtenOff']],
+  }[asset?.state]
+  if (!changes) return
+  const ui = modal({
+    title: t('changeState'), subtitle: `${itemName(itemId)} · ${isol(serial)} · ${safeName(asset.safe)} · ${t(asset.state)}`,
+    body: `<div class="flow">${select(t('status'), 'change-state', [['', t('chooseState')], ...changes.map(([key]) => [key, t(key)])])}
+      <div id="move-safe" hidden>${select(t('destination'), 'destination', safeOptions().filter(([safe]) => safe !== asset.safe))}</div>
+      ${textarea(t('reason'), 'state-reason', 'maxlength="240" required')}${witnessField('witness', asset.safe)}</div>`,
+    submit: t('save'), opener, first: '#f-change-state',
+  })
+  const read = name => valueOf(name, ui.form)
+  ui.start(() => {
+    $('#move-safe', ui.form).hidden = read('change-state') !== 'moveSafe'
+    return read('change-state') && read('state-reason').length >= 3 && read('witness') ? '' : t('needState')
+  }, () => {
+    const action = read('change-state'), safe = action === 'moveSafe' ? read('destination') : asset.safe
+    D.setSerialState(item, serial, changes.find(([key]) => key === action)[1], {
+      safe, actor: D.currentUser, witness: read('witness'), note: read('state-reason'), action, to: safe !== asset.safe ? safe : '',
+    })
+    complete('savedState', '#equipment-detail', attrSelector('data-serial-line', serial))
+  })
+}
+
+/* Shell and scriptable approval presets. */
+function viewState() {
+  const names = {
+    shift: ['firearmsAtSafe', 'shiftActivity'],
+    items: ['itemsTab'],
+    custody: ['custody'],
+    guards: ['guards'],
+    decisions: ['discrepancies'],
+    counts: ['shiftChecks', 'monthlyCounts'],
+    log: ['log'],
+  }[state.tab]
+  if (state.widget) names.splice(0, names.length, 'widgetTitle')
+  if (state.view === 'error') return `<section class="panel state">${heading('issue-title', t(names[0]))}
+    <div class="content"><p role="alert" class="danger-tone">${t('loadFailed')}</p>${button(t('retry'), 'retry', { cls: 'textbtn' })}</div></section>`
+  if (state.view === 'loading') return `<span class="sr" role="status">${t('loadingText')}</span>${names.map((key, index) => `<section class="panel state">
+    ${heading(`loading-${index}`, t(key))}<ul class="content bare-list" aria-hidden="true">
+    ${Array.from({ length: state.tab === 'shift' && index === 0 ? 2 : 3 }, () => '<li><span class="bar long"></span><span class="bar short"></span></li>').join('')}</ul></section>`).join('')}`
+  return names.map((key, index) => `<section class="panel state">${heading(`empty-${index}`, t(key))}<div class="content"><p class="muted">
+    ${t(({ shiftActivity: 'noneOut', monthlyCounts: 'noCounts', discrepancies: 'noDiscrepancies', log: 'noLog' })[key] || 'nothingHere')}</p>
+    </div></section>`).join('')
+}
+function render(focus = '') {
+  document.title = t('docTitle')
+  document.documentElement.lang = state.lang
+  document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr'
+  document.documentElement.dataset.theme = state.theme
+  $('#skip').textContent = t('skip')
+  const receipt = state.receipt && D.custodies.find(c => c.id === state.receipt)
+  app.hidden = Boolean(receipt)
+  printPreview.hidden = !receipt
+  if (receipt) {
+    app.innerHTML = ''
+    printPreview.innerHTML = receiptView(receipt)
+    if (focus) focusTo(focus)
+    return
+  }
+  printPreview.innerHTML = ''
+  const tab = state.tab, item = tab === 'items' && D.item(state.item), shift = D.shiftNow()
+  const title = state.widget ? t('widgetPreview') : item ? local(item) : t(({ shift: 'shiftDesk', items: 'catalogueTitle', custody: 'custodyLedger', counts: 'checkRecords', log: 'movementRecords' })[tab] || tab)
+  const note = state.widget ? t('widgetBlurb') : item ? '' : tab === 'shift'
+    ? t('shiftMeta', { shift: t(shift.id), period: periodTitle(shift), date: stamp(D.today) })
+    : tab === 'items' ? (showData() ? t('itemCount', { n: D.items.length }) : '') : t(({ decisions: 'countsHint' })[tab] || `${tab}Hint`)
+  const scope = `<label class="safe-context">${icon('safe')}<span class="sr">${t('scopeLabel')}</span><select id="safe-context">${options([...safeOptions(), ['', t('allSafes')]], state.scopeSafe)}</select></label>`
+  const needsDecision = showData() ? D.discrepancies().filter(v => !v.decision && (!v.safe || inScope(v))) : []
+  const decisionCount = needsDecision.length ? `<span class="nav-count">${fmtN(needsDecision.length)}</span>` : ''
+  const readers = needsDecision.filter(v => v.actor !== D.currentUser)
+  const actions = [button(t('find'), 'find', { cls: 'secondary phone-only', glyph: 'search' })]
+  if (!state.widget && edit()) {
+    if (tab === 'shift') {
+      if (showData() && shiftOut().length) actions.push(button(t('signin'), 'bulk-signin', { cls: 'secondary', glyph: 'return' }))
+      actions.push(button(t('signout'), 'signout', { cls: 'primary', glyph: 'plus' }))
+    }
+    if (tab === 'items') {
+      if (showData()) actions.push(button(t('receiveStock'), 'receive-stock', { id: item ? item.id : undefined, cls: item ? 'primary' : 'secondary', glyph: 'package' }))
+      if (!item) actions.push(button(t('addItem'), 'add-item', { cls: 'primary', glyph: 'plus' }))
+    }
+    if (tab === 'custody') actions.push(button(t('handover'), 'handover', { cls: 'primary', glyph: 'plus' }))
+    if (tab === 'counts') actions.push(button(t('newCount'), 'count', { cls: 'primary', glyph: 'plus' }))
+    if (tab === 'decisions' && readers.length) actions.push(button(t('review'), 'decision', { id: readers[0].id, cls: 'primary' }))
+  }
+  const previewOpen = $('#preview-menu')?.open
+  const mark = `<div class="brand-identity"><img src="../../frontend/public/brand/gssg-wordmark-on-dark.png" width="1440" height="229" alt="${t('org')}"><span>${t(state.widget ? 'dashboard' : 'assets')}</span></div>`
+  const preview = `<details class="preview-menu" id="preview-menu"${previewOpen ? ' open' : ''}><summary>${icon('filter')}${t('preview')}</summary>
+    <div class="preview-pop flow" role="region" aria-label="${t('previewLabel')}"><p class="desc">${t('proto')}</p>
+    ${select(t('preview'), 'view-mode', modes.map(mode => [mode, t(mode)]), state.view)}
+    ${auditTab(tab) && edit() ? select(t('acting'), 'actor-preview', [[D.armorer, t('edit')], [D.reviewer.id, t('secondActor')]], D.currentUser) : ''}
+    <div class="actions"><button type="button" class="secondary" data-action="lang" lang="${state.lang === 'en' ? 'ar' : 'en'}">${t('languageToggle')}</button>
+    ${button(t(state.theme === 'dark' ? 'lightTheme' : 'darkTheme'), 'theme', { cls: 'secondary' })}</div></div></details>`
+  const auditNav = auditTab(tab) && !state.widget ? `<nav class="segments audit-nav" aria-label="${t('audit')}">
+    ${Object.values(auditPanes).map(key => link(`${t(key)}${key === 'decisions' && needsDecision.length ? ` ${countTag(needsDecision.length)}` : ''}`, route({ tab: key }), 'tab',
+      { id: key, cls: 'secondary segment', attrs: key === tab ? 'aria-current="page"' : '' })).join('')}</nav>` : ''
+  const jobNav = state.widget ? '' : `<nav class="subtabs" aria-label="${t('armoryPages')}"><div class="wrap"><div class="job-nav">
+    ${navTabs.map(([key, label]) => link(`${t(label)}${key === 'decisions' ? decisionCount : ''}`, route({ tab: key }), 'tab',
+      { id: key, cls: 'subtab', attrs: (key === 'decisions' ? auditTab(tab) : tab === key) ? 'aria-current="page"' : '' })).join('')}</div>
+    ${button(`${t('findPlaceholder')}<kbd dir="ltr">/</kbd>`, 'find', { cls: 'secondary find-button', glyph: 'search', accessible: t('findArmory') })}</div></nav>`
+  app.innerHTML = `<header class="hero"><div class="wrap"><div class="brand-row">${mark}${preview}</div>
+    ${state.widget ? '' : `<nav class="sectiontabs" aria-label="${t('sections')}"><span class="inactive">${t('store')}</span><span class="inactive">${t('uniform')}</span>
+      ${link(t('armory'), route({ tab: 'shift' }), 'tab', { id: 'shift', cls: 'section-tab', attrs: 'aria-current="page"' })}</nav>`}</div></header>
+    ${jobNav}${missingBanner()}
+    <main id="main" class="wrap" tabindex="-1" aria-busy="${state.view === 'loading'}">
+      <div class="titlerow"><div class="title-copy">${item ? link(t('stockHome'), route({ tab: 'items' }), 'item-back', { cls: 'textbtn view-back', glyph: 'back' }) : ''}
+      <h1 id="screen-title" tabindex="-1">${title}</h1>
+      <div class="page-context">${!state.widget ? scope : ''}${note ? `<p class="finding">${note}</p>` : ''}</div></div>
+      ${!state.widget ? `<div class="page-actions">${actions.join('')}</div>` : ''}</div>
+      ${auditNav}${!showData() ? viewState() : state.widget ? widgetView() : { shift: shiftView, items: equipmentView, custody: custodyView, guards: guardsView, decisions: countsView, counts: countsView, log: logView }[tab]()}
+    </main>`
+  if (focus) focusTo(focus)
+}
+function sync({ push = false, hash = '' } = {}) {
+  const url = route({ ...detailPreset(), ...overlayPreset }) + hash
+  if (`${location.search}${location.hash}` !== url) history[push ? 'pushState' : 'replaceState'](null, '', url)
+}
+const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'instant' })
+function jumpTo(id) {
+  const node = id && document.getElementById(id)
+  if (!node) return
+  const region = node.closest('.section') || node
+  region.scrollIntoView({ block: 'start', behavior: 'instant' })
+  focusTo(`#${id}`)
+}
+function rememberSafe() {
+  try { sessionStorage.setItem('armory-safe', state.scopeSafe || 'all') } catch { /* file previews may not have storage */ }
+}
+function savedSafe() {
+  try { return sessionStorage.getItem('armory-safe') || 'S2' } catch { return 'S2' }
+}
+function useTab(key) {
+  state.tab = normalise(key, tabs, 'shift')
+  state.widget = false
+  state.receipt = state.item = state.custody = null
+  state.custodyDetail = state.showFormer = false
+  state.guardQuery = state.query = state.category = state.rackFilter = ''
+  state.guardFilter = state.stockView = 'all'
+  state.shiftLane = 'out'
+  state.custodyFilter = 'active'
+  state.itemPane = 'stock'
+  state.equipmentSerial = state.equipmentBack = ''
+  state.logSerial = state.logGuard = state.logType = ''
+  state.logFrom = D.daysAgo(13)
+  state.logTo = D.today
+  state.listScroll = 0
+}
+function selectCustody(id) {
+  state.tab = 'custody'
+  state.custodyDetail = true
+  state.custody = id
+  const record = D.custodies.find(c => c.id === id)
+  if (record && !inScope(record)) state.scopeSafe = record.safe
+  state.custodyFilter = 'all'
+}
+function openPreset(p) {
+  if (!edit() || state.widget || state.receipt) return
+  if (p.add && p.add !== '0') catalogueForm({ opener: actionSelector('add-item'), preset: { kind: p.add } })
+  else if (p.receive && p.receive !== '0' && showData()) receiveStock({ item: D.item(p.receive)?.id, opener: actionSelector('receive-stock') })
+  else if (p.bulk && p.bulk !== '0' && showData()) bulkReturn(actionSelector('bulk-signin'))
+  else if (p.signout && p.signout !== '0') assignment({ kit: p.kit, guard: p.guard, preset: true, opener: actionSelector('signout') })
+  else if (p.signin) signin(p.signin, { shortfall: true, opener: actionSelector('signin', p.signin) })
+  else if (p.check) shiftCheck(p.check, actionSelector('check', p.check), Number(p.checkMissing) || 0)
+  else if (p.count === 'new') monthlyCount(actionSelector('count'))
+  else if (p.licence) licenceDialog(p.licence, actionSelector('licence', p.licence))
+  else if (p.decision) decisionDialog(p.decision, actionSelector('decision', p.decision))
+}
+function setPreset(p, fromURL = false) {
+  discardDialog()
+  const inferred = p.item || p.add || p.receive ? 'items' : p.receipt || p.custody ? 'custody' : p.decision ? 'decisions'
+    : p.count ? 'counts' : p.licence ? 'guards' : p.signout || p.signin || p.check || p.bulk ? 'shift' : fromURL ? 'shift' : state.tab
+  const legacy = { today: 'shift', equipment: 'items', review: 'decisions', audit: auditPanes[p.pane] || 'decisions' }
+  useTab(p.check ? 'shift' : legacy[p.tab] || p.tab || inferred)
+  const presetSafe = p.safe || p.check || (p.signout && D.guard(p.guard)?.duty) || (p.signin && D.issues.find(r => r.id === p.signin)?.safe)
+    || (p.serial && serialItem(p.serial)?.serials.find(s => s.id === p.serial)?.safe) || (fromURL ? savedSafe() : state.scopeSafe || 'all')
+  state.scopeSafe = presetSafe === 'all' ? '' : D.safe(presetSafe)?.id || 'S2'
+  state.returnSelection.clear()
+  state.lang = normalise(p.lang, ['en', 'ar'], fromURL ? 'en' : state.lang)
+  state.theme = normalise(p.theme, ['light', 'dark'], fromURL ? 'light' : state.theme)
+  state.view = normalise(p.view, modes, fromURL ? 'edit' : state.view)
+  if (fromURL || p.actor !== undefined) D.currentUser = p.actor === 'reviewer' ? D.reviewer.id : D.armorer
+  if (fromURL) state.access = 'edit'
+  if (state.tab === 'log') {
+    state.logSerial = String(p.serial || '')
+    state.logGuard = D.guard(p.guard)?.id || ''
+    state.logType = normalise(p.event, movementTypes(), '')
+    if (state.logSerial && !p.safe) state.scopeSafe = ''
+    if (state.logSerial || state.logGuard) state.logFrom = ''
+  }
+  if (state.tab === 'guards') state.guardFilter = normalise(p.filter, ['all', 'missing', 'expiring', 'expired', 'valid'], 'all')
+  if (showData()) state.access = state.view
+  state.widget = p.widget === 1 || p.widget === '1' || p.widget === true
+  if (showData()) {
+    const item = p.item && D.item(p.item)
+    if (state.tab === 'items' && item) {
+      state.item = item.id
+      state.equipmentSerial = item.serials?.find(s => s.id === p.serial)?.id || ''
+    }
+    if (state.tab === 'custody' && p.custody && D.custodies.some(c => c.id === p.custody)) selectCustody(p.custody)
+    if (p.receipt && D.custodies.some(c => c.id === p.receipt)) {
+      selectCustody(p.receipt)
+      state.receipt = p.receipt
+    }
+  }
+  render()
+  const hash = fromURL && /^#[a-z-]+$/.test(location.hash) ? location.hash : ''
+  if (!fromURL) sync()
+  scrollToTop()
+  if (hash) jumpTo(hash.slice(1))
+  else if (state.equipmentSerial && state.item && !(p.add || p.receive)) {
+    const row = attrSelector('data-serial-row', state.equipmentSerial)
+    if (focusTo(row, false)) serialDetail(state.equipmentSerial, row)
+  }
+  else openPreset(p)
+}
+window.__armory = { set: p => setPreset(p) }
+
+const availableMutations = new Set(['signout', 'signin', 'bulk-signin', 'handover', 'end-custody', 'licence', 'serials', 'check', 'count', 'decision', 'state', 'add-item', 'receive-stock'])
+const isNarrow = () => matchMedia('(max-width:1000px)').matches
+function onClick(event) {
+  const el = event.target.closest('[data-action]')
+  if (!el || el.disabled || (el.tagName === 'A' && (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey))) return
+  event.preventDefault()
+  const { action, id } = el.dataset
+  if (availableMutations.has(action) && !edit()) return
+  const self = actionSelector(action, id)
+  switch (action) {
+    case 'lang': state.lang = state.lang === 'ar' ? 'en' : 'ar'; render(self); sync(); break
+    case 'theme': state.theme = state.theme === 'dark' ? 'light' : 'dark'; render(self); sync(); break
+    case 'retry': state.view = state.access; render('#screen-title'); sync(); break
+    case 'open-armory':
+    case 'tab':
+      discardDialog()
+      useTab(action === 'open-armory' ? 'shift' : id)
+      render('#screen-title'); scrollToTop(); sync({ push: true }); break
+    case 'jump': jumpTo(id); break
+    case 'go-counts':
+      discardDialog(); useTab(id === 'discrepancies' ? 'decisions' : 'counts'); render(); jumpTo(id); sync({ push: true, hash: jump(id) }); break
+    case 'serial-log':
+      discardDialog(); useTab('log'); state.logSerial = id; state.logFrom = ''; state.scopeSafe = ''
+      render('#screen-title'); scrollToTop(); sync({ push: true }); break
+    case 'board-serial':
+    case 'item':
+      discardDialog()
+      const scroll = state.tab === 'items' ? scrollY : 0
+      if (state.tab !== 'items') useTab('items')
+      if (!state.item) state.listScroll = scroll
+      state.equipmentBack = self
+      state.equipmentSerial = action === 'board-serial' ? id : ''
+      state.item = action === 'board-serial' ? el.dataset.item : id
+      state.itemPane = 'stock'
+      render(); scrollToTop()
+      const detail = state.equipmentSerial ? attrSelector('data-serial-row', state.equipmentSerial) : '#screen-title'
+      focusTo(detail, !state.equipmentSerial); sync({ push: true }); break
+    case 'item-back': {
+      const prev = state.equipmentBack || actionSelector('item', state.item)
+      state.item = null; state.equipmentSerial = ''
+      render(); window.scrollTo(0, state.listScroll); focusTo(prev); sync({ push: true }); break
+    }
+    case 'custody':
+      discardDialog()
+      if (!state.custodyDetail) state.listScroll = scrollY
+      selectCustody(id); render(); if (isNarrow()) scrollToTop()
+      focusTo('#custody-detail', false); sync({ push: true }); break
+    case 'custody-back':
+      state.custodyDetail = false
+      render(); window.scrollTo(0, state.listScroll); focusTo(actionSelector('custody', state.custody)); sync({ push: true }); break
+    case 'custody-filter': state.custodyFilter = id; render(self); break
+    case 'receipt':
+      selectCustody(id); state.receipt = id
+      render('#receipt-title'); scrollToTop(); sync({ push: true }); break
+    case 'receipt-close':
+      state.receipt = null
+      render(); scrollToTop(); focusTo(actionSelector('receipt', id), false); sync({ push: true }); break
+    case 'print': window.print(); break
+    case 'guard-filter': state.guardFilter = id; render(self); sync(); break
+    case 'clear-search':
+      if (id === 'guard-search') state.guardQuery = ''
+      else state.query = ''
+      render(`#${id}`); break
+    case 'clear-guard-filters':
+      state.guardFilter = 'all'; state.showFormer = false; state.guardQuery = ''; render(actionSelector('guard-filter', 'all')); sync(); break
+    case 'shift-lane':
+      state.shiftLane = id; render(self); break
+    case 'rack-filter':
+      state.rackFilter = state.rackFilter === id ? '' : id; render(self); break
+    case 'clear-selection':
+      state.returnSelection.clear(); render('#shift-queue'); break
+    case 'item-pane':
+      state.itemPane = id; render(self); break
+    case 'find': finder(self); break
+    case 'serial-detail': serialDetail(id, self); break
+    case 'guard-detail': guardDetail(id, self); break
+    case 'shift-record': shiftRecordDialog(id, self); break
+    case 'add-item': catalogueForm({ opener: self }); break
+    case 'receive-stock':
+      if (showData()) receiveStock({ item: id, opener: self })
+      break
+    case 'bulk-signin': bulkReturn(self); break
+    case 'signout': assignment({ opener: self }); break
+    case 'signin': signin(id, { opener: self }); break
+    case 'handover': assignment({ custody: true, kit: 'equipment', opener: self }); break
+    case 'end-custody': endCustody(id, self); break
+    case 'licence': licenceDialog(id, self); break
+    case 'serials': recordSerials(id, self); break
+    case 'check': shiftCheck(id, self); break
+    case 'count': monthlyCount(self); break
+    case 'decision': decisionDialog(id, self); break
+    case 'state': stateDialog(el.dataset.item, id, self); break
+  }
+}
+app.addEventListener('click', onClick)
+printPreview.addEventListener('click', onClick)
+app.addEventListener('change', e => {
+  if (e.target.id === 'f-view-mode') {
+    state.view = e.target.value
+    if (showData()) state.access = state.view
+    if (!showData()) state.item = state.custody = null
+    render('#f-view-mode')
+    sync()
+  } else if (e.target.id === 'show-former') {
+    state.showFormer = e.target.checked
+    render('#show-former')
+  } else if (e.target.id === 'f-actor-preview') {
+    D.currentUser = e.target.value
+    render('#f-actor-preview'); sync()
+  } else if (e.target.id === 'safe-context') {
+    state.scopeSafe = e.target.value
+    state.rackFilter = ''
+    state.returnSelection.clear()
+    rememberSafe(); render('#safe-context'); sync()
+  } else if (e.target.dataset.returnSelect) {
+    const id = e.target.dataset.returnSelect
+    if (e.target.checked) state.returnSelection.add(id); else state.returnSelection.delete(id)
+    render(attrSelector('data-return-select', id))
+  } else {
+    const map = { 'item-category': 'category', 'stock-view': 'stockView', 'log-type': 'logType', 'log-guard': 'logGuard', 'log-from': 'logFrom', 'log-to': 'logTo' }
+    const key = map[e.target.name]
+    if (!key) return
+    const date = ['log-from', 'log-to'].includes(e.target.name)
+    const value = date ? parseStockDate(e.target.value) : e.target.value
+    if (date && e.target.value.trim() && !value) { toast(t('needStockDate')); return }
+    state[key] = value
+    render(`#${e.target.id}`); sync()
+  }
+})
+app.addEventListener('input', e => {
+  const map = { 'guard-search': 'guardQuery', 'scope-search': 'query', 'f-log-serial': 'logSerial' }
+  const { id, value, selectionStart, selectionEnd } = e.target
+  if (!map[id] || e.isComposing) return
+  state[map[id]] = value
+  render(`#${id}`)
+  $(`#${id}`).setSelectionRange(selectionStart, selectionEnd)
+  if (id === 'f-log-serial') sync()
+})
+printPreview.addEventListener('keydown', e => {
+  if (e.key === 'Escape') $('[data-action="receipt-close"]', printPreview)?.click()
+})
+document.addEventListener('keydown', e => {
+  if (e.defaultPrevented || e.isComposing || dialog.open || state.receipt || e.target.closest('input,textarea,select,[contenteditable="true"]')) return
+  if (e.code === 'Slash' && !e.altKey || e.code === 'KeyK' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    finder(actionSelector('find'))
+  }
+})
+const fromLocation = () => {
+  const params = Object.fromEntries(new URLSearchParams(location.search))
+  setPreset(params, true)
+}
+window.addEventListener('popstate', fromLocation)
+fromLocation()
+</script>
+</body>
+</html>
