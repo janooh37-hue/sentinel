@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { ArmoryPersonCandidateRead, ArmoryPeopleFilters } from '@/lib/api'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
-import { licenceStatusKey, Ltr, useArmoryLocale } from '../armoryFormat'
+import { Ltr } from '../ArmoryLtr'
+import { licenceStatusKey, useArmoryLocale } from '../armoryFormat'
 import { useArmoryPeople } from '../armoryQueries'
 
 export type ArmoryPickerPurpose = ArmoryPeopleFilters['purpose']

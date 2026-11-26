@@ -8,11 +8,6 @@ export type ArmoryLicenceStatus = ArmoryQualificationRead['licence_status']
 /** Organization zone (SPEC rule 8). Prefer `window.time_zone` from a read when one is at hand. */
 export const ARMORY_TIME_ZONE = 'Asia/Dubai'
 
-/** Serial/code/G-number/date isolation: always LTR inside either UI direction. */
-export function Ltr({ children, className }: { children: React.ReactNode; className?: string }): React.JSX.Element {
-  return <bdi dir="ltr" className={className}>{children}</bdi>
-}
-
 /** Translation key for a serial state; one status language on every surface (shared enum keys). */
 export function serialStateKey(state: ArmorySerialState): string {
   return `assets.armory.serialState.${state}`
