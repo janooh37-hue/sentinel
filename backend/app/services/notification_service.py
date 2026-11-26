@@ -157,6 +157,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
         kind = "review" if role == "reviewer" or book_service.is_report(book) else "approval"
         subject = book.subject if book.confidentiality == "general" else None
         label = book.ref_number or subject or f"#{book.id}"
+        submitter_id = book.submitted_by_user_id
         items.append(
             ActionableItem(
                 kind,
@@ -164,8 +165,10 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 f"/books/{book.id}",
                 label,
                 subject=subject,
-                requester=sender_names.get(book.submitted_by_user_id),
-                requester_ar=sender_names_ar.get(book.submitted_by_user_id),
+                requester=sender_names.get(submitter_id) if submitter_id is not None else None,
+                requester_ar=(
+                    sender_names_ar.get(submitter_id) if submitter_id is not None else None
+                ),
             )
         )
 

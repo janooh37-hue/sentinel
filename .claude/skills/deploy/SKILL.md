@@ -1,6 +1,6 @@
 ---
 name: "deploy"
-description: "Deploy GSSG Manager to the production server (GSSGIT) after the user explicitly asks: confirm the work is merged to origin/main, show what will ship, run mng update on the server, and verify health."
+description: "Deploy GSSG Manager to the production server (GSSGIT) after the user explicitly asks: confirm origin/main is merged and its checks are green, show what will ship, run mng update on the server, and verify health."
 ---
 
 # /deploy

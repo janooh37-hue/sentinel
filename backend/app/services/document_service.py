@@ -35,7 +35,7 @@ from sqlalchemy import ColumnElement, and_, case, exists, func, not_, or_, selec
 from sqlalchemy.orm import InstrumentedAttribute, Session, aliased
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
-from app.config import get_settings
+from app.config import get_settings as get_settings
 from app.core import form_policy
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text

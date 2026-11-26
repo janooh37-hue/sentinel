@@ -21,7 +21,7 @@ Never base a writer on `dev`, and never merge a writer's branch into `dev` by ha
 ## Start a writer
 
 1. Worktree: `ssh dtop 'cd ~/Projects/sentinel && git fetch origin && git worktree add -b <branch> .worktrees/<name> <base>'` where `<base>` is `origin/main` or the feature branch.
-2. Brief: write it to `<worktree>/.tmp/brief-<name>.md` on dtop. Include the goal, owned files, whether edits are allowed, the check to run (`~/.venvs/sentinel/bin/python -m pytest <narrowest>`), "commit on this branch", and "write your report to `<worktree>/.tmp/handoff-<name>.md` and reply with the path only". Tell the agent to use subagents.
+2. Brief: write it to `<worktree>/.tmp/brief-<name>.md` on dtop. Include the goal, owned files, whether edits are allowed, the check to run (`~/Projects/sentinel/venv/bin/python -m pytest <narrowest>`), "commit on this branch", and "write your report to `<worktree>/.tmp/handoff-<name>.md` and reply with the path only". Tell the agent to use subagents.
 3. Tab: `herdr --machine dtop tab create --workspace <id> --cwd <worktree> --label <name> --no-focus`.
 4. Agent: `herdr --machine dtop agent start <name> --kind omp --pane <returned-pane> -- --model <model> --goal "Read .tmp/brief-<name>.md in this worktree and complete it exactly, including the report step."` Cheap model to explore, strong model to write and review.
 5. Goal mode starts working at once, so `agent start` may report the name lost; fix it with `herdr --machine dtop agent rename <pane> <name>`, then `herdr --machine dtop agent wait`.
@@ -35,5 +35,5 @@ Never base a writer on `dev`, and never merge a writer's branch into `dev` by ha
 ## Tests
 
 - Writers run the narrowest pytest for what they changed.
-- Before the PR, run the full suite once on dtop, in the feature worktree, with `-n 6`: `ssh dtop 'cd ~/Projects/sentinel/.worktrees/<name> && ~/.venvs/sentinel/bin/python -m pytest -n 6'`.
-- Requirements changed: `uv pip install -p ~/.venvs/sentinel/bin/python -r requirements.txt pytest-xdist` there first.
+- Before the PR, run the full suite once on dtop, in the feature worktree, with `-n 6`: `ssh dtop 'cd ~/Projects/sentinel/.worktrees/<name> && ~/Projects/sentinel/venv/bin/python -m pytest -n 6'`.
+- Requirements changed: `uv pip install -p ~/Projects/sentinel/venv/bin/python -r requirements.txt pytest-xdist` there first.
