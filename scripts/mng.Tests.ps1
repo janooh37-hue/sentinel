@@ -492,6 +492,8 @@ Describe 'mng update deploy gate' {
         $script:gateCheckRuns = @()
         $script:gateStatuses = @()
         $script:gateApiDown = $false
+        # GitHub's total number of status contexts; $null means "as many as listed".
+        $script:gateStatusTotal = $null
 
         Mock Invoke-RestMethod {
             if ($script:gateApiDown) { throw 'Unable to connect to the remote server' }
@@ -503,7 +505,9 @@ Describe 'mng update deploy gate' {
             }
             # GitHub reports a combined state of "pending" when a commit has
             # no statuses at all; the gate must judge the statuses themselves.
-            return [pscustomobject]@{ state = 'pending'; statuses = @($script:gateStatuses) }
+            $statusTotal = @($script:gateStatuses).Count
+            if ($null -ne $script:gateStatusTotal) { $statusTotal = $script:gateStatusTotal }
+            return [pscustomobject]@{ state = 'pending'; total_count = $statusTotal; statuses = @($script:gateStatuses) }
         }
         Mock Sync-BackendDependencies {}
     }
@@ -578,12 +582,17 @@ Describe 'mng update deploy gate' {
         @{ Case = 'missing checks'; Expected = 'pending'
            CheckRuns = @(); Statuses = @(); ApiDown = $false },
         @{ Case = 'unreachable'; Expected = 'unreachable'
-           CheckRuns = @(); Statuses = @(); ApiDown = $true }
+           CheckRuns = @(); Statuses = @(); ApiDown = $true },
+        @{ Case = 'unreachable (GitHub listed 100 of 101 commit statuses)'; Expected = 'unreachable'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'success'))
+           Statuses = @(1..100 | ForEach-Object { New-CommitStatus ('external-{0}' -f $_) 'success' })
+           StatusTotal = 101; ApiDown = $false }
     ) {
-        param($Case, $Expected, $CheckRuns, $Statuses, $ApiDown)
+        param($Case, $Expected, $CheckRuns, $Statuses, $ApiDown, $StatusTotal)
         $script:gateCheckRuns = $CheckRuns
         $script:gateStatuses = $Statuses
         $script:gateApiDown = $ApiDown
+        $script:gateStatusTotal = $StatusTotal
 
         $output = Invoke-GateUpdate
 

@@ -652,6 +652,10 @@ function Get-CommitChecks([string] $commit) {
     if ($listed -lt $runs.total_count) {
         return [pscustomobject]@{ State = 'unreachable'; Detail = ('GitHub listed only {0} of {1} check runs' -f $listed, $runs.total_count) }
     }
+    $listedStatuses = @($combined.statuses).Count
+    if ($listedStatuses -lt $combined.total_count) {
+        return [pscustomobject]@{ State = 'unreachable'; Detail = ('GitHub listed only {0} of {1} commit statuses' -f $listedStatuses, $combined.total_count) }
+    }
     $failed = @()
     $pending = @()
     $passed = 0
