@@ -17,7 +17,7 @@ import { normalizeDigits } from '@/lib/utils'
 import { Ltr } from '../ArmoryLtr'
 import { displayDate, orgDateIso, orgDateTimeInput, orgInputToInstant, useArmoryLocale } from '../armoryFormat'
 import {
-  armoryErrorMessage, invalidateArmoryQueries, useArmoryAccess, useArmoryItem, useArmoryItems, useArmoryKits,
+  armoryErrorMessage, invalidateArmoryQueries, useArmoryAccess, useArmoryItem, useArmoryItemDetails, useArmoryItems, useArmoryKits,
   useArmoryPeople, useArmoryShift, useCreateArmoryCustody, useCreateArmoryIssue,
 } from '../armoryQueries'
 import { armoryLink } from '../armoryUrl'
@@ -180,23 +180,40 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
     return { slot, line: slot.options.find(option => option.item.id === itemId) ?? slot.options[0] }
   })
   const qtyOf = (line: ArmoryKitLineRead) => whole(picks[line.item.id]?.qty ?? (line.role === 'optional' ? '0' : String(line.default_qty)))
+  const expirySlots = chosenSlots.filter(({ line }) => line.item.kind === 'expiry')
+  const batchDetails = useArmoryItemDetails(expirySlots.map(({ line }) => line.item.id), safeId)
+  // The units a line asks for; null = malformed input that blocks Save. A batch
+  // line counts only with a chosen batch, and its field shows a blank as 0.
+  function counted(line: ArmoryKitLineRead): number | null {
+    if (line.item.kind === 'expiry') {
+      const value = pick(line.item.id)
+      return value.batchId === null ? 0 : whole(value.qty || '0')
+    }
+    return line.item.kind === 'quantity' || line.item.kind === 'ammunition' ? qtyOf(line) : 0
+  }
+  /** Issuable units: the chosen unexpired batch for expiry lines, the safe's available stock otherwise. */
+  function limit(line: ArmoryKitLineRead): number {
+    if (line.item.kind !== 'expiry') return available(line.item.id)
+    const detail = batchDetails[expirySlots.findIndex(entry => entry.line.item.id === line.item.id)]
+    const batchId = pick(line.item.id).batchId
+    return detail?.batches.find(row => row.batch.id === batchId && row.safe.id === safeId && row.status !== 'expired')?.on_hand ?? 0
+  }
   const lines: ArmoryAssignmentLineInput[] = []
   if (firearm && pick(firearm.id).serialId !== null) lines.push({ item_id: firearm.id, qty: 1, serial_id: pick(firearm.id).serialId })
   for (const { line } of chosenSlots) {
     const kind = line.item.kind
     const value = pick(line.item.id)
+    const qty = counted(line) ?? 0
     if (kind === 'firearm' || kind === 'serial') {
       if (value.serialId !== null) lines.push({ item_id: line.item.id, qty: 1, serial_id: value.serialId })
     } else if (kind === 'expiry') {
-      const qty = whole(value.qty) ?? 0
       if (value.batchId !== null && qty > 0) lines.push({ item_id: line.item.id, qty, batch_id: value.batchId })
-    } else {
-      const qty = qtyOf(line) ?? 0
-      if (qty > 0) lines.push({ item_id: line.item.id, qty })
+    } else if (qty > 0) {
+      lines.push({ item_id: line.item.id, qty })
     }
   }
-  const overStock = chosenSlots.find(({ line }) => (line.item.kind === 'quantity' || line.item.kind === 'ammunition') && (qtyOf(line) ?? 0) > available(line.item.id))
-  const badQty = chosenSlots.find(({ line }) => (line.item.kind === 'quantity' || line.item.kind === 'ammunition') && qtyOf(line) === null)
+  const overStock = chosenSlots.find(({ line }) => (counted(line) ?? 0) > limit(line))
+  const badQty = chosenSlots.find(({ line }) => counted(line) === null)
   const excess = firearm !== null && chosenSlots.some(({ line }) => line.item.kind === 'ammunition' && (qtyOf(line) ?? 0) > line.default_qty)
   const dueInstant = mode === 'shift' && /^([01]\d|2[0-3]):[0-5]\d$/.test(dueTimeText) ? orgInputToInstant(`${dueDate}T${dueTimeText}`, window?.time_zone) : null
   const dueTime = dueInstant ? Date.parse(dueInstant) : NaN
@@ -214,7 +231,7 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
     if (requiresAck && !acknowledged) return t('assets.armory.needAck')
     if (firearm && pick(firearm.id).serialId === null) return t('assets.armory.needSerial')
     if (badQty) return t('assets.armory.needStockQuantity')
-    if (overStock) return t('assets.armory.onlyLeft', { count: available(overStock.line.item.id) })
+    if (overStock) return t('assets.armory.onlyLeft', { count: limit(overStock.line) })
     if (excess && excessReason.trim().length < 3) return t('assets.armory.needExcess')
     if (!lines.length) return t('assets.armory.needEquipment')
     if (mode === 'shift') {

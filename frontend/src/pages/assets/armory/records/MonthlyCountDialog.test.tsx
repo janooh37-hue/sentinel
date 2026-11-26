@@ -40,7 +40,9 @@ beforeEach(async () => {
 
 async function chooseWitness(user: UserEvent) {
   fireEvent.change(screen.getByRole('searchbox', { name: 'Count witness' }), { target: { value: 'Test' } })
-  await user.click(await screen.findByRole('button', { name: /Test Witness/ }))
+  // A result is choosable only once the typed search settles.
+  await waitFor(() => expect(screen.getByRole('button', { name: /Test Witness/ })).toBeEnabled())
+  await user.click(screen.getByRole('button', { name: /Test Witness/ }))
 }
 
 describe('MonthlyCountDialog', () => {

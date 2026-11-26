@@ -51,8 +51,12 @@ export function ArmoryPersonPicker({ purpose, safeId, label, value, onChange, ex
     { key: 'other', title: t('assets.armory.otherGuards'), rows: others },
   ]
   const ordered = groups.flatMap(group => group.rows)
+  // Results answer the debounced query. While the typed text is ahead of it,
+  // they describe another search: no key or click may choose one of them.
+  const stale = query.trim() !== debounced
 
   function choose(person: ArmoryPersonCandidateRead) {
+    if (stale) return
     setQuery('')
     onChange(person)
   }
@@ -80,10 +84,10 @@ export function ArmoryPersonPicker({ purpose, safeId, label, value, onChange, ex
       placeholder={t('assets.armory.searchGuard')} value={query} aria-controls={`${id}-results`}
       onChange={event => setQuery(event.target.value)}
       onKeyDown={event => {
-        if (event.key === 'ArrowDown' && ordered.length) { event.preventDefault(); focusResult(0) }
+        if (event.key === 'ArrowDown' && ordered.length && !stale) { event.preventDefault(); focusResult(0) }
         else if (event.key === 'Enter') { event.preventDefault(); if (ordered.length === 1) choose(ordered[0]) }
       }} />
-    <div id={`${id}-results`} className="max-h-72 overflow-y-auto rounded-md border border-border">
+    <div id={`${id}-results`} aria-busy={stale || undefined} className="max-h-72 overflow-y-auto rounded-md border border-border">
       {people.isPending && <p role="status" className="p-3 text-sm text-muted-foreground">{t('assets.armory.loadingText')}</p>}
       {people.isError && <div className="flex flex-wrap items-center gap-2 p-3">
         <p role="alert" className="text-sm text-destructive-text">{t('assets.armory.loadFailed')}</p>
@@ -98,7 +102,7 @@ export function ArmoryPersonPicker({ purpose, safeId, label, value, onChange, ex
           {group.rows.map(row => {
             const index = ordered.indexOf(row)
             return <li key={row.person.employee_id} className="border-b border-hairline last:border-0">
-              <button type="button" ref={button => { resultRefs.current[index] = button }} disabled={disabled}
+              <button type="button" ref={button => { resultRefs.current[index] = button }} disabled={disabled || stale}
                 className="flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 text-start hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 onClick={() => choose(row)}
                 onKeyDown={event => {

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { type QueryClient, type QueryKey, useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
+import { type QueryClient, type QueryKey, useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 
 import {
   api, ApiError, apiErrorMessage,
@@ -134,6 +134,24 @@ export function useArmoryItems(filters: ArmoryItemFilters = {}) {
 }
 export function useArmoryItem(itemId: number | null, safeId: number | null) {
   return useArmoryQuery('view', p => armoryKeys.item(p, itemId, safeId), () => api.getArmoryItem(itemId as number, safeId ?? undefined), itemId !== null)
+}
+/**
+ * Item details for several items in one safe, sharing `useArmoryItem`'s cache.
+ * A form validates its batch lines against these reads; the per-line selector
+ * owns the access-error eviction, so a denied read here only yields no data.
+ */
+export function useArmoryItemDetails(itemIds: readonly number[], safeId: number | null) {
+  const access = useArmoryAccess()
+  const allowed = access.canView && !access.isLoading && access.principal !== null && safeId !== null
+  return useQueries({
+    queries: itemIds.map(itemId => ({
+      queryKey: armoryKeys.item(access.principal, itemId, safeId),
+      queryFn: () => api.getArmoryItem(itemId, safeId ?? undefined),
+      enabled: allowed,
+      retry: (count: number, error: Error) => !isArmoryAccessError(error) && count < 2,
+    })),
+    combine: results => results.map(result => (allowed && !isArmoryAccessError(result.error) ? result.data : undefined)),
+  })
 }
 export function useArmorySummary(safeId: number | null = null) {
   return useArmoryQuery('view', p => armoryKeys.summary(p, safeId), () => api.getArmorySummary(safeId ?? undefined))

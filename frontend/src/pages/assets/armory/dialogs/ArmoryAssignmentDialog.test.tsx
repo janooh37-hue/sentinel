@@ -23,6 +23,7 @@ const RIFLE: ArmoryItemRef = { id: 10, name_en: 'Test rifle', name_ar: 'بندق
 const MAG: ArmoryItemRef = { id: 11, name_en: 'Test magazine', name_ar: 'مخزن اختبار', kind: 'quantity', category: 'accessories', drawing: 'magazine' }
 const ROUNDS: ArmoryItemRef = { id: 12, name_en: 'Test rounds', name_ar: 'عتاد اختبار', kind: 'ammunition', category: 'ammo', drawing: 'rounds' }
 const RADIO: ArmoryItemRef = { id: 13, name_en: 'Test radio', name_ar: 'جهاز اختبار', kind: 'serial', category: 'comms', drawing: 'radio' }
+const SPRAY: ArmoryItemRef = { id: 14, name_en: 'Test spray', name_ar: 'رذاذ اختبار', kind: 'expiry', category: 'nonlethal', drawing: 'spray' }
 const KITS: ArmoryKitRead[] = [
   { id: 1, code: 'rifle', name_en: 'Test rifle kit', name_ar: 'طقم بندقية اختبار', firearm_item: RIFLE, lines: [
     { item: MAG, role: 'default', default_qty: 2, substitutes_item_id: null },
@@ -30,6 +31,7 @@ const KITS: ArmoryKitRead[] = [
   ] },
   { id: 3, code: 'equipment', name_en: 'Test equipment only', name_ar: 'معدات اختبار فقط', firearm_item: null, lines: [
     { item: RADIO, role: 'optional', default_qty: 0, substitutes_item_id: null },
+    { item: SPRAY, role: 'optional', default_qty: 0, substitutes_item_id: null },
   ] },
 ]
 const TOTALS: ArmoryStockTotals = {
@@ -45,6 +47,10 @@ const serialsOf = (ref: ArmoryItemRef, codes: string[], safe = SAFE_A): ArmoryIt
   ...item(ref, codes.length), batches: [], recent_movements: [],
   serials: codes.map((code, index) => ({ id: ref.id * 100 + index, item: ref, serial_code: code, safe, state: 'in_safe', state_at: null, last_posting_id: 1, assignment_id: null, holder: null, overdue_minutes: null })),
 })
+const sprayBatches: ArmoryItemDetailRead = {
+  ...item(SPRAY, 4), serials: [], recent_movements: [],
+  batches: [{ batch: { id: 140, batch_ref: 'TEST-B-001', expires_on: '2030-01-31' }, safe: SAFE_A, on_hand: 4, status: 'valid' }],
+}
 const candidate = (overrides: Partial<ArmoryPersonCandidateRead> & { id?: string; name?: string } = {}): ArmoryPersonCandidateRead => ({
   person: { employee_id: overrides.id ?? 'T-0002', name_en: overrides.name ?? 'Test Guard One', name_ar: null, employee_status: 'Active', is_former: false },
   on_duty_here: true, course_round: 1, licence_status: 'valid', licence_expires_on: '2027-06-30', open_firearm: null, ...overrides,
@@ -80,9 +86,9 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   people = [candidate()]
   vi.spyOn(api, 'listArmoryKits').mockResolvedValue(KITS)
-  vi.spyOn(api, 'listArmoryItems').mockResolvedValue([item(RIFLE, 2), item(MAG, 5), item(ROUNDS, 30), item(RADIO, 1)])
+  vi.spyOn(api, 'listArmoryItems').mockResolvedValue([item(RIFLE, 2), item(MAG, 5), item(ROUNDS, 30), item(RADIO, 1), item(SPRAY, 4)])
   vi.spyOn(api, 'getArmoryItem').mockImplementation(async (itemId: number, safeId?: number) =>
-    itemId === RIFLE.id ? serialsOf(RIFLE, safeId === 2 ? [] : ['TEST-R-001', 'TEST-R-002']) : serialsOf(RADIO, ['TEST-T-001']))
+    itemId === RIFLE.id ? serialsOf(RIFLE, safeId === 2 ? [] : ['TEST-R-001', 'TEST-R-002']) : itemId === SPRAY.id ? sprayBatches : serialsOf(RADIO, ['TEST-T-001']))
   vi.spyOn(api, 'getArmoryShift').mockResolvedValue(SHIFT)
   vi.spyOn(api, 'listArmoryPeople').mockImplementation(async filters => people.filter(row => !filters.q || row.person.employee_id === filters.q))
 })
@@ -124,6 +130,56 @@ describe('ArmoryAssignmentDialog', () => {
     expect(screen.queryByText('No weapons course on record', { selector: 'p' })).not.toBeInTheDocument()
     await user.selectOptions(await screen.findByRole('combobox', { name: 'Serial number' }), '1300')
     await waitFor(() => expect(screen.getByRole('button', { name: 'Issue' })).toBeEnabled())
+  })
+
+  it('blocks Save on a malformed or over-stock batch quantity instead of dropping the batch line', async () => {
+    const user = userEvent.setup()
+    const create = vi.spyOn(api, 'createArmoryIssue').mockResolvedValue({ id: 6 } as ArmoryAssignmentRead)
+    mount()
+    await choosePerson(user)
+    await user.click(await screen.findByRole('radio', { name: 'Test equipment only' }))
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Serial number' }), '1300')
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Batch reference' }), '140')
+    const qty = screen.getByRole('textbox', { name: 'Quantity: Test spray' })
+    const submit = screen.getByRole('button', { name: 'Issue' })
+
+    await user.clear(qty)
+    await user.type(qty, '1.5')
+    expect(submit).toBeDisabled()
+    expect(screen.getByText('Enter a whole quantity of zero or more.')).toBeInTheDocument()
+
+    await user.clear(qty)
+    await user.type(qty, '5')
+    expect(submit).toBeDisabled()
+    expect(screen.getAllByText('Only 4 left.').length).toBeGreaterThan(0)
+    expect(create).not.toHaveBeenCalled()
+
+    await user.clear(qty)
+    await user.type(qty, '2')
+    await waitFor(() => expect(submit).toBeEnabled())
+    await user.click(submit)
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+    expect(create.mock.calls[0][0].lines).toEqual([{ item_id: 13, qty: 1, serial_id: 1300 }, { item_id: 14, qty: 2, batch_id: 140 }])
+  })
+
+  it('never lets Enter choose a result of the previous search before the new query settles', async () => {
+    const user = userEvent.setup()
+    people = [candidate(), candidate({ id: 'T-0004', name: 'Test Guard Two' })]
+    mount()
+    const search = await screen.findByRole('searchbox', { name: 'Guard' })
+    await user.type(search, 'T-0002')
+    await screen.findByRole('button', { name: /Test Guard One/ })
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Test Guard Two/ })).not.toBeInTheDocument())
+
+    await user.clear(search)
+    await user.type(search, 'T-0004{Enter}')
+    expect(screen.queryByRole('button', { name: 'Change: Guard' })).not.toBeInTheDocument()
+    expect(search).toHaveValue('T-0004')
+
+    await screen.findByRole('button', { name: /Test Guard Two/ })
+    await user.type(search, '{Enter}')
+    expect(await screen.findByRole('button', { name: 'Change: Guard' })).toBeInTheDocument()
+    expect(screen.getByText('Test Guard Two')).toBeInTheDocument()
   })
 
   it('blocks a second firearm with a link to the held record', async () => {
