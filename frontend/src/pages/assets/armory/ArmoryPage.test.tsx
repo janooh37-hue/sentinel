@@ -1,6 +1,10 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { setTimeout as delay } from 'node:timers/promises'
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Route, Routes, useLocation } from 'react-router-dom'
+import { I18nextProvider } from 'react-i18next'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { RequireCapability } from '@/components/shell/RequireCapability'
@@ -8,6 +12,7 @@ import { api, ApiError, type ArmoryItemDetailRead } from '@/lib/api'
 import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import i18n from '@/lib/i18n'
 import { ArmoryPage } from './ArmoryPage'
+import { armoryKeys } from './armoryQueries'
 import { candidates, firearm, issue, otherSafe, renderArmory, returnPosting, testDraft, testSafe, testShift } from './shift/shiftFixtures'
 
 const access = vi.hoisted(() => ({ principal: 1, view: true, edit: false }))
@@ -227,6 +232,50 @@ describe('Armory route shell', () => {
     await user.click(within(addItem).getByRole('button', { name: 'Cancel' }))
     const resumed = await screen.findByRole('dialog', { name: 'Receive stock' })
     expect(within(resumed).getByRole('textbox', { name: 'Reference' })).toHaveValue('TEST-KEEP')
+  })
+
+  it.each([
+    { status: 503, keepsDraft: true, attempts: 3 },
+    { status: 403, keepsDraft: false, attempts: 1 },
+  ])('handles a $status safes refetch with a dirty receipt open', async ({ status, keepsDraft, attempts }) => {
+    access.edit = true
+    const user = userEvent.setup()
+    const client = new QueryClient({ defaultOptions: { queries: { retryDelay: 0 } } })
+    vi.mocked(api.listArmoryItems).mockResolvedValue([{
+      ...emptyDetail, id: 100, name_en: 'TEST-COUNTED-ITEM', name_ar: 'صنف معدود للاختبار',
+      kind: 'quantity', category: 'accessories', drawing: 'case',
+    }])
+    render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}>
+      <MemoryRouter initialEntries={['/holdings/armory?tab=items&safe=1']}><ArmoryRoute /></MemoryRouter>
+    </I18nextProvider></QueryClientProvider>)
+    await user.click(await screen.findByRole('button', { name: 'Receive stock' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Receive stock' })
+    const receipt = within(dialog)
+    await receipt.findByRole('option', { name: 'TEST-COUNTED-ITEM' })
+    await user.selectOptions(receipt.getByRole('combobox', { name: 'Item' }), '100')
+    await user.type(receipt.getByRole('textbox', { name: 'Quantity' }), '3')
+    await user.type(receipt.getByRole('textbox', { name: 'Reference' }), 'TEST-KEEP')
+
+    const load = vi.mocked(api.listArmorySafes)
+    load.mockClear()
+    load.mockRejectedValue(new ApiError(status, `HTTP_${status}`, 'Synthetic detail'))
+    await act(async () => {
+      await client.refetchQueries({ queryKey: armoryKeys.safes(access.principal), exact: true })
+      // React Query notifies its observers on the next timer turn.
+      await delay(0)
+    })
+    expect(load).toHaveBeenCalledTimes(attempts)
+
+    if (keepsDraft) {
+      expect(dialog).toBeInTheDocument()
+      expect(receipt.getByRole('combobox', { name: 'Receiving safe' })).toHaveValue('1')
+      expect(receipt.getByRole('textbox', { name: 'Reference' })).toHaveValue('TEST-KEEP')
+      expect(receipt.getByRole('textbox', { name: 'Quantity' })).toHaveValue('3')
+    } else {
+      expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('errors.generic'))
+      expect(dialog).not.toBeInTheDocument()
+      expect(screen.queryByRole('combobox', { name: 'Safe' })).not.toBeInTheDocument()
+    }
   })
 
   it.each(['save the next item', 'close the wizard'] as const)('keeps Add another open during a receipt until operators %s', async finish => {

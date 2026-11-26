@@ -88,7 +88,8 @@ export function ArmoryPage(): React.JSX.Element | null {
   const navigate = useNavigate()
   const safesQuery = useArmorySafes()
   const safesDenied = isArmoryAccessError(safesQuery.error)
-  const safes = safesQuery.isSuccess ? safesQuery.data : EMPTY_SAFES
+  const cachedSafes = safesDenied ? undefined : safesQuery.data
+  const safes = cachedSafes ?? EMPTY_SAFES
   const canBrowse = safes.length > 0
   const scope = params.get('safe')
   const wantedSafe = scope ?? storedSafe()
@@ -284,7 +285,7 @@ export function ArmoryPage(): React.JSX.Element | null {
   )
 
   let pane: ReactNode
-  if (safesQuery.isError) {
+  if (safesQuery.isError && !cachedSafes) {
     pane = (
       <div className="space-y-3 rounded-lg border border-border bg-surface p-4">
         <p role="alert" className="text-sm text-destructive-text">{safesDenied ? armoryErrorMessage(safesQuery.error) : t('assets.armory.loadFailed')}</p>
