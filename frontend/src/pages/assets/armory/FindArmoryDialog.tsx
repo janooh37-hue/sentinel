@@ -126,7 +126,7 @@ function FinderBody({ open, onOpenChange, safeId, canEdit, onReturn, onReceiveSe
         <Search aria-hidden className="size-4 shrink-0 text-muted-foreground" />
         <Input ref={inputRef} type="search" dir="auto" value={search} maxLength={maxQueryLength} autoComplete="off"
           aria-label={t('assets.armory.findPlaceholder')} aria-controls={resultsId} placeholder={t('assets.armory.findPlaceholder')}
-          className="min-h-11 min-w-0 flex-1 appearance-none border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-search-cancel-button]:appearance-none"
+          className="min-h-11 min-w-0 flex-1 appearance-none border-0 bg-transparent px-0 focus-visible:outline-none! focus-visible:ring-0! focus-visible:ring-offset-0! [&::-webkit-search-cancel-button]:appearance-none"
           onChange={event => setSearch(event.target.value)} onKeyDown={onFieldKeyDown} />
         {search && <Button type="button" variant="ghost" size="icon" className="min-h-11 min-w-11 shrink-0"
           aria-label={t('assets.armory.clearSearch')} onClick={() => { setSearch(''); inputRef.current?.focus() }}>

@@ -439,7 +439,7 @@ function SerialSelect({ itemId, safeId, label, value, onChange, required = false
   const serials = (detail.data?.serials ?? []).filter(serial => serial.state === 'in_safe' && serial.safe?.id === safeId)
   if (detail.isError) return <p role="alert" className="text-sm text-destructive-text">{t('assets.armory.loadFailed')}</p>
   return <label htmlFor={id} className="flex flex-col gap-1 text-xs text-muted-foreground">{label}
-    <select id={id} dir="ltr" className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value ?? ''}
+    <select id={id} className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value ?? ''}
       disabled={!detail.data || serials.length === 0} onChange={event => onChange(event.target.value ? Number(event.target.value) : null)}>
       <option value="">{detail.isPending ? t('assets.armory.loadingText') : serials.length ? t(required ? 'assets.armory.chooseSerial' : 'assets.armory.none') : t('assets.armory.unavailableSerials')}</option>
       {serials.map(serial => <option key={serial.id} value={serial.id}>{serial.serial_code}</option>)}
@@ -456,7 +456,7 @@ function BatchSelect({ itemId, safeId, value, onChange, itemName }: { itemId: nu
   const chosen = batches.find(row => row.batch.id === value.batchId)
   return <div className="flex flex-wrap items-end gap-3">
     <label htmlFor={id} className="flex flex-col gap-1 text-xs text-muted-foreground">{t('assets.armory.batchNumber')}
-      <select id={id} dir="ltr" className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value.batchId ?? ''}
+      <select id={id} className="min-h-11 rounded-md border border-border bg-surface px-3 font-mono text-sm text-foreground" value={value.batchId ?? ''}
         disabled={batches.length === 0} onChange={event => onChange({ batchId: event.target.value ? Number(event.target.value) : null })}>
         <option value="">{batches.length ? t('assets.armory.none') : t('assets.armory.assignment.noBatches')}</option>
         {batches.map(row => <option key={row.batch.id} value={row.batch.id}>{row.batch.batch_ref} · {displayDate(row.batch.expires_on)}</option>)}
