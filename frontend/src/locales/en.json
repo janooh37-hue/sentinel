@@ -569,7 +569,8 @@
       "title": "Photo",
       "cta": "Upload a photo",
       "hint": "PNG or JPG, drag & drop or click",
-      "change": "Change photo"
+      "change": "Change photo",
+      "view": "View photo of {{name}}"
     },
     "passport": {
       "label": "Passport No.",

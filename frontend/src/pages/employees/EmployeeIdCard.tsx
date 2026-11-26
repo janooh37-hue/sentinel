@@ -7,6 +7,8 @@
  * edit ghost).
  *
  * Photo upload button (camera icon) is copied from the old EmployeeHero pattern.
+ * A real photo is an `EmployeePhotoPreview`: hover or focus enlarges it, a
+ * click or tap opens it full size. The initials tile has nothing to enlarge.
  * Gate: profile edit & camera need `employees.edit`; number correction needs
  * `employees.change_id`. The time sheet is hidden without `timesheet.view`.
  *
@@ -29,6 +31,8 @@ import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBa
 import { statusDetailText } from '@/components/employees/statusDetail'
 import { useEmployeePhoto } from '@/components/employees/useEmployeePhoto'
 import { lastCompletedMonth, spanMonthLabels } from '@/pages/timesheet/useTimesheet'
+
+import { EmployeePhotoPreview } from './EmployeePhotoPreview'
 
 const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
   Active: 'bg-success',
@@ -152,13 +156,11 @@ export function EmployeeIdCard({
         {/* Photo tile */}
         <div className="relative shrink-0">
           {employee.has_photo ? (
-            <img
+            <EmployeePhotoPreview
               src={photoSrc}
-              alt={name}
-              onError={(e) => {
-                ;(e.currentTarget as HTMLImageElement).style.visibility = 'hidden'
-              }}
-              className="h-20 w-20 rounded-[14px] object-cover ring-2 ring-white/20"
+              name={name}
+              altName={altName}
+              employeeId={employee.id}
             />
           ) : (
             <div

@@ -19,7 +19,7 @@
  * record offers is derived from today, and leaving `setTimeout` real keeps
  * React's and react-query's scheduling untouched.
  */
-import { render, screen, fireEvent } from '@testing-library/react'
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -206,5 +206,130 @@ describe('EmployeeIdCard — status pill dates', () => {
     expect(
       screen.getByText(/Transferred · .*Port A.* · .*15\/08\/2026.* → .*15\/11\/2026/),
     ).toBeInTheDocument()
+  })
+})
+
+/**
+ * The enlarged photo. Hover (a mouse pointer) or keyboard focus shows the
+ * peek, a non-modal enlargement marked `data-photo-peek`; a click or tap opens
+ * the full view as a dialog named after the employee. The peek's open delay
+ * (hover intent) runs on real timers, so the open assertions wait for it.
+ */
+describe('EmployeeIdCard — photo preview', () => {
+  const WITH_PHOTO = { ...EMPLOYEE, has_photo: true, photo_version: 'v7' } as EmployeeRead
+  const PHOTO_SRC = '/api/v1/employees/G7141/photo?v=v7'
+  const peek = (): HTMLElement | null => document.querySelector('[data-photo-peek]')
+  const viewButton = (): HTMLElement => screen.getByRole('button', { name: 'View photo of Rasel Miah' })
+
+  it('enlarges the photo while a mouse hovers it, and shrinks it when the mouse leaves', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+    expect(peek()!.querySelector('img')).toHaveAttribute('src', PHOTO_SRC)
+
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).toBeNull())
+  })
+
+  it('shows the same enlargement on keyboard focus, and Escape closes it', async () => {
+    wrap(WITH_PHOTO)
+    act(() => viewButton().focus())
+    await waitFor(() => expect(peek()).not.toBeNull())
+
+    fireEvent.keyDown(viewButton(), { key: 'Escape' })
+    await waitFor(() => expect(peek()).toBeNull())
+    expect(viewButton()).toHaveFocus()
+  })
+
+  it('opens the full view on a click, and its close control dismisses it', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.click(viewButton())
+    const dialog = await screen.findByRole('dialog', { name: 'Rasel Miah' })
+    expect(dialog.querySelector('img')).toHaveAttribute('src', PHOTO_SRC)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('opens the full view on a tap without the hover enlargement, and Escape dismisses it', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'touch' })
+    fireEvent.pointerDown(viewButton(), { pointerType: 'touch' })
+    act(() => viewButton().focus())
+    fireEvent.click(viewButton())
+    await screen.findByRole('dialog', { name: 'Rasel Miah' })
+    expect(peek()).toBeNull()
+
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('keeps the camera button an upload: its click opens the file picker, not the photo', async () => {
+    caps.add('employees.edit')
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    wrap(WITH_PHOTO)
+    const camera = screen.getByRole('button', { name: 'Change photo' })
+    fireEvent.pointerEnter(camera, { pointerType: 'mouse' })
+    fireEvent.click(camera)
+
+    expect(pick).toHaveBeenCalledTimes(1)
+    // Give the hover-intent delay time to fire if the camera had started it.
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(peek()).toBeNull()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    pick.mockRestore()
+  })
+
+  it('keeps the enlargement open while the pointer moves from the tile onto it', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(peek()!, { pointerType: 'mouse' })
+    // Well past the crossing grace delay.
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(peek()).not.toBeNull()
+  })
+
+  it('closes the enlargement once the pointer has left both the tile and the enlargement', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(peek()!, { pointerType: 'mouse' })
+
+    fireEvent.pointerLeave(peek()!, { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).toBeNull())
+  })
+
+  it('keeps the camera clear of the open enlargement, and its click still uploads', async () => {
+    caps.add('employees.edit')
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    wrap(WITH_PHOTO)
+    // The camera sits on the tile's bottom-end corner; give the tile a real box.
+    vi.spyOn(viewButton(), 'getBoundingClientRect').mockReturnValue(new DOMRect(150, 230, 80, 80))
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+    expect(parseFloat(peek()!.style.left)).toBeGreaterThan(230)
+
+    const camera = screen.getByRole('button', { name: 'Change photo' })
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(camera, { pointerType: 'mouse' })
+    fireEvent.click(camera)
+
+    expect(pick).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    pick.mockRestore()
+  })
+
+  it('offers no preview for an employee without a photo', async () => {
+    wrap(EMPLOYEE)
+    expect(screen.queryByRole('button', { name: /View photo/ })).not.toBeInTheDocument()
+    fireEvent.pointerEnter(screen.getByText('RM'), { pointerType: 'mouse' })
+    fireEvent.click(screen.getByText('RM'))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(peek()).toBeNull()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
