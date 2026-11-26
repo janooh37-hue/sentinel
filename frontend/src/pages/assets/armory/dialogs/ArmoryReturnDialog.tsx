@@ -28,8 +28,7 @@ interface Props {
 type LineCondition = NonNullable<ArmoryReturnLineInput['condition']>
 type ShortfallReason = ArmoryShortfallInput['reason']
 
-interface LineDraft {
-  source: ArmoryAssignmentLineRead
+interface LineEvidence {
   condition?: LineCondition
   faultNote?: string
   rounds?: string
@@ -38,9 +37,15 @@ interface LineDraft {
   shortfallNote?: string
 }
 
+interface LineDraft {
+  source: ArmoryAssignmentLineRead
+  confirmation: 'confirmed' | 'review' | 'omitted'
+  evidence?: LineEvidence
+}
+
 interface ReturnDraft {
   source: readonly ArmoryAssignmentLineRead[]
-  checked: ReadonlyMap<number, LineDraft>
+  entries: ReadonlyMap<number, LineDraft>
   witness: ArmoryPersonCandidateRead | null
 }
 
@@ -56,12 +61,14 @@ function sameLine(before: ArmoryAssignmentLineRead, after: ArmoryAssignmentLineR
 }
 
 function rebaseDraft(draft: ReturnDraft, source: readonly ArmoryAssignmentLineRead[]): ReturnDraft {
-  const checked = new Map<number, LineDraft>()
+  const entries = new Map<number, LineDraft>()
   for (const line of source) {
-    const previous = draft.checked.get(line.id)
-    if (line.remaining_qty > 0 && previous && sameLine(previous.source, line)) checked.set(line.id, previous)
+    const previous = draft.entries.get(line.id)
+    if (line.remaining_qty > 0 && previous) {
+      entries.set(line.id, sameLine(previous.source, line) ? previous : { ...previous, source: line, confirmation: 'review' })
+    }
   }
-  return { source, checked, witness: source.length ? draft.witness : null }
+  return { source, entries, witness: source.length ? draft.witness : null }
 }
 
 function countRounds(value: string, remaining: number): number | null {
@@ -70,11 +77,15 @@ function countRounds(value: string, remaining: number): number | null {
   return Number.isSafeInteger(count) && count <= remaining ? count : null
 }
 
-function planReturn(checked: ReadonlyMap<number, LineDraft>, custody: boolean) {
+function planReturn(entries: ReadonlyMap<number, LineDraft>, custody: boolean) {
   const lines: ArmoryReturnLineInput[] = []
   let needsWitness = custody
-  let error = checked.size ? undefined : 'assets.armory.needReturn'
-  for (const { source, condition = 'ok', faultNote, rounds, reason, reference, shortfallNote } of checked.values()) {
+  let confirmedCount = 0
+  let error: string | undefined
+  for (const { source, confirmation, evidence } of entries.values()) {
+    if (confirmation !== 'confirmed') continue
+    confirmedCount += 1
+    const { condition = 'ok', faultNote, rounds, reason, reference, shortfallNote } = evidence ?? {}
     const input: ArmoryReturnLineInput = {
       assignment_line_id: source.id, expected_remaining_qty: source.remaining_qty, returned_qty: source.remaining_qty,
     }
@@ -112,7 +123,7 @@ function planReturn(checked: ReadonlyMap<number, LineDraft>, custody: boolean) {
     }
     lines.push(input)
   }
-  return { lines, needsWitness, error }
+  return { lines, needsWitness, confirmedCount, error: error ?? (confirmedCount === 0 ? 'assets.armory.needReturn' : undefined) }
 }
 
 /** Reuse approved plural copy while keeping its inserted numeral directionally isolated. */
@@ -122,7 +133,7 @@ function CountCopy({ message, count }: { message: 'stillOut' | 'shortfall'; coun
   return <>{before}<Ltr className="tabular-nums">{count}</Ltr>{after}</>
 }
 
-function LineIdentity({ line }: { line: ArmoryAssignmentLineRead }) {
+function LineIdentity({ line, reviewId }: { line: ArmoryAssignmentLineRead; reviewId?: string }) {
   const { t, name } = useArmoryLocale()
   return <div className="min-w-0 space-y-1 py-2">
     <p className="break-words text-sm font-semibold"><bdi>{name(line.item)}</bdi></p>
@@ -138,6 +149,7 @@ function LineIdentity({ line }: { line: ArmoryAssignmentLineRead }) {
         <dt>{t('assets.armory.returns.outstandingQty')}:</dt><dd><Ltr className="tabular-nums">{line.remaining_qty}</Ltr></dd>
       </div>
     </dl>
+    {reviewId && <p id={reviewId} role="status" className="text-sm font-medium text-warning">{t('assets.armory.returns.lineChanged')}</p>}
   </div>
 }
 
@@ -145,17 +157,18 @@ interface LineProps {
   line: ArmoryAssignmentLineRead
   draft: LineDraft | undefined
   onCheck(checked: boolean): void
-  onEdit(patch: Partial<Omit<LineDraft, 'source'>>): void
+  onEdit(patch: LineEvidence): void
 }
 
-function ReturnCheckbox({ checked, onCheck, children, label }: {
+function ReturnCheckbox({ checked, onCheck, children, label, describedBy }: {
   checked: boolean
   onCheck(checked: boolean): void
   children: ReactNode
   label?: string
+  describedBy?: string
 }) {
   return <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm font-medium has-disabled:cursor-not-allowed">
-    <input type="checkbox" aria-label={label} checked={checked} onChange={event => onCheck(event.target.checked)}
+    <input type="checkbox" aria-label={label} aria-describedby={describedBy} checked={checked} onChange={event => onCheck(event.target.checked)}
       className="size-4 shrink-0 accent-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring" />
     {children}
   </label>
@@ -165,16 +178,17 @@ function EquipmentReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
   const { t, name } = useArmoryLocale()
   const id = useId()
   const serial = line.serial_id !== null
-  const condition = draft?.condition ?? 'ok'
+  const condition = draft?.evidence?.condition ?? 'ok'
+  const reviewId = draft?.confirmation === 'review' ? `${id}-review` : undefined
   const checkboxText = t(serial ? 'assets.armory.serialSeen' : 'assets.armory.returned')
   const checkboxLabel = serial && line.serial_code
     ? t('assets.armory.checkedSerial', { serial: line.serial_code })
     : `${checkboxText}: ${name(line.item)}`
   return <li className="border-b border-hairline last:border-0">
     <div role="group" aria-label={name(line.item)} className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3">
-      <LineIdentity line={line} />
-      <ReturnCheckbox checked={!!draft} onCheck={onCheck} label={checkboxLabel}>{checkboxText}</ReturnCheckbox>
-      {draft && serial && <div className="col-span-full space-y-3 pb-3">
+      <LineIdentity line={line} reviewId={reviewId} />
+      <ReturnCheckbox checked={draft?.confirmation === 'confirmed'} onCheck={onCheck} label={checkboxLabel} describedBy={reviewId}>{checkboxText}</ReturnCheckbox>
+      {draft && draft.confirmation !== 'omitted' && serial && <div className="col-span-full space-y-3 pb-3">
         <label className="grid gap-1.5 text-sm font-medium">
           {t('assets.armory.condition')}
           <select className={cn(NATIVE_SELECT, 'min-h-11 w-full sm:w-auto sm:justify-self-start')} value={condition}
@@ -185,7 +199,7 @@ function EquipmentReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
         </label>
         {condition === 'repair' && <div className="space-y-1.5">
           <label className="block text-sm font-medium" htmlFor={`${id}-fault`}>{t('assets.armory.fault')}</label>
-          <Textarea id={`${id}-fault`} dir="auto" maxLength={500} required value={draft.faultNote ?? ''}
+          <Textarea id={`${id}-fault`} dir="auto" maxLength={500} required value={draft.evidence?.faultNote ?? ''}
             onChange={event => onEdit({ faultNote: event.target.value })} />
         </div>}
       </div>}
@@ -196,22 +210,28 @@ function EquipmentReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
 function RoundsReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
   const { t } = useArmoryLocale()
   const id = useId()
-  const count = draft ? countRounds(draft.rounds ?? '', line.remaining_qty) : null
+  const evidence = draft?.evidence
+  const rounds = evidence?.rounds ?? ''
+  const count = countRounds(rounds, line.remaining_qty)
   const missing = count === null ? 0 : line.remaining_qty - count
+  const reviewId = draft?.confirmation === 'review' ? `${id}-review` : undefined
+  const countError = reviewId !== undefined && rounds.length > 0 && count === null
 
   return <li className="space-y-2 border-b border-hairline pb-3 last:border-0 last:pb-0">
-    <LineIdentity line={line} />
-    <ReturnCheckbox checked={!!draft} onCheck={onCheck}>{t('assets.armory.roundsCounted')}</ReturnCheckbox>
-    {draft && <div className="space-y-3">
+    <LineIdentity line={line} reviewId={reviewId} />
+    <ReturnCheckbox checked={draft?.confirmation === 'confirmed'} onCheck={onCheck} describedBy={reviewId}>{t('assets.armory.roundsCounted')}</ReturnCheckbox>
+    {draft && draft.confirmation !== 'omitted' && <div className="space-y-3">
       <div className="space-y-1.5">
         <label className="block text-sm font-medium" htmlFor={`${id}-rounds`}>{t('assets.armory.roundsReturned')}</label>
         <Input id={`${id}-rounds`} inputMode="numeric" dir="ltr" autoComplete="off" required
-          aria-describedby={`${id}-rounds-limit`} value={draft.rounds ?? ''} className="min-h-11 max-w-40 tabular-nums"
+          aria-invalid={countError || undefined} aria-describedby={`${id}-rounds-limit${countError ? ` ${id}-rounds-error` : ''}`}
+          value={rounds} className="min-h-11 max-w-40 tabular-nums"
           onChange={event => onEdit({ rounds: normalizeDigits(event.target.value) })} />
         <p id={`${id}-rounds-limit`} className="text-xs text-muted-foreground">
           <Ltr className="tabular-nums">0</Ltr>{' '}{t('assets.armory.returns.rangeTo')}{' '}
           <Ltr className="tabular-nums">{line.remaining_qty}</Ltr>
         </p>
+        {countError && <p id={`${id}-rounds-error`} className="text-sm text-destructive-text">{t('assets.armory.returns.countWithinOutstanding')}</p>}
       </div>
       {missing > 0 && <section className="space-y-3 rounded-md bg-warning-soft p-3">
         <div>
@@ -221,7 +241,7 @@ function RoundsReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="min-w-0 space-y-1.5">
             <label htmlFor={`${id}-reason`} className="block text-sm font-medium">{t('assets.armory.reason')}</label>
-            <select id={`${id}-reason`} required className={cn(NATIVE_SELECT, 'min-h-11 w-full')} value={draft.reason ?? ''}
+            <select id={`${id}-reason`} required className={cn(NATIVE_SELECT, 'min-h-11 w-full')} value={evidence?.reason ?? ''}
               onChange={event => onEdit({ reason: REASONS.find(reason => reason === event.target.value) })}>
               <option value="">{t('assets.armory.chooseReason')}</option>
               {REASONS.map(reason => <option key={reason} value={reason}>{t(`assets.armory.shortfallReason.${reason}`)}</option>)}
@@ -230,14 +250,14 @@ function RoundsReturnLine({ line, draft, onCheck, onEdit }: LineProps) {
           <div className="min-w-0 space-y-1.5">
             <label htmlFor={`${id}-reference`} className="block text-sm font-medium">{t('assets.armory.reference')}</label>
             <Input id={`${id}-reference`} dir="ltr" autoComplete="off" spellCheck={false} required maxLength={80}
-              aria-describedby={`${id}-reference-hint`} value={draft.reference ?? ''} className="min-h-11"
+              aria-describedby={`${id}-reference-hint`} value={evidence?.reference ?? ''} className="min-h-11"
               onChange={event => onEdit({ reference: event.target.value })} />
             <p id={`${id}-reference-hint`} className="text-xs text-muted-foreground">{t('assets.armory.shortfallReferenceRule')}</p>
           </div>
         </div>
-        {draft.reason === 'other' && <div className="space-y-1.5">
+        {evidence?.reason === 'other' && <div className="space-y-1.5">
           <label htmlFor={`${id}-note`} className="block text-sm font-medium">{t('assets.armory.reasonDetail')}</label>
-          <Textarea id={`${id}-note`} dir="auto" maxLength={500} required value={draft.shortfallNote ?? ''}
+          <Textarea id={`${id}-note`} dir="auto" maxLength={500} required value={evidence.shortfallNote ?? ''}
             onChange={event => onEdit({ shortfallNote: event.target.value })} />
         </div>}
       </section>}
@@ -263,20 +283,20 @@ function ReturnTask({ assignmentId, kind, onOpenChange, onSaved, returnFocusRef 
   const accessError = deniedWrite || (isArmoryAccessError(query.error) ? query.error : null)
   const record = accessError ? undefined : query.data
   const source = record?.state === 'active' ? record.lines : NO_LINES
-  const [draft, setDraft] = useState<ReturnDraft>(() => ({ source, checked: new Map(), witness: null }))
+  const [draft, setDraft] = useState<ReturnDraft>(() => ({ source, entries: new Map(), witness: null }))
   const [confirmDiscard, setConfirmDiscard] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
   const validationId = useId()
 
-  // The shared mutation invalidates reads on stale_return. Only confirmations
-  // against unchanged lines survive a fresh result, even on a background reload.
+  // The shared mutation refreshes stale returns. A changed line loses its
+  // confirmation, not the evidence the operator needs to reconcile it.
   if (draft.source !== source) setDraft(rebaseDraft(draft, source))
 
   const outstanding = source.filter(line => line.remaining_qty > 0)
   const equipment = outstanding.filter(line => line.item.kind !== 'ammunition')
   const ammunition = outstanding.filter(line => line.item.kind === 'ammunition')
-  const plan = planReturn(draft.checked, isCustody)
+  const plan = planReturn(draft.entries, isCustody)
   const excludeIds = [user?.employee_id, record?.holder.employee?.employee_id, record?.holder.supervisor?.employee_id]
     .filter((id): id is string => Boolean(id))
   const witness = draft.witness && !excludeIds.includes(draft.witness.person.employee_id) ? draft.witness : null
@@ -287,11 +307,11 @@ function ReturnTask({ assignmentId, kind, onOpenChange, onSaved, returnFocusRef 
   const readBusy = query.fetchStatus !== 'idle'
   const showForm = !!record && outstanding.length > 0
   const canSubmit = showForm && !busy && !readBusy && !query.isError && !mutation.isSuccess && !validation
-  const dirty = draft.checked.size > 0 || !!draft.witness
+  const dirty = draft.entries.size > 0 || !!draft.witness
   const title = t(isCustody ? 'assets.armory.endCustody' : 'assets.armory.signin')
   const closeLabel = t('assets.armory.cancel')
   const holder = record?.holder.employee ?? record?.holder.site_safe
-  const unconfirmed = outstanding.length - draft.checked.size
+  const unconfirmed = outstanding.length - plan.confirmedCount
 
   function requestClose() {
     if (busy) return
@@ -323,20 +343,23 @@ function ReturnTask({ assignmentId, kind, onOpenChange, onSaved, returnFocusRef 
   function lineProps(line: ArmoryAssignmentLineRead): LineProps {
     return {
       line,
-      draft: draft.checked.get(line.id),
+      draft: draft.entries.get(line.id),
       onCheck(checked) {
         setDraft(current => {
-          const next = new Map(current.checked)
-          if (checked) next.set(line.id, { source: line })
-          else next.delete(line.id)
-          return { ...current, checked: next }
+          const entries = new Map(current.entries)
+          const previous = entries.get(line.id)
+          if (checked) entries.set(line.id, { ...previous, source: line, confirmation: 'confirmed' })
+          else if (previous?.evidence) entries.set(line.id, { ...previous, confirmation: 'omitted' })
+          else entries.delete(line.id)
+          return { ...current, entries }
         })
       },
       onEdit(patch) {
         setDraft(current => {
-          const selected = current.checked.get(line.id)
-          if (!selected) return current
-          return { ...current, checked: new Map(current.checked).set(line.id, { ...selected, ...patch }) }
+          const entry = current.entries.get(line.id)
+          if (!entry) return current
+          const entries = new Map(current.entries).set(line.id, { ...entry, evidence: { ...entry.evidence, ...patch } })
+          return { ...current, entries }
         })
       },
     }

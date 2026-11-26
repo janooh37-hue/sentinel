@@ -3833,6 +3833,7 @@
         "originalQty": "Originally issued",
         "outstandingQty": "Still outstanding",
         "noOutstanding": "No items are outstanding on this record.",
+        "lineChanged": "This line changed. Your entries are kept. Review the outstanding quantity and confirm this line again.",
         "countWithinOutstanding": "Enter a whole count between zero and the outstanding quantity.",
         "rangeTo": "to",
         "needIndependentWitness": "Choose a witness who is not the holder, supervisor or recording armorer.",

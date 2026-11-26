@@ -10,6 +10,7 @@ import { api, ApiError } from '@/lib/api'
 import type { ArmoryAssignmentLineRead, ArmoryAssignmentRead, ArmoryPersonCandidateRead, ArmoryReturnRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { toast } from '@/lib/toast'
+import { armoryKeys } from '../armoryQueries'
 import { ArmoryReturnDialog } from './ArmoryReturnDialog'
 
 const access = vi.hoisted(() => ({ view: true, edit: true }))
@@ -95,7 +96,7 @@ function mount(kind: ArmoryAssignmentRead['kind'] = 'shift', initiallyOpen = tru
   }
 
   const rendered = render(view())
-  return { onSaved, refreshCapabilities: () => rendered.rerender(view()) }
+  return { client, onSaved, refreshCapabilities: () => rendered.rerender(view()) }
 }
 
 beforeEach(async () => {
@@ -242,13 +243,17 @@ describe('single Armory return', () => {
     expect(toast.success).toHaveBeenCalledWith('Custody ended.')
   })
 
-  it('refetches a stale record, clears changed confirmations, and never resubmits on its own', async () => {
+  it('keeps ammunition evidence after a stale return and posts it only after reconfirmation', async () => {
     const user = userEvent.setup()
     // The project's ES2023 lib predates Promise.withResolvers.
     let finishRefresh!: (record: ArmoryAssignmentRead) => void
     const refresh = new Promise<ArmoryAssignmentRead>(resolve => { finishRefresh = resolve })
-    const detail = vi.spyOn(api, 'getArmoryIssue').mockResolvedValueOnce(assignment([HELMETS, RADIO])).mockReturnValue(refresh)
-    const post = vi.spyOn(api, 'createArmoryReturn').mockRejectedValue(new ApiError(409, 'armory_stale_return', 'Untranslated backend message'))
+    const detail = vi.spyOn(api, 'getArmoryIssue').mockResolvedValueOnce(assignment([HELMETS, RADIO, AMMO])).mockReturnValue(refresh)
+    vi.spyOn(api, 'listArmoryPeople').mockResolvedValue([WITNESS])
+    const result = returnResult(assignment([{ ...HELMETS, remaining_qty: 1 }, RADIO, { ...AMMO, remaining_qty: 0 }]), WITNESS.person)
+    const post = vi.spyOn(api, 'createArmoryReturn')
+      .mockRejectedValueOnce(new ApiError(409, 'armory_stale_return', 'Untranslated backend message'))
+      .mockResolvedValue(result)
     const { onSaved } = mount()
 
     await screen.findByText('Test Helmet')
@@ -256,20 +261,87 @@ describe('single Armory return', () => {
     await user.click(radioBox())
     await user.selectOptions(screen.getByLabelText('Condition'), 'repair')
     await user.type(screen.getByLabelText('Fault'), 'Retain this note')
+    const counted = screen.getByRole('checkbox', { name: 'I counted the returned rounds' })
+    await user.click(counted)
+    await user.type(screen.getByLabelText('Rounds returned'), '1')
+    await user.selectOptions(screen.getByLabelText('Reason'), 'other')
+    await user.type(screen.getByLabelText('Reference'), 'TEST-INCIDENT')
+    await user.type(screen.getByLabelText('Describe the reason'), 'Test count verified')
+    await user.click(await screen.findByRole('button', { name: /Test Witness/ }))
     await user.click(submit())
 
     expect(await screen.findByRole('alert')).toHaveTextContent('This record changed since you opened it. Review the current lines and confirm again.')
     expect(detail).toHaveBeenCalledTimes(2)
     expect(submit()).toBeDisabled()
-    await act(async () => finishRefresh(assignment([{ ...HELMETS, remaining_qty: 1 }, RADIO])))
+    await act(async () => finishRefresh(assignment([{ ...HELMETS, remaining_qty: 1 }, RADIO, { ...AMMO, remaining_qty: 2 }])))
 
     await waitFor(() => expect(helmetsBox()).not.toBeChecked())
+    expect(screen.queryByLabelText('Rounds returned')).toHaveValue('1')
+    expect(screen.getByLabelText('Reason')).toHaveValue('other')
+    expect(screen.getByLabelText('Reference')).toHaveValue('TEST-INCIDENT')
+    expect(screen.getByLabelText('Describe the reason')).toHaveValue('Test count verified')
+    expect(counted).not.toBeChecked()
+    const roundsLine = within(counted.closest('li')!)
+    expect(roundsLine.getByRole('status')).toBeVisible()
+    expect(counted).toHaveAccessibleDescription(/confirm this line again/i)
+    expect(roundsLine.getByText('Still outstanding:').nextElementSibling).toHaveTextContent('2')
     expect(radioBox()).toBeChecked()
     expect(screen.getByLabelText('Condition')).toHaveValue('repair')
     expect(screen.getByLabelText('Fault')).toHaveValue('Retain this note')
     expect(submit()).toBeEnabled()
+    await user.click(radioBox())
+    expect(submit()).toBeDisabled()
     expect(post).toHaveBeenCalledTimes(1)
     expect(onSaved).not.toHaveBeenCalled()
+    await user.click(counted)
+    expect(submit()).toBeEnabled()
+    await user.click(submit())
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(result))
+    expect(post).toHaveBeenNthCalledWith(2, { assignment_id: 41, witness_employee_id: 'T-0004', lines: [
+      { assignment_line_id: 23, expected_remaining_qty: 2, returned_qty: 1, shortfall: {
+        reason: 'other', reference: 'TEST-INCIDENT', note: 'Test count verified',
+      } },
+    ] })
+  })
+
+  it('keeps an over-count after a background refresh and keeps its evidence when the count is corrected', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(api, 'getArmoryIssue').mockResolvedValue(assignment([AMMO]))
+    vi.spyOn(api, 'listArmoryPeople').mockResolvedValue([WITNESS])
+    const result = returnResult(assignment([{ ...AMMO, remaining_qty: 0 }], { state: 'ended' }), WITNESS.person)
+    const post = vi.spyOn(api, 'createArmoryReturn').mockResolvedValue(result)
+    const { client, onSaved } = mount()
+    const counted = await screen.findByRole('checkbox', { name: 'I counted the returned rounds' })
+    await user.click(counted)
+    await user.type(screen.getByLabelText('Rounds returned'), '2')
+    await user.selectOptions(screen.getByLabelText('Reason'), 'other')
+    await user.type(screen.getByLabelText('Reference'), 'TEST-INCIDENT')
+    await user.type(screen.getByLabelText('Describe the reason'), 'Test count verified')
+    await user.click(await screen.findByRole('button', { name: /Test Witness/ }))
+
+    act(() => { client.setQueryData(armoryKeys.issue(1, 41), assignment([{ ...AMMO, remaining_qty: 1 }])) })
+
+    await waitFor(() => expect(counted).not.toBeChecked())
+    expect(screen.queryByLabelText('Rounds returned')).toHaveValue('2')
+    expect(screen.getByText(i18n.t('assets.armory.returns.countWithinOutstanding'))).toBeVisible()
+    expect(submit()).toBeDisabled()
+
+    const count = screen.getByLabelText('Rounds returned')
+    await user.clear(count)
+    await user.type(count, '0')
+    expect(screen.getByLabelText('Reason')).toHaveValue('other')
+    expect(screen.getByLabelText('Reference')).toHaveValue('TEST-INCIDENT')
+    expect(screen.getByLabelText('Describe the reason')).toHaveValue('Test count verified')
+    expect(submit()).toBeDisabled()
+    expect(post).not.toHaveBeenCalled()
+    await user.click(counted)
+    await user.click(submit())
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(result))
+    expect(post).toHaveBeenCalledExactlyOnceWith({ assignment_id: 41, witness_employee_id: 'T-0004', lines: [
+      { assignment_line_id: 23, expected_remaining_qty: 1, returned_qty: 0, shortfall: {
+        reason: 'other', reference: 'TEST-INCIDENT', note: 'Test count verified',
+      } },
+    ] })
   })
 
   it.each([{ view: false, edit: true }, { view: true, edit: false }])('does not open or read without both capabilities (%j)', ({ view, edit }) => {
