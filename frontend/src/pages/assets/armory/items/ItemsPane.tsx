@@ -132,7 +132,7 @@ function Catalogue({ safeId, safes, onAddItem, onReceive, filters, search, onSea
       <Button type="button" variant="outline" className="min-h-11" onClick={() => void items.refetch()}>{t('assets.armory.retry')}</Button>
     </div> : !data ? <p role="status" className="px-3 py-4 text-sm text-muted-foreground sm:px-4">{t('assets.armory.loadingText')}</p>
       : data.length === 0 ? <p className="px-3 py-4 text-sm text-muted-foreground sm:px-4">{t('assets.armory.noEquipment')}</p>
-      : <table ref={list} role="table" aria-labelledby={headingId} className="w-full table-fixed border-collapse text-start text-sm">
+      : <table ref={list} role="table" aria-labelledby={headingId} className="block w-full table-fixed border-collapse text-start text-sm lg:table">
         <colgroup className="hidden lg:table-column-group"><col className="w-[26%]" /><col className="w-[12%]" />{STOCK_COLUMNS.map(([field]) => <col key={field} className="w-[8%]" />)}<col className="w-[9%]" /><col /></colgroup>
         <thead className="sr-only lg:not-sr-only">
           <tr className="border-b border-hairline text-xs text-muted-foreground">
@@ -145,8 +145,8 @@ function Catalogue({ safeId, safes, onAddItem, onReceive, filters, search, onSea
         </thead>
         {CATEGORIES.map(category => {
           const rows = grouped.get(category)
-          return rows ? <tbody role="rowgroup" key={category}>
-            <tr role="row" className="bg-surface-raised"><th scope="rowgroup" colSpan={8} className="px-3 py-2 text-start text-xs font-semibold sm:px-4">{t(`assets.armory.categoryName.${category}`)}</th></tr>
+          return rows ? <tbody role="rowgroup" className="block lg:table-row-group" key={category}>
+            <tr role="row" className="block bg-surface-raised lg:table-row"><th scope="rowgroup" colSpan={8} className="block px-3 py-2 text-start text-xs font-semibold sm:px-4 lg:table-cell">{t(`assets.armory.categoryName.${category}`)}</th></tr>
             {rows.map(item => {
               const stock = item.stock.find(row => row.safe.id === safeId) ?? item.totals
               return <tr key={item.id} role="row" className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 border-b border-hairline px-3 py-1 last:border-b-0 hover:bg-surface-raised lg:table-row lg:p-0">
