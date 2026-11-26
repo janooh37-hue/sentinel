@@ -17,11 +17,13 @@ import { LoginPage } from '@/pages/auth/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { RecordDeleteProvider } from '@/pages/books/RecordDeleteProvider'
+import { ARMORY_PATH } from '@/pages/assets/armory/armoryUrl'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
 import { AppLockContext } from '@/lib/appLockContext'
+import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { ATTENDANCE_ROSTER_CAPS } from '@/lib/workforceAttendance'
@@ -117,6 +119,7 @@ const StoreCountPage = lazy(loadStoreCountPage)
 const StoreDisposalsPage = lazy(loadStoreDisposalsPage)
 const StoreMovementsPage = lazy(loadStoreMovementsPage)
 const UniformPage = lazy(() => import('@/pages/assets/uniform/UniformPage').then(m => ({ default: m.UniformPage })))
+const ArmoryPage = lazy(() => import('@/pages/assets/armory/ArmoryPage').then(m => ({ default: m.ArmoryPage })))
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -192,14 +195,14 @@ function LedgerRoute(): React.JSX.Element {
   return <LedgerPage onNavigate={navigatePage} />
 }
 
-function AssetsRedirect(): React.JSX.Element {
+export function AssetsRedirect(): React.JSX.Element {
   const { has, isLoading } = useCapabilities()
   if (isLoading) return <PageSuspenseFallback />
 
-  // Store stays the default, including its existing denial/request flow when
-  // neither section is viewable. Each child route enforces its own capability.
-  const destination = !has('store.view') && has('uniform.view')
-    ? '/holdings/uniform'
+  // Keep Store's existing denial/request flow when no section is viewable.
+  const destination = has('store.view') ? '/holdings/store'
+    : has('uniform.view') ? '/holdings/uniform'
+    : has(ARMORY_VIEW_CAP) ? ARMORY_PATH
     : '/holdings/store'
   return <Navigate to={destination} replace />
 }
@@ -582,6 +585,10 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/holdings/uniform"
                 element={<RequireCapability cap="uniform.view"><UniformPage /></RequireCapability>}
+              />
+              <Route
+                path={ARMORY_PATH}
+                element={<RequireCapability cap={ARMORY_VIEW_CAP}><ArmoryPage /></RequireCapability>}
               />
               <Route
                 path="/holdings/store"

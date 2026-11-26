@@ -7317,6 +7317,606 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/armory/safes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Safes */
+        get: operations["list_armory_safes_api_v1_armory_safes_get"];
+        put?: never;
+        /** Create Armory Safe */
+        post: operations["create_armory_safe_api_v1_armory_safes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/site-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Site Options */
+        get: operations["list_armory_site_options_api_v1_armory_site_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Settings */
+        get: operations["get_armory_settings_api_v1_armory_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Armory Settings */
+        patch: operations["update_armory_settings_api_v1_armory_settings_patch"];
+        trace?: never;
+    };
+    "/api/v1/armory/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Items */
+        get: operations["list_armory_items_api_v1_armory_items_get"];
+        put?: never;
+        /** Create Armory Item */
+        post: operations["create_armory_item_api_v1_armory_items_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/items/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Item */
+        get: operations["get_armory_item_api_v1_armory_items__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/items/{item_id}/serials/record": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Armory Serials */
+        post: operations["record_armory_serials_api_v1_armory_items__item_id__serials_record_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/serials/{serial_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Serial */
+        get: operations["get_armory_serial_api_v1_armory_serials__serial_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/serials/{serial_id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move Armory Serial */
+        post: operations["move_armory_serial_api_v1_armory_serials__serial_id__movements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/kits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Kits */
+        get: operations["list_armory_kits_api_v1_armory_kits_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/stock/receipts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Receipt */
+        post: operations["create_armory_receipt_api_v1_armory_stock_receipts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/shift": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Shift */
+        get: operations["get_armory_shift_api_v1_armory_shift_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory People */
+        get: operations["list_armory_people_api_v1_armory_people_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/issues/{issue_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Issue */
+        get: operations["get_armory_issue_api_v1_armory_issues__issue_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Issue */
+        post: operations["create_armory_issue_api_v1_armory_issues_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/returns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Return */
+        post: operations["create_armory_return_api_v1_armory_returns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/returns/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Bulk Return */
+        post: operations["create_armory_bulk_return_api_v1_armory_returns_bulk_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/custody": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Custody */
+        get: operations["list_armory_custody_api_v1_armory_custody_get"];
+        put?: never;
+        /** Create Armory Custody */
+        post: operations["create_armory_custody_api_v1_armory_custody_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/custody/{custody_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Custody */
+        get: operations["get_armory_custody_api_v1_armory_custody__custody_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/guards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Guards */
+        get: operations["list_armory_guards_api_v1_armory_guards_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/guards/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Guard */
+        get: operations["get_armory_guard_api_v1_armory_guards__employee_id__get"];
+        /** Save Armory Qualification */
+        put: operations["save_armory_qualification_api_v1_armory_guards__employee_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/safes/{safe_id}/shift-checks/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Shift Check Draft */
+        get: operations["get_armory_shift_check_draft_api_v1_armory_safes__safe_id__shift_checks_draft_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/safes/{safe_id}/shift-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Shift Check */
+        post: operations["create_armory_shift_check_api_v1_armory_safes__safe_id__shift_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/safes/{safe_id}/monthly-counts/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Monthly Count Draft */
+        get: operations["get_armory_monthly_count_draft_api_v1_armory_safes__safe_id__monthly_counts_draft_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/safes/{safe_id}/monthly-counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Armory Monthly Count */
+        post: operations["create_armory_monthly_count_api_v1_armory_safes__safe_id__monthly_counts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/counts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Counts */
+        get: operations["list_armory_counts_api_v1_armory_counts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/counts/{count_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Count */
+        get: operations["get_armory_count_api_v1_armory_counts__count_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/discrepancies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Discrepancies */
+        get: operations["list_armory_discrepancies_api_v1_armory_discrepancies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/discrepancies/{discrepancy_id}/decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decide Armory Discrepancy */
+        post: operations["decide_armory_discrepancy_api_v1_armory_discrepancies__discrepancy_id__decision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Armory Movements */
+        get: operations["list_armory_movements_api_v1_armory_movements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/movements/{posting_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Movement */
+        get: operations["get_armory_movement_api_v1_armory_movements__posting_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/movements/{posting_id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Void Armory Movement */
+        post: operations["void_armory_movement_api_v1_armory_movements__posting_id__void_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/find": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find Armory Records */
+        get: operations["find_armory_records_api_v1_armory_find_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Summary */
+        get: operations["get_armory_summary_api_v1_armory_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Employee */
+        get: operations["get_armory_employee_api_v1_armory_employees__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/armory/employees/{employee_id}/clearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Armory Clearance */
+        get: operations["get_armory_clearance_api_v1_armory_employees__employee_id__clearance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/debug/logs": {
         parameters: {
             query?: never;
@@ -8990,6 +9590,1387 @@ export interface components {
              * @default false
              */
             is_default: boolean;
+        };
+        /** ArmoryActorRead */
+        ArmoryActorRead: {
+            /** User Id */
+            user_id: number;
+            employee: components["schemas"]["ArmoryPersonRead"] | null;
+            /** Display Name */
+            display_name: string | null;
+        };
+        /** ArmoryAlertsRead */
+        ArmoryAlertsRead: {
+            /**
+             * Now At
+             * Format: date-time
+             */
+            now_at: string;
+            /** Missing Firearm Count */
+            missing_firearm_count: number;
+            /** Missing Firearms */
+            missing_firearms: components["schemas"]["ArmorySerialRead"][];
+            /** Overdue Count */
+            overdue_count: number;
+            /** Overdue */
+            overdue: components["schemas"]["ArmoryAssignmentSummary"][];
+            /** Decision Count */
+            decision_count: number;
+            /** Due Check Count */
+            due_check_count: number;
+            /** Expired Batch Count */
+            expired_batch_count: number;
+            /** Expiring Batch Count */
+            expiring_batch_count: number;
+            licences: components["schemas"]["ArmoryLicenceCounts"];
+            /** Former Open Count */
+            former_open_count: number;
+        };
+        /** ArmoryAssignmentLineInput */
+        ArmoryAssignmentLineInput: {
+            /** Item Id */
+            item_id: number;
+            /** Qty */
+            qty: number;
+            /** Serial Id */
+            serial_id?: number | null;
+            /** Batch Id */
+            batch_id?: number | null;
+        };
+        /** ArmoryAssignmentLineRead */
+        ArmoryAssignmentLineRead: {
+            /** Id */
+            id: number;
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Qty */
+            qty: number;
+            /** Remaining Qty */
+            remaining_qty: number;
+            /** Serial Id */
+            serial_id: number | null;
+            /** Serial Code */
+            serial_code: string | null;
+            batch: components["schemas"]["ArmoryBatchRef"] | null;
+        };
+        /** ArmoryAssignmentPage */
+        ArmoryAssignmentPage: {
+            /** Items */
+            items: components["schemas"]["ArmoryAssignmentSummary"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** ArmoryAssignmentRead */
+        ArmoryAssignmentRead: {
+            /** Id */
+            id: number;
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "shift" | "custody";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "ended" | "voided";
+            safe: components["schemas"]["ArmorySafeRead"];
+            holder: components["schemas"]["ArmoryHolderRead"];
+            issuer: components["schemas"]["ArmoryActorRead"];
+            /**
+             * Issued At
+             * Format: date-time
+             */
+            issued_at: string;
+            /** Due At */
+            due_at: string | null;
+            /** Overdue Minutes */
+            overdue_minutes: number | null;
+            /** Licence Warning Acknowledged */
+            licence_warning_acknowledged: boolean;
+            /** Changed Kit */
+            changed_kit: boolean;
+            /** Lines */
+            lines: components["schemas"]["ArmoryAssignmentLineRead"][];
+            /** Kit Id */
+            kit_id: number;
+            /** Course Round Snapshot */
+            course_round_snapshot: number | null;
+            /** Licence Status At Issue */
+            licence_status_at_issue: ("missing" | "expired" | "expiring" | "valid") | null;
+            shift_window: components["schemas"]["ArmoryShiftWindowRead"] | null;
+            /** Grace Minutes */
+            grace_minutes: number | null;
+            /** Off Duty Reason */
+            off_duty_reason: ("cover" | "escort" | "training" | "other") | null;
+            /** Off Duty Note */
+            off_duty_note: string | null;
+            /** Excess Rounds Reason */
+            excess_rounds_reason: string | null;
+            /** Condition Note */
+            condition_note: string | null;
+            /** Ended At */
+            ended_at: string | null;
+            ended_by: components["schemas"]["ArmoryActorRead"] | null;
+            /** Return Ids */
+            return_ids: number[];
+            /** Voided At */
+            voided_at: string | null;
+            voided_by: components["schemas"]["ArmoryActorRead"] | null;
+            /** Void Reason */
+            void_reason: string | null;
+            receipt: components["schemas"]["ArmoryCustodyReceiptRead"] | null;
+        };
+        /** ArmoryAssignmentSummary */
+        ArmoryAssignmentSummary: {
+            /** Id */
+            id: number;
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "shift" | "custody";
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "active" | "ended" | "voided";
+            safe: components["schemas"]["ArmorySafeRead"];
+            holder: components["schemas"]["ArmoryHolderRead"];
+            issuer: components["schemas"]["ArmoryActorRead"];
+            /**
+             * Issued At
+             * Format: date-time
+             */
+            issued_at: string;
+            /** Due At */
+            due_at: string | null;
+            /** Overdue Minutes */
+            overdue_minutes: number | null;
+            /** Licence Warning Acknowledged */
+            licence_warning_acknowledged: boolean;
+            /** Changed Kit */
+            changed_kit: boolean;
+            /** Lines */
+            lines: components["schemas"]["ArmoryAssignmentLineRead"][];
+        };
+        /** ArmoryBatchIntake */
+        ArmoryBatchIntake: {
+            /** Batch Ref */
+            batch_ref: string;
+            /** Expires On */
+            expires_on: string;
+            /** Qty */
+            qty: number;
+        };
+        /** ArmoryBatchRead */
+        ArmoryBatchRead: {
+            batch: components["schemas"]["ArmoryBatchRef"];
+            safe: components["schemas"]["ArmorySafeRead"];
+            /** On Hand */
+            on_hand: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "expired" | "expiring" | "valid";
+        };
+        /** ArmoryBatchRef */
+        ArmoryBatchRef: {
+            /** Id */
+            id: number;
+            /** Batch Ref */
+            batch_ref: string;
+            /**
+             * Expires On
+             * Format: date
+             */
+            expires_on: string;
+        };
+        /** ArmoryBulkReturnCreate */
+        ArmoryBulkReturnCreate: {
+            /** Safe Id */
+            safe_id: number;
+            /** Records */
+            records: components["schemas"]["ArmoryReturnCreate"][];
+        };
+        /** ArmoryCheckReconciliation */
+        ArmoryCheckReconciliation: {
+            /** Signed Out */
+            signed_out: components["schemas"]["ArmorySerialRead"][];
+            /** In Custody */
+            in_custody: components["schemas"]["ArmorySerialRead"][];
+            /** In Repair */
+            in_repair: components["schemas"]["ArmorySerialRead"][];
+            /** Missing */
+            missing: components["schemas"]["ArmorySerialRead"][];
+            /** Lost */
+            lost: components["schemas"]["ArmorySerialRead"][];
+            /** Assigned Count */
+            assigned_count: number;
+        };
+        /** ArmoryCheckSlotRead */
+        ArmoryCheckSlotRead: {
+            window: components["schemas"]["ArmoryShiftWindowRead"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "due" | "missed" | "completed";
+            /** Count Id */
+            count_id: number | null;
+            /** Missing Count */
+            missing_count: number | null;
+        };
+        /** ArmoryClearanceLineRead */
+        ArmoryClearanceLineRead: {
+            item: components["schemas"]["ArmoryNameRead"];
+            /** Serial Code */
+            serial_code: string | null;
+            /** Remaining Qty */
+            remaining_qty: number;
+        };
+        /** ArmoryClearanceRead */
+        ArmoryClearanceRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Records */
+            records: components["schemas"]["ArmoryClearanceRecordRead"][];
+        };
+        /** ArmoryClearanceRecordRead */
+        ArmoryClearanceRecordRead: {
+            /** Id */
+            id: number;
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "shift" | "custody";
+            safe: components["schemas"]["ArmoryNameRead"];
+            /**
+             * Issued At
+             * Format: date-time
+             */
+            issued_at: string;
+            /** Due At */
+            due_at: string | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryClearanceLineRead"][];
+        };
+        /** ArmoryCountLineRead */
+        ArmoryCountLineRead: {
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Expected Qty */
+            expected_qty: number | null;
+            /** Observed Qty */
+            observed_qty: number;
+            /** Expected Serials */
+            expected_serials: components["schemas"]["ArmoryCountSerialRef"][];
+            /** Observed Serial Codes */
+            observed_serial_codes: string[];
+            /** Expected Unrecorded Qty */
+            expected_unrecorded_qty: number | null;
+            /** Observed Unrecorded Qty */
+            observed_unrecorded_qty: number | null;
+        };
+        /** ArmoryCountObservation */
+        ArmoryCountObservation: {
+            /** Item Id */
+            item_id: number;
+            /** Observed Qty */
+            observed_qty: number;
+            /** Observed Serial Codes */
+            observed_serial_codes?: string[];
+            /**
+             * Serials Complete
+             * @default false
+             */
+            serials_complete: boolean;
+        };
+        /** ArmoryCountPage */
+        ArmoryCountPage: {
+            /** Items */
+            items: components["schemas"]["ArmoryCountRead"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** ArmoryCountRead */
+        ArmoryCountRead: {
+            posting: components["schemas"]["ArmoryPostingRef"];
+            safe: components["schemas"]["ArmorySafeRead"];
+            actor: components["schemas"]["ArmoryActorRead"];
+            witness: components["schemas"]["ArmoryPersonRead"];
+            window: components["schemas"]["ArmoryShiftWindowRead"] | null;
+            /** Month */
+            month: string | null;
+            reconciliation: components["schemas"]["ArmoryCheckReconciliation"] | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryCountLineRead"][];
+            /** Discrepancy Ids */
+            discrepancy_ids: number[];
+        };
+        /** ArmoryCountSerialRef */
+        ArmoryCountSerialRef: {
+            /** Serial Id */
+            serial_id: number;
+            /** Serial Code */
+            serial_code: string;
+        };
+        /** ArmoryCustodyCreate */
+        ArmoryCustodyCreate: {
+            /** Safe Id */
+            safe_id: number;
+            /**
+             * Holder Kind
+             * @enum {string}
+             */
+            holder_kind: "person" | "site";
+            /** Holder Employee Id */
+            holder_employee_id?: string | null;
+            /** Holder Safe Id */
+            holder_safe_id?: number | null;
+            /** Supervisor Employee Id */
+            supervisor_employee_id?: string | null;
+            /** Kit Id */
+            kit_id: number;
+            /** Lines */
+            lines: components["schemas"]["ArmoryAssignmentLineInput"][];
+            /** Condition Note */
+            condition_note?: string | null;
+            /** Excess Rounds Reason */
+            excess_rounds_reason?: string | null;
+            /**
+             * Licence Warning Acknowledged
+             * @default false
+             */
+            licence_warning_acknowledged: boolean;
+        };
+        /** ArmoryCustodyReceiptLineRead */
+        ArmoryCustodyReceiptLineRead: {
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Qty */
+            qty: number;
+            /** Serial Code */
+            serial_code: string | null;
+        };
+        /** ArmoryCustodyReceiptRead */
+        ArmoryCustodyReceiptRead: {
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Issued At
+             * Format: date-time
+             */
+            issued_at: string;
+            source_safe: components["schemas"]["ArmoryNameRead"];
+            holder: components["schemas"]["ArmoryNameRead"];
+            /** Holder Employee Id */
+            holder_employee_id: string | null;
+            supervisor: components["schemas"]["ArmoryNameRead"] | null;
+            /** Supervisor Employee Id */
+            supervisor_employee_id: string | null;
+            armorer: components["schemas"]["ArmoryNameRead"];
+            /** Firearm Included */
+            firearm_included: boolean;
+            /** Licence Number */
+            licence_number: string | null;
+            /** Condition Note */
+            condition_note: string | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryCustodyReceiptLineRead"][];
+        };
+        /** ArmoryDecisionBatchInput */
+        ArmoryDecisionBatchInput: {
+            /** Batch Id */
+            batch_id: number;
+            /** Qty */
+            qty: number;
+        };
+        /** ArmoryDecisionCreate */
+        ArmoryDecisionCreate: {
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "found" | "used_in_training" | "lost" | "recording_error";
+            /** Note */
+            note: string;
+            /** Witness Employee Id */
+            witness_employee_id: string;
+            /** Batches */
+            batches?: components["schemas"]["ArmoryDecisionBatchInput"][];
+        };
+        /** ArmoryDecisionRead */
+        ArmoryDecisionRead: {
+            posting: components["schemas"]["ArmoryPostingRead"];
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "found" | "used_in_training" | "lost" | "recording_error";
+        };
+        /** ArmoryDiscrepancyPage */
+        ArmoryDiscrepancyPage: {
+            /** Items */
+            items: components["schemas"]["ArmoryDiscrepancyRead"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** ArmoryDiscrepancyRead */
+        ArmoryDiscrepancyRead: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "rounds_shortfall" | "missing_serial" | "unexpected_serial" | "monthly_quantity";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "resolved" | "voided";
+            source: components["schemas"]["ArmoryPostingRef"];
+            safe: components["schemas"]["ArmorySafeRead"];
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Serial Id */
+            serial_id: number | null;
+            /** Serial Code */
+            serial_code: string | null;
+            /** Assignment Line Id */
+            assignment_line_id: number | null;
+            person: components["schemas"]["ArmoryPersonRead"] | null;
+            /** Expected Qty */
+            expected_qty: number;
+            /** Observed Qty */
+            observed_qty: number;
+            recorder: components["schemas"]["ArmoryActorRead"];
+            source_witness: components["schemas"]["ArmoryPersonRead"] | null;
+            /** Shortfall Reason */
+            shortfall_reason: ("training" | "incident" | "lost" | "other") | null;
+            /** Reference */
+            reference: string | null;
+            /** Note */
+            note: string | null;
+            /** Allowed Outcomes */
+            allowed_outcomes: ("found" | "used_in_training" | "lost" | "recording_error")[];
+            /** Can Decide */
+            can_decide: boolean;
+            decision: components["schemas"]["ArmoryDecisionRead"] | null;
+        };
+        /** ArmoryDutyPostRead */
+        ArmoryDutyPostRead: {
+            /** Duty Unit */
+            duty_unit: string;
+            /** Duty Post */
+            duty_post: string;
+        };
+        /** ArmoryEmployeeRead */
+        ArmoryEmployeeRead: {
+            person: components["schemas"]["ArmoryPersonRead"];
+            qualification: components["schemas"]["ArmoryQualificationRead"];
+            /** Open Assignments */
+            open_assignments: components["schemas"]["ArmoryAssignmentSummary"][];
+            history: components["schemas"]["ArmoryAssignmentPage"];
+        };
+        /** ArmoryExpiryIntake */
+        ArmoryExpiryIntake: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "expiry";
+            /** Batches */
+            batches: components["schemas"]["ArmoryBatchIntake"][];
+            /**
+             * Counted Zero
+             * @default false
+             */
+            counted_zero: boolean;
+        };
+        /** ArmoryFindRead */
+        ArmoryFindRead: {
+            /** Serials */
+            serials: components["schemas"]["ArmorySerialRead"][];
+            /** Guards */
+            guards: components["schemas"]["ArmoryPersonRead"][];
+            /** Items */
+            items: components["schemas"]["ArmoryItemRef"][];
+            /** Custody */
+            custody: components["schemas"]["ArmoryAssignmentSummary"][];
+            /** Postings */
+            postings: components["schemas"]["ArmoryPostingRef"][];
+        };
+        /** ArmoryGuardPage */
+        ArmoryGuardPage: {
+            /** Items */
+            items: components["schemas"]["ArmoryGuardRead"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            filter_counts: components["schemas"]["ArmoryLicenceCounts"];
+        };
+        /** ArmoryGuardRead */
+        ArmoryGuardRead: {
+            person: components["schemas"]["ArmoryPersonRead"];
+            qualification: components["schemas"]["ArmoryQualificationRead"];
+            /** Open Assignments */
+            open_assignments: components["schemas"]["ArmoryAssignmentSummary"][];
+        };
+        /** ArmoryHolderRead */
+        ArmoryHolderRead: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "person" | "site";
+            employee: components["schemas"]["ArmoryPersonRead"] | null;
+            site_safe: components["schemas"]["ArmorySafeRead"] | null;
+            supervisor: components["schemas"]["ArmoryPersonRead"] | null;
+        };
+        /** ArmoryIntakeLineInput */
+        ArmoryIntakeLineInput: {
+            /** Item Id */
+            item_id: number;
+            /** Entry */
+            entry: components["schemas"]["ArmoryQuantityIntake"] | components["schemas"]["ArmorySerialIntake"] | components["schemas"]["ArmoryExpiryIntake"];
+        };
+        /** ArmoryItemCreate */
+        ArmoryItemCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "firearm" | "ammunition" | "serial" | "quantity" | "expiry";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "firearms" | "ammo" | "accessories" | "nonlethal" | "restraints" | "riot" | "comms";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "rifle" | "pistol" | "magazine" | "rounds" | "sling" | "holster" | "tool" | "rod" | "scabbard" | "grip" | "adapter" | "case" | "taser" | "spray" | "cartridge" | "cuffs" | "leg-irons" | "plastic" | "key" | "baton" | "helmet" | "shield" | "riot-suit" | "radio" | "bodycam" | "wand";
+            /** Optional Kit Ids */
+            optional_kit_ids?: number[];
+            /** Openings */
+            openings?: components["schemas"]["ArmoryOpeningInput"][];
+        };
+        /** ArmoryItemDetailRead */
+        ArmoryItemDetailRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "firearm" | "ammunition" | "serial" | "quantity" | "expiry";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "firearms" | "ammo" | "accessories" | "nonlethal" | "restraints" | "riot" | "comms";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "rifle" | "pistol" | "magazine" | "rounds" | "sling" | "holster" | "tool" | "rod" | "scabbard" | "grip" | "adapter" | "case" | "taser" | "spray" | "cartridge" | "cuffs" | "leg-irons" | "plastic" | "key" | "baton" | "helmet" | "shield" | "riot-suit" | "radio" | "bodycam" | "wand";
+            /** Preset Key */
+            preset_key: string | null;
+            /** Optional Kit Ids */
+            optional_kit_ids: number[];
+            /** Stock */
+            stock: components["schemas"]["ArmoryStockRead"][];
+            totals: components["schemas"]["ArmoryStockTotals"];
+            /** Serials */
+            serials: components["schemas"]["ArmorySerialRead"][];
+            /** Batches */
+            batches: components["schemas"]["ArmoryBatchRead"][];
+            /** Recent Movements */
+            recent_movements: components["schemas"]["ArmoryPostingRef"][];
+        };
+        /** ArmoryItemRead */
+        ArmoryItemRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "firearm" | "ammunition" | "serial" | "quantity" | "expiry";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "firearms" | "ammo" | "accessories" | "nonlethal" | "restraints" | "riot" | "comms";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "rifle" | "pistol" | "magazine" | "rounds" | "sling" | "holster" | "tool" | "rod" | "scabbard" | "grip" | "adapter" | "case" | "taser" | "spray" | "cartridge" | "cuffs" | "leg-irons" | "plastic" | "key" | "baton" | "helmet" | "shield" | "riot-suit" | "radio" | "bodycam" | "wand";
+            /** Preset Key */
+            preset_key: string | null;
+            /** Optional Kit Ids */
+            optional_kit_ids: number[];
+            /** Stock */
+            stock: components["schemas"]["ArmoryStockRead"][];
+            totals: components["schemas"]["ArmoryStockTotals"];
+        };
+        /** ArmoryItemRef */
+        ArmoryItemRef: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "firearm" | "ammunition" | "serial" | "quantity" | "expiry";
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "firearms" | "ammo" | "accessories" | "nonlethal" | "restraints" | "riot" | "comms";
+            /**
+             * Drawing
+             * @enum {string}
+             */
+            drawing: "rifle" | "pistol" | "magazine" | "rounds" | "sling" | "holster" | "tool" | "rod" | "scabbard" | "grip" | "adapter" | "case" | "taser" | "spray" | "cartridge" | "cuffs" | "leg-irons" | "plastic" | "key" | "baton" | "helmet" | "shield" | "riot-suit" | "radio" | "bodycam" | "wand";
+        };
+        /** ArmoryKitLineRead */
+        ArmoryKitLineRead: {
+            item: components["schemas"]["ArmoryItemRef"];
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "default" | "alternative" | "optional";
+            /** Default Qty */
+            default_qty: number;
+            /** Substitutes Item Id */
+            substitutes_item_id: number | null;
+        };
+        /** ArmoryKitRead */
+        ArmoryKitRead: {
+            /** Id */
+            id: number;
+            /**
+             * Code
+             * @enum {string}
+             */
+            code: "rifle" | "pistol" | "equipment";
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            firearm_item: components["schemas"]["ArmoryItemRef"] | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryKitLineRead"][];
+        };
+        /** ArmoryLicenceCounts */
+        ArmoryLicenceCounts: {
+            /** Missing */
+            missing: number;
+            /** Expired */
+            expired: number;
+            /** Expiring */
+            expiring: number;
+            /** Valid */
+            valid: number;
+        };
+        /** ArmoryMonthlyCountCreate */
+        ArmoryMonthlyCountCreate: {
+            /** Snapshot Token */
+            snapshot_token: string;
+            /** Witness Employee Id */
+            witness_employee_id: string;
+            /** Lines */
+            lines: components["schemas"]["ArmoryCountObservation"][];
+        };
+        /** ArmoryMonthlyCountDraftRead */
+        ArmoryMonthlyCountDraftRead: {
+            safe: components["schemas"]["ArmorySafeRead"];
+            /** Month */
+            month: string;
+            /** Snapshot Token */
+            snapshot_token: string;
+            /** Items */
+            items: components["schemas"]["ArmoryItemRef"][];
+        };
+        /** ArmoryMovementLineRead */
+        ArmoryMovementLineRead: {
+            /** Id */
+            id: number;
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Qty */
+            qty: number;
+            /** Serial Id */
+            serial_id: number | null;
+            /** Serial Code */
+            serial_code: string | null;
+            batch: components["schemas"]["ArmoryBatchRef"] | null;
+            /** Stock Delta */
+            stock_delta: number;
+            /** Before On Hand */
+            before_on_hand: number | null;
+            /** After On Hand */
+            after_on_hand: number | null;
+            /** Before State */
+            before_state: ("in_safe" | "signed_out" | "in_custody" | "in_repair" | "missing" | "lost" | "written_off") | null;
+            /** After State */
+            after_state: ("in_safe" | "signed_out" | "in_custody" | "in_repair" | "missing" | "lost" | "written_off") | null;
+            /** Before Safe Id */
+            before_safe_id: number | null;
+            /** After Safe Id */
+            after_safe_id: number | null;
+            /** Assignment Line Id */
+            assignment_line_id: number | null;
+            /** Remaining Before */
+            remaining_before: number | null;
+            /** Remaining After */
+            remaining_after: number | null;
+            /** Condition */
+            condition: ("ok" | "repair") | null;
+            /** Fault Note */
+            fault_note: string | null;
+        };
+        /** ArmoryNameRead */
+        ArmoryNameRead: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+        };
+        /** ArmoryOpenFirearmRead */
+        ArmoryOpenFirearmRead: {
+            /** Assignment Id */
+            assignment_id: number;
+            /**
+             * Assignment Kind
+             * @enum {string}
+             */
+            assignment_kind: "shift" | "custody";
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Serial Id */
+            serial_id: number;
+            /** Serial Code */
+            serial_code: string;
+        };
+        /** ArmoryOpeningInput */
+        ArmoryOpeningInput: {
+            /** Safe Id */
+            safe_id: number;
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Reference */
+            reference?: string | null;
+            /** Witness Employee Id */
+            witness_employee_id?: string | null;
+            /** Entry */
+            entry: components["schemas"]["ArmoryQuantityIntake"] | components["schemas"]["ArmorySerialIntake"] | components["schemas"]["ArmoryExpiryIntake"];
+        };
+        /** ArmoryPersonCandidateRead */
+        ArmoryPersonCandidateRead: {
+            person: components["schemas"]["ArmoryPersonRead"];
+            /** On Duty Here */
+            on_duty_here: boolean;
+            /** Course Round */
+            course_round: number | null;
+            /**
+             * Licence Status
+             * @enum {string}
+             */
+            licence_status: "missing" | "expired" | "expiring" | "valid";
+            /** Licence Expires On */
+            licence_expires_on: string | null;
+            open_firearm: components["schemas"]["ArmoryOpenFirearmRead"] | null;
+        };
+        /** ArmoryPersonRead */
+        ArmoryPersonRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Status */
+            employee_status: string;
+            /** Is Former */
+            is_former: boolean;
+        };
+        /** ArmoryPostingPage */
+        ArmoryPostingPage: {
+            /** Items */
+            items: components["schemas"]["ArmoryPostingRead"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** ArmoryPostingRead */
+        ArmoryPostingRead: {
+            /** Id */
+            id: number;
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "opening" | "receipt" | "serial_registration" | "shift_issue" | "custody" | "return" | "shift_check" | "monthly_count" | "serial_state" | "decision";
+            /** Safe Id */
+            safe_id: number;
+            /**
+             * Occurred On
+             * Format: date
+             */
+            occurred_on: string;
+            /** Occurred At */
+            occurred_at: string | null;
+            /** Voided At */
+            voided_at: string | null;
+            safe: components["schemas"]["ArmorySafeRead"];
+            destination_safe: components["schemas"]["ArmorySafeRead"] | null;
+            /** Related Posting Id */
+            related_posting_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            actor: components["schemas"]["ArmoryActorRead"];
+            witness: components["schemas"]["ArmoryPersonRead"] | null;
+            person: components["schemas"]["ArmoryPersonRead"] | null;
+            /** Reference */
+            reference: string | null;
+            /** Source */
+            source: ("supplier" | "head_office" | "other") | null;
+            /** Reason */
+            reason: string | null;
+            /** Note */
+            note: string | null;
+            /** Serial Action */
+            serial_action: ("send_repair" | "return_repair" | "mark_lost" | "write_off" | "transfer") | null;
+            /** Decision Outcome */
+            decision_outcome: ("found" | "used_in_training" | "lost" | "recording_error") | null;
+            voided_by: components["schemas"]["ArmoryActorRead"] | null;
+            /** Void Reason */
+            void_reason: string | null;
+            void_witness: components["schemas"]["ArmoryPersonRead"] | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryMovementLineRead"][];
+            /** Discrepancy Ids */
+            discrepancy_ids: number[];
+        };
+        /** ArmoryPostingRef */
+        ArmoryPostingRef: {
+            /** Id */
+            id: number;
+            /** Record Ref */
+            record_ref: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "opening" | "receipt" | "serial_registration" | "shift_issue" | "custody" | "return" | "shift_check" | "monthly_count" | "serial_state" | "decision";
+            /** Safe Id */
+            safe_id: number;
+            /**
+             * Occurred On
+             * Format: date
+             */
+            occurred_on: string;
+            /** Occurred At */
+            occurred_at: string | null;
+            /** Voided At */
+            voided_at: string | null;
+        };
+        /** ArmoryQualificationRead */
+        ArmoryQualificationRead: {
+            /** Version */
+            version: number;
+            /** Course Round */
+            course_round: number | null;
+            /** Licence Number */
+            licence_number: string | null;
+            /** Licence Expires On */
+            licence_expires_on: string | null;
+            /**
+             * Licence Status
+             * @enum {string}
+             */
+            licence_status: "missing" | "expired" | "expiring" | "valid";
+            /** Licence Days Left */
+            licence_days_left: number | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** ArmoryQualificationUpsert */
+        ArmoryQualificationUpsert: {
+            /** Course Round */
+            course_round: number | null;
+            /** Licence Number */
+            licence_number: string | null;
+            /** Licence Expires On */
+            licence_expires_on: string | null;
+        };
+        /** ArmoryQuantityIntake */
+        ArmoryQuantityIntake: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "quantity";
+            /** Qty */
+            qty: number;
+        };
+        /** ArmoryReceiptCreate */
+        ArmoryReceiptCreate: {
+            /** Safe Id */
+            safe_id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "opening" | "receipt";
+            /**
+             * Received On
+             * Format: date
+             */
+            received_on: string;
+            /** Source */
+            source?: ("supplier" | "head_office" | "other") | null;
+            /** Reference */
+            reference?: string | null;
+            /** Witness Employee Id */
+            witness_employee_id?: string | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryIntakeLineInput"][];
+        };
+        /** ArmoryReturnCreate */
+        ArmoryReturnCreate: {
+            /** Assignment Id */
+            assignment_id: number;
+            /** Witness Employee Id */
+            witness_employee_id?: string | null;
+            /** Lines */
+            lines: components["schemas"]["ArmoryReturnLineInput"][];
+        };
+        /** ArmoryReturnLineInput */
+        ArmoryReturnLineInput: {
+            /** Assignment Line Id */
+            assignment_line_id: number;
+            /** Expected Remaining Qty */
+            expected_remaining_qty: number;
+            /** Returned Qty */
+            returned_qty: number;
+            /** Condition */
+            condition?: ("ok" | "repair") | null;
+            /** Fault Note */
+            fault_note?: string | null;
+            shortfall?: components["schemas"]["ArmoryShortfallInput"] | null;
+        };
+        /** ArmoryReturnRead */
+        ArmoryReturnRead: {
+            posting: components["schemas"]["ArmoryPostingRead"];
+            assignment: components["schemas"]["ArmoryAssignmentSummary"];
+        };
+        /** ArmorySafeCreate */
+        ArmorySafeCreate: {
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            /** Vehicle Site Id */
+            vehicle_site_id?: number | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+        };
+        /** ArmorySafeRead */
+        ArmorySafeRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+            vehicle_site: components["schemas"]["ArmorySiteRead"] | null;
+            duty_post: components["schemas"]["ArmoryDutyPostRead"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** ArmorySerialDetailRead */
+        ArmorySerialDetailRead: {
+            /** Id */
+            id: number;
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Serial Code */
+            serial_code: string;
+            safe: components["schemas"]["ArmorySafeRead"] | null;
+            /** State */
+            state: ("in_safe" | "signed_out" | "in_custody" | "in_repair" | "missing" | "lost" | "written_off") | null;
+            /** State At */
+            state_at: string | null;
+            /** Last Posting Id */
+            last_posting_id: number;
+            /** Assignment Id */
+            assignment_id: number | null;
+            holder: components["schemas"]["ArmoryHolderRead"] | null;
+            /** Overdue Minutes */
+            overdue_minutes: number | null;
+            /** Recent Movements */
+            recent_movements: components["schemas"]["ArmoryPostingRef"][];
+        };
+        /** ArmorySerialIntake */
+        ArmorySerialIntake: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "serial";
+            /** Serial Codes */
+            serial_codes: string[];
+            /** Unrecorded Qty */
+            unrecorded_qty?: number | null;
+        };
+        /** ArmorySerialMovementCreate */
+        ArmorySerialMovementCreate: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "send_repair" | "return_repair" | "mark_lost" | "write_off" | "transfer";
+            /**
+             * Expected State
+             * @enum {string}
+             */
+            expected_state: "in_safe" | "signed_out" | "in_custody" | "in_repair" | "missing" | "lost" | "written_off";
+            /** Expected Safe Id */
+            expected_safe_id: number;
+            /** Expected Posting Id */
+            expected_posting_id: number;
+            /** Destination Safe Id */
+            destination_safe_id?: number | null;
+            /** Reason */
+            reason: string;
+            /** Witness Employee Id */
+            witness_employee_id: string;
+        };
+        /** ArmorySerialRead */
+        ArmorySerialRead: {
+            /** Id */
+            id: number;
+            item: components["schemas"]["ArmoryItemRef"];
+            /** Serial Code */
+            serial_code: string;
+            safe: components["schemas"]["ArmorySafeRead"] | null;
+            /** State */
+            state: ("in_safe" | "signed_out" | "in_custody" | "in_repair" | "missing" | "lost" | "written_off") | null;
+            /** State At */
+            state_at: string | null;
+            /** Last Posting Id */
+            last_posting_id: number;
+            /** Assignment Id */
+            assignment_id: number | null;
+            holder: components["schemas"]["ArmoryHolderRead"] | null;
+            /** Overdue Minutes */
+            overdue_minutes: number | null;
+        };
+        /** ArmorySerialRegistrationCreate */
+        ArmorySerialRegistrationCreate: {
+            /** Safe Id */
+            safe_id: number;
+            /** Serial Codes */
+            serial_codes: string[];
+            /** Reference */
+            reference?: string | null;
+            /** Witness Employee Id */
+            witness_employee_id?: string | null;
+        };
+        /** ArmorySettingsRead */
+        ArmorySettingsRead: {
+            /** Version */
+            version: number;
+            current: components["schemas"]["ArmoryShiftPolicyRead"];
+            pending: components["schemas"]["ArmoryShiftPolicyRead"] | null;
+        };
+        /** ArmorySettingsUpdate */
+        ArmorySettingsUpdate: {
+            /** Day Start */
+            day_start: string;
+            /** Night Start */
+            night_start: string;
+            /** Grace Minutes */
+            grace_minutes: number;
+        };
+        /** ArmoryShiftCheckCreate */
+        ArmoryShiftCheckCreate: {
+            /** Snapshot Token */
+            snapshot_token: string;
+            /** Observed Serial Ids */
+            observed_serial_ids: number[];
+            /** Confirm Missing */
+            confirm_missing: boolean;
+            /** Witness Employee Id */
+            witness_employee_id: string;
+        };
+        /** ArmoryShiftCheckDraftRead */
+        ArmoryShiftCheckDraftRead: {
+            safe: components["schemas"]["ArmorySafeRead"];
+            window: components["schemas"]["ArmoryShiftWindowRead"];
+            /** Snapshot Token */
+            snapshot_token: string;
+            /** Expected */
+            expected: components["schemas"]["ArmorySerialRead"][];
+            reconciliation: components["schemas"]["ArmoryCheckReconciliation"];
+        };
+        /** ArmoryShiftIssueCreate */
+        ArmoryShiftIssueCreate: {
+            /** Safe Id */
+            safe_id: number;
+            /** Employee Id */
+            employee_id: string;
+            /** Kit Id */
+            kit_id: number;
+            /** Lines */
+            lines: components["schemas"]["ArmoryAssignmentLineInput"][];
+            /** Due At */
+            due_at?: string | null;
+            /** Off Duty Reason */
+            off_duty_reason?: ("cover" | "escort" | "training" | "other") | null;
+            /** Off Duty Note */
+            off_duty_note?: string | null;
+            /** Excess Rounds Reason */
+            excess_rounds_reason?: string | null;
+            /**
+             * Licence Warning Acknowledged
+             * @default false
+             */
+            licence_warning_acknowledged: boolean;
+        };
+        /** ArmoryShiftPolicyRead */
+        ArmoryShiftPolicyRead: {
+            /** Day Start */
+            day_start: string;
+            /** Night Start */
+            night_start: string;
+            /** Grace Minutes */
+            grace_minutes: number;
+            /** Effective On */
+            effective_on: string | null;
+        };
+        /** ArmoryShiftRead */
+        ArmoryShiftRead: {
+            window: components["schemas"]["ArmoryShiftWindowRead"];
+            /** Safes */
+            safes: components["schemas"]["ArmoryShiftSafeRead"][];
+            attention: components["schemas"]["ArmoryAlertsRead"];
+        };
+        /** ArmoryShiftSafeRead */
+        ArmoryShiftSafeRead: {
+            safe: components["schemas"]["ArmorySafeRead"];
+            /** Firearms */
+            firearms: components["schemas"]["ArmorySerialRead"][];
+            /** Out */
+            out: components["schemas"]["ArmoryAssignmentSummary"][];
+            /** Returned Today */
+            returned_today: components["schemas"]["ArmoryReturnRead"][];
+            /** On Duty */
+            on_duty: components["schemas"]["ArmoryPersonCandidateRead"][];
+            /** Check History */
+            check_history: components["schemas"]["ArmoryCheckSlotRead"][];
+        };
+        /** ArmoryShiftWindowRead */
+        ArmoryShiftWindowRead: {
+            /** Time Zone */
+            time_zone: string;
+            /**
+             * Shift Date
+             * Format: date
+             */
+            shift_date: string;
+            /**
+             * Shift Kind
+             * @enum {string}
+             */
+            shift_kind: "day" | "night";
+            /**
+             * Starts At
+             * Format: date-time
+             */
+            starts_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /**
+             * Next Ends At
+             * Format: date-time
+             */
+            next_ends_at: string;
+            /** Grace Minutes */
+            grace_minutes: number;
+        };
+        /** ArmoryShortfallInput */
+        ArmoryShortfallInput: {
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "training" | "incident" | "lost" | "other";
+            /** Reference */
+            reference: string;
+            /** Note */
+            note?: string | null;
+        };
+        /** ArmorySiteOptionsRead */
+        ArmorySiteOptionsRead: {
+            /** Vehicle Sites */
+            vehicle_sites: components["schemas"]["ArmorySiteRead"][];
+            /** Duty Posts */
+            duty_posts: components["schemas"]["ArmoryDutyPostRead"][];
+        };
+        /** ArmorySiteRead */
+        ArmorySiteRead: {
+            /** Id */
+            id: number;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string;
+        };
+        /** ArmoryStockRead */
+        ArmoryStockRead: {
+            /** Opening Qty */
+            opening_qty: number | null;
+            /** Received Qty */
+            received_qty: number;
+            /** Known In Safe */
+            known_in_safe: number;
+            /** In Safe */
+            in_safe: number | null;
+            /** Available Qty */
+            available_qty: number;
+            /** Unrecorded Qty */
+            unrecorded_qty: number | null;
+            /** Out On Shift */
+            out_on_shift: number;
+            /** In Custody */
+            in_custody: number;
+            /** In Repair */
+            in_repair: number | null;
+            /** Missing */
+            missing: number | null;
+            /** Lost */
+            lost: number | null;
+            /** Written Off */
+            written_off: number | null;
+            /** Awaiting Rounds Decision */
+            awaiting_rounds_decision: number | null;
+            /** Expended Rounds */
+            expended_rounds: number | null;
+            /** Lost Rounds */
+            lost_rounds: number | null;
+            /** Settled Rounds */
+            settled_rounds: number | null;
+            /** Expired Qty */
+            expired_qty: number | null;
+            /** Book Total */
+            book_total: number | null;
+            safe: components["schemas"]["ArmorySafeRead"];
+        };
+        /** ArmoryStockTotals */
+        ArmoryStockTotals: {
+            /** Opening Qty */
+            opening_qty: number | null;
+            /** Received Qty */
+            received_qty: number;
+            /** Known In Safe */
+            known_in_safe: number;
+            /** In Safe */
+            in_safe: number | null;
+            /** Available Qty */
+            available_qty: number;
+            /** Unrecorded Qty */
+            unrecorded_qty: number | null;
+            /** Out On Shift */
+            out_on_shift: number;
+            /** In Custody */
+            in_custody: number;
+            /** In Repair */
+            in_repair: number | null;
+            /** Missing */
+            missing: number | null;
+            /** Lost */
+            lost: number | null;
+            /** Written Off */
+            written_off: number | null;
+            /** Awaiting Rounds Decision */
+            awaiting_rounds_decision: number | null;
+            /** Expended Rounds */
+            expended_rounds: number | null;
+            /** Lost Rounds */
+            lost_rounds: number | null;
+            /** Settled Rounds */
+            settled_rounds: number | null;
+            /** Expired Qty */
+            expired_qty: number | null;
+            /** Book Total */
+            book_total: number | null;
+        };
+        /** ArmoryVoid */
+        ArmoryVoid: {
+            /** Reason */
+            reason: string;
+            /** Witness Employee Id */
+            witness_employee_id?: string | null;
         };
         /**
          * ArrivedAfterCloseOut
@@ -11469,7 +13450,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits" | "store_expiring" | "store_low_stock" | "punch_log";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "quick_actions" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox" | "permits" | "store_expiring" | "store_low_stock" | "punch_log" | "armory_exceptions";
             /**
              * Visible
              * @default true
@@ -37410,6 +39391,1403 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UniformSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_safes_api_v1_armory_safes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySafeRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_safe_api_v1_armory_safes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmorySafeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySafeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_site_options_api_v1_armory_site_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySiteOptionsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_settings_api_v1_armory_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySettingsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_armory_settings_api_v1_armory_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmorySettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySettingsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_items_api_v1_armory_items_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+                category?: ("firearms" | "ammo" | "accessories" | "nonlethal" | "restraints" | "riot" | "comms") | null;
+                q?: string | null;
+                stock_view?: "all" | "needs_attention";
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryItemRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_item_api_v1_armory_items_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryItemDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_item_api_v1_armory_items__item_id__get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+            };
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryItemDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_armory_serials_api_v1_armory_items__item_id__serials_record_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmorySerialRegistrationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_serial_api_v1_armory_serials__serial_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmorySerialDetailRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_armory_serial_api_v1_armory_serials__serial_id__movements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                serial_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmorySerialMovementCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_kits_api_v1_armory_kits_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryKitRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_receipt_api_v1_armory_stock_receipts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryReceiptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_shift_api_v1_armory_shift_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryShiftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_people_api_v1_armory_people_get: {
+        parameters: {
+            query: {
+                purpose: "issue" | "custody" | "witness" | "qualification";
+                q?: string | null;
+                safe_id?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPersonCandidateRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_issue_api_v1_armory_issues__issue_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                issue_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_issue_api_v1_armory_issues_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryShiftIssueCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_return_api_v1_armory_returns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryReturnCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryReturnRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_bulk_return_api_v1_armory_returns_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryBulkReturnCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryReturnRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_custody_api_v1_armory_custody_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+                state?: "active" | "ended" | "all";
+                q?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAssignmentPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_custody_api_v1_armory_custody_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryCustodyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_custody_api_v1_armory_custody__custody_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                custody_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAssignmentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_guards_api_v1_armory_guards_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                licence_status?: ("missing" | "expired" | "expiring" | "valid") | null;
+                include_former?: boolean;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryGuardPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_guard_api_v1_armory_guards__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryGuardRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_armory_qualification_api_v1_armory_guards__employee_id__put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryQualificationUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryGuardRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_shift_check_draft_api_v1_armory_safes__safe_id__shift_checks_draft_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                safe_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryShiftCheckDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_shift_check_api_v1_armory_safes__safe_id__shift_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                safe_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryShiftCheckCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_monthly_count_draft_api_v1_armory_safes__safe_id__monthly_counts_draft_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                safe_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryMonthlyCountDraftRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_armory_monthly_count_api_v1_armory_safes__safe_id__monthly_counts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                safe_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryMonthlyCountCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_counts_api_v1_armory_counts_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+                kind?: ("shift_check" | "monthly_count") | null;
+                month?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryCountPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_count_api_v1_armory_counts__count_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                count_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryCountRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_discrepancies_api_v1_armory_discrepancies_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+                status?: "open" | "resolved" | "all";
+                discrepancy_id?: number | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryDiscrepancyPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decide_armory_discrepancy_api_v1_armory_discrepancies__discrepancy_id__decision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discrepancy_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryDecisionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryDiscrepancyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_armory_movements_api_v1_armory_movements_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+                item_id?: number | null;
+                serial?: string | null;
+                employee_id?: string | null;
+                q?: string | null;
+                from?: string | null;
+                to?: string | null;
+                kind?: ("opening" | "receipt" | "serial_registration" | "shift_issue" | "custody" | "return" | "shift_check" | "monthly_count" | "serial_state" | "decision") | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_movement_api_v1_armory_movements__posting_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                posting_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    void_armory_movement_api_v1_armory_movements__posting_id__void_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                posting_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArmoryVoid"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryPostingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    find_armory_records_api_v1_armory_find_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                recent_safe_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryFindRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_summary_api_v1_armory_summary_get: {
+        parameters: {
+            query?: {
+                safe_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryAlertsRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_employee_api_v1_armory_employees__employee_id__get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryEmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_armory_clearance_api_v1_armory_employees__employee_id__clearance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArmoryClearanceRead"];
                 };
             };
             /** @description Validation Error */

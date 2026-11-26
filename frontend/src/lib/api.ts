@@ -417,6 +417,112 @@ export type StoreUsage = components['schemas']['StoreUsage']
 export type StoreUsageRow = components['schemas']['StoreUsageRow']
 export type StoreSuggestion = components['schemas']['StoreSuggestion']
 
+// --- assets: armory (generated schema aliases; filters from generated operations) ---
+export type ArmoryActorRead = components['schemas']['ArmoryActorRead']
+export type ArmoryAlertsRead = components['schemas']['ArmoryAlertsRead']
+export type ArmoryAssignmentLineInput = components['schemas']['ArmoryAssignmentLineInput']
+export type ArmoryAssignmentLineRead = components['schemas']['ArmoryAssignmentLineRead']
+export type ArmoryAssignmentPage = components['schemas']['ArmoryAssignmentPage']
+export type ArmoryAssignmentRead = components['schemas']['ArmoryAssignmentRead']
+export type ArmoryAssignmentSummary = components['schemas']['ArmoryAssignmentSummary']
+export type ArmoryBatchIntake = components['schemas']['ArmoryBatchIntake']
+export type ArmoryBatchRead = components['schemas']['ArmoryBatchRead']
+export type ArmoryBatchRef = components['schemas']['ArmoryBatchRef']
+export type ArmoryBulkReturnCreate = components['schemas']['ArmoryBulkReturnCreate']
+export type ArmoryCheckReconciliation = components['schemas']['ArmoryCheckReconciliation']
+export type ArmoryCheckSlotRead = components['schemas']['ArmoryCheckSlotRead']
+export type ArmoryClearanceLineRead = components['schemas']['ArmoryClearanceLineRead']
+export type ArmoryClearanceRead = components['schemas']['ArmoryClearanceRead']
+export type ArmoryClearanceRecordRead = components['schemas']['ArmoryClearanceRecordRead']
+export type ArmoryCountLineRead = components['schemas']['ArmoryCountLineRead']
+export type ArmoryCountObservation = components['schemas']['ArmoryCountObservation']
+export type ArmoryCountPage = components['schemas']['ArmoryCountPage']
+export type ArmoryCountRead = components['schemas']['ArmoryCountRead']
+export type ArmoryCountSerialRef = components['schemas']['ArmoryCountSerialRef']
+export type ArmoryCustodyCreate = components['schemas']['ArmoryCustodyCreate']
+export type ArmoryCustodyReceiptLineRead = components['schemas']['ArmoryCustodyReceiptLineRead']
+export type ArmoryCustodyReceiptRead = components['schemas']['ArmoryCustodyReceiptRead']
+export type ArmoryDecisionBatchInput = components['schemas']['ArmoryDecisionBatchInput']
+export type ArmoryDecisionCreate = components['schemas']['ArmoryDecisionCreate']
+export type ArmoryDecisionRead = components['schemas']['ArmoryDecisionRead']
+export type ArmoryDiscrepancyPage = components['schemas']['ArmoryDiscrepancyPage']
+export type ArmoryDiscrepancyRead = components['schemas']['ArmoryDiscrepancyRead']
+export type ArmoryDutyPostRead = components['schemas']['ArmoryDutyPostRead']
+export type ArmoryEmployeeRead = components['schemas']['ArmoryEmployeeRead']
+export type ArmoryExpiryIntake = components['schemas']['ArmoryExpiryIntake']
+export type ArmoryFindRead = components['schemas']['ArmoryFindRead']
+export type ArmoryGuardPage = components['schemas']['ArmoryGuardPage']
+export type ArmoryGuardRead = components['schemas']['ArmoryGuardRead']
+export type ArmoryHolderRead = components['schemas']['ArmoryHolderRead']
+export type ArmoryIntakeLineInput = components['schemas']['ArmoryIntakeLineInput']
+export type ArmoryItemCreate = components['schemas']['ArmoryItemCreate']
+export type ArmoryItemDetailRead = components['schemas']['ArmoryItemDetailRead']
+export type ArmoryItemRead = components['schemas']['ArmoryItemRead']
+export type ArmoryItemRef = components['schemas']['ArmoryItemRef']
+export type ArmoryKitLineRead = components['schemas']['ArmoryKitLineRead']
+export type ArmoryKitRead = components['schemas']['ArmoryKitRead']
+export type ArmoryLicenceCounts = components['schemas']['ArmoryLicenceCounts']
+export type ArmoryMonthlyCountCreate = components['schemas']['ArmoryMonthlyCountCreate']
+export type ArmoryMonthlyCountDraftRead = components['schemas']['ArmoryMonthlyCountDraftRead']
+export type ArmoryMovementLineRead = components['schemas']['ArmoryMovementLineRead']
+export type ArmoryNameRead = components['schemas']['ArmoryNameRead']
+export type ArmoryOpenFirearmRead = components['schemas']['ArmoryOpenFirearmRead']
+export type ArmoryOpeningInput = components['schemas']['ArmoryOpeningInput']
+export type ArmoryPersonCandidateRead = components['schemas']['ArmoryPersonCandidateRead']
+export type ArmoryPersonRead = components['schemas']['ArmoryPersonRead']
+export type ArmoryPostingPage = components['schemas']['ArmoryPostingPage']
+export type ArmoryPostingRead = components['schemas']['ArmoryPostingRead']
+export type ArmoryPostingRef = components['schemas']['ArmoryPostingRef']
+export type ArmoryQualificationRead = components['schemas']['ArmoryQualificationRead']
+export type ArmoryQualificationUpsert = components['schemas']['ArmoryQualificationUpsert']
+export type ArmoryQuantityIntake = components['schemas']['ArmoryQuantityIntake']
+export type ArmoryReceiptCreate = components['schemas']['ArmoryReceiptCreate']
+export type ArmoryReturnCreate = components['schemas']['ArmoryReturnCreate']
+export type ArmoryReturnLineInput = components['schemas']['ArmoryReturnLineInput']
+export type ArmoryReturnRead = components['schemas']['ArmoryReturnRead']
+export type ArmorySafeCreate = components['schemas']['ArmorySafeCreate']
+export type ArmorySafeRead = components['schemas']['ArmorySafeRead']
+export type ArmorySerialDetailRead = components['schemas']['ArmorySerialDetailRead']
+export type ArmorySerialIntake = components['schemas']['ArmorySerialIntake']
+export type ArmorySerialMovementCreate = components['schemas']['ArmorySerialMovementCreate']
+export type ArmorySerialRead = components['schemas']['ArmorySerialRead']
+export type ArmorySerialRegistrationCreate = components['schemas']['ArmorySerialRegistrationCreate']
+export type ArmorySettingsRead = components['schemas']['ArmorySettingsRead']
+export type ArmorySettingsUpdate = components['schemas']['ArmorySettingsUpdate']
+export type ArmoryShiftCheckCreate = components['schemas']['ArmoryShiftCheckCreate']
+export type ArmoryShiftCheckDraftRead = components['schemas']['ArmoryShiftCheckDraftRead']
+export type ArmoryShiftIssueCreate = components['schemas']['ArmoryShiftIssueCreate']
+export type ArmoryShiftPolicyRead = components['schemas']['ArmoryShiftPolicyRead']
+export type ArmoryShiftRead = components['schemas']['ArmoryShiftRead']
+export type ArmoryShiftSafeRead = components['schemas']['ArmoryShiftSafeRead']
+export type ArmoryShiftWindowRead = components['schemas']['ArmoryShiftWindowRead']
+export type ArmoryShortfallInput = components['schemas']['ArmoryShortfallInput']
+export type ArmorySiteOptionsRead = components['schemas']['ArmorySiteOptionsRead']
+export type ArmorySiteRead = components['schemas']['ArmorySiteRead']
+export type ArmoryStockRead = components['schemas']['ArmoryStockRead']
+export type ArmoryStockTotals = components['schemas']['ArmoryStockTotals']
+export type ArmoryVoid = components['schemas']['ArmoryVoid']
+
+/** Query filters of an Armory GET operation, without `null` (`qs` would send "null"). */
+type ArmoryQuery<P extends keyof paths> = paths[P] extends {
+  get: { parameters: { query?: infer Q } }
+}
+  ? { [K in keyof NonNullable<Q>]?: Exclude<NonNullable<Q>[K], null> }
+  : never
+export type ArmoryItemFilters = ArmoryQuery<'/api/v1/armory/items'>
+export type ArmoryPeopleFilters = ArmoryQuery<'/api/v1/armory/people'> & {
+  purpose: NonNullable<
+    paths['/api/v1/armory/people']['get']['parameters']['query']
+  >['purpose']
+}
+export type ArmoryCustodyFilters = ArmoryQuery<'/api/v1/armory/custody'>
+export type ArmoryGuardFilters = ArmoryQuery<'/api/v1/armory/guards'>
+export type ArmoryCountFilters = ArmoryQuery<'/api/v1/armory/counts'>
+export type ArmoryDiscrepancyFilters = ArmoryQuery<'/api/v1/armory/discrepancies'>
+export type ArmoryMovementFilters = ArmoryQuery<'/api/v1/armory/movements'>
+export type ArmoryFindFilters = ArmoryQuery<'/api/v1/armory/find'>
+export type ArmoryEmployeeFilters = ArmoryQuery<'/api/v1/armory/employees/{employee_id}'>
+
 export type UniformAdjustmentCreate = components['schemas']['UniformAdjustmentCreate']
 export type UniformAdjustmentLine = components['schemas']['UniformAdjustmentLine']
 export type UniformAdjustmentRead = components['schemas']['UniformAdjustmentRead']
@@ -2064,6 +2170,94 @@ export const api = {
   getUniformEmployee: (employeeId: string) =>
     request<UniformEmployeeRead>('GET', `/uniform/employees/${encodeURIComponent(employeeId)}`),
   getUniformSummary: () => request<UniformSummary>('GET', '/uniform/summary'),
+
+  // --- assets: armory ---
+  listArmorySafes: () => request<ArmorySafeRead[]>('GET', '/armory/safes'),
+  createArmorySafe: (body: ArmorySafeCreate) =>
+    request<ArmorySafeRead>('POST', '/armory/safes', body),
+  listArmorySiteOptions: () => request<ArmorySiteOptionsRead>('GET', '/armory/site-options'),
+  getArmorySettings: () => requestVersioned<ArmorySettingsRead>('GET', '/armory/settings'),
+  updateArmorySettings: (body: ArmorySettingsUpdate, etag: string) =>
+    requestVersioned<ArmorySettingsRead>('PATCH', '/armory/settings', body, requireEtag(etag)),
+  listArmoryItems: (params: ArmoryItemFilters = {}) =>
+    request<ArmoryItemRead[]>('GET', `/armory/items${qs({ ...params })}`),
+  createArmoryItem: (body: ArmoryItemCreate) =>
+    request<ArmoryItemDetailRead>('POST', '/armory/items', body),
+  getArmoryItem: (itemId: number, safeId?: number) =>
+    request<ArmoryItemDetailRead>('GET', `/armory/items/${itemId}${qs({ safe_id: safeId })}`),
+  recordArmorySerials: (itemId: number, body: ArmorySerialRegistrationCreate) =>
+    request<ArmoryPostingRead>('POST', `/armory/items/${itemId}/serials/record`, body),
+  getArmorySerial: (serialId: number) =>
+    request<ArmorySerialDetailRead>('GET', `/armory/serials/${serialId}`),
+  moveArmorySerial: (serialId: number, body: ArmorySerialMovementCreate) =>
+    request<ArmoryPostingRead>('POST', `/armory/serials/${serialId}/movements`, body),
+  listArmoryKits: () => request<ArmoryKitRead[]>('GET', '/armory/kits'),
+  createArmoryReceipt: (body: ArmoryReceiptCreate) =>
+    request<ArmoryPostingRead>('POST', '/armory/stock/receipts', body),
+  getArmoryShift: (safeId?: number) =>
+    request<ArmoryShiftRead>('GET', `/armory/shift${qs({ safe_id: safeId })}`),
+  listArmoryPeople: (params: ArmoryPeopleFilters) =>
+    request<ArmoryPersonCandidateRead[]>('GET', `/armory/people${qs({ ...params })}`),
+  getArmoryIssue: (issueId: number) =>
+    request<ArmoryAssignmentRead>('GET', `/armory/issues/${issueId}`),
+  createArmoryIssue: (body: ArmoryShiftIssueCreate) =>
+    request<ArmoryAssignmentRead>('POST', '/armory/issues', body),
+  createArmoryReturn: (body: ArmoryReturnCreate) =>
+    request<ArmoryReturnRead>('POST', '/armory/returns', body),
+  createArmoryBulkReturn: (body: ArmoryBulkReturnCreate) =>
+    request<ArmoryReturnRead[]>('POST', '/armory/returns/bulk', body),
+  listArmoryCustody: (params: ArmoryCustodyFilters = {}) =>
+    request<ArmoryAssignmentPage>('GET', `/armory/custody${qs({ ...params })}`),
+  createArmoryCustody: (body: ArmoryCustodyCreate) =>
+    request<ArmoryAssignmentRead>('POST', '/armory/custody', body),
+  getArmoryCustody: (custodyId: number) =>
+    request<ArmoryAssignmentRead>('GET', `/armory/custody/${custodyId}`),
+  listArmoryGuards: (params: ArmoryGuardFilters = {}) =>
+    request<ArmoryGuardPage>('GET', `/armory/guards${qs({ ...params })}`),
+  getArmoryGuard: (employeeId: string) =>
+    requestVersioned<ArmoryGuardRead>('GET', `/armory/guards/${encodeURIComponent(employeeId)}`),
+  saveArmoryQualification: (employeeId: string, body: ArmoryQualificationUpsert, etag: string) =>
+    requestVersioned<ArmoryGuardRead>(
+      'PUT',
+      `/armory/guards/${encodeURIComponent(employeeId)}`,
+      body,
+      requireEtag(etag),
+    ),
+  getArmoryShiftCheckDraft: (safeId: number) =>
+    request<ArmoryShiftCheckDraftRead>('GET', `/armory/safes/${safeId}/shift-checks/draft`),
+  createArmoryShiftCheck: (safeId: number, body: ArmoryShiftCheckCreate) =>
+    request<ArmoryCountRead>('POST', `/armory/safes/${safeId}/shift-checks`, body),
+  getArmoryMonthlyCountDraft: (safeId: number) =>
+    request<ArmoryMonthlyCountDraftRead>('GET', `/armory/safes/${safeId}/monthly-counts/draft`),
+  createArmoryMonthlyCount: (safeId: number, body: ArmoryMonthlyCountCreate) =>
+    request<ArmoryCountRead>('POST', `/armory/safes/${safeId}/monthly-counts`, body),
+  listArmoryCounts: (params: ArmoryCountFilters = {}) =>
+    request<ArmoryCountPage>('GET', `/armory/counts${qs({ ...params })}`),
+  getArmoryCount: (countId: number) => request<ArmoryCountRead>('GET', `/armory/counts/${countId}`),
+  listArmoryDiscrepancies: (params: ArmoryDiscrepancyFilters = {}) =>
+    request<ArmoryDiscrepancyPage>('GET', `/armory/discrepancies${qs({ ...params })}`),
+  decideArmoryDiscrepancy: (discrepancyId: number, body: ArmoryDecisionCreate) =>
+    request<ArmoryDiscrepancyRead>('POST', `/armory/discrepancies/${discrepancyId}/decision`, body),
+  listArmoryMovements: (params: ArmoryMovementFilters = {}) =>
+    request<ArmoryPostingPage>('GET', `/armory/movements${qs({ ...params })}`),
+  getArmoryMovement: (postingId: number) =>
+    request<ArmoryPostingRead>('GET', `/armory/movements/${postingId}`),
+  voidArmoryMovement: (postingId: number, body: ArmoryVoid) =>
+    request<ArmoryPostingRead>('POST', `/armory/movements/${postingId}/void`, body),
+  findArmoryRecords: (params: ArmoryFindFilters = {}) =>
+    request<ArmoryFindRead>('GET', `/armory/find${qs({ ...params })}`),
+  getArmorySummary: (safeId?: number) =>
+    request<ArmoryAlertsRead>('GET', `/armory/summary${qs({ safe_id: safeId })}`),
+  getArmoryEmployee: (employeeId: string, params: ArmoryEmployeeFilters = {}) =>
+    request<ArmoryEmployeeRead>(
+      'GET',
+      `/armory/employees/${encodeURIComponent(employeeId)}${qs({ ...params })}`,
+    ),
+  getArmoryClearance: (employeeId: string) =>
+    request<ArmoryClearanceRead>(
+      'GET',
+      `/armory/employees/${encodeURIComponent(employeeId)}/clearance`,
+    ),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)

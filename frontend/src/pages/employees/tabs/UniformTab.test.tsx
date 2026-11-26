@@ -234,3 +234,20 @@ describe('EmployeeTabChips uniform gate', () => {
     expect(screen.getByRole('tab', { name: 'Uniform' })).toBeInTheDocument()
   })
 })
+
+describe('EmployeeTabChips Armory gate', () => {
+  const counts = {
+    documents: 0, leaves: '0d', absences: 0, violations: 0, activity: 0, messages: 0, profileGaps: 0, attendance: null,
+  }
+
+  it('does not expose Armory to users who can only view Uniform', () => {
+    render(<EmployeeTabChips active="profile" counts={counts} onChange={() => {}} showUniform />)
+    expect(screen.queryByRole('tab', { name: 'Armory' })).not.toBeInTheDocument()
+  })
+
+  it('shows Armory as a peer immediately after Uniform', () => {
+    render(<EmployeeTabChips active="armory" counts={counts} onChange={() => {}} showUniform showArmory />)
+    const armory = screen.getByRole('tab', { name: 'Armory', selected: true })
+    expect(armory.previousElementSibling).toBe(screen.getByRole('tab', { name: 'Uniform' }))
+  })
+})

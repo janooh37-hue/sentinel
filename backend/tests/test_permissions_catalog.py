@@ -1,11 +1,12 @@
 from app.core import permissions
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import ALL_CAPABILITIES, CAPABILITIES, CAPABILITY_IDS, ROLE_DEFAULTS
-from app.db.models import BookCategory
+from app.db.models import BookCategory, User
+from app.services import perm_service
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 66
+    assert len(CAPABILITIES) == 68
     assert {cap.id for cap in CAPABILITIES if cap.domain == "uniform"} == {
         "uniform.view",
         "uniform.edit",
@@ -31,8 +32,10 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     assert {cap.id for cap in CAPABILITIES if cap.sensitive} == set(
         permissions.SENSITIVE_CAPABILITY_IDS
     )
-    # Clearance and employee-number corrections require an explicit grant.
+    # These non-sensitive capabilities require an explicit grant outside admin.
     assert {cap.id for cap in CAPABILITIES if not cap.sensitive and not cap.requestable} == {
+        "armory.view",
+        "armory.edit",
         "books.secret",
         "employees.change_id",
     }
@@ -46,7 +49,7 @@ def test_static_role_default_counts_are_preserved():
     } == {
         "operator": 19,
         "manager": 45,
-        "admin": 66,
+        "admin": 68,
     }
     assert {"uniform.view", "uniform.edit"} <= ROLE_DEFAULTS["admin"]
     assert "uniform.view" in ROLE_DEFAULTS["manager"]
@@ -60,6 +63,52 @@ def test_static_role_default_counts_are_preserved():
     assert change_id.domain == "employees"
     assert not change_id.sensitive
     assert not change_id.requestable
+
+
+def test_armory_catalog_entries_are_bilingual_and_admin_only_by_default():
+    assert [cap for cap in CAPABILITIES if cap.domain == "armory"] == [
+        permissions.Capability(
+            "armory.view",
+            "armory",
+            "View armory",
+            "عرض خزنة السلاح",
+            "View armory stock, custody and audit history.",
+            "عرض مخزون خزنة السلاح والعهد وسجل التدقيق.",
+            sensitive=False,
+            requestable=False,
+        ),
+        permissions.Capability(
+            "armory.edit",
+            "armory",
+            "Manage armory",
+            "إدارة خزنة السلاح",
+            "Record armory stock, custody, checks and decisions.",
+            "تسجيل مخزون خزنة السلاح والعهد والفحوص والقرارات.",
+            sensitive=False,
+            requestable=False,
+        ),
+    ]
+    armory_caps = {"armory.view", "armory.edit"}
+    assert armory_caps <= ROLE_DEFAULTS["admin"]
+    for role in ("operator", "manager", "inmate_reporter", "fleet_reporter"):
+        assert armory_caps.isdisjoint(ROLE_DEFAULTS[role]), role
+
+
+def test_admin_can_grant_both_armory_capabilities_to_a_user(db_session):
+    admin = User(
+        email="armory-admin@example.test", password_hash="x", role="admin", status="active"
+    )
+    operator = User(
+        email="armory-operator@example.test", password_hash="x", role="operator", status="active"
+    )
+    db_session.add_all([admin, operator])
+    db_session.commit()
+
+    armory_caps = {"armory.view", "armory.edit"}
+    assert armory_caps.isdisjoint(perm_service.effective_caps(db_session, operator))
+    for cap in sorted(armory_caps):
+        perm_service.set_user_override(db_session, operator.id, cap, "grant", actor=admin)
+    assert armory_caps <= perm_service.effective_caps(db_session, operator)
 
 
 def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():

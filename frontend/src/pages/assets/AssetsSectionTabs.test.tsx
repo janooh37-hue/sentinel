@@ -1,7 +1,8 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { AssetsRedirect } from '@/App'
 import i18n from '@/lib/i18n'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
@@ -26,7 +27,9 @@ describe.each(['en', 'ar'])('Assets section navigation (%s)', (language) => {
     { caps: [], pathname: '/holdings' },
     { caps: ['uniform.view'], pathname: '/holdings/uniform' },
     { caps: ['store.view'], pathname: '/holdings/store' },
-    { caps: ['store.view', 'uniform.view'], pathname: '/holdings/store' },
+    { caps: ['armory.view'], pathname: '/holdings/armory' },
+    { caps: ['armory.edit'], pathname: '/holdings' },
+    { caps: ['store.view', 'uniform.view', 'armory.view'], pathname: '/holdings/store' },
   ])('shows only viewable child destinations for $caps', async ({ caps, pathname }) => {
     await i18n.changeLanguage(language)
     capabilityState.allowed = new Set(caps)
@@ -37,8 +40,12 @@ describe.each(['en', 'ar'])('Assets section navigation (%s)', (language) => {
     )
 
     const navigation = screen.getByRole('navigation', { name: i18n.t('assets.sectionTabs.aria') })
-    for (const section of ['store', 'uniform']) {
-      const link = within(navigation).queryByRole('link', { name: i18n.t(`assets.sectionTabs.${section}`) })
+    for (const [section, title] of [
+      ['store', 'assets.sectionTabs.store'],
+      ['uniform', 'assets.sectionTabs.uniform'],
+      ['armory', 'assets.armory.armory'],
+    ]) {
+      const link = within(navigation).queryByRole('link', { name: i18n.t(title) })
       if (caps.includes(`${section}.view`)) {
         expect(link).toHaveAttribute('href', `/holdings/${section}`)
         if (pathname === `/holdings/${section}`) {
@@ -51,4 +58,27 @@ describe.each(['en', 'ar'])('Assets section navigation (%s)', (language) => {
       }
     }
   })
+})
+
+function Destination() {
+  return <p>{useLocation().pathname}</p>
+}
+
+it.each([
+  { caps: ['store.view', 'uniform.view', 'armory.view'], destination: '/holdings/store' },
+  { caps: ['uniform.view', 'armory.view'], destination: '/holdings/uniform' },
+  { caps: ['armory.view'], destination: '/holdings/armory' },
+  { caps: ['armory.edit'], destination: '/holdings/store' },
+  { caps: [], destination: '/holdings/store' },
+])('opens $destination from Assets with $caps', async ({ caps, destination }) => {
+  capabilityState.allowed = new Set(caps)
+  render(
+    <MemoryRouter initialEntries={['/holdings']}>
+      <Routes>
+        <Route path="/holdings" element={<AssetsRedirect />} />
+        <Route path="*" element={<Destination />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+  expect(await screen.findByText(destination)).toBeInTheDocument()
 })

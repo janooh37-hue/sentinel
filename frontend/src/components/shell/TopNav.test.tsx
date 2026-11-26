@@ -103,8 +103,10 @@ describe('TopNav', () => {
     { caps: ['uniform.view'], visible: true },
     { caps: ['store.view'], visible: true },
     { caps: ['store.view', 'uniform.view'], visible: true },
+    { caps: ['armory.view'], visible: true },
+    { caps: ['armory.edit'], visible: false },
   ])('shows Assets only with a viewable section: $caps', ({ caps, visible }) => {
-    for (const capability of ['store.view', 'uniform.view']) {
+    for (const capability of ['store.view', 'uniform.view', 'armory.view']) {
       if (!caps.includes(capability)) capabilityState.denied.add(capability)
     }
     renderNav()

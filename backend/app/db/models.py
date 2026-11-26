@@ -37,6 +37,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    Time,
     UniqueConstraint,
     false,
     func,
@@ -3260,6 +3261,749 @@ class UniformAdjustment(_UniformVoidable, _UniformStamped, Base):
         CheckConstraint("length(trim(reason)) > 0", name="ck_uniform_adjustments_reason"),
         Index("ix_uniform_adjustments_size", "size_id"),
         {"sqlite_autoincrement": True},
+    )
+
+
+# --- Armory (migration 0126) -----------------------------------------------
+#
+# A ledger of externally authorized activity for controlled equipment. Postings
+# are immutable evidence; ``armory_stock.on_hand``, serial state and assignment
+# ``remaining_qty`` are projections changed only inside the posting/void write
+# transaction. Nothing cascades on delete: evidence is never erased.
+
+ARMORY_MAX_QTY: Final = 2_147_483_647
+ARMORY_KINDS: Final = ("firearm", "ammunition", "serial", "quantity", "expiry")
+ARMORY_CATEGORIES: Final = (
+    "firearms",
+    "ammo",
+    "accessories",
+    "nonlethal",
+    "restraints",
+    "riot",
+    "comms",
+)
+ARMORY_DRAWINGS: Final = (
+    "rifle",
+    "pistol",
+    "magazine",
+    "rounds",
+    "sling",
+    "holster",
+    "tool",
+    "rod",
+    "scabbard",
+    "grip",
+    "adapter",
+    "case",
+    "taser",
+    "spray",
+    "cartridge",
+    "cuffs",
+    "leg-irons",
+    "plastic",
+    "key",
+    "baton",
+    "helmet",
+    "shield",
+    "riot-suit",
+    "radio",
+    "bodycam",
+    "wand",
+)
+ARMORY_SERIAL_STATES: Final = (
+    "in_safe",
+    "signed_out",
+    "in_custody",
+    "in_repair",
+    "missing",
+    "lost",
+    "written_off",
+)
+ARMORY_SERIAL_ACTIONS: Final = (
+    "send_repair",
+    "return_repair",
+    "mark_lost",
+    "write_off",
+    "transfer",
+)
+ARMORY_POSTING_KINDS: Final = (
+    "opening",
+    "receipt",
+    "serial_registration",
+    "shift_issue",
+    "custody",
+    "return",
+    "shift_check",
+    "monthly_count",
+    "serial_state",
+    "decision",
+)
+ARMORY_INTAKE_SOURCES: Final = ("supplier", "head_office", "other")
+ARMORY_KIT_CODES: Final = ("rifle", "pistol", "equipment")
+ARMORY_KIT_ROLES: Final = ("default", "alternative", "optional")
+ARMORY_LICENCE_STATUSES: Final = ("missing", "expired", "expiring", "valid")
+ARMORY_OFF_DUTY_REASONS: Final = ("cover", "escort", "training", "other")
+ARMORY_SHORTFALL_REASONS: Final = ("training", "incident", "lost", "other")
+ARMORY_DISCREPANCY_KINDS: Final = (
+    "rounds_shortfall",
+    "missing_serial",
+    "unexpected_serial",
+    "monthly_quantity",
+)
+ARMORY_DECISION_OUTCOMES: Final = ("found", "used_in_training", "lost", "recording_error")
+
+
+def _armory_in(column: str, values: tuple[str, ...], *, nullable: bool = False) -> str:
+    listed = ", ".join(f"'{value}'" for value in values)
+    check = f"{column} IN ({listed})"
+    return f"{column} IS NULL OR {check}" if nullable else check
+
+
+def _armory_qty(column: str, *, nullable: bool = False, positive: bool = False) -> str:
+    low = ">= 1" if positive else ">= 0"
+    check = f"{column} {low} AND {column} <= {ARMORY_MAX_QTY}"
+    return f"{column} IS NULL OR ({check})" if nullable else check
+
+
+def _armory_text(column: str) -> str:
+    return f"length(trim({column})) > 0"
+
+
+class ArmorySafe(Base):
+    """A logical ledger location. Optional Fleet site and exact Workforce duty path."""
+
+    __tablename__ = "armory_safes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_en: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(120), nullable=False)
+    vehicle_site_id: Mapped[int | None] = mapped_column(
+        ForeignKey("vehicle_sites.id"), nullable=True
+    )
+    duty_unit: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    duty_post: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    stock_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+
+    __table_args__ = (
+        CheckConstraint(_armory_text("name_en"), name="ck_armory_safes_name_en"),
+        CheckConstraint(_armory_text("name_ar"), name="ck_armory_safes_name_ar"),
+        CheckConstraint(
+            "(duty_unit IS NULL) = (duty_post IS NULL)", name="ck_armory_safes_duty_pair"
+        ),
+        CheckConstraint("stock_revision >= 0", name="ck_armory_safes_stock_revision"),
+        Index("uq_armory_safes_name_en", func.lower(text("name_en")), unique=True),
+        Index("uq_armory_safes_name_ar", "name_ar", unique=True),
+        Index(
+            "uq_armory_safes_vehicle_site",
+            "vehicle_site_id",
+            unique=True,
+            sqlite_where=text("vehicle_site_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_armory_safes_duty_path",
+            "duty_unit",
+            "duty_post",
+            unique=True,
+            sqlite_where=text("duty_unit IS NOT NULL"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryShiftPolicy(Base):
+    """Append-only shift settings; a row applies from ``effective_on`` (latest id wins)."""
+
+    __tablename__ = "armory_shift_policies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    effective_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    day_start: Mapped[dt.time] = mapped_column(Time, nullable=False)
+    night_start: Mapped[dt.time] = mapped_column(Time, nullable=False)
+    grace_minutes: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("day_start < night_start", name="ck_armory_shift_policies_order"),
+        CheckConstraint(
+            "grace_minutes >= 0 AND grace_minutes <= 1440", name="ck_armory_shift_policies_grace"
+        ),
+        Index("ix_armory_shift_policies_effective", "effective_on", "id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryItem(Base):
+    """Catalogue definition. ``kind`` is immutable once created."""
+
+    __tablename__ = "armory_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    preset_key: Mapped[str | None] = mapped_column(String(40), nullable=True, unique=True)
+    name_en: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(120), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    category: Mapped[str] = mapped_column(String(16), nullable=False)
+    drawing: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, server_default=func.current_timestamp()
+    )
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(_armory_text("name_en"), name="ck_armory_items_name_en"),
+        CheckConstraint(_armory_text("name_ar"), name="ck_armory_items_name_ar"),
+        CheckConstraint(_armory_in("kind", ARMORY_KINDS), name="ck_armory_items_kind"),
+        CheckConstraint(_armory_in("category", ARMORY_CATEGORIES), name="ck_armory_items_category"),
+        CheckConstraint(_armory_in("drawing", ARMORY_DRAWINGS), name="ck_armory_items_drawing"),
+        CheckConstraint(
+            "(kind = 'firearm') = (category = 'firearms')", name="ck_armory_items_firearms"
+        ),
+        CheckConstraint("(kind = 'ammunition') = (category = 'ammo')", name="ck_armory_items_ammo"),
+        Index("uq_armory_items_name_en", func.lower(text("name_en")), unique=True),
+        Index("uq_armory_items_name_ar", "name_ar", unique=True),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryKit(Base):
+    """Posting template. ``equipment`` is the only kit without a firearm model."""
+
+    __tablename__ = "armory_kits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(16), nullable=False, unique=True)
+    name_en: Mapped[str] = mapped_column(String(120), nullable=False)
+    name_ar: Mapped[str] = mapped_column(String(120), nullable=False)
+    firearm_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_items.id"), nullable=True
+    )
+
+    lines: Mapped[list[ArmoryKitItem]] = relationship(
+        foreign_keys="ArmoryKitItem.kit_id", order_by="ArmoryKitItem.item_id"
+    )
+
+    __table_args__ = (
+        CheckConstraint(_armory_in("code", ARMORY_KIT_CODES), name="ck_armory_kits_code"),
+        CheckConstraint(
+            "(code = 'equipment') = (firearm_item_id IS NULL)", name="ck_armory_kits_firearm"
+        ),
+        Index(
+            "uq_armory_kits_firearm",
+            "firearm_item_id",
+            unique=True,
+            sqlite_where=text("firearm_item_id IS NOT NULL"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryKitItem(Base):
+    """Kit membership. Defaults carry a quantity; alternatives substitute a default."""
+
+    __tablename__ = "armory_kit_items"
+
+    kit_id: Mapped[int] = mapped_column(ForeignKey("armory_kits.id"), primary_key=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    default_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    substitutes_item_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_items.id"), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(_armory_in("role", ARMORY_KIT_ROLES), name="ck_armory_kit_items_role"),
+        CheckConstraint(
+            "(role = 'default' AND default_qty > 0) OR (role <> 'default' AND default_qty = 0)",
+            name="ck_armory_kit_items_default_qty",
+        ),
+        CheckConstraint(
+            "(role = 'alternative') = (substitutes_item_id IS NOT NULL)",
+            name="ck_armory_kit_items_substitute",
+        ),
+    )
+
+
+class ArmoryBatch(Base):
+    """Expiry lot of one item, shared across safes. Expiry is immutable."""
+
+    __tablename__ = "armory_batches"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    batch_ref: Mapped[str] = mapped_column(String(80), nullable=False)
+    expires_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+    __table_args__ = (
+        CheckConstraint(_armory_text("batch_ref"), name="ck_armory_batches_ref"),
+        UniqueConstraint("item_id", "batch_ref", name="uq_armory_batches_item_ref"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryStock(Base):
+    """Quantity bucket per safe/item (and batch). ``opening_qty`` NULL = never attested."""
+
+    __tablename__ = "armory_stock"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    safe_id: Mapped[int] = mapped_column(ForeignKey("armory_safes.id"), nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("armory_batches.id"), nullable=True)
+    on_hand: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    opening_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(_armory_qty("on_hand"), name="ck_armory_stock_on_hand"),
+        CheckConstraint(_armory_qty("opening_qty", nullable=True), name="ck_armory_stock_opening"),
+        CheckConstraint(
+            "batch_id IS NULL OR opening_qty IS NULL", name="ck_armory_stock_opening_unbatched"
+        ),
+        Index(
+            "uq_armory_stock_unbatched",
+            "safe_id",
+            "item_id",
+            unique=True,
+            sqlite_where=text("batch_id IS NULL"),
+        ),
+        Index(
+            "uq_armory_stock_batch",
+            "safe_id",
+            "item_id",
+            "batch_id",
+            unique=True,
+            sqlite_where=text("batch_id IS NOT NULL"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryGuardQualification(Base):
+    """Recorded passed course and licence evidence; not an authorization."""
+
+    __tablename__ = "armory_guard_qualifications"
+
+    employee_id: Mapped[str] = mapped_column(ForeignKey("employees.id"), primary_key=True)
+    course_round: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    licence_number: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    licence_expires_on: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    updated_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "course_round IS NULL OR course_round > 0", name="ck_armory_guard_quals_course"
+        ),
+        CheckConstraint(
+            "(licence_number IS NULL) = (licence_expires_on IS NULL)",
+            name="ck_armory_guard_quals_licence_pair",
+        ),
+        CheckConstraint(
+            "licence_number IS NULL OR length(trim(licence_number)) > 0",
+            name="ck_armory_guard_quals_licence_number",
+        ),
+        CheckConstraint("version > 0", name="ck_armory_guard_quals_version"),
+    )
+
+
+class ArmoryPosting(Base):
+    """Immutable ledger header. Voids set the triple once and post inverse effects."""
+
+    __tablename__ = "armory_postings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    safe_id: Mapped[int] = mapped_column(ForeignKey("armory_safes.id"), nullable=False)
+    related_posting_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_postings.id"), nullable=True
+    )
+    occurred_on: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    occurred_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    created_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    actor_employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    witness_employee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True
+    )
+    reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    serial_action: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    period_key: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    count_context: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    voided_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    voided_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    void_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    void_witness_employee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True
+    )
+
+    lines: Mapped[list[ArmoryPostingLine]] = relationship(
+        foreign_keys="ArmoryPostingLine.posting_id", order_by="ArmoryPostingLine.position"
+    )
+
+    __table_args__ = (
+        CheckConstraint(_armory_in("kind", ARMORY_POSTING_KINDS), name="ck_armory_postings_kind"),
+        CheckConstraint(
+            _armory_in("source", ARMORY_INTAKE_SOURCES, nullable=True),
+            name="ck_armory_postings_source",
+        ),
+        CheckConstraint(
+            _armory_in("serial_action", ARMORY_SERIAL_ACTIONS, nullable=True),
+            name="ck_armory_postings_serial_action",
+        ),
+        CheckConstraint(
+            "(voided_at IS NULL AND voided_by_id IS NULL AND void_reason IS NULL)"
+            " OR (voided_at IS NOT NULL AND voided_by_id IS NOT NULL"
+            " AND void_reason IS NOT NULL AND length(trim(void_reason)) > 0)",
+            name="ck_armory_postings_void",
+        ),
+        CheckConstraint(
+            "void_witness_employee_id IS NULL OR voided_at IS NOT NULL",
+            name="ck_armory_postings_void_witness",
+        ),
+        CheckConstraint(
+            "(period_key IS NULL) = (kind NOT IN ('shift_check', 'monthly_count'))",
+            name="ck_armory_postings_period",
+        ),
+        Index(
+            "uq_armory_postings_live_period",
+            "safe_id",
+            "kind",
+            "period_key",
+            unique=True,
+            sqlite_where=text("period_key IS NOT NULL AND voided_at IS NULL"),
+        ),
+        Index("ix_armory_postings_safe_date", "safe_id", "occurred_on", "id"),
+        Index("ix_armory_postings_related", "related_posting_id", "kind"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmorySerial(Base):
+    """Registered unit. ``safe_id`` is its home safe in every live state.
+
+    A NULL state marks a history-only row left by voiding the intake that
+    created it; a corrected intake creates a fresh row.
+    """
+
+    __tablename__ = "armory_serials"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    serial_code: Mapped[str] = mapped_column(String(80), nullable=False)
+    safe_id: Mapped[int | None] = mapped_column(ForeignKey("armory_safes.id"), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    state_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            _armory_in("state", ARMORY_SERIAL_STATES, nullable=True),
+            name="ck_armory_serials_state",
+        ),
+        CheckConstraint(
+            "(state IS NULL) = (safe_id IS NULL) AND (state IS NULL) = (state_at IS NULL)",
+            name="ck_armory_serials_live",
+        ),
+        CheckConstraint(_armory_text("serial_code"), name="ck_armory_serials_code"),
+        Index(
+            "uq_armory_serials_live_code",
+            "serial_code",
+            unique=True,
+            sqlite_where=text("state IS NOT NULL"),
+        ),
+        Index("ix_armory_serials_safe_item_state", "safe_id", "item_id", "state"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryAssignment(Base):
+    """Shift issue or custody record; its posting's ``kind`` says which."""
+
+    __tablename__ = "armory_assignments"
+
+    posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), primary_key=True)
+    holder_kind: Mapped[str] = mapped_column(String(8), nullable=False)
+    holder_employee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True
+    )
+    holder_safe_id: Mapped[int | None] = mapped_column(ForeignKey("armory_safes.id"), nullable=True)
+    supervisor_employee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True
+    )
+    kit_id: Mapped[int] = mapped_column(ForeignKey("armory_kits.id"), nullable=False)
+    firearm_open: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    course_round_snapshot: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    licence_status_at_issue: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    licence_warning_acknowledged: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    off_duty_reason: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    off_duty_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    excess_rounds_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    grace_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    shift_window: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+    receipt_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )
+
+    lines: Mapped[list[ArmoryAssignmentLine]] = relationship(
+        foreign_keys="ArmoryAssignmentLine.assignment_id",
+        order_by="ArmoryAssignmentLine.position",
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(holder_kind = 'person' AND holder_employee_id IS NOT NULL"
+            " AND holder_safe_id IS NULL AND supervisor_employee_id IS NULL)"
+            " OR (holder_kind = 'site' AND holder_employee_id IS NULL"
+            " AND holder_safe_id IS NOT NULL)",
+            name="ck_armory_assignments_holder",
+        ),
+        CheckConstraint(
+            _armory_in("licence_status_at_issue", ARMORY_LICENCE_STATUSES, nullable=True),
+            name="ck_armory_assignments_licence_status",
+        ),
+        CheckConstraint(
+            _armory_in("off_duty_reason", ARMORY_OFF_DUTY_REASONS, nullable=True),
+            name="ck_armory_assignments_off_duty",
+        ),
+        CheckConstraint(
+            "firearm_open IN (0, 1) AND licence_warning_acknowledged IN (0, 1)",
+            name="ck_armory_assignments_booleans",
+        ),
+        CheckConstraint(
+            "(due_at IS NULL) = (grace_minutes IS NULL)"
+            " AND (due_at IS NULL) = (shift_window IS NULL)"
+            " AND (due_at IS NULL OR receipt_snapshot IS NULL)",
+            name="ck_armory_assignments_shift_fields",
+        ),
+        CheckConstraint(
+            "grace_minutes IS NULL OR (grace_minutes >= 0 AND grace_minutes <= 1440)",
+            name="ck_armory_assignments_grace",
+        ),
+        CheckConstraint(
+            "course_round_snapshot IS NULL OR course_round_snapshot > 0",
+            name="ck_armory_assignments_course",
+        ),
+        Index(
+            "uq_armory_assignments_open_firearm",
+            func.coalesce(text("holder_employee_id"), text("supervisor_employee_id")),
+            unique=True,
+            sqlite_where=text("firearm_open = 1"),
+        ),
+        Index("ix_armory_assignments_holder", "holder_employee_id"),
+        Index("ix_armory_assignments_supervisor", "supervisor_employee_id"),
+    )
+
+
+class ArmoryAssignmentLine(Base):
+    """Issued line; ``remaining_qty`` is the live outstanding projection."""
+
+    __tablename__ = "armory_assignment_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    assignment_id: Mapped[int] = mapped_column(
+        ForeignKey("armory_assignments.posting_id"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    serial_id: Mapped[int | None] = mapped_column(ForeignKey("armory_serials.id"), nullable=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("armory_batches.id"), nullable=True)
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    remaining_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(_armory_qty("qty", positive=True), name="ck_armory_assignment_lines_qty"),
+        CheckConstraint(
+            "remaining_qty >= 0 AND remaining_qty <= qty",
+            name="ck_armory_assignment_lines_remaining",
+        ),
+        CheckConstraint(
+            "serial_id IS NULL OR (qty = 1 AND batch_id IS NULL)",
+            name="ck_armory_assignment_lines_serial",
+        ),
+        UniqueConstraint("assignment_id", "position", name="uq_armory_assignment_lines_position"),
+        Index(
+            "uq_armory_assignment_lines_open_serial",
+            "serial_id",
+            unique=True,
+            sqlite_where=text("serial_id IS NOT NULL AND remaining_qty > 0"),
+        ),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryPostingLine(Base):
+    """Immutable effect/evidence of one posting line.
+
+    ``stock_delta`` applies to the posting's safe bucket; serialized movements
+    record before/after state and safe instead of a quantity delta.
+    """
+
+    __tablename__ = "armory_posting_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    serial_id: Mapped[int | None] = mapped_column(ForeignKey("armory_serials.id"), nullable=True)
+    batch_id: Mapped[int | None] = mapped_column(ForeignKey("armory_batches.id"), nullable=True)
+    assignment_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_assignment_lines.id"), nullable=True
+    )
+    qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    stock_delta: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    before_on_hand: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    after_on_hand: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    before_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    after_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    before_safe_id: Mapped[int | None] = mapped_column(ForeignKey("armory_safes.id"), nullable=True)
+    after_safe_id: Mapped[int | None] = mapped_column(ForeignKey("armory_safes.id"), nullable=True)
+    remaining_before: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    remaining_after: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    condition: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    fault_note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(_armory_qty("qty"), name="ck_armory_posting_lines_qty"),
+        CheckConstraint(
+            f"stock_delta >= -{ARMORY_MAX_QTY} AND stock_delta <= {ARMORY_MAX_QTY}",
+            name="ck_armory_posting_lines_delta",
+        ),
+        CheckConstraint(
+            _armory_in("before_state", ARMORY_SERIAL_STATES, nullable=True),
+            name="ck_armory_posting_lines_before_state",
+        ),
+        CheckConstraint(
+            _armory_in("after_state", ARMORY_SERIAL_STATES, nullable=True),
+            name="ck_armory_posting_lines_after_state",
+        ),
+        CheckConstraint(
+            _armory_in("condition", ("ok", "repair"), nullable=True),
+            name="ck_armory_posting_lines_condition",
+        ),
+        UniqueConstraint("posting_id", "position", name="uq_armory_posting_lines_position"),
+        Index("ix_armory_posting_lines_serial", "serial_id"),
+        Index("ix_armory_posting_lines_item", "item_id"),
+        Index("ix_armory_posting_lines_assignment_line", "assignment_line_id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryCountLine(Base):
+    """Per-item check/count evidence: what was expected and what was observed."""
+
+    __tablename__ = "armory_count_lines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    expected_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    expected_serial_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    observed_serial_codes: Mapped[list[str]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    expected_unrecorded_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    observed_unrecorded_qty: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint(_armory_qty("observed_qty"), name="ck_armory_count_lines_observed"),
+        CheckConstraint(
+            _armory_qty("expected_qty", nullable=True), name="ck_armory_count_lines_expected"
+        ),
+        CheckConstraint(
+            _armory_qty("expected_unrecorded_qty", nullable=True),
+            name="ck_armory_count_lines_expected_unrecorded",
+        ),
+        CheckConstraint(
+            _armory_qty("observed_unrecorded_qty", nullable=True),
+            name="ck_armory_count_lines_observed_unrecorded",
+        ),
+        UniqueConstraint("posting_id", "item_id", name="uq_armory_count_lines_item"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryDiscrepancy(Base):
+    """One finding. Open = live source and no active decision."""
+
+    __tablename__ = "armory_discrepancies"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), nullable=False)
+    item_id: Mapped[int] = mapped_column(ForeignKey("armory_items.id"), nullable=False)
+    assignment_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_assignment_lines.id"), nullable=True
+    )
+    serial_id: Mapped[int | None] = mapped_column(ForeignKey("armory_serials.id"), nullable=True)
+    unexpected_serial_code: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    expected_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    observed_qty: Mapped[int] = mapped_column(Integer, nullable=False)
+    involved_employee_id: Mapped[str | None] = mapped_column(
+        ForeignKey("employees.id"), nullable=True
+    )
+    shortfall_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    active_decision_posting_id: Mapped[int | None] = mapped_column(
+        ForeignKey("armory_postings.id"), nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            _armory_in("kind", ARMORY_DISCREPANCY_KINDS), name="ck_armory_discrepancies_kind"
+        ),
+        CheckConstraint(
+            _armory_in("shortfall_reason", ARMORY_SHORTFALL_REASONS, nullable=True),
+            name="ck_armory_discrepancies_reason",
+        ),
+        CheckConstraint(
+            _armory_qty("expected_qty") + " AND " + _armory_qty("observed_qty"),
+            name="ck_armory_discrepancies_qty",
+        ),
+        Index("ix_armory_discrepancies_source", "source_posting_id"),
+        Index("ix_armory_discrepancies_decision", "active_decision_posting_id"),
+        Index("ix_armory_discrepancies_serial", "serial_id"),
+        {"sqlite_autoincrement": True},
+    )
+
+
+class ArmoryDecision(Base):
+    """Outcome chosen for one discrepancy; evidence and effects live on the posting."""
+
+    __tablename__ = "armory_decisions"
+
+    posting_id: Mapped[int] = mapped_column(ForeignKey("armory_postings.id"), primary_key=True)
+    discrepancy_id: Mapped[int] = mapped_column(
+        ForeignKey("armory_discrepancies.id"), nullable=False
+    )
+    outcome: Mapped[str] = mapped_column(String(24), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            _armory_in("outcome", ARMORY_DECISION_OUTCOMES), name="ck_armory_decisions_outcome"
+        ),
+        Index("ix_armory_decisions_discrepancy", "discrepancy_id", "posting_id"),
     )
 
 

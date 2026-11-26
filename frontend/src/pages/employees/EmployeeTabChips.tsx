@@ -2,7 +2,6 @@
  * Pill-chip tab bar for the Employee Detail page.
  *
  * Replaces the old underline EmployeeDetailTabs; chips are rounded-full pills.
- * Order: profile → documents → leaves → messages → activity → violations.
  * The profile chip shows a warning-tinted badge when missing fields > 0.
  */
 
@@ -18,6 +17,7 @@ export type Tab =
   | 'messages'
   | 'attendance'
   | 'uniform'
+  | 'armory'
 
 interface Counts {
   documents: number
@@ -38,6 +38,8 @@ interface Props {
   onChange: (next: Tab) => void
   /** The Uniform chip is a peer tab only for users holding `uniform.view`. */
   showUniform?: boolean
+  /** The Armory chip also requires access to the employee file. */
+  showArmory?: boolean
 }
 
 const ORDER: Tab[] = [
@@ -50,6 +52,7 @@ const ORDER: Tab[] = [
   'attendance',
   'violations',
   'uniform',
+  'armory',
 ]
 
 export function EmployeeTabChips({
@@ -57,6 +60,7 @@ export function EmployeeTabChips({
   counts,
   onChange,
   showUniform = false,
+  showArmory = false,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
 
@@ -65,7 +69,7 @@ export function EmployeeTabChips({
       className="mb-4 flex flex-wrap gap-2 overflow-x-auto [-webkit-overflow-scrolling:touch]"
       role="tablist"
     >
-      {ORDER.filter((tab) => tab !== 'uniform' || showUniform).map((tab) => {
+      {ORDER.filter((tab) => (tab !== 'uniform' || showUniform) && (tab !== 'armory' || showArmory)).map((tab) => {
         const isActive = active === tab
 
         let badge: string | number | null = null
@@ -91,8 +95,11 @@ export function EmployeeTabChips({
                 : 'border border-border bg-surface text-muted-foreground hover:border-primary/40 hover:text-foreground'
             }`}
           >
-            {/* The Uniform label lives with the module copy, not the employee namespace. */}
-            {t(tab === 'uniform' ? 'assets.uniform.uniform' : `employee.tab.${tab}`)}
+            {t(
+              tab === 'uniform' ? 'assets.uniform.uniform'
+                : tab === 'armory' ? 'assets.armory.armory'
+                : `employee.tab.${tab}`,
+            )}
             {badge !== null && (
               <span
                 className={

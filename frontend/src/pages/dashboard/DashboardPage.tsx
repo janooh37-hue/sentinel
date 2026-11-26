@@ -201,9 +201,12 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
       workforceAccess: workforceAccessQuery.data,
     }),
   )
+  // The Armory widget is default-on only for users without a saved layout, so it waits for the
+  // stored layout instead of flashing (and querying) from the placeholder defaults.
   const visibleWidgets = [...activeLayout.widgets]
     .sort((a, b) => a.order - b.order)
     .filter((widget) => widget.visible && availableIds.includes(widget.id))
+    .filter((widget) => widget.id !== 'armory_exceptions' || draft !== null || !layoutQuery.isPending)
   const cols = isMobile ? 2 : activeLayout.canvas_width === 'wide' ? 6 : 4
   const packed = packLayout(visibleWidgets, cols)
   const catalog = availableIds.map((id) => ({

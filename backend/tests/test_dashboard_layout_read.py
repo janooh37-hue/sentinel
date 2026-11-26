@@ -91,6 +91,31 @@ def test_wide_canvas_width_round_trips(db_session):
     assert layout.canvas_width == "wide"
 
 
+def test_armory_exceptions_layout_round_trips_without_changing_existing_widgets(db_session):
+    existing_widgets = [
+        {"id": "pending", "visible": True, "order": 0, "size": "M"},
+        {"id": "store_low_stock", "visible": False, "order": 1, "size": "L"},
+    ]
+    existing_layout = {
+        "widgets": existing_widgets,
+        "quick_actions": [{"id": "Employee Clearance Form", "visible": True, "order": 0}],
+        "canvas_width": "wide",
+    }
+    user = _store_layout(db_session, existing_layout)
+    layout = DashboardLayout.model_validate(
+        {
+            **existing_layout,
+            "widgets": [
+                *existing_widgets,
+                {"id": "armory_exceptions", "visible": True, "order": 2, "size": "L"},
+            ],
+        }
+    )
+
+    assert dashboard_service.set_user_layout(db_session, user.id, layout) == layout
+    assert dashboard_service.get_user_layout(db_session, user.id) == layout
+
+
 def test_quick_action_ids_exclude_companions_but_keep_primary():
     assert "Leave Undertaking" not in DASHBOARD_QUICK_ACTION_IDS
     assert "Resignation Declaration" not in DASHBOARD_QUICK_ACTION_IDS
