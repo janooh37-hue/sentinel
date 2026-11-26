@@ -1408,7 +1408,9 @@ def posting_reads(
                 void_reason=posting.void_reason,
                 void_witness=lookup.person(posting.void_witness_employee_id),
                 lines=[_movement_line(lookup, line) for line in lines[posting.id]],
-                discrepancy_ids=discrepancy_ids[posting.id],
+                discrepancy_ids=(
+                    discrepancy_ids[posting.id] if decision is None else [decision.discrepancy_id]
+                ),
             )
         )
     return reads

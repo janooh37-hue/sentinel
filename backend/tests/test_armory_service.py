@@ -15,6 +15,7 @@ from app.schemas import armory as s
 from app.services import armory_audit_service as svc
 from app.services import armory_catalog_service as catalog
 from app.services import armory_custody_service as custody
+from app.services import armory_read_service as reads
 from app.services import armory_service as core
 from app.services import armory_void_service as voids
 from tests.factories.armory import (
@@ -806,6 +807,25 @@ def test_rounds_decisions_credit_only_found_to_the_sending_safe(
     assert _findings(env) == []
     assert _findings(env, status="resolved", key=discrepancy.id) == [result]
     assert _findings(env, status="all", key=discrepancy.id + 1) == []
+
+
+def test_decision_movement_keeps_its_discrepancy_link_after_void(env: AuditEnv) -> None:
+    _rounds_shortfall(env)
+    (finding,) = _findings(env)
+    resolved = svc.decide(env.db, env.reviewer, finding.id, _decision(env, "recording_error"))
+    assert resolved.decision is not None
+    posting = resolved.decision.posting
+    assert posting.discrepancy_ids == [finding.id]
+
+    voided = voids.void(
+        env.db,
+        env.reviewer,
+        posting.id,
+        s.ArmoryVoid(reason="Correct the decision evidence", witness_employee_id=env.witness_id),
+    )
+    assert voided.voided_at is not None
+    assert reads.get_movement(env.db, posting.id).discrepancy_ids == [finding.id]
+    assert reads.get_movement(env.db, finding.source.id).discrepancy_ids == [finding.id]
 
 
 def test_decision_rejects_same_user_same_employee_involved_people_and_invalid_witnesses(
