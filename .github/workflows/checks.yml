@@ -72,8 +72,10 @@ jobs:
       - name: pytest
         env:
           GSSG_DATA_DIR: ${{ runner.temp }}/gssg-data
+        # The same files a local `pytest` collects: testpaths is backend/tests,
+        # searched recursively for pytest's default test_*.py and *_test.py.
         run: |
-          files=$(ls backend/tests/test_*.py | sort | awk -v s=${{ matrix.shard }} 'NR % 4 == s')
+          files=$(find backend/tests \( -name 'test_*.py' -o -name '*_test.py' \) | sort | awk -v s=${{ matrix.shard }} 'NR % 4 == s')
           pytest -n auto $files
       - name: No repo data/ created
         run: test ! -e data
