@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import sys
+from collections.abc import Callable
 
 from sqlalchemy import SQLColumnExpression, String, and_, case, func, or_, select, type_coerce
 from sqlalchemy.orm import Session
@@ -65,34 +66,36 @@ def _movement_order() -> tuple[
     )
 
 
-def _employee_movements(employee_id: str) -> ColumnElement[bool]:
+def _employee_movements(
+    matches: Callable[[SQLColumnExpression[str | None]], ColumnElement[bool]],
+) -> ColumnElement[bool]:
     assignment_id = case(
         (ArmoryPosting.kind == "return", ArmoryPosting.related_posting_id),
         else_=ArmoryPosting.id,
     )
     return or_(
-        ArmoryPosting.actor_employee_id == employee_id,
-        ArmoryPosting.witness_employee_id == employee_id,
+        matches(ArmoryPosting.actor_employee_id),
+        matches(ArmoryPosting.witness_employee_id),
         select(ArmoryAssignment.posting_id)
         .where(
             ArmoryAssignment.posting_id == assignment_id,
             or_(
-                ArmoryAssignment.holder_employee_id == employee_id,
-                ArmoryAssignment.supervisor_employee_id == employee_id,
+                matches(ArmoryAssignment.holder_employee_id),
+                matches(ArmoryAssignment.supervisor_employee_id),
             ),
         )
         .exists(),
         select(ArmoryDiscrepancy.id)
         .where(
             ArmoryDiscrepancy.source_posting_id == ArmoryPosting.id,
-            ArmoryDiscrepancy.involved_employee_id == employee_id,
+            matches(ArmoryDiscrepancy.involved_employee_id),
         )
         .exists(),
         select(ArmoryDecision.posting_id)
         .join(ArmoryDiscrepancy, ArmoryDiscrepancy.id == ArmoryDecision.discrepancy_id)
         .where(
             ArmoryDecision.posting_id == ArmoryPosting.id,
-            ArmoryDiscrepancy.involved_employee_id == employee_id,
+            matches(ArmoryDiscrepancy.involved_employee_id),
         )
         .exists(),
     )
@@ -137,16 +140,22 @@ def list_movements(
             .exists()
         )
     if employee_id is not None:
-        filters.append(_employee_movements(employee_id.strip()))
+        exact_id = employee_id.strip()
+        filters.append(_employee_movements(lambda column: column == exact_id))
     if needle := core.normalize_search(q):
         _enable_text_search(db)
+        matching_employees = select(Employee.id).where(_employee_search(needle)).cte()
+        employee_ids = select(matching_employees.c.id)
         filters.append(
-            _text_matches(
-                needle,
-                _record_ref(),
-                ArmoryPosting.reference,
-                ArmoryPosting.note,
-                ArmoryPosting.reason,
+            or_(
+                _text_matches(
+                    needle,
+                    _record_ref(),
+                    ArmoryPosting.reference,
+                    ArmoryPosting.note,
+                    ArmoryPosting.reason,
+                ),
+                _employee_movements(lambda column: column.in_(employee_ids)),
             )
         )
     if date_from is not None:

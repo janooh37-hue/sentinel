@@ -205,6 +205,41 @@ def test_movement_date_filters_sort_and_page_with_void_history(
     )
 
 
+def test_movement_text_search_matches_bilingual_holder_names_and_employee_numbers(
+    ledger: Ledger,
+    people: People,
+) -> None:
+    db = ledger.db
+    _receipt(ledger, ("cuffs", 1))
+    holder = factory.employee(db, "T-MOVE-01", name="Test Bilingual Holder")
+    holder.name_ar = "حارس البحث"
+    db.add(
+        EmployeeFormerId(
+            employee_id=holder.id,
+            new_id=holder.id,
+            former_id="T-OLD-01",
+            reason="Fixture ID correction",
+        )
+    )
+    db.commit()
+    record = custody.create_custody(
+        db,
+        people.operator,
+        s.ArmoryCustodyCreate(
+            safe_id=ledger.safe_id,
+            holder_kind="person",
+            holder_employee_id=holder.id,
+            kit_id=ledger.catalog.kit("equipment"),
+            lines=[s.ArmoryAssignmentLineInput(item_id=ledger.catalog.item("cuffs"), qty=1)],
+        ),
+    )
+
+    for query in (" BILINGUAL holder ", "حارس البحث", "t-move-\u0660\u0661", "t-old-\u0660\u0661"):
+        result = reads.list_movements(db, safe_id=ledger.safe_id, q=query)
+        assert result.total == 1
+        assert [posting.id for posting in result.items] == [record.id]
+
+
 def test_find_is_bounded_cross_safe_and_matches_former_employee_ids(
     ledger: Ledger,
     people: People,
