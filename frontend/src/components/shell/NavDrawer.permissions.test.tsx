@@ -44,6 +44,8 @@ it.each([
   { caps: ['uniform.view'], visible: true },
   { caps: ['store.view'], visible: true },
   { caps: ['store.view', 'uniform.view'], visible: true },
+  { caps: ['armory.view'], visible: true },
+  { caps: ['armory.edit'], visible: false },
 ])('shows the mobile Assets entry only with a viewable section: $caps', ({ caps, visible }) => {
   capabilityState.allowed = new Set(caps)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

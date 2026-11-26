@@ -36,7 +36,8 @@ function LocationProbe() {
 
 
 
-vi.mock('react-i18next', () => ({
+vi.mock('react-i18next', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 vi.mock('@/lib/toast', () => ({ toast: { success: vi.fn(), error: vi.fn(), loading: vi.fn() } }))
@@ -46,6 +47,7 @@ vi.mock('@/lib/api', () => ({
   },
   api: {
     getEmployeeDetail: vi.fn(),
+    getArmoryEmployee: vi.fn(),
     updateEmployee: vi.fn(),
     fetchTimesheetEmployeeExport: vi.fn(),
     documentDownloadUrl: vi.fn(
@@ -82,9 +84,13 @@ vi.mock('./EmployeeGapsCard', () => ({
   ),
 }))
 vi.mock('./EmployeeTabChips', () => ({
-  EmployeeTabChips: ({ active, onChange }: { active: string; onChange: (tab: string) => void }) => (
+  EmployeeTabChips: ({ active, onChange, showArmory }: {
+    active: string
+    onChange: (tab: string) => void
+    showArmory?: boolean
+  }) => (
     <>
-      <div data-testid="tab-chips" data-active={active} />
+      <div data-testid="tab-chips" data-active={active} data-show-armory={showArmory} />
       <button type="button" onClick={() => onChange('documents')}>change-tab</button>
     </>
   ),
@@ -205,6 +211,7 @@ function renderPage(initialEntry = '/employees/G100', previous: string[] = [], l
 // neither, and a real anchor click navigates.
 beforeEach(() => {
   mockHasCapability.mockReturnValue(true)
+  vi.mocked(api.getArmoryEmployee).mockReset()
 
   URL.createObjectURL = vi.fn(() => 'blob:sheet') as unknown as typeof URL.createObjectURL
   URL.revokeObjectURL = vi.fn()
@@ -280,6 +287,46 @@ test('uniform deep link with uniform.view opens the Uniform tab', async () => {
   vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
   renderPage('/employees/G100?tab=uniform')
   expect(await screen.findByTestId('uniform-tab')).toBeInTheDocument()
+})
+
+const armoryEmployeeId = 'T-0001'
+const armoryPerson = { employee_id: armoryEmployeeId, name_en: 'Test Guard One', name_ar: 'حارس اختبار', employee_status: 'Active', is_former: false }
+const armoryDetail = { ...detail, employee: { ...detail.employee, id: armoryEmployeeId, name_en: armoryPerson.name_en, name_ar: armoryPerson.name_ar } }
+
+test.each(['armory.view', 'employees.view'])('an Armory deep link falls back to the profile without %s', async (denied) => {
+  mockHasCapability.mockImplementation((cap) => cap !== denied)
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(armoryDetail as never)
+  renderPage(`/employees/${armoryEmployeeId}?tab=armory`, [], armoryEmployeeId)
+
+  const chips = await screen.findByTestId('tab-chips')
+  expect(chips).toHaveAttribute('data-active', 'profile')
+  expect(chips).toHaveAttribute('data-show-armory', 'false')
+  expect(api.getArmoryEmployee).not.toHaveBeenCalled()
+})
+
+test('an authorized employee profile does not preload Armory records', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(armoryDetail as never)
+  renderPage(`/employees/${armoryEmployeeId}`, [], armoryEmployeeId)
+
+  const chips = await screen.findByTestId('tab-chips')
+  expect(chips).toHaveAttribute('data-active', 'profile')
+  expect(chips).toHaveAttribute('data-show-armory', 'true')
+  expect(api.getArmoryEmployee).not.toHaveBeenCalled()
+})
+
+test('an authorized Armory deep link loads the selected employee’s records', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(armoryDetail as never)
+  vi.mocked(api.getArmoryEmployee).mockResolvedValue({
+    person: armoryPerson,
+    qualification: { version: 0, course_round: null, licence_number: null, licence_expires_on: null, licence_status: 'missing', licence_days_left: null, updated_at: null },
+    open_assignments: [],
+    history: { page: 1, page_size: 10, total: 0, items: [] },
+  })
+  renderPage(`/employees/${armoryEmployeeId}?tab=armory`, [], armoryEmployeeId)
+
+  expect(await screen.findByRole('heading', { name: 'assets.armory.employeeTab.qualification' })).toBeInTheDocument()
+  expect(screen.getByTestId('tab-chips')).toHaveAttribute('data-active', 'armory')
+  expect(api.getArmoryEmployee).toHaveBeenCalledWith(armoryEmployeeId, { page: 1 })
 })
 
 

@@ -110,3 +110,67 @@ describe('assets locale parity', () => {
     }
   })
 })
+
+describe('armory locale contract', () => {
+  const enArmory = [...enAssets].filter(([key]) => key.startsWith('assets.armory.'))
+  const arArmory = [...arAssets].filter(([key]) => key.startsWith('assets.armory.'))
+
+  it('keeps the approved Armory names and the shared enum vocabularies in both languages', () => {
+    const pairs: [string, string, string][] = [
+      ['assets.armory.armory', 'Armory', 'خزنة السلاح'],
+      ['assets.armory.widgetTitle', 'Armory exceptions', 'تنبيهات خزنة السلاح'],
+      ['assets.armory.signout', 'Issue', 'صرف'],
+      ['assets.armory.signin', 'Return', 'إرجاع'],
+      ['assets.armory.handover', 'Hand over custody', 'تسليم عهدة'],
+      ['assets.armory.shiftCheck', 'Shift check', 'فحص الوردية'],
+      ['assets.armory.needsDecision', 'Needs a decision', 'يحتاج قرارًا'],
+      ['assets.armory.clearSearch', 'Clear search filter', 'إلغاء تصفية البحث'],
+    ]
+    for (const [key, enText, arText] of pairs) {
+      expect(enAssets.get(key), key).toBe(enText)
+      expect(arAssets.get(key), key).toBe(arText)
+    }
+    const enums: Record<string, readonly string[]> = {
+      serialState: ['in_safe', 'signed_out', 'in_custody', 'in_repair', 'missing', 'lost', 'written_off'],
+      licenceStatus: ['missing', 'expired', 'expiring', 'valid'],
+      postingKind: ['opening', 'receipt', 'serial_registration', 'shift_issue', 'custody', 'return', 'shift_check', 'monthly_count', 'serial_state', 'decision'],
+      discrepancyKind: ['rounds_shortfall', 'missing_serial', 'unexpected_serial', 'monthly_quantity'],
+      discrepancyStatus: ['open', 'resolved', 'voided'],
+      decisionOutcome: ['found', 'used_in_training', 'lost', 'recording_error'],
+      shortfallReason: ['training', 'incident', 'lost', 'other'],
+      serialAction: ['send_repair', 'return_repair', 'mark_lost', 'write_off', 'transfer'],
+      assignmentState: ['active', 'ended', 'voided'],
+      categoryName: ['firearms', 'ammo', 'accessories', 'nonlethal', 'restraints', 'riot', 'comms'],
+      kitName: ['rifle', 'pistol', 'equipment'],
+    }
+    for (const [group, values] of Object.entries(enums)) {
+      for (const value of values) {
+        const key = `assets.armory.${group}.${value}`
+        expect(enAssets.get(key)?.trim(), key).toBeTruthy()
+        expect(arAssets.get(key)?.trim(), key).toBeTruthy()
+      }
+    }
+  })
+
+  it('labels the Armory permission domain and dashboard source with the Armory name', () => {
+    expect(en.access.permissions.domains.armory).toBe('Armory')
+    expect(ar.access.permissions.domains.armory).toBe('خزنة السلاح')
+    expect(en.dashboard.customize.sources.armory).toBe('Armory')
+    expect(ar.dashboard.customize.sources.armory).toBe('خزنة السلاح')
+  })
+
+  it('states that a licence acknowledgement does not authorize release', () => {
+    expect(enAssets.get('assets.armory.licenceAcknowledge')).toBe('I acknowledge the licence warning on this record.')
+    expect(arAssets.get('assets.armory.licenceAcknowledge')).toBe('أقرّ بتنبيه الرخصة الوارد في هذا السجل.')
+    expect(enAssets.get('assets.armory.releaseNotAuthorized')).toBe('Recording does not authorize release.')
+    expect(arAssets.get('assets.armory.releaseNotAuthorized')).toBe('تسجيل المعاملة لا يجيز تسليم المعدات.')
+  })
+
+  it('ships no mockup preview copy, old-style placeholders or dashes', () => {
+    for (const [key, text] of [...enArmory, ...arArmory]) {
+      expect(text, key).not.toMatch(/in this preview|هذه المعاينة|approval mockup|نموذج للاعتماد/i)
+      expect(text, key).not.toMatch(/(^|[^{])\{[a-z#]/i)
+      expect(text, key).not.toMatch(/[\u2013\u2014]/)
+    }
+  })
+})
