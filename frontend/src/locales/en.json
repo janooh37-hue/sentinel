@@ -3058,11 +3058,15 @@
         "guardCount_other": "<count>{{count}}</count> guards",
         "invalidExpiry": "Enter a valid expiry date.",
         "invalidRound": "Enter a positive whole number for the course round.",
+        "keepChanges": "Keep my changes",
         "lineQty": "<count>{{count}}</count> × <item>{{item}}</item>",
         "pageOf": "Page <page>{{page}}</page> of <pages>{{pages}}</pages>",
         "pagination": "Guard list pages",
         "qualification": "Guard qualification",
-        "savedQualification": "Guard qualification saved."
+        "recoverQualification": "Choose whether to keep your changes or use the saved values before you save again.",
+        "savedQualification": "Guard qualification saved.",
+        "savedValues": "Saved values",
+        "useSaved": "Use saved values"
       },
       "movementsPane": {
         "logCount_one": "<count>{{count}}</count> movement",

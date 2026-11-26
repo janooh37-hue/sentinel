@@ -57,7 +57,7 @@ describe('GuardQualificationDialog', () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledExactlyOnceWith(true))
   })
 
-  it('reports a 412 conflict, reloads and re-seeds the draft for review without resubmitting', async () => {
+  async function conflictOnSave() {
     const user = userEvent.setup()
     const supersedingGuard = {
       ...testGuard,
@@ -70,17 +70,51 @@ describe('GuardQualificationDialog', () => {
     const { onClose } = mount()
     const dialog = await screen.findByRole('dialog', { name: 'Update licence' })
     const round = within(dialog).getByLabelText('Course round')
+    const licence = within(dialog).getByLabelText('Licence security number')
     fireEvent.change(round, { target: { value: '6' } })
+    fireEvent.change(licence, { target: { value: 'TEST-LICENCE-B' } })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    return { user, dialog, round, licence, onClose }
+  }
+
+  it('keeps the unsaved draft after a 412, shows the saved values and saves the kept draft against the new ETag', async () => {
+    const { user, dialog, round, licence, onClose } = await conflictOnSave()
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('This record changed since you opened it. Review the current values.')
     expect(within(dialog).queryByText('Internal fixture error')).not.toBeInTheDocument()
-    expect(await within(dialog).findByDisplayValue('TEST-LICENCE-NEW')).toBe(within(dialog).getByLabelText('Licence security number'))
-    expect(round).toHaveValue('8')
-    expect(within(dialog).getByLabelText('Licence expiry')).toHaveValue('2032-06-07')
+    await waitFor(() => expect(vi.mocked(api.getArmoryGuard).mock.calls.length).toBeGreaterThanOrEqual(2))
+    await waitFor(() => expect(within(dialog).queryByText('Loading armory records…')).not.toBeInTheDocument())
+    expect(round).toHaveValue('6')
+    expect(licence).toHaveValue('TEST-LICENCE-B')
+    expect(within(dialog).getByLabelText('Licence expiry')).toHaveValue('2032-05-28')
+    const saved = within(dialog).getByRole('region', { name: 'Saved values' })
+    expect(saved).toHaveTextContent('8')
+    expect(saved).toHaveTextContent('TEST-LICENCE-NEW')
+    expect(saved).toHaveTextContent('07/06/2032')
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(api.getArmoryGuard).toHaveBeenNthCalledWith(2, 'T-0001')
     expect(api.saveArmoryQualification).toHaveBeenCalledTimes(1)
     expect(onClose).not.toHaveBeenCalled()
+
+    await user.click(within(saved).getByRole('button', { name: 'Keep my changes' }))
+    expect(within(dialog).queryByRole('region', { name: 'Saved values' })).not.toBeInTheDocument()
+    expect(round).toHaveValue('6')
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(api.saveArmoryQualification).toHaveBeenLastCalledWith('T-0001', {
+      course_round: 6, licence_number: 'TEST-LICENCE-B', licence_expires_on: '2032-05-28',
+    }, '"4"')
+    await waitFor(() => expect(onClose).toHaveBeenCalledExactlyOnceWith(true))
+  })
+
+  it('replaces the draft with the saved values only when the operator chooses them after a 412', async () => {
+    const { user, dialog, round, licence, onClose } = await conflictOnSave()
+
+    const saved = await within(dialog).findByRole('region', { name: 'Saved values' })
+    await user.click(within(saved).getByRole('button', { name: 'Use saved values' }))
+    expect(round).toHaveValue('8')
+    expect(licence).toHaveValue('TEST-LICENCE-NEW')
+    expect(within(dialog).getByLabelText('Licence expiry')).toHaveValue('2032-06-07')
+    expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument()
 
     fireEvent.change(round, { target: { value: '9' } })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))

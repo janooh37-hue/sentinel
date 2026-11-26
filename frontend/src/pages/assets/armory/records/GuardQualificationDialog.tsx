@@ -8,7 +8,7 @@ import type { ArmoryGuardRead, ArmoryPersonCandidateRead, Versioned } from '@/li
 import { normalizeDigits } from '@/lib/utils'
 
 import { Ltr } from '../ArmoryLtr'
-import { orgDateIso, useArmoryLocale } from '../armoryFormat'
+import { displayDate, orgDateIso, useArmoryLocale } from '../armoryFormat'
 import { armoryErrorMessage, armoryErrorRecovery, isArmoryAccessError, useArmoryAccess, useArmoryGuard, useSaveArmoryQualification } from '../armoryQueries'
 import { ArmoryPersonPicker } from '../dialogs/ArmoryPersonPicker'
 
@@ -50,11 +50,15 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
   const [person, setPerson] = useState<ArmoryPersonCandidateRead | null>(null)
   const selectedId = employeeId ?? person?.person.employee_id ?? null
   const [edited, setEdited] = useState<QualificationDraft | null>(null)
-  const [conflict, setConflict] = useState<'loading' | 'failed' | null>(null)
+  // After a 412 the draft stays as typed; `saved` holds the refreshed server
+  // values until the operator keeps the draft or takes the saved values.
+  const [conflict, setConflict] = useState<'loading' | 'failed' | { saved: QualificationDraft } | null>(null)
+  const review = typeof conflict === 'object' && conflict !== null ? conflict.saved : null
   const closed = useRef(false)
   const cancel = useRef<HTMLButtonElement>(null)
   const courseInput = useRef<HTMLInputElement>(null)
   const expiryInput = useRef<HTMLInputElement>(null)
+  const keepChanges = useRef<HTMLButtonElement>(null)
   const guardQuery = useArmoryGuard(selectedId)
   const mutation = useSaveArmoryQualification()
   const loadError = guardQuery.isError ? guardQuery.error : null
@@ -80,6 +84,10 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
     if (showFields && document.activeElement === cancel.current) courseInput.current?.focus()
   }, [showFields])
 
+  useEffect(() => {
+    if (review) keepChanges.current?.focus()
+  }, [review])
+
   function close(saved: boolean) {
     if (closed.current) return
     closed.current = true
@@ -90,17 +98,22 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
     if (draft) setEdited({ ...draft, ...changes })
   }
 
-  async function reloadAfterConflict() {
+  async function reloadAfterConflict(pinned: QualificationDraft) {
+    setEdited(pinned)
     setConflict('loading')
     // The mutation already invalidates Armory on a version conflict. Join
     // that refetch rather than aborting it and issuing a duplicate request.
     const latest = await guardQuery.refetch({ cancelRefetch: false })
-    if (latest.isSuccess) {
-      setEdited(draftFrom(latest.data))
-      setConflict(null)
-    } else {
-      setConflict('failed')
-    }
+    setConflict(latest.isSuccess ? { saved: draftFrom(latest.data) } : 'failed')
+  }
+
+  /** Keep the draft against the new version, or replace it with the saved values. */
+  function resolveConflict(keep: boolean) {
+    if (!review || !draft) return
+    setEdited(keep ? { ...draft, etag: review.etag } : review)
+    setConflict(null)
+    mutation.reset()
+    requestAnimationFrame(() => courseInput.current?.focus())
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -118,7 +131,7 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
     }, {
       onSuccess: () => close(true),
       onError: (error) => {
-        if (armoryErrorRecovery(error) === 'reload') void reloadAfterConflict()
+        if (armoryErrorRecovery(error) === 'reload') void reloadAfterConflict(draft)
       },
     })
   }
@@ -176,7 +189,7 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
             {loadError && (
               <div className="flex flex-wrap items-center gap-2">
                 <p role="alert" className="text-sm text-destructive-text">{armoryErrorMessage(loadError)}</p>
-                {!accessDenied && <Button type="button" variant="ghost" className="min-h-11" onClick={() => void (conflict === 'failed' ? reloadAfterConflict() : guardQuery.refetch())}>{t('assets.armory.retry')}</Button>}
+                {!accessDenied && <Button type="button" variant="ghost" className="min-h-11" onClick={() => void (conflict === 'failed' && draft ? reloadAfterConflict(draft) : guardQuery.refetch())}>{t('assets.armory.retry')}</Button>}
               </div>
             )}
             {guard?.person.is_former && <p role="status" className="text-sm text-muted-foreground">{t('assets.armory.guardsPane.formerReadOnly')}</p>}
@@ -252,6 +265,24 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
               </p>
             )}
             {conflict === 'loading' && <p role="status" className="text-sm text-muted-foreground">{t('assets.armory.loadingText')}</p>}
+            {review && (
+              <section aria-labelledby={`${id}-saved`} className="space-y-3 rounded-md bg-surface-raised p-3">
+                <h3 id={`${id}-saved`} className="text-sm font-semibold">{t('assets.armory.guardsPane.savedValues')}</h3>
+                <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                  <dt className="text-muted-foreground">{t('assets.armory.courseRound')}</dt>
+                  <dd>{review.courseRound ? <Ltr className="tabular-nums">{review.courseRound}</Ltr> : t('assets.armory.none')}</dd>
+                  <dt className="text-muted-foreground">{t('assets.armory.securityNumber')}</dt>
+                  <dd className="[overflow-wrap:anywhere]">{review.licenceNumber ? <Ltr className="tabular-nums">{review.licenceNumber}</Ltr> : t('assets.armory.none')}</dd>
+                  <dt className="text-muted-foreground">{t('assets.armory.securityExpiry')}</dt>
+                  <dd>{review.expiry ? <Ltr className="tabular-nums">{displayDate(review.expiry)}</Ltr> : t('assets.armory.none')}</dd>
+                </dl>
+                <p className="text-sm text-muted-foreground">{t('assets.armory.guardsPane.recoverQualification')}</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button ref={keepChanges} type="button" variant="outline" className="min-h-11" onClick={() => resolveConflict(true)}>{t('assets.armory.guardsPane.keepChanges')}</Button>
+                  <Button type="button" variant="outline" className="min-h-11" onClick={() => resolveConflict(false)}>{t('assets.armory.guardsPane.useSaved')}</Button>
+                </div>
+              </section>
+            )}
           </div>
           <div className="flex flex-none flex-wrap justify-end gap-2 border-t border-border px-4 py-3">
             <Button ref={cancel} type="button" variant="outline" className="min-h-11" disabled={saving} onClick={() => close(false)}>{t('assets.armory.cancel')}</Button>
