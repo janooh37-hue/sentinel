@@ -256,6 +256,58 @@ def _attendance_is_trustworthy(sync_health: dict[str, dict[str, Any]]) -> bool:
     return bool(sync_health["punches"]["state"] == "healthy")
 
 
+def _case_is_on_site(
+    evaluation: AttendanceEvaluation,
+    adjustment: AttendanceAdjustment | None,
+    *,
+    now: datetime,
+) -> bool:
+    effective = attendance_correction_service.overlay(
+        {
+            "presence_state": evaluation.presence_state,
+            "first_in_at": evaluation.first_in_at,
+            "final_out_at": evaluation.final_out_at,
+        },
+        adjustment,
+    )
+    return (
+        effective["presence_state"] == "on_duty"
+        and effective["first_in_at"] is not None
+        and effective["first_in_at"] <= now
+        and effective["final_out_at"] is None
+    )
+
+
+def on_site_employee_ids_at_duty_path(
+    db: Session, *, duty_unit: str, duty_post: str, now: datetime
+) -> set[str]:
+    """Employees present now at exactly this (duty_unit, duty_post) per local Workforce data."""
+    now = _naive_utc(now)
+    unit, post = normalize_scope_value(duty_unit), normalize_scope_value(duty_post)
+    if unit is None or post is None or not _attendance_is_trustworthy(_stream_health(db, now=now)):
+        return set()
+    cases = [
+        case
+        for case in db.scalars(
+            select(AttendanceCase).where(
+                AttendanceCase.scheduled_start_at <= now,
+                AttendanceCase.scheduled_end_at > now,
+            )
+        )
+        if normalize_scope_value(case.duty_unit_snapshot) == unit
+        and normalize_scope_value(case.duty_post_snapshot) == post
+    ]
+    queued = _queued_case_ids(db, cases)
+    latest = _latest_evaluations(db, (case.id for case in cases if case.id not in queued))
+    adjustments = attendance_correction_service.active_corrections(db, latest)
+    return {
+        case.employee_id
+        for case in cases
+        if (evaluation := latest.get(case.id)) is not None
+        and _case_is_on_site(evaluation, adjustments.get(case.id), now=now)
+    }
+
+
 def _case_metrics(
     db: Session,
     *,
@@ -837,7 +889,6 @@ def get_workforce_snapshot(
         ),
     }
     # Current cases include overnight staff; fallback cases must not claim "on site now".
-    on_site: set[str] = set()
     on_site_cases = [
         case for case in cases if case.scheduled_start_at <= naive_now < case.scheduled_end_at
     ]
@@ -846,26 +897,20 @@ def get_workforce_snapshot(
         and not _queued_case_ids(db, on_site_cases)
         and all(case.id in latest for case in on_site_cases)
     )
-    for case in on_site_cases if on_site_available else ():
-        evaluation = latest[case.id]
-        effective = attendance_correction_service.overlay(
+    on_site = (
+        len(
             {
-                "presence_state": evaluation.presence_state,
-                "first_in_at": evaluation.first_in_at,
-                "final_out_at": evaluation.final_out_at,
-            },
-            adjustments.get(case.id),
+                case.employee_id
+                for case in on_site_cases
+                if _case_is_on_site(latest[case.id], adjustments.get(case.id), now=naive_now)
+            }
         )
-        if (
-            effective["presence_state"] == "on_duty"
-            and effective["first_in_at"] is not None
-            and effective["first_in_at"] <= naive_now
-            and effective["final_out_at"] is None
-        ):
-            on_site.add(case.employee_id)
+        if on_site_available
+        else None
+    )
     value["aggregate"] = {
         "active_employees": len(active_scoped),
-        "on_site": len(on_site) if on_site_available else None,
+        "on_site": on_site,
     }
     return DashboardProjection(value)
 
@@ -1084,4 +1129,5 @@ __all__ = [
     "get_coverage_children",
     "get_workforce_analytics",
     "get_workforce_snapshot",
+    "on_site_employee_ids_at_duty_path",
 ]

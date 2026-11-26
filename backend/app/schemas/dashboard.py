@@ -30,6 +30,7 @@ DASHBOARD_WIDGET_IDS = (
     "store_expiring",
     "store_low_stock",
     "punch_log",
+    "armory_exceptions",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "General Book",
@@ -74,6 +75,7 @@ DashboardWidgetId = Literal[
     "store_expiring",
     "store_low_stock",
     "punch_log",
+    "armory_exceptions",
 ]
 DashboardQuickActionId = Literal[
     "General Book",
