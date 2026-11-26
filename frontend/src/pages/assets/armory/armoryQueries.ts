@@ -300,28 +300,22 @@ export function armoryErrorRecovery(error: unknown): ArmoryRecovery {
   return error instanceof ApiError && Object.hasOwn(RECOVERY, error.code) ? RECOVERY[error.code] : 'none'
 }
 
-/**
- * Translated copy for Armory errors; never a backend `message`. Armory codes
- * map to their own copy; anything else falls back by HTTP status, keeping the
- * shared 403 and network handling of `apiErrorMessage`.
- */
+/** Translate Armory errors without exposing any server-provided message. */
 export function armoryErrorMessage(error: unknown): string {
-  return apiErrorMessage(error, code => {
-    if (!(error instanceof ApiError) || error.status === 403) return null
-    if (code === 'armory_not_found') {
-      const resource = typeof error.details.resource === 'string' ? error.details.resource : ''
-      const key = `assets.armory.errors.notFound.${resource}`
-      return /^[a-z_]+$/.test(resource) && i18n.exists(key) ? key : 'assets.armory.errors.notFound.generic'
-    }
-    if (code.startsWith('armory_')) {
-      const camel = code.slice('armory_'.length).replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
-      const key = `assets.armory.errors.${camel}`
-      if (i18n.exists(key)) return key
-    }
-    if (error.status === 404) return 'assets.armory.errors.notFound.generic'
-    if (error.status === 412) return 'assets.armory.errors.versionMismatch'
-    if (error.status === 409) return 'assets.armory.errors.conflict'
-    if (error.status === 422 || error.status === 400) return 'assets.armory.errors.invalidInput'
-    return 'errors.generic'
-  })
+  if (!(error instanceof ApiError)) return apiErrorMessage(error)
+  const { code, status } = error
+  if (!code.startsWith('armory_')) return i18n.t('errors.generic')
+  if (code === 'armory_not_found') {
+    const resource = typeof error.details.resource === 'string' ? error.details.resource : ''
+    const key = `assets.armory.errors.notFound.${resource}`
+    return i18n.t(/^[a-z_]+$/.test(resource) && i18n.exists(key) ? key : 'assets.armory.errors.notFound.generic')
+  }
+  const camel = code.slice('armory_'.length).replace(/_([a-z])/g, (_, letter: string) => letter.toUpperCase())
+  const key = `assets.armory.errors.${camel}`
+  if (i18n.exists(key)) return i18n.t(key)
+  if (status === 404) return i18n.t('assets.armory.errors.notFound.generic')
+  if (status === 412) return i18n.t('assets.armory.errors.versionMismatch')
+  if (status === 409) return i18n.t('assets.armory.errors.conflict')
+  if (status === 422 || status === 400) return i18n.t('assets.armory.errors.invalidInput')
+  return i18n.t('errors.generic')
 }

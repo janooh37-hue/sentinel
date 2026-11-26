@@ -168,7 +168,6 @@ describe('Armory error copy and recovery', () => {
     [404, 'armory_not_found', { resource: 'safe' }, 'The safe was not found.'],
     [404, 'armory_not_found', { resource: 'unknown_resource' }, 'The record was not found. It may have changed.'],
     [409, 'armory_unknown_conflict', {}, 'This record changed. Review the current data.'],
-    [409, 'HTTP_409', {}, 'This record changed. Review the current data.'],
   ])('localizes status %i and code %s', (status, code, details, expected) => {
     expect(armoryErrorMessage(new ApiError(status, code, SERVER_DETAIL, details))).toBe(expected)
   })
@@ -178,10 +177,15 @@ describe('Armory error copy and recovery', () => {
     expect(armoryErrorMessage(new ApiError(409, 'armory_duplicate_serial', SERVER_DETAIL))).toBe('هذا الرقم التسلسلي مسجّل مسبقًا.')
     expect(armoryErrorMessage(new ApiError(404, 'armory_not_found', SERVER_DETAIL, { resource: 'safe' }))).toBe('لم يُعثر على الخزنة.')
     expect(armoryErrorMessage(new ApiError(409, 'armory_unknown_conflict', SERVER_DETAIL))).toBe('تغيّر هذا السجل. راجع البيانات الحالية.')
-    expect(armoryErrorMessage(new ApiError(401, 'HTTP_401', SERVER_DETAIL))).toBe(i18n.t('errors.generic'))
-    expect(armoryErrorMessage(new ApiError(403, 'HTTP_403', SERVER_DETAIL))).toBe(i18n.t('common.forbiddenError'))
     expect(armoryErrorMessage(new ApiError(500, 'armory_unknown_error', SERVER_DETAIL))).toBe(i18n.t('errors.generic'))
     expect(armoryErrorMessage(new ApiError(500, 'armory_unknown_error', SERVER_DETAIL))).not.toContain(SERVER_DETAIL)
+  })
+
+  it.each(['en', 'ar'])('uses the generic app error for non-Armory responses in %s', async language => {
+    await i18n.changeLanguage(language)
+    for (const status of [400, 401, 403, 404, 409, 412, 422, 500]) {
+      expect(armoryErrorMessage(new ApiError(status, `HTTP_${status}`, SERVER_DETAIL))).toBe(i18n.t('errors.generic'))
+    }
   })
 
   it.each([
