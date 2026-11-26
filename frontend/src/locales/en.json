@@ -615,7 +615,7 @@
       "employeeNotFound": "Employee not found.",
       "employeeLoadError": "The selected employee could not be loaded.",
       "openProfile": "Open profile",
-      "clearEmployee": "Clear",
+      "clearEmployee": "Reset search",
       "typeLabel": "Activity type",
       "all": "All activity",
       "employee_added": "New employees",

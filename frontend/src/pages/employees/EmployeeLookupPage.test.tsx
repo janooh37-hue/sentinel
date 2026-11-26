@@ -167,7 +167,7 @@ describe('EmployeeLookupPage', () => {
     Element.prototype.scrollIntoView = scrollIntoView
   })
 
-  it('opens a search result in the activity view, records it, and restores the directory on Clear', async () => {
+  it('opens a search result in the activity view, records it, and restores the directory on Reset search', async () => {
     const user = userEvent.setup()
     setup()
     expect(screen.getByText(lookup.recentTitle)).toBeInTheDocument()

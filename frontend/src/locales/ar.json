@@ -656,7 +656,7 @@
       "employeeNotFound": "الموظف غير موجود.",
       "employeeLoadError": "تعذّر تحميل بيانات الموظف المحدد.",
       "openProfile": "فتح الملف",
-      "clearEmployee": "مسح",
+      "clearEmployee": "إعادة ضبط البحث",
       "typeLabel": "نوع النشاط",
       "all": "كل الأنشطة",
       "employee_added": "موظفون جدد",

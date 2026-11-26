@@ -56,11 +56,11 @@ describe('EmployeeBadgeCard', () => {
     expect(img).not.toBeNull()
   })
 
-  it('links to the profile and delegates Clear', async () => {
+  it('links to the profile and delegates Reset search', async () => {
     const onClear = vi.fn()
     renderBadge(abdulla, onClear)
     expect(screen.getByRole('link', { name: 'Open profile' })).toHaveAttribute('href', '/employees/G3190')
-    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Reset search' }))
     expect(onClear).toHaveBeenCalledOnce()
   })
 
