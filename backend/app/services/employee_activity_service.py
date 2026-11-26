@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import chain
 
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, Integer, func, literal_column, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -383,6 +383,52 @@ def _id_changes(
     ], total
 
 
+def _employees_added(
+    db: Session, *, employee_id: str | None, requested: int
+) -> tuple[list[EmployeeActivityItemRead], int]:
+    # Number corrections update the text primary key in place, preserving rowid.
+    rowid = literal_column("employees.rowid", Integer).label("source_id")
+    stmt = (
+        select(
+            rowid,
+            Employee.created_at,
+            Employee.id,
+            Employee.name_en,
+            Employee.name_ar,
+            Employee.status,
+            Employee.doj,
+            func.coalesce(func.nullif(User.display_name, ""), User.email).label("actor_name"),
+            func.count().over().label("source_total"),
+        )
+        .select_from(Employee)
+        .outerjoin(User, Employee.created_by_user_id == User.id)
+        .where(Employee.imported.is_(False))
+    )
+    if employee_id is not None:
+        stmt = stmt.where(Employee.id == employee_id)
+    rows = db.execute(
+        stmt.order_by(Employee.created_at.desc(), rowid.desc()).limit(requested)
+    ).all()
+    total = int(rows[0].source_total) if rows else 0
+    return [
+        EmployeeActivityItemRead(
+            kind="employee_added",
+            source_id=row.source_id,
+            target_id=row.source_id,
+            occurred_at=row.created_at,
+            employee_id=row.id,
+            employee_name_en=row.name_en,
+            employee_name_ar=row.name_ar,
+            title=row.name_en,
+            reference=row.id,
+            status=row.status,
+            joining_date=row.doj,
+            actor_name=row.actor_name,
+        )
+        for row in rows
+    ], total
+
+
 def list_employee_activity(
     db: Session,
     *,
@@ -420,6 +466,8 @@ def list_employee_activity(
         sources.append(_status_events(db, employee_id=employee_id, requested=requested))
     if kind in (None, "id_change"):
         sources.append(_id_changes(db, employee_id=employee_id, requested=requested))
+    if kind in (None, "employee_added"):
+        sources.append(_employees_added(db, employee_id=employee_id, requested=requested))
 
     # Documents are filtered in SQL; the exact per-document gate then re-checks
     # only the documents that land on this page. A refused one is excluded and

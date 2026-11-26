@@ -603,6 +603,7 @@
       "expiryNone": "No documents expiring within 90 days",
       "gapsNone": "No files with missing data",
       "miniPlaceholder": "New search — type a name or employee ID…",
+      "clearSearch": "Clear search",
       "fileTitle": "Employee file",
       "daysLeft": "{{count}} days"
     },
@@ -610,17 +611,14 @@
       "eyebrow": "Employee records",
       "title": "Recent activity",
       "subtitle": "Review recent record activity across all employees or find one employee.",
-      "resultCount": "{{count}} recent entries",
-      "lookupLabel": "Quick activity lookup",
-      "lookupLoading": "Searching employees…",
-      "lookupEmpty": "No matching employees.",
-      "lookupPlaceholder": "Search by employee name or G-number",
-      "matches": "Matching employees",
-      "showActivity": "Show activity",
+      "resultCount_one": "{{count}} recent entry",
+      "resultCount_other": "{{count}} recent entries",
+      "employeeNotFound": "Employee not found.",
+      "employeeLoadError": "The selected employee could not be loaded.",
       "openProfile": "Open profile",
-      "clearEmployee": "Clear employee filter",
       "typeLabel": "Activity type",
       "all": "All activity",
+      "employee_added": "New employees",
       "document": "Documents",
       "leave": "Leave",
       "violation": "Violations",
@@ -637,6 +635,7 @@
       "openLeave": "Open leave",
       "openViolation": "Open violation",
       "openLedger": "Open correspondence",
+      "openEmployeeActivity": "Open employee activity",
       "dutyLocation": {
         "label": "Duty location",
         "initial_placement": "Initial placement",
@@ -648,7 +647,6 @@
         "toTransferred": "Transferred",
         "returnedTo": "Returned to",
         "unassigned": "Unassigned",
-        "openEmployeeActivity": "Open employee activity",
         "historyBegins": "History begins at"
       },
       "statusEvent": {
@@ -668,18 +666,23 @@
       },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
-      "showing": "Showing {{shown}} of {{total}} recent entries",
+      "showing": "Showing {{shown}} of {{total}}",
       "empty": "No recent employee activity.",
       "emptyFiltered": "No activity matches the current filters.",
       "clearFilters": "Clear filters",
       "loadError": "Recent activity could not be loaded.",
-      "lookupError": "Employees could not be searched.",
       "retry": "Retry",
       "actions": {
         "document": "Generated document",
         "leave": "Leave record · {{days}} days",
         "violation": "Recorded violation",
         "ledger": "Recorded correspondence"
+      },
+      "added": {
+        "sentence": "Added · {{name}} · {{id}}",
+        "withActor": "Added · {{name}} · {{id}} · by {{actor}}",
+        "joins": "Joins {{date}}",
+        "joined": "Joined {{date}}"
       },
       "badge": {
         "company": "GSSG Security",

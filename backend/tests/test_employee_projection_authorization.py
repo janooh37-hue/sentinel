@@ -32,7 +32,9 @@ def records(api_db, monkeypatch, tmp_path):
     get_settings.cache_clear()
     reader = make_user(api_db, email="projection-reader@test.ae")
     admin = make_user(api_db, role="admin", email="projection-admin@test.ae")
-    employee = Employee(id="G-PROJECTION", name_en="Projection Employee", status="Active")
+    employee = Employee(
+        id="G-PROJECTION", name_en="Projection Employee", status="Active", imported=True
+    )
     leave = Leave(
         employee_id=employee.id,
         leave_type="Annual Leave",

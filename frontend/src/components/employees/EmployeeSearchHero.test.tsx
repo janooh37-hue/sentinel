@@ -42,6 +42,23 @@ describe('EmployeeSearchHero', () => {
     await userEvent.click(await screen.findByRole('button', { name: /إنشاء ملف موظف جديد|Create a new employee file/ }))
     expect(onCreate).toHaveBeenCalled()
   })
+
+  it('clears typed text from the clear button and hides it on an empty bar', async () => {
+    wrap(<EmployeeSearchHero onSelect={() => {}} onCreate={() => {}} onLeaveIds={new Set()} />)
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+    await userEvent.type(screen.getByRole('searchbox'), 'abd')
+    await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(screen.getByRole('searchbox')).toHaveValue('')
+    expect(screen.getByRole('searchbox')).toHaveFocus()
+    expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the clear button while a selection is open and reports the clear', async () => {
+    const onClear = vi.fn()
+    wrap(<EmployeeSearchHero onSelect={() => {}} onCreate={() => {}} onLeaveIds={new Set()} compact onClear={onClear} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+    expect(onClear).toHaveBeenCalledOnce()
+  })
 })
 
 describe('EmployeeSearchHero transferred pill', () => {

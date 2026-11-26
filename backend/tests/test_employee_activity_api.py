@@ -118,6 +118,104 @@ def test_activity_route_forwards_filters_and_page(manager_client: TestClient):
     assert body["items"][0]["kind"] == "document"
 
 
+def test_create_employee_records_the_authenticated_creator(
+    api_db: Session, manager_client: TestClient
+) -> None:
+    creator = api_db.query(User).filter_by(email="mgr@x.ae").one()
+    response = manager_client.post(
+        "/api/v1/employees",
+        json={
+            "id": "G200",
+            "name_en": "New Employee",
+            "created_by_user_id": creator.id + 100,
+            "imported": True,
+        },
+    )
+    assert response.status_code == 201, response.text
+    employee = api_db.get(Employee, "G200")
+    assert employee is not None
+    assert employee.created_by_user_id == creator.id
+    assert employee.imported is False
+
+
+def test_activity_lists_app_created_and_legacy_additions_but_not_imports(
+    api_db: Session, manager_client: TestClient
+) -> None:
+    creator = api_db.query(User).filter_by(email="mgr@x.ae").one()
+    creator.display_name = "HR Manager"
+    original = api_db.get(Employee, "G100")
+    document = api_db.get(Document, 11)
+    assert original is not None and document is not None
+    original.created_at = datetime(2026, 6, 24, 9)
+    document.created_at = datetime(2026, 7, 1, 9)
+    api_db.commit()
+    created = manager_client.post(
+        "/api/v1/employees",
+        json={
+            "id": "G200",
+            "name_en": "New Employee",
+            "name_ar": "موظف جديد",
+            "status": "Loaned",
+            "doj": "2026-12-01",
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    def activity(**params: str | int):
+        response = manager_client.get("/api/v1/employees/activity", params=params)
+        assert response.status_code == 200, response.text
+        return response.json()
+
+    filtered = activity(kind="employee_added", employee_id="G200")
+    assert filtered["total"] == 1
+    (added,) = filtered["items"]
+    assert {
+        key: added[key]
+        for key in (
+            "kind",
+            "employee_id",
+            "title",
+            "employee_name_en",
+            "employee_name_ar",
+            "reference",
+            "status",
+            "joining_date",
+            "actor_name",
+            "occurred_at",
+        )
+    } == {
+        "kind": "employee_added",
+        "employee_id": "G200",
+        "title": "New Employee",
+        "employee_name_en": "New Employee",
+        "employee_name_ar": "موظف جديد",
+        "reference": "G200",
+        "status": "Loaned",
+        "joining_date": "2026-12-01",
+        "actor_name": "HR Manager",
+        "occurred_at": created.json()["created_at"],
+    }
+    assert added["target_id"] == added["source_id"]
+
+    api_db.add(Employee(id="G300", name_en="Imported Employee", imported=True))
+    api_db.commit()
+    assert activity(kind="employee_added", employee_id="G300")["total"] == 0
+    page = activity(kind="employee_added", limit=1, offset=1)
+    assert page["total"] == 2
+    (legacy,) = page["items"]
+    assert (legacy["kind"], legacy["employee_id"]) == ("employee_added", "G100")
+    assert legacy["actor_name"] is None
+    assert legacy["joining_date"] is None
+
+    merged = activity()
+    assert merged["total"] == 3
+    assert [(row["kind"], row["employee_id"]) for row in merged["items"]] == [
+        ("employee_added", "G200"),
+        ("document", "G100"),
+        ("employee_added", "G100"),
+    ]
+
+
 def test_activity_route_validates_kind_and_limit(manager_client: TestClient):
     assert manager_client.get("/api/v1/employees/activity?kind=profile").status_code == 422
     assert manager_client.get("/api/v1/employees/activity?limit=101").status_code == 422
@@ -441,12 +539,12 @@ def test_activity_page_cost_does_not_grow_with_document_total(
         params["kind"] = kind
     _seed_linked_documents(api_db, 200, first_id=1000)
     smaller, body = _counted_activity(api_db, manager_client, params)
-    assert body["total"] == 201
+    assert body["total"] == (202 if kind is None else 201)
     assert len(body["items"]) == 25
 
     _seed_linked_documents(api_db, 200, first_id=2000)
     larger, body = _counted_activity(api_db, manager_client, params)
-    assert body["total"] == 401
+    assert body["total"] == (402 if kind is None else 401)
     assert len(body["items"]) == 25
 
     assert larger - smaller <= 2, (smaller, larger)

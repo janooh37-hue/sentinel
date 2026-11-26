@@ -13,7 +13,14 @@ DutyLocationEventType = Literal[
 ]
 DUTY_LOCATION_EVENT_TYPES: Final[tuple[str, ...]] = get_args(DutyLocationEventType)
 EmployeeActivityKind = Literal[
-    "document", "leave", "violation", "ledger", "duty_location", "status", "id_change"
+    "document",
+    "leave",
+    "violation",
+    "ledger",
+    "duty_location",
+    "status",
+    "id_change",
+    "employee_added",
 ]
 # `employee_status_events.kind` / `.source` — see EmployeeStatusEvent.
 StatusEventKind = Literal["changed", "scheduled", "scheduled_cancelled", "applied", "imported"]
@@ -53,8 +60,10 @@ class EmployeeActivityItemRead(ORMBase):
     return_date: date | None = None
     status_event_kind: StatusEventKind | None = None
     status_source: StatusEventSource | None = None
-    # Recorder for status and id_change events.
+    # Recorder for status, id_change and employee_added events.
     actor_name: str | None = None
+    # kind == "employee_added" only: the employee's date of joining, if set.
+    joining_date: date | None = None
 
 
 class EmployeeActivityListRead(BaseModel):

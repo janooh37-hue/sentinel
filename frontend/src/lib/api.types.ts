@@ -12034,7 +12034,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change" | "employee_added";
             /** Source Id */
             source_id: number;
             /** Target Id */
@@ -12096,6 +12096,8 @@ export interface components {
             status_source?: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
             /** Actor Name */
             actor_name?: string | null;
+            /** Joining Date */
+            joining_date?: string | null;
         };
         /** EmployeeActivityListRead */
         EmployeeActivityListRead: {
@@ -22034,7 +22036,7 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: string | null;
-                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change") | null;
+                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location" | "status" | "id_change" | "employee_added") | null;
                 limit?: number;
                 offset?: number;
             };

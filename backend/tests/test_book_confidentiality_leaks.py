@@ -41,7 +41,9 @@ def records(api_db):
     creator = make_user(api_db, email="creator@test.ae")
     other = make_user(api_db, email="other@test.ae")
     admin = make_user(api_db, role="admin", email="admin@test.ae")
-    employee = Employee(id="G100", name_en="Test Employee", name_ar="موظف", status="Active")
+    employee = Employee(
+        id="G100", name_en="Test Employee", name_ar="موظف", status="Active", imported=True
+    )
     api_db.add_all([employee, BookCategory(id="GS", prefix="GS", name_en="General Records")])
     api_db.flush()
     books, documents, logs = [], [], []

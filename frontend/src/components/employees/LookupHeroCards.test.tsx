@@ -86,23 +86,26 @@ function wrap(ui: React.ReactElement) {
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 describe('LookupHeroCards', () => {
-  it('renders recent chips with employee names and calls onOpen on click', async () => {
-    const onOpen = vi.fn()
-    wrap(<LookupHeroCards onOpen={onOpen} />)
+  it('selects activity without opening the profile from a recent chip', async () => {
+    const onSelectRecent = vi.fn()
+    const onOpenProfile = vi.fn()
+    wrap(<LookupHeroCards onSelectRecent={onSelectRecent} onOpenProfile={onOpenProfile} />)
 
     // All three recent employees must appear
     expect(screen.getByText('ABDULLA ALABRI')).toBeInTheDocument()
     expect(screen.getByText('AHMED ALHARSH')).toBeInTheDocument()
     expect(screen.getByText('ADEL ALJAFA')).toBeInTheDocument()
 
-    // Clicking the first chip fires onOpen with its id
     const chip = screen.getByRole('button', { name: /ABDULLA ALABRI/ })
     await userEvent.click(chip)
-    expect(onOpen).toHaveBeenCalledWith('G3190')
+    expect(onSelectRecent).toHaveBeenCalledWith('G3190')
+    expect(onOpenProfile).not.toHaveBeenCalled()
   })
 
-  it('renders expiry card with count badge and exactly 2 rows sorted by days_remaining', async () => {
-    wrap(<LookupHeroCards onOpen={vi.fn()} />)
+  it('orders the top two expiry rows and opens the selected profile directly', async () => {
+    const onSelectRecent = vi.fn()
+    const onOpenProfile = vi.fn()
+    wrap(<LookupHeroCards onSelectRecent={onSelectRecent} onOpenProfile={onOpenProfile} />)
 
     // Badge shows total count of expiring items (3 from mock)
     await waitFor(() => {
@@ -115,11 +118,15 @@ describe('LookupHeroCards', () => {
 
     // Third row (74 days) must NOT be shown
     expect(screen.queryByText('74 days')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /AHMED ALHARSH.*Passport/ }))
+    expect(onOpenProfile).toHaveBeenCalledWith('G3260')
+    expect(onSelectRecent).not.toHaveBeenCalled()
   })
 
-  it('renders gaps card with completeness count and localized field labels, CTA calls onOpen', async () => {
-    const onOpen = vi.fn()
-    wrap(<LookupHeroCards onOpen={onOpen} />)
+  it('renders localized data gaps and opens the first incomplete profile', async () => {
+    const onSelectRecent = vi.fn()
+    const onOpenProfile = vi.fn()
+    wrap(<LookupHeroCards onSelectRecent={onSelectRecent} onOpenProfile={onOpenProfile} />)
 
     // Badge shows incomplete count (12 from mock)
     await waitFor(() => {
@@ -132,9 +139,9 @@ describe('LookupHeroCards', () => {
     expect(screen.queryByText(/nationality/)).not.toBeInTheDocument() // raw key
     expect(screen.queryByText(/\biban\b/)).not.toBeInTheDocument()   // raw key
 
-    // CTA calls onOpen with first_incomplete_id
     const cta = screen.getByRole('button', { name: /Start completing files/ })
     await userEvent.click(cta)
-    expect(onOpen).toHaveBeenCalledWith('G3190')
+    expect(onOpenProfile).toHaveBeenCalledWith('G3190')
+    expect(onSelectRecent).not.toHaveBeenCalled()
   })
 })

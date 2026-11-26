@@ -255,9 +255,7 @@ def _validate_transfer(
         ) from exc
 
 
-def create_employee(
-    db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
-) -> Employee:
+def create_employee(db: Session, payload: EmployeeCreate, *, actor_user_id: int) -> Employee:
     # Serialize the reservation check against concurrent number corrections.
     begin_immediate_if_idle(db)
     existing = db.get(Employee, payload.id)
@@ -292,6 +290,7 @@ def create_employee(
         # Same rule as update_employee: a future departure stays Active.
         data["pending_status"] = target
         data["status"] = EMPLOYEE_STATUS_ACTIVE
+    data.update(created_by_user_id=actor_user_id, imported=False)
     row = Employee(**data)
     db.add(row)
     # A record created already departed leaves the unit structure at once.
