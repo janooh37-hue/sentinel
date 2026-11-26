@@ -27,13 +27,13 @@ def require_level_floor(
     attached: bool = True,
 ) -> None:
     """Check outgoing links, plus a proposed link before it is persisted."""
-    links = (
+    links: list[tuple[str, bool, str]] = (
         list(
             db.execute(
                 select(BookLink.kind, BookLink.attached, Book.confidentiality)
                 .join(Book, Book.id == BookLink.target_book_id)
                 .where(BookLink.book_id == book.id)
-            )
+            ).tuples()
         )
         if book is not None
         else []
@@ -223,7 +223,7 @@ def derive(
         from docx import Document as WordDocument
         from docx.oxml.ns import qn
 
-        doc = WordDocument(source_docx)
+        doc = WordDocument(str(source_docx))
         for section in doc.sections:
             for header in (section.first_page_header, section.header):
                 for paragraph in header._element.iter(qn("w:p")):
@@ -231,9 +231,10 @@ def derive(
                     if text.startswith("التاريخ:"):
                         date = text.split(":", 1)[1].strip()
     if isinstance(date, str):
+        raw_date = date
         for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y"):
             try:
-                date = datetime.strptime(date, fmt)
+                date = datetime.strptime(raw_date, fmt)
                 break
             except ValueError:
                 continue

@@ -15,7 +15,9 @@ $functionNames = @(
     'Read-DotEnv',
     'Resolve-GitRemoteUrl',
     'Get-UpdateGitAuthentication',
-    'Invoke-AuthenticatedGitPull',
+    'Invoke-AuthenticatedGitFetch',
+    'Get-CommitChecks',
+    'Assert-CommitGreen',
     'Invoke-Update'
 )
 $definitions = $ast.FindAll({
@@ -190,7 +192,7 @@ Describe 'mng update repository authentication' {
         $oldPath = $env:PATH
         try {
             $env:PATH = "$fakeGitDir;$oldPath"
-            $result = @(Invoke-AuthenticatedGitPull $authentication)
+            $result = @(Invoke-AuthenticatedGitFetch $authentication)
         } finally {
             $env:PATH = $oldPath
         }
@@ -369,6 +371,16 @@ server.serve_forever()
             Invoke-TestGit $seedRoot @('add', 'README.txt')
             Invoke-TestGit $seedRoot @('commit', '-qm', 'authenticated fixture update')
             Invoke-TestGit $seedRoot @('push', '-q', 'origin', 'main')
+            Mock Invoke-RestMethod {
+                # The deploy gate is covered below; here the commit is green.
+                if ($Uri -match '/check-runs') {
+                    return [pscustomobject]@{
+                        total_count = 1
+                        check_runs = @([pscustomobject]@{ name = 'backend-tests'; status = 'completed'; conclusion = 'success' })
+                    }
+                }
+                return [pscustomobject]@{ state = 'pending'; statuses = @() }
+            }
 
             $pullOutput = & {
                 Push-Location $repoRoot
@@ -398,7 +410,7 @@ server.serve_forever()
                 $helperResult = & {
                     Push-Location $repoRoot
                     try {
-                        Invoke-AuthenticatedGitPull $null
+                        Invoke-AuthenticatedGitFetch $null
                     } finally {
                         Pop-Location
                     }
@@ -407,7 +419,7 @@ server.serve_forever()
                 $env:PATH = $oldPath
             }
             $helperResult | Should Match '0'
-            (Get-Content -LiteralPath $helperMarker -Raw) | Should Match 'pull --ff-only'
+            (Get-Content -LiteralPath $helperMarker -Raw) | Should Match 'fetch'
             (Get-Content -LiteralPath $helperMarker -Raw) | Should Not Match 'credential\.helper='
             (Get-Content -LiteralPath (Join-Path $repoRoot 'README.txt') -Raw) | Should Match 'pulled update'
 
@@ -435,5 +447,183 @@ server.serve_forever()
             Remove-Item Env:MNG_TEST_SERVER_USERNAME -ErrorAction SilentlyContinue
             Remove-Item Env:MNG_TEST_SERVER_TOKEN -ErrorAction SilentlyContinue
         }
+    }
+}
+
+function New-CheckRun([string] $name, [string] $status, [string] $conclusion) {
+    return [pscustomobject]@{ name = $name; status = $status; conclusion = $conclusion }
+}
+
+function New-CommitStatus([string] $context, [string] $state) {
+    return [pscustomobject]@{ context = $context; state = $state }
+}
+
+Describe 'mng update deploy gate' {
+    BeforeEach {
+        # origin is a local bare repository, so the update uses plain git with
+        # no credentials; only the GitHub checks API is faked.
+        $fixtureRoot = Join-Path $TestDrive ('gate-' + [Guid]::NewGuid().ToString('N'))
+        $bareRoot = Join-Path $fixtureRoot 'origin.git'
+        $seedRoot = Join-Path $fixtureRoot 'seed'
+        $repoRoot = Join-Path $fixtureRoot 'checkout'
+        New-Item -ItemType Directory -Path $fixtureRoot | Out-Null
+        Invoke-TestGit $fixtureRoot @('init', '--bare', '-q', $bareRoot)
+        New-Item -ItemType Directory -Path $seedRoot | Out-Null
+        Invoke-TestGit $seedRoot @('init', '-q')
+        Invoke-TestGit $seedRoot @('config', 'user.email', 'sentinel-test@example.invalid')
+        Invoke-TestGit $seedRoot @('config', 'user.name', 'Sentinel Test')
+        Set-Content -LiteralPath (Join-Path $seedRoot 'README.txt') -Value 'deployed' -Encoding UTF8
+        Invoke-TestGit $seedRoot @('add', 'README.txt')
+        Invoke-TestGit $seedRoot @('commit', '-qm', 'deployed commit')
+        Invoke-TestGit $seedRoot @('branch', '-M', 'main')
+        Invoke-TestGit $seedRoot @('remote', 'add', 'origin', $bareRoot)
+        Invoke-TestGit $seedRoot @('push', '-q', 'origin', 'main')
+        Invoke-TestGit $TestDrive @('clone', '-q', '--branch', 'main', $bareRoot, $repoRoot)
+        Set-Content -LiteralPath (Join-Path $seedRoot 'README.txt') -Value 'next release' -Encoding UTF8
+        Invoke-TestGit $seedRoot @('add', 'README.txt')
+        Invoke-TestGit $seedRoot @('commit', '-qm', 'next release')
+        Invoke-TestGit $seedRoot @('push', '-q', 'origin', 'main')
+
+        $script:gateBefore = (& git -C $repoRoot rev-parse HEAD).Trim()
+        $script:gateTarget = (& git -C $seedRoot rev-parse HEAD).Trim()
+        $script:gateRepo = $repoRoot
+        $script:Root = $repoRoot
+        $Root = $repoRoot
+        $script:gateCheckRuns = @()
+        $script:gateStatuses = @()
+        $script:gateApiDown = $false
+        # GitHub's total number of status contexts; $null means "as many as listed".
+        $script:gateStatusTotal = $null
+
+        Mock Invoke-RestMethod {
+            if ($script:gateApiDown) { throw 'Unable to connect to the remote server' }
+            if ($Uri -match '/check-runs') {
+                return [pscustomobject]@{
+                    total_count = @($script:gateCheckRuns).Count
+                    check_runs = @($script:gateCheckRuns)
+                }
+            }
+            # GitHub reports a combined state of "pending" when a commit has
+            # no statuses at all; the gate must judge the statuses themselves.
+            $statusTotal = @($script:gateStatuses).Count
+            if ($null -ne $script:gateStatusTotal) { $statusTotal = $script:gateStatusTotal }
+            return [pscustomobject]@{ state = 'pending'; total_count = $statusTotal; statuses = @($script:gateStatuses) }
+        }
+        Mock Sync-BackendDependencies {}
+    }
+
+    function Invoke-GateUpdate([switch] $Force) {
+        $script:gateError = $null
+        $output = & {
+            Push-Location $script:gateRepo
+            try {
+                Invoke-Update -Force:$Force
+            } catch {
+                $script:gateError = $_.Exception.Message
+            } finally {
+                Pop-Location
+            }
+        } 6>&1 2>&1 | Out-String
+        return $output
+    }
+
+    function Get-GateHead {
+        return (& git -C $script:gateRepo rev-parse HEAD).Trim()
+    }
+
+    It 'deploys a commit whose checks all succeeded, were neutral or were skipped' {
+        $script:gateCheckRuns = @(
+            (New-CheckRun 'backend-tests' 'completed' 'success'),
+            (New-CheckRun 'PR Agent - Review' 'completed' 'neutral'),
+            (New-CheckRun 'ruff format (changed files)' 'completed' 'skipped')
+        )
+        $script:gateStatuses = @((New-CommitStatus 'external' 'success'))
+
+        $output = Invoke-GateUpdate
+
+        $script:gateError | Should BeNullOrEmpty
+        Get-GateHead | Should Be $script:gateTarget
+        $output | Should Match ([regex]::Escape($script:gateTarget.Substring(0, 7)))
+        Assert-MockCalled Sync-BackendDependencies -Times 1 -Exactly -Scope It
+    }
+
+    It 'asks the public GitHub API, with no token, about the commit it would pull' {
+        $script:gateCheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'success'))
+
+        Invoke-GateUpdate | Out-Null
+
+        Assert-MockCalled Invoke-RestMethod -Scope It -ParameterFilter {
+            $Uri -like "https://api.github.com/repos/janooh37-hue/sentinel/commits/$($script:gateTarget)/check-runs*"
+        }
+        Assert-MockCalled Invoke-RestMethod -Scope It -ParameterFilter {
+            $Uri -like "https://api.github.com/repos/janooh37-hue/sentinel/commits/$($script:gateTarget)/status*"
+        }
+        Assert-MockCalled Invoke-RestMethod -Scope It -Times 0 -Exactly -ParameterFilter {
+            ($Headers -and $Headers.ContainsKey('Authorization')) -or $Credential -or $Token
+        }
+    }
+
+    It 'refuses a commit that is <Case>, naming the commit and changing nothing' -TestCases @(
+        @{ Case = 'red (failed check run)'; Expected = 'red'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'failure'), (New-CheckRun 'api-contract' 'completed' 'success'))
+           Statuses = @(); ApiDown = $false },
+        @{ Case = 'red (cancelled check run)'; Expected = 'red'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'cancelled'))
+           Statuses = @(); ApiDown = $false },
+        @{ Case = 'red (failed commit status)'; Expected = 'red'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'success'))
+           Statuses = @((New-CommitStatus 'external' 'error')); ApiDown = $false },
+        @{ Case = 'pending (check run in progress)'; Expected = 'pending'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'in_progress' $null), (New-CheckRun 'api-contract' 'completed' 'success'))
+           Statuses = @(); ApiDown = $false },
+        @{ Case = 'pending (commit status pending)'; Expected = 'pending'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'success'))
+           Statuses = @((New-CommitStatus 'external' 'pending')); ApiDown = $false },
+        @{ Case = 'missing checks'; Expected = 'pending'
+           CheckRuns = @(); Statuses = @(); ApiDown = $false },
+        @{ Case = 'unreachable'; Expected = 'unreachable'
+           CheckRuns = @(); Statuses = @(); ApiDown = $true },
+        @{ Case = 'unreachable (GitHub listed 100 of 101 commit statuses)'; Expected = 'unreachable'
+           CheckRuns = @((New-CheckRun 'backend-tests' 'completed' 'success'))
+           Statuses = @(1..100 | ForEach-Object { New-CommitStatus ('external-{0}' -f $_) 'success' })
+           StatusTotal = 101; ApiDown = $false }
+    ) {
+        param($Case, $Expected, $CheckRuns, $Statuses, $ApiDown, $StatusTotal)
+        $script:gateCheckRuns = $CheckRuns
+        $script:gateStatuses = $Statuses
+        $script:gateApiDown = $ApiDown
+        $script:gateStatusTotal = $StatusTotal
+
+        $output = Invoke-GateUpdate
+
+        $script:gateError | Should Match ([regex]::Escape($script:gateTarget.Substring(0, 7)))
+        $script:gateError | Should Match "not green \($Expected"
+        $script:gateError | Should Match 'mng update -Force'
+        Get-GateHead | Should Be $script:gateBefore
+        (Get-Content -LiteralPath (Join-Path $script:gateRepo 'README.txt') -Raw) | Should Match 'deployed'
+        Assert-MockCalled Sync-BackendDependencies -Times 0 -Exactly -Scope It
+    }
+
+    It 'deploys anyway with -Force, with a warning, even when GitHub is unreachable' {
+        $script:gateApiDown = $true
+
+        $output = Invoke-GateUpdate -Force
+
+        $script:gateError | Should BeNullOrEmpty
+        Get-GateHead | Should Be $script:gateTarget
+        $output | Should Match 'WARNING'
+        $output | Should Match '-Force'
+        $output | Should Match ([regex]::Escape($script:gateTarget.Substring(0, 7)))
+        Assert-MockCalled Sync-BackendDependencies -Times 1 -Exactly -Scope It
+    }
+
+    It 'does not ask GitHub when there is nothing to pull' {
+        Invoke-TestGit $script:gateRepo @('pull', '-q', '--ff-only')
+
+        $output = Invoke-GateUpdate
+
+        $script:gateError | Should BeNullOrEmpty
+        $output | Should Match 'Already up to date'
+        Assert-MockCalled Invoke-RestMethod -Times 0 -Exactly -Scope It
     }
 }

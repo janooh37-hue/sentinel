@@ -953,7 +953,9 @@ def _attach_creator_names(db: Session, rows: Sequence[Book], items: Sequence[Boo
         item.created_by_name = (
             names.get(row.created_by_user_id) if row.created_by_user_id is not None else None
         )
-        item.created_by_name_ar = names_ar.get(row.created_by_user_id)
+        item.created_by_name_ar = (
+            names_ar.get(row.created_by_user_id) if row.created_by_user_id is not None else None
+        )
         if item.edit_session is not None:
             item.edit_session.user_name_ar = names_ar.get(item.edit_session.user_id)
 
@@ -983,8 +985,10 @@ def _attach_desk_fields(
     titles = book_service.resolve_titles_by_ids(db, creator_ids | set(signed_by.values()))
     for row, item in zip(rows, items, strict=True):
         item.recipients = recipients.get(row.id, [])
-        item.created_by_title, item.created_by_title_ar = titles.get(
-            row.created_by_user_id, (None, None)
+        item.created_by_title, item.created_by_title_ar = (
+            titles.get(row.created_by_user_id, (None, None))
+            if row.created_by_user_id is not None
+            else (None, None)
         )
         manager = managers.get(row.doc_manager_id) if row.doc_manager_id is not None else None
         if manager is not None and (manager.name_en or manager.name_ar):
@@ -1387,7 +1391,11 @@ def _build_versions(
                     if version.created_by_user_id is not None
                     else None
                 ),
-                created_by_name_ar=names_ar_by_id.get(version.created_by_user_id),
+                created_by_name_ar=(
+                    names_ar_by_id.get(version.created_by_user_id)
+                    if version.created_by_user_id is not None
+                    else None
+                ),
                 docx_url=docx_url,
                 pdf_url=pdf_url,
                 manager_sig_embedded=version.manager_sig_embedded,
@@ -1463,13 +1471,21 @@ def _build_book_detail(db: Session, row: Book) -> BookRead:
     )
     names_ar = dict.fromkeys(user_ids)
     item.versions = _build_versions(db, row, names_ar_by_id=names_ar)
-    item.created_by_name_ar = names_ar.get(row.created_by_user_id)
-    item.submitted_by_name_ar = names_ar.get(row.submitted_by_user_id)
-    item.doc_manager_name_ar = names_ar.get(item.doc_manager_user_id)
+    item.created_by_name_ar = (
+        names_ar.get(row.created_by_user_id) if row.created_by_user_id is not None else None
+    )
+    item.submitted_by_name_ar = (
+        names_ar.get(row.submitted_by_user_id) if row.submitted_by_user_id is not None else None
+    )
+    item.doc_manager_name_ar = (
+        names_ar.get(item.doc_manager_user_id) if item.doc_manager_user_id is not None else None
+    )
     if item.edit_session is not None:
         item.edit_session.user_name_ar = names_ar.get(item.edit_session.user_id)
     for event in item.included_papers_history:
-        event.actor_name_ar = names_ar.get(event.actor_user_id)
+        event.actor_name_ar = (
+            names_ar.get(event.actor_user_id) if event.actor_user_id is not None else None
+        )
     current = row.versions[-1] if row.versions else None
     current_read = item.versions[-1] if item.versions else None
     item.approval_steps = current_read.approval_steps if current_read is not None else []
@@ -1590,12 +1606,14 @@ def _build_scoped_book_response(
 ) -> BookRead:
     context = selected.approval_context if isinstance(selected.approval_context, dict) else {}
     category_id = _context_string(context, "category_id")
+    submitted_by_user_id = _context_user_id(context, "submitted_by_user_id")
+    doc_manager_user_id = _context_user_id(context, "doc_manager_user_id")
     names_ar = dict.fromkeys(
         uid
         for uid in (
             row.created_by_user_id if resolve_creator_name else None,
-            _context_user_id(context, "submitted_by_user_id"),
-            _context_user_id(context, "doc_manager_user_id"),
+            submitted_by_user_id,
+            doc_manager_user_id,
         )
         if uid is not None
     )
@@ -1627,11 +1645,11 @@ def _build_scoped_book_response(
         is_draft=False,
         edit_session=None,
         signing_path=form_policy.signing_path_of(selected.template_id),
-        submitted_by_user_id=_context_user_id(context, "submitted_by_user_id"),
+        submitted_by_user_id=submitted_by_user_id,
         submitted_by_name=_context_string(context, "submitted_by_name"),
         submitted_by_name_ar=context.get(
             "submitted_by_name_ar",
-            names_ar.get(_context_user_id(context, "submitted_by_user_id")),
+            names_ar.get(submitted_by_user_id) if submitted_by_user_id is not None else None,
         ),
         submitted_by_g=None,
         created_by_user_id=row.created_by_user_id,
@@ -1640,14 +1658,18 @@ def _build_scoped_book_response(
             if resolve_creator_name and row.created_by_user_id is not None
             else None
         ),
-        created_by_name_ar=names_ar.get(row.created_by_user_id) if resolve_creator_name else None,
+        created_by_name_ar=(
+            names_ar.get(row.created_by_user_id)
+            if resolve_creator_name and row.created_by_user_id is not None
+            else None
+        ),
         created_by_g=None,
         submitted_at=selected_read.submitted_at,
-        doc_manager_user_id=_context_user_id(context, "doc_manager_user_id"),
+        doc_manager_user_id=doc_manager_user_id,
         doc_manager_name=_context_string(context, "doc_manager_name"),
         doc_manager_name_ar=context.get(
             "doc_manager_name_ar",
-            names_ar.get(_context_user_id(context, "doc_manager_user_id")),
+            names_ar.get(doc_manager_user_id) if doc_manager_user_id is not None else None,
         ),
         doc_manager_has_signature=False,
         is_word_book=not selected.fields and selected.document_id is not None,
@@ -1933,8 +1955,9 @@ def list_annotations(
     out: list[BookAnnotationRead] = []
     for a in rows:
         item = BookAnnotationRead.model_validate(a)
-        item.author_name = names.get(a.author_user_id)
-        item.author_name_ar = names_ar.get(a.author_user_id)
+        author_id = a.author_user_id
+        item.author_name = names.get(author_id) if author_id is not None else None
+        item.author_name_ar = names_ar.get(author_id) if author_id is not None else None
         out.append(item)
     return out
 

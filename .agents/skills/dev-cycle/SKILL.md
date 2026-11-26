@@ -46,7 +46,13 @@ When the user says "put it on dev", "add this to the worktree too", or "make the
 6. **Preview:** `dev-channel.ps1 preview <branch>` on the laptop. It reads the branch straight from dtop, so no push is needed first. Tell the user what to test and give the dev URL.
 7. **Fix what testing finds:** in the same feature worktree. Commit, then `preview <branch>` again.
 8. **PR (gate):** after the user approves what they saw. From the feature worktree: `git fetch origin && git merge origin/main` if main moved, re-run the checks, run the routing audit below, `git push -u origin <branch>`, `gh pr create --base main`. The PR contains exactly the commits the user tested.
-9. **After the merge:** `dev-channel.ps1 sync` (the merged branch leaves the preview), then remove the worktree and branch on dtop. Deploy only when the user asks.
+9. **Merge (gate):** only when the user says so. The `main` ruleset (`.github/rulesets/main.json`) allows the merge, as a merge commit, only when:
+   - the required checks `backend-static`, `frontend-static`, `backend-tests`, `frontend-tests` and `api-contract` are green on the PR's head commit;
+   - every review conversation is resolved: fix the finding and push, or resolve the thread to dismiss it;
+   - the branch is up to date with `main`: "Update branch" on the PR, or `git merge origin/main` and push. Two PRs that each add a migration cannot both merge on a stale base.
+
+   No approval is needed. Direct pushes, force-pushes and deleting `main` are refused. The admin can bypass the rules, but only through the PR's merge button, never by pushing to `main`: use it when a required check cannot report or in an emergency. The bypass shows on the PR.
+10. **After the merge:** `dev-channel.ps1 sync` (the merged branch leaves the preview), then remove the worktree and branch on dtop. Deploy only when the user asks.
 
 ## When branches collide
 
