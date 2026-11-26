@@ -142,7 +142,8 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
     void invalidateArmoryQueries(client)
   }, [client, resumeSignal, t])
 
-  function touch() { setDirty(true); mutation.reset() }
+  // An in-flight write must stay pending: resetting it would re-enable Save for a duplicate record.
+  function touch() { setDirty(true); if (!mutation.isPending) mutation.reset() }
   function available(itemId: number): number {
     const item = items.data?.find(entry => entry.id === itemId)
     return item?.stock.find(row => row.safe.id === safeId)?.available_qty ?? 0
@@ -249,7 +250,7 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
 
   function submit(event: React.SyntheticEvent) {
     event.preventDefault()
-    if (reason || safeId === null || !kit) return
+    if (reason || mutation.isPending || safeId === null || !kit) return
     const common = {
       safe_id: safeId, kit_id: kit.id, lines,
       excess_rounds_reason: excess ? excessReason.trim() : null,
@@ -293,6 +294,7 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
       <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" aria-describedby={`${id}-reason`}>
         <DialogBody>
           {notice && <p role="status" className="rounded-md bg-surface-tinted px-3 py-2 text-sm">{notice}</p>}
+          <fieldset disabled={mutation.isPending} className="flex min-w-0 flex-col gap-3.5">
           <label className="flex flex-col gap-1.5 text-sm font-semibold">{t('assets.armory.safe')}
             <select className="min-h-11 rounded-md border border-border bg-surface px-3 font-normal" value={safeId ?? ''} disabled={mutation.isPending}
               onChange={event => chooseSafe(event.target.value ? Number(event.target.value) : null)}>
@@ -423,6 +425,7 @@ function AssignmentForm({ open, mode, safeId: initialSafeId, safes, onOpenChange
           {mode === 'custody' && <label className="flex flex-col gap-1.5 text-sm font-semibold">{t('assets.armory.conditionNote')}
             <Textarea dir="auto" maxLength={500} value={conditionNote} onChange={event => { touch(); setConditionNote(event.target.value) }} />
           </label>}
+          </fieldset>
           <FormAlert id={`${id}-error`} message={errorText} />
         </DialogBody>
         <DialogFooter>

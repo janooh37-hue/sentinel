@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -262,6 +262,31 @@ describe('ArmoryAssignmentDialog', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Safe' }), '2')
     expect(await screen.findByText('The safe changed. Choose the serials and batches again from this safe.')).toBeInTheDocument()
     await waitFor(() => expect(screen.getByRole('combobox', { name: 'Serial number' })).toHaveValue(''))
+  })
+
+  it('locks the draft while an issue is in flight so an edit cannot re-enable a second submission', async () => {
+    const user = userEvent.setup()
+    // The project's TS lib predates `Promise.withResolvers`.
+    let finish: (record: ArmoryAssignmentRead) => void = () => {}
+    const create = vi.spyOn(api, 'createArmoryIssue').mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const { onSaved } = mount()
+    await choosePerson(user)
+    await user.selectOptions(await screen.findByRole('combobox', { name: 'Serial number' }), '1000')
+    const submit = screen.getByRole('button', { name: 'Issue' })
+    await waitFor(() => expect(submit).toBeEnabled())
+    await user.click(submit)
+    await waitFor(() => expect(create).toHaveBeenCalledTimes(1))
+
+    const magazines = screen.getByRole('textbox', { name: 'Quantity: Test magazine' })
+    expect(magazines).toBeDisabled()
+    fireEvent.change(magazines, { target: { value: '1' } })
+    fireEvent.submit(submit.closest('form')!)
+    expect(submit).toBeDisabled()
+    expect(create).toHaveBeenCalledTimes(1)
+
+    finish({ id: 7 } as ArmoryAssignmentRead)
+    await waitFor(() => expect(onSaved).toHaveBeenCalledTimes(1))
+    expect(create).toHaveBeenCalledTimes(1)
   })
 
   it('records site custody with the responsible supervisor', async () => {
