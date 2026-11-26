@@ -17,11 +17,11 @@ Then read the checks of the commit that will ship, the same check `mng update` m
 
 ```
 sha=$(git rev-parse origin/main)
-gh api "repos/janooh37-hue/sentinel/commits/$sha/check-runs?per_page=100" --jq '.check_runs[] | "\(.name) \(.status) \(.conclusion)"'
-gh api "repos/janooh37-hue/sentinel/commits/$sha/status" --jq '.statuses[] | "\(.context) \(.state)"'
+gh api "repos/janooh37-hue/sentinel/commits/$sha/check-runs?per_page=100" --jq '"total_count \(.total_count)", (.check_runs[] | "\(.name) \(.status) \(.conclusion)")'
+gh api "repos/janooh37-hue/sentinel/commits/$sha/status?per_page=100" --jq '"total_count \(.total_count)", (.statuses[] | "\(.context) \(.state)")'
 ```
 
-The commit is **green** when at least one line is listed, every check run is `completed` with `success`, `neutral` or `skipped`, and every status is `success`. A failure, a check still running, no checks yet, or GitHub not answering is not green: stop, and report the commit and the checks that are not green to the user. Continue only once it is green, or when the user explicitly asks to force this deploy (step 4).
+The commit is **green** when at least one check run or status is listed, every check run is `completed` with `success`, `neutral` or `skipped`, and every status is `success`. Each call lists at most 100 entries after its `total_count` line: if it lists fewer than `total_count`, it is not green. A failure, a check still running, no checks yet, a partial listing, or GitHub not answering is not green: stop, and report the commit and the checks that are not green to the user. Continue only once it is green, or when the user explicitly asks to force this deploy (step 4).
 
 ## 2. Show what will ship
 
