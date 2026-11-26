@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 
-import type { ArmoryQualificationRead, ArmorySerialRead } from '@/lib/api'
+import type { ArmoryActorRead, ArmoryQualificationRead, ArmorySerialRead } from '@/lib/api'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 export type ArmorySerialState = NonNullable<ArmorySerialRead['state']>
 export type ArmoryLicenceStatus = ArmoryQualificationRead['licence_status']
@@ -15,6 +16,13 @@ export function serialStateKey(state: ArmorySerialState): string {
 
 export function licenceStatusKey(status: ArmoryLicenceStatus): string {
   return `assets.armory.licenceStatus.${status}`
+}
+
+/** The recorded employee name, then the account's friendly name. */
+export function actorName(actor: ArmoryActorRead | null | undefined, language: string): string | null {
+  if (!actor) return null
+  if (actor.employee) return pickEmployeeName(actor.employee, language)
+  return actor.display_name?.trim() || null
 }
 
 function parts(iso: string, timeZone: string): Record<string, string> {

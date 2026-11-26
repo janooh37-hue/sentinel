@@ -5,9 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ArmoryActorRead, ArmoryPersonRead, ArmoryPostingRef } from '@/lib/api'
 import { Ltr } from '../ArmoryLtr'
-import { displayDate, orgDateTime, useArmoryLocale } from '../armoryFormat'
+import { actorName, displayDate, orgDateTime, useArmoryLocale } from '../armoryFormat'
 import { armoryErrorMessage } from '../armoryQueries'
-import { actorName } from './recordFormat'
 
 export function AuditFact({ label, children }: { label: string; children: ReactNode }) {
   return (

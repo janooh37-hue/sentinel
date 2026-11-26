@@ -12,11 +12,10 @@ import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 
 import { Ltr } from '../ArmoryLtr'
-import { displayDate, licenceStatusKey, orgDateTime, useArmoryLocale } from '../armoryFormat'
+import { actorName, displayDate, licenceStatusKey, orgDateTime, useArmoryLocale } from '../armoryFormat'
 import { useArmoryAccess, useArmoryCustody, useArmoryCustodyDetail } from '../armoryQueries'
 import { armoryLink, patchArmoryParams, readArmoryId } from '../armoryUrl'
 import { CustodyReceipt } from './CustodyReceipt'
-import { actorName } from './recordFormat'
 
 const filters = ['active', 'ended', 'all'] as const
 const panel = 'min-w-0 rounded-xl border border-border bg-surface'
