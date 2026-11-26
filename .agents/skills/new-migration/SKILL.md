@@ -10,15 +10,17 @@ a **single linear head** (a split history forced the emergency `0048` merge
 once) and **SQLite's batch-ALTER limits**. Revision IDs are hand-numbered with a
 zero-padded `NNNN_` prefix — NOT Alembic's default hashes.
 
-All commands use the project venv from the repo root. Write paths with forward
-slashes; bash strips backslashes.
+All commands use the project venv from the repo root: `venv/bin/python` and
+`venv/bin/alembic` on Linux (`dtop`), or `venv/Scripts/python.exe` and
+`venv/Scripts/alembic.exe` on Windows (use forward slashes; bash strips
+backslashes). Examples below show the Linux `venv/bin/` paths.
 
 ## Steps
 
 ### 1. Confirm a single head and get the next number
 ```
 git fetch origin
-venv/Scripts/python.exe scripts/check_numbering.py
+venv/bin/python scripts/check_numbering.py
 git ls-tree --name-only origin/main backend/app/db/migrations/versions/
 ```
 Local `heads` only sees your branch. If `origin/main` has a higher `NNNN` than
@@ -30,7 +32,7 @@ revision on a fork. Note the head's number `NNNN`; the new revision is
 
 ### 2. Create the revision with an explicit id chained onto the tip
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "venv/Scripts/alembic.exe revision --rev-id 0049_short_slug --head 0048_merge_sms_scaninbox -m 'short slug'"
+venv/bin/alembic revision --rev-id 0049_short_slug --head 0048_merge_sms_scaninbox -m "short slug"
 ```
 - `--rev-id 0049_short_slug` sets both the revision id and the filename prefix.
 - `--head <current tip>` makes `down_revision` point at the tip (no fork).
@@ -54,13 +56,13 @@ comments. Follow the house rules:
 
 ### 4. Verify it applies both ways
 ```
-venv/Scripts/alembic.exe upgrade head
-venv/Scripts/alembic.exe downgrade -1
-venv/Scripts/alembic.exe upgrade head
-venv/Scripts/alembic.exe heads
+venv/bin/alembic upgrade head
+venv/bin/alembic downgrade -1
+venv/bin/alembic upgrade head
+venv/bin/alembic heads
 ```
 `heads` must again show exactly one head. Back up first if pointing at real data
-(`scripts/backup-db.ps1`).
+(`scripts/backup-db.ps1` on Windows).
 
 ### 5. Review and commit
 Ask the **alembic-migration-reviewer** agent to review the diff, then commit the
@@ -70,7 +72,7 @@ new `versions/NNNN_*.py`. If the migration changes the API surface, also run
 ## Merging heads
 If step 1 shows two heads, create a merge revision instead of a new feature one:
 ```
-venv/Scripts/alembic.exe merge --rev-id 00NN_merge_short -m "merge heads" <rev_a> <rev_b>
+venv/bin/alembic merge --rev-id 00NN_merge_short -m "merge heads" <rev_a> <rev_b>
 ```
 Then continue from step 4.
 

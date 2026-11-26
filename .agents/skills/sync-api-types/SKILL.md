@@ -16,23 +16,24 @@ refresh the types, then commit the result.
 ## Steps
 
 ### 1. Dump the OpenAPI schema from the backend
-Uses the project venv and the app factory (no need to hit the running service):
+Uses the project venv (`venv/bin/python` on Linux `dtop`, `venv/Scripts/python.exe` on Windows) and the app factory (no need to hit the running service):
 ```
-venv/Scripts/python.exe -X utf8 scripts/dump_openapi.py
+venv/bin/python -X utf8 scripts/dump_openapi.py          # Linux (dtop)
+venv/Scripts/python.exe -X utf8 scripts/dump_openapi.py  # Windows
 ```
-Expect output like `Wrote ...\backend\openapi.json (N paths)`. If the import
+Expect output like `Wrote .../backend/openapi.json (N paths)`. If the import
 fails, the backend has a load-time error — fix that first; the schema can't be
 generated from a broken app.
 
 ### 2. Regenerate the TypeScript types
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "cd frontend; pnpm run gen:api"
+pnpm -C frontend run gen:api
 ```
 (`gen:api` = `openapi-typescript ../backend/openapi.json -o ./src/lib/api.types.ts`.)
 
 ### 3. Typecheck the frontend against the fresh types
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "cd frontend; pnpm exec tsc -b --noEmit"
+pnpm -C frontend exec tsc -b --noEmit
 ```
 New type errors here are the *point* — they show exactly where frontend code no
 longer matches the backend contract. Report them; fix call sites as needed.
