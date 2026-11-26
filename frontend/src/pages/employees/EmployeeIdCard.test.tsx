@@ -280,6 +280,49 @@ describe('EmployeeIdCard — photo preview', () => {
     pick.mockRestore()
   })
 
+  it('keeps the enlargement open while the pointer moves from the tile onto it', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(peek()!, { pointerType: 'mouse' })
+    // Well past the crossing grace delay.
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(peek()).not.toBeNull()
+  })
+
+  it('closes the enlargement once the pointer has left both the tile and the enlargement', async () => {
+    wrap(WITH_PHOTO)
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(peek()!, { pointerType: 'mouse' })
+
+    fireEvent.pointerLeave(peek()!, { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).toBeNull())
+  })
+
+  it('keeps the camera clear of the open enlargement, and its click still uploads', async () => {
+    caps.add('employees.edit')
+    const pick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => {})
+    wrap(WITH_PHOTO)
+    // The camera sits on the tile's bottom-end corner; give the tile a real box.
+    vi.spyOn(viewButton(), 'getBoundingClientRect').mockReturnValue(new DOMRect(150, 230, 80, 80))
+    fireEvent.pointerEnter(viewButton(), { pointerType: 'mouse' })
+    await waitFor(() => expect(peek()).not.toBeNull())
+    expect(parseFloat(peek()!.style.left)).toBeGreaterThan(230)
+
+    const camera = screen.getByRole('button', { name: 'Change photo' })
+    fireEvent.pointerLeave(viewButton(), { pointerType: 'mouse' })
+    fireEvent.pointerEnter(camera, { pointerType: 'mouse' })
+    fireEvent.click(camera)
+
+    expect(pick).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    pick.mockRestore()
+  })
+
   it('offers no preview for an employee without a photo', async () => {
     wrap(EMPLOYEE)
     expect(screen.queryByRole('button', { name: /View photo/ })).not.toBeInTheDocument()

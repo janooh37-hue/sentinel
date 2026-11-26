@@ -6,9 +6,13 @@
  * cached; the stored photo is the original upload, so it stays sharp):
  *
  * - **Peek** — a mouse pointer resting on the tile (hover intent) or keyboard
- *   focus. A non-modal, `pointer-events-none` enlargement that grows out of the
- *   tile, anchored at its corner, and shrinks back into it on leave, blur,
- *   Escape or scroll. It is a visual duplicate of the tile, so `aria-hidden`.
+ *   focus. A non-modal enlargement that grows out of the tile into the space
+ *   beside it (or below it, when that has more room). It never overlaps the
+ *   tile, so the camera button on the tile's corner stays reachable. The
+ *   pointer may cross onto the peek and stay there (a click on it opens the
+ *   full view); it shrinks back into the tile once the pointer has left both
+ *   for a short grace delay, and on blur, Escape or scroll. It is a visual
+ *   duplicate of the tile, so `aria-hidden`.
  * - **Full view** — a click, Enter or a tap (touch has no hover). A modal
  *   `DialogContent` that grows from wherever the photo is on screen (the peek
  *   when it is showing, else the tile) to a centred, larger frame. Escape, a
@@ -32,15 +36,24 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { useReducedMotion } from '@/lib/useFakeProgress'
+import { cn } from '@/lib/utils'
 
 /** Hover intent: a pointer crossing the tile on its way elsewhere opens nothing. */
 const HOVER_INTENT_MS = 120
 const EASE_OUT_EXPO = 'cubic-bezier(0.16, 1, 0.3, 1)'
 /** Peek photo box: 4:5, the ID-photo shape, 4.5x the 80px tile; the photo is fitted inside it. */
 const PEEK_MAX = { width: 360, height: 450 }
-/** The peek lifts this far out past the tile's top-start corner. */
+/** Lift of the peek's top edge above the tile's top edge. */
 const PEEK_LIFT = 12
+/** Clear space between the tile (with the camera on its corner) and the peek. */
+const PEEK_GAP = 12
+/** Pointer crossing the gap between tile and peek: closing waits this long. */
+const PEEK_GRACE_MS = 120
 const VIEWPORT_MARGIN = 12
+/** Peek frame around the photo: p-1.5 + 1px border on each side. */
+const FRAME_X = 14
+/** The same, plus a caption of up to two name lines and the ID. */
+const FRAME_Y = 14 + 72
 
 interface Props {
   src: string
@@ -58,7 +71,7 @@ interface Size {
 /** The largest box of the photo's aspect that fits `max` (a square until it loads). */
 function fitPhoto(natural: Size | null, max: Size): Size {
   const ratio = natural && natural.width > 0 && natural.height > 0 ? natural.width / natural.height : 1
-  const width = Math.min(max.width, max.height * ratio)
+  const width = Math.max(0, Math.min(max.width, max.height * ratio))
   return { width: Math.round(width), height: Math.round(width / ratio) }
 }
 
@@ -98,21 +111,44 @@ function growFrom(
 }
 
 /**
- * Where the peek frame sits: lifted past the tile's inline-start top corner
- * (left in LTR, right in RTL), kept inside the viewport. Derived on every
- * render, so the frame stays anchored when the photo's aspect arrives late.
+ * Where the peek frame sits and how large its photo is. It never overlaps the
+ * tile: it goes beside it on the inline-end side (right in LTR, left in RTL),
+ * top lifted a little above the tile's, or below the tile when that region
+ * fits a larger photo. Derived on every render, so the frame stays anchored
+ * when the photo's aspect arrives late.
  */
-function placePeek(tile: DOMRect, rtl: boolean, photo: Size): { left: number; top: number } {
-  // Frame = photo + p-1.5 + 1px border on each side, plus a caption of up to
-  // two name lines and the ID below it.
-  const frameWidth = photo.width + 14
-  const frameHeight = photo.height + 14 + 72
-  const left = rtl ? tile.right + PEEK_LIFT - frameWidth : tile.left - PEEK_LIFT
+function placePeek(
+  tile: DOMRect,
+  rtl: boolean,
+  natural: Size | null,
+): { left: number; top: number; photo: Size } {
+  const vw = window.innerWidth
+  const vh = window.innerHeight
   const clamp = (value: number, room: number): number =>
     Math.max(VIEWPORT_MARGIN, Math.min(value, room - VIEWPORT_MARGIN))
+  const besideRoom = rtl
+    ? tile.left - PEEK_GAP - VIEWPORT_MARGIN
+    : vw - VIEWPORT_MARGIN - (tile.right + PEEK_GAP)
+  const beside = fitPhoto(natural, {
+    width: Math.min(PEEK_MAX.width, besideRoom - FRAME_X),
+    height: Math.min(PEEK_MAX.height, vh - 2 * VIEWPORT_MARGIN - FRAME_Y),
+  })
+  const below = fitPhoto(natural, {
+    width: Math.min(PEEK_MAX.width, vw - 2 * VIEWPORT_MARGIN - FRAME_X),
+    height: Math.min(PEEK_MAX.height, vh - VIEWPORT_MARGIN - (tile.bottom + PEEK_GAP) - FRAME_Y),
+  })
+  if (beside.width >= below.width) {
+    return {
+      photo: beside,
+      left: rtl ? tile.left - PEEK_GAP - (beside.width + FRAME_X) : tile.right + PEEK_GAP,
+      top: clamp(tile.top - PEEK_LIFT, vh - (beside.height + FRAME_Y)),
+    }
+  }
+  const frameWidth = below.width + FRAME_X
   return {
-    left: clamp(left, window.innerWidth - frameWidth),
-    top: clamp(tile.top - PEEK_LIFT, window.innerHeight - frameHeight),
+    photo: below,
+    left: clamp(rtl ? tile.right + PEEK_LIFT - frameWidth : tile.left - PEEK_LIFT, vw - frameWidth),
+    top: tile.bottom + PEEK_GAP,
   }
 }
 
@@ -122,6 +158,8 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
   const tileRef = useRef<HTMLButtonElement>(null)
   const peekRef = useRef<HTMLDivElement>(null)
   const intentTimer = useRef<number | undefined>(undefined)
+  /** Grace before the peek closes once the pointer has left both tile and peek. */
+  const graceTimer = useRef<number | undefined>(undefined)
   /** Focus that a pointer press or the dialog's focus return caused shows no peek. */
   const skipFocusPeek = useRef(false)
   const [natural, setNatural] = useState<Size | null>(null)
@@ -131,8 +169,7 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
   const [peekAnchor, setPeekAnchor] = useState<{ tile: DOMRect; rtl: boolean } | null>(null)
   const [fullFrom, setFullFrom] = useState<DOMRect | null>(null)
 
-  const peekBox = fitPhoto(natural, PEEK_MAX)
-  const peekPlace = peekAnchor && placePeek(peekAnchor.tile, peekAnchor.rtl, peekBox)
+  const peekPlace = peekAnchor && placePeek(peekAnchor.tile, peekAnchor.rtl, natural)
 
   function openPeek(): void {
     window.clearTimeout(intentTimer.current)
@@ -147,11 +184,20 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
 
   const closePeek = useCallback((): void => {
     window.clearTimeout(intentTimer.current)
+    window.clearTimeout(graceTimer.current)
     const next = canAnimate(reducedMotion) ? 'closing' : 'closed'
     setPeek((state) => (state === 'open' ? next : state))
   }, [reducedMotion])
 
-  // Grow the peek out of the tile on open; shrink it back on close.
+  /** The pointer left the tile or the peek: close unless it lands on the other. */
+  function closeAfterGrace(): void {
+    window.clearTimeout(intentTimer.current)
+    window.clearTimeout(graceTimer.current)
+    graceTimer.current = window.setTimeout(closePeek, PEEK_GRACE_MS)
+  }
+
+  // Grow the peek out of the tile on open; shrink it back on close. While it
+  // grows it still overlaps the tile, so it takes the pointer only once settled.
   useLayoutEffect(() => {
     const frame = peekRef.current
     const tile = tileRef.current
@@ -160,7 +206,14 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
       duration: peek === 'open' ? 220 : 150,
       reverse: peek === 'closing',
     })
-    if (peek === 'closing') animation.onfinish = () => setPeek('closed')
+    if (peek === 'closing') {
+      animation.onfinish = () => setPeek('closed')
+    } else {
+      frame.style.pointerEvents = 'none'
+      animation.onfinish = () => {
+        frame.style.pointerEvents = ''
+      }
+    }
     return () => animation.cancel()
   }, [peek, reducedMotion])
 
@@ -181,7 +234,13 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
     }
   }, [peek, closePeek])
 
-  useEffect(() => () => window.clearTimeout(intentTimer.current), [])
+  useEffect(
+    () => () => {
+      window.clearTimeout(intentTimer.current)
+      window.clearTimeout(graceTimer.current)
+    },
+    [],
+  )
 
   /**
    * Grow the full view from wherever the photo was when it was asked for. A ref
@@ -206,6 +265,7 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
     const source = peekRef.current?.querySelector('img') ?? tileRef.current
     if (!source) return
     window.clearTimeout(intentTimer.current)
+    window.clearTimeout(graceTimer.current)
     skipFocusPeek.current = false
     setFullFrom(source.getBoundingClientRect())
     setPeek('closed')
@@ -226,10 +286,12 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
         className="block cursor-zoom-in rounded-[14px] focus-visible:outline-white"
         onPointerEnter={(event) => {
           if (event.pointerType === 'touch') return
+          window.clearTimeout(graceTimer.current)
+          if (peek === 'open') return
           window.clearTimeout(intentTimer.current)
           intentTimer.current = window.setTimeout(openPeek, HOVER_INTENT_MS)
         }}
-        onPointerLeave={closePeek}
+        onPointerLeave={closeAfterGrace}
         onPointerDown={() => {
           skipFocusPeek.current = true
         }}
@@ -261,18 +323,28 @@ export function EmployeePhotoPreview({ src, name, altName, employeeId }: Props):
             ref={peekRef}
             data-photo-peek
             aria-hidden
-            className="pointer-events-none fixed z-50 rounded-2xl border border-hairline bg-surface p-1.5 shadow-xl"
+            className={cn(
+              'fixed z-50 cursor-zoom-in rounded-2xl border border-hairline bg-surface p-1.5 shadow-xl',
+              // Only the settled peek takes the pointer; a shrinking one lets it through.
+              peek !== 'open' && 'pointer-events-none',
+            )}
             style={{ left: peekPlace.left, top: peekPlace.top }}
+            onPointerEnter={() => window.clearTimeout(graceTimer.current)}
+            onPointerLeave={closeAfterGrace}
+            // Keep focus where it is: a focused tile's blur would close the
+            // peek before this click lands.
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={openFull}
           >
             <img
               src={src}
               alt=""
-              width={peekBox.width}
-              height={peekBox.height}
+              width={peekPlace.photo.width}
+              height={peekPlace.photo.height}
               className="block rounded-[12px] object-cover"
-              style={{ width: peekBox.width, height: peekBox.height }}
+              style={{ width: peekPlace.photo.width, height: peekPlace.photo.height }}
             />
-            <div className="px-1.5 pb-1 pt-2 text-start" style={{ width: peekBox.width }}>
+            <div className="px-1.5 pb-1 pt-2 text-start" style={{ width: peekPlace.photo.width }}>
               <div className="line-clamp-2 text-[0.85em] font-semibold leading-snug text-foreground">
                 <bdi>{name}</bdi>
               </div>
