@@ -186,9 +186,9 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
                 <Skeleton className="h-11 w-full" />
               </div>
             )}
-            {loadError && (
+            {(loadError || conflict === 'failed') && (
               <div className="flex flex-wrap items-center gap-2">
-                <p role="alert" className="text-sm text-destructive-text">{armoryErrorMessage(loadError)}</p>
+                <p role="alert" className="text-sm text-destructive-text">{loadError ? armoryErrorMessage(loadError) : t('assets.armory.loadFailed')}</p>
                 {!accessDenied && <Button type="button" variant="ghost" className="min-h-11" onClick={() => void (conflict === 'failed' && draft ? reloadAfterConflict(draft) : guardQuery.refetch())}>{t('assets.armory.retry')}</Button>}
               </div>
             )}
@@ -265,7 +265,7 @@ function QualificationSession({ employeeId, onClose, restoreFocus }: Omit<Props,
               </p>
             )}
             {conflict === 'loading' && <p role="status" className="text-sm text-muted-foreground">{t('assets.armory.loadingText')}</p>}
-            {review && (
+            {review && showFields && (
               <section aria-labelledby={`${id}-saved`} className="space-y-3 rounded-md bg-surface-raised p-3">
                 <h3 id={`${id}-saved`} className="text-sm font-semibold">{t('assets.armory.guardsPane.savedValues')}</h3>
                 <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
