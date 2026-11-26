@@ -26,7 +26,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     bind = op.get_bind()
-    null_count = bind.execute(
+    null_count: int = bind.execute(
         sa.text("SELECT COUNT(*) FROM documents WHERE docx_path IS NULL")
     ).scalar_one()
     if null_count:

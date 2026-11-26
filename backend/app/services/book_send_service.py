@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal, NamedTuple
 
-from sqlalchemy import event, func, select
+from sqlalchemy import Select, event, func, select
 from sqlalchemy.orm import Session, SessionTransaction
 
 from app.api.errors import AppError, NotFoundError
@@ -477,9 +477,7 @@ def _send_references(
                 reason = "self"
             elif reference.confidentiality == "personal":
                 reason = "personal"
-            elif reference.confidentiality == "secret" and not perm_service.has_capability(
-                db, db.get(User, uid), "books.secret"
-            ):
+            elif reference.confidentiality == "secret" and not _secret_cleared(db, uid):
                 reason = "not_cleared"
             elif book_service.is_active_recipient(db, uid, reference.id):
                 reason = "already_recipient"
@@ -487,7 +485,7 @@ def _send_references(
                 eligible.append(uid)
             else:
                 skipped.append(BookReferenceSkipped(user_id=uid, reason=reason))
-        sent = []
+        sent: list[BookRecipientRead] = []
         if eligible:
             sent, _, _ = send(
                 db,
@@ -508,6 +506,12 @@ def _send_references(
             )
         )
     return results
+
+
+def _secret_cleared(db: Session, user_id: int) -> bool:
+    """A missing user is not cleared; ``send`` has already rejected unknown recipients."""
+    recipient = db.get(User, user_id)
+    return recipient is not None and perm_service.has_capability(db, recipient, "books.secret")
 
 
 def _push_new(db: Session, book: Book, rows: list[BookRecipient], sender: User) -> None:
@@ -683,7 +687,7 @@ def mark_read(db: Session, user_id: int, book_id: int) -> datetime | None:
     return now
 
 
-def _received_stmt(db: Session, user: User):  # type: ignore[no-untyped-def]
+def _received_stmt(db: Session, user: User) -> Select[BookRecipient, Book]:
     stmt = (
         select(BookRecipient, Book)
         .join(Book, Book.id == BookRecipient.book_id)
