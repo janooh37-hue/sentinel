@@ -21,6 +21,7 @@ import {
   DocumentViewerDialog,
 } from '@/components/ui/document-viewer-dialog'
 import { ApiError, api } from '@/lib/api'
+import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import { AuthContext } from '@/lib/authContext'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -38,6 +39,7 @@ import { EmployeeTabChips } from './EmployeeTabChips'
 import { StatusDialog } from './StatusDialog'
 import { AbsencesTab } from './tabs/AbsencesTab'
 import { ActivityTab } from './tabs/ActivityTab'
+import { ArmoryTab } from './tabs/ArmoryTab'
 import { AttendanceTab } from './tabs/AttendanceTab'
 import { DocumentsTab } from './tabs/DocumentsTab'
 import { LeavesTab } from './tabs/LeavesTab'
@@ -56,6 +58,7 @@ const VALID_TABS = new Set<Tab>([
   'attendance',
   'violations',
   'uniform',
+  'armory',
 ])
 
 function tabFromSearch(params: URLSearchParams): Tab {
@@ -75,9 +78,12 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const editOverlay = useUrlOverlay('action')
   const docOverlay = useUrlOverlay('doc')
   const canViewUniform = has('uniform.view')
-  // A shared ?tab=uniform link opens the profile for users without uniform.view.
+  const canViewArmory = has(ARMORY_VIEW_CAP) && has('employees.view')
+  // A shared link to a hidden holdings tab opens the profile instead.
   const requestedTab = tabFromSearch(searchParams)
-  const tab = requestedTab === 'uniform' && !canViewUniform ? 'profile' : requestedTab
+  const tab = (requestedTab === 'uniform' && !canViewUniform) || (requestedTab === 'armory' && !canViewArmory)
+    ? 'profile'
+    : requestedTab
   const rawOpenId = searchParams.get('open')
   const parsedOpenId = rawOpenId && /^\d+$/.test(rawOpenId) ? Number(rawOpenId) : null
   const violationOpenId =
@@ -306,6 +312,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               }}
               onChange={handleTabChange}
               showUniform={canViewUniform}
+              showArmory={canViewArmory}
             />
             {tab === 'profile' && (
               <ProfileTab
@@ -351,6 +358,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
             )}
             {tab === 'attendance' && id && <AttendanceTab employeeId={id} employeeName={name} isSelf={isSelf} />}
             {tab === 'uniform' && <UniformTab employeeId={data.employee.id} />}
+            {tab === 'armory' && <ArmoryTab key={data.employee.id} employeeId={data.employee.id} />}
             {tab === 'messages' && (
               <MessagesTab
                 messages={data.recent_sms}

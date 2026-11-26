@@ -99,6 +99,8 @@ describe('BottomTabBar', () => {
     { caps: ['uniform.view'], visible: true },
     { caps: ['store.view'], visible: true },
     { caps: ['store.view', 'uniform.view'], visible: true },
+    { caps: ['armory.view'], visible: true },
+    { caps: ['armory.edit'], visible: false },
   ])('gates persisted Assets slots and the picker consistently: $caps', ({ caps, visible }) => {
     localStorage.setItem(
       NAV_SLOTS_STORAGE_KEY,

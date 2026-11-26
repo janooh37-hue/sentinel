@@ -9,7 +9,7 @@
  * drive submission. This component is purely presentational.
  */
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import type { UseFormReturn } from 'react-hook-form'
 import { FormProvider } from 'react-hook-form'
@@ -40,6 +40,7 @@ import { SignatureField } from './fields/SignatureField'
 import { EmployeeSignatureCard } from './fields/EmployeeSignatureCard'
 import { RichEditor } from '@/components/ui/rich-editor'
 import { GENERAL_BOOK_PAGE_VIEW } from '@/components/ui/rich-editor-config'
+import { ArmoryClearanceNotice } from './fields/ArmoryClearanceNotice'
 import { ClearanceTableField } from './fields/ClearanceTableField'
 import { ItemsTableField } from './fields/ItemsTableField'
 import { EmployeesTableField } from './fields/EmployeesTableField'
@@ -258,6 +259,14 @@ function renderField(
       )
 
     case 'clearance_table':
+      if (templateId === 'Employee Clearance Form') {
+        return (
+          <Fragment key={field.id}>
+            <ArmoryClearanceNotice employeeId={employeeId} />
+            <ClearanceTableField {...common} />
+          </Fragment>
+        )
+      }
       return <ClearanceTableField key={field.id} {...common} />
 
     case 'items_table':

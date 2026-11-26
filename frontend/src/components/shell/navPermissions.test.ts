@@ -53,10 +53,12 @@ describe('permission-aware navigation', () => {
     { caps: ['uniform.view'], allowed: true },
     { caps: ['store.view'], allowed: true },
     { caps: ['store.view', 'uniform.view'], allowed: true },
-  ])('allows Assets with either section capability: $caps', ({ caps, allowed }) => {
+    { caps: ['armory.view'], allowed: true },
+    { caps: ['armory.edit'], allowed: false },
+  ])('allows Assets with any section view capability: $caps', ({ caps, allowed }) => {
     for (const entries of [NAV_ITEMS, SECTION_ENTRIES]) {
       const entry = entries.find((item) => item.to === '/holdings')!
-      expect(entry.anyCaps).toEqual(['store.view', 'uniform.view'])
+      expect(entry.anyCaps).toEqual(['store.view', 'uniform.view', 'armory.view'])
       expect(isNavEntryAllowed(entry, (cap) => caps.includes(cap))).toBe(allowed)
     }
   })

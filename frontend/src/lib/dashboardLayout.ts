@@ -15,10 +15,10 @@ export const WIDGET_IDS = [
   'waiting_approvals', 'pending', 'sent_approvals', 'inbox', 'ledger', 'workspace',
   'quick_actions', 'on_leave_today', 'upcoming_leave', 'drafts', 'expiring_soon',
   'violation_months', 'violations', 'pending_departures', 'workforce_pulse', 'punch_log', 'permits',
-  'store_expiring', 'store_low_stock',
+  'store_expiring', 'store_low_stock', 'armory_exceptions',
 ] as const
 export type WidgetId = (typeof WIDGET_IDS)[number]
-export type WidgetSource = 'records' | 'approvals' | 'ledger' | 'employees' | 'leaves' | 'workforce' | 'permits' | 'services' | 'store'
+export type WidgetSource = 'records' | 'approvals' | 'ledger' | 'employees' | 'leaves' | 'workforce' | 'permits' | 'services' | 'store' | 'armory'
 export const MAX_VISIBLE_QUICK_ACTIONS = 8
 export const QUICK_ACTION_IDS = [
   'General Book', 'Acknowledgment Form', 'Salary Transfer Request', 'Leave Permit Form',
@@ -56,10 +56,10 @@ const DEFAULT_SIZES: Record<WidgetId, WidgetSize> = {
   workspace: 'M', quick_actions: 'W', on_leave_today: 'L', upcoming_leave: 'S',
   drafts: 'S', expiring_soon: 'S', violation_months: 'S', violations: 'S',
   pending_departures: 'L', workforce_pulse: 'M', punch_log: 'L', permits: 'XL',
-  store_expiring: 'L', store_low_stock: 'L',
+  store_expiring: 'L', store_low_stock: 'L', armory_exceptions: 'L',
 }
 export const DEFAULT_LAYOUT: ResolvedDashboardLayout = {
-  widgets: WIDGET_IDS.map((id, order) => ({ id, visible: order < 12, order, size: DEFAULT_SIZES[id] })),
+  widgets: WIDGET_IDS.map((id, order) => ({ id, visible: order < 12 || id === 'armory_exceptions', order, size: DEFAULT_SIZES[id] })),
   quick_actions: QUICK_ACTION_IDS.map((id, order) => ({ id, visible: order < 4, order })),
   canvas_width: DEFAULT_CANVAS_WIDTH,
 }

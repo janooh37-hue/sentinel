@@ -5,8 +5,9 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 import { api } from '@/lib/api'
-import type { DashboardSummary, WorkforceAccess } from '@/lib/api'
+import type { DashboardLayout, DashboardSummary, WorkforceAccess } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
+import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import type { WidgetProps } from './widgets/types'
 import { DEFAULT_LAYOUT, packLayout } from '@/lib/dashboardLayout'
 import { DashboardPage } from './DashboardPage'
@@ -31,6 +32,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       getDashboardLayout: vi.fn(),
       updateDashboardLayout: vi.fn(),
       getWorkforceAccess: vi.fn(),
+      getArmorySummary: vi.fn(),
     },
   }
 })
@@ -95,6 +97,15 @@ describe('packed per-user dashboard', () => {
       workforce_access_tier: 'none',
       scopes: [],
     })
+    mockedApi.getArmorySummary.mockResolvedValue({
+      now_at: '2026-01-01T00:00:00Z',
+      missing_firearm_count: 0, missing_firearms: [],
+      overdue_count: 0, overdue: [],
+      decision_count: 0, due_check_count: 0,
+      expired_batch_count: 0, expiring_batch_count: 0,
+      licences: { missing: 0, expired: 0, expiring: 0, valid: 0 },
+      former_open_count: 0,
+    })
   })
   it.each([false, true])('renders one packed grid with explicit boxes on mobile=%s', async (mobile) => {
     state.mobile = mobile
@@ -103,7 +114,7 @@ describe('packed per-user dashboard', () => {
     const cols = mobile ? 2 : 4
     expect(screen.getByTestId('widget-grid')).toHaveAttribute('data-columns', String(cols))
     const visible = DEFAULT_LAYOUT.widgets.filter((item) => item.visible)
-    expect(boardIds()).toEqual(visible.map((item) => item.id))
+    await waitFor(() => expect(boardIds()).toEqual(visible.map((item) => item.id)))
     for (const box of packLayout(visible, cols).placed) {
       expect(widget(box.id).style.gridColumn).toBe(`${box.c + 1} / span ${box.w}`)
       expect(widget(box.id).style.gridRow).toBe(`${box.r + 1} / span ${box.h}`)
@@ -147,6 +158,7 @@ describe('packed per-user dashboard', () => {
   it('removes unavailable entries before packing and from the add catalog', async () => {
     state.denied.add('books.view')
     state.denied.add('leaves.view')
+    state.denied.add(ARMORY_VIEW_CAP)
     state.received = []
     renderPage()
     await customize()
@@ -157,6 +169,41 @@ describe('packed per-user dashboard', () => {
     expect(within(panel).queryByText('On leave today')).not.toBeInTheDocument()
     expect(within(panel).getByText('Open violations')).toBeInTheDocument()
     expect(screen.getByTestId('widget-grid').querySelectorAll('article')).toHaveLength(3)
+  })
+  it('does not mount, offer or fetch Armory exceptions without view access', async () => {
+    state.denied.add(ARMORY_VIEW_CAP)
+    renderPage()
+    await customize()
+
+    expect(boardIds()).not.toContain('armory_exceptions')
+    const panel = screen.getByRole('complementary', { name: 'Add widgets' })
+    expect(within(panel).queryByText('Armory exceptions')).not.toBeInTheDocument()
+    expect(within(panel).queryByRole('region', { name: 'Armory' })).not.toBeInTheDocument()
+    expect(mockedApi.getArmorySummary).not.toHaveBeenCalled()
+  })
+
+  it('offers Armory exceptions under the Armory source on an older layout with view access', async () => {
+    let resolveSaved!: (layout: DashboardLayout) => void
+    mockedApi.getDashboardLayout.mockReturnValue(new Promise((resolve) => { resolveSaved = resolve }))
+    renderPage()
+    await waitFor(() => expect(mockedApi.getDashboardLayout).toHaveBeenCalledTimes(1))
+    expect(boardIds()).not.toContain('armory_exceptions')
+    expect(mockedApi.getArmorySummary).not.toHaveBeenCalled()
+    await act(async () => {
+      resolveSaved({
+        ...DEFAULT_LAYOUT,
+        widgets: DEFAULT_LAYOUT.widgets.filter(({ id }) => id !== 'armory_exceptions'),
+      })
+    })
+    await customize()
+
+    const panel = screen.getByRole('complementary', { name: 'Add widgets' })
+    const source = within(panel).getByRole('region', { name: 'Armory' })
+    expect(boardIds()).not.toContain('armory_exceptions')
+    expect(mockedApi.getArmorySummary).not.toHaveBeenCalled()
+    await userEvent.click(within(source).getByRole('button', { name: 'Add Armory exceptions' }))
+    expect(boardIds()).toContain('armory_exceptions')
+    await waitFor(() => expect(mockedApi.getArmorySummary).toHaveBeenCalledWith(undefined))
   })
   it('shows the localised name visibly in every edited widget header', async () => {
     renderPage()

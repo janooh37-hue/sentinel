@@ -1,0 +1,191 @@
+.armory-custody-sheet {
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 210mm;
+  min-block-size: 297mm;
+  margin-inline: auto;
+  padding: 16mm;
+  border: 1px solid #d4d1c8;
+  background: #fff;
+  color: #1c1f24;
+  color-scheme: light;
+  font-family: var(--font-sans);
+  font-size: 11pt;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.armory-custody-sheet[lang='ar'] {
+  font-family: var(--font-arabic);
+  line-height: 1.65;
+}
+
+.armory-custody-sheet + .armory-custody-sheet {
+  margin-block-start: 1rem;
+}
+
+.armory-custody-letterhead {
+  margin-block-end: 5mm;
+  text-align: center;
+}
+
+.armory-custody-letterhead img {
+  display: block;
+  inline-size: min(57mm, 100%);
+  block-size: auto;
+  margin: 0 auto 2mm;
+}
+
+.armory-custody-letterhead p {
+  color: #5a6068;
+}
+
+.armory-custody-letterhead h3 {
+  margin-block-start: 2mm;
+  color: #0d2845;
+  font-size: 17pt;
+  font-weight: 700;
+}
+
+.armory-custody-paper-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2mm 5mm;
+  padding-block: 3mm;
+  border-block: 1px solid #d4d1c8;
+}
+
+.armory-custody-sheet dt {
+  color: #5a6068;
+  font-size: 10pt;
+}
+
+.armory-custody-sheet dd {
+  margin-block: 1mm 0;
+  margin-inline: 0;
+  white-space: pre-wrap;
+}
+
+.armory-custody-paper-id {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.armory-custody-paper-lines {
+  inline-size: 100%;
+  margin-block-start: 4mm;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.armory-custody-paper-lines :is(th, td) {
+  padding: 1.5mm;
+  border-block-end: 1px solid #d4d1c8;
+  text-align: start;
+  vertical-align: top;
+}
+
+.armory-custody-paper-lines thead th {
+  color: #0d2845;
+  font-size: 10pt;
+  font-weight: 700;
+}
+
+.armory-custody-paper-lines thead th:first-child {
+  inline-size: 48%;
+}
+
+.armory-custody-paper-lines thead th:nth-child(2) {
+  inline-size: 29%;
+}
+
+.armory-custody-paper-lines :is(th, td):last-child {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.armory-custody-condition {
+  margin-block: 4mm 3mm;
+}
+
+.armory-custody-signatures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6mm;
+  padding-block-start: 12mm;
+}
+
+.armory-custody-signature {
+  padding-block-start: 2mm;
+  border-block-start: 1px solid #5a6068;
+  font-size: 10pt;
+}
+
+.armory-custody-signature-date {
+  display: flex;
+  align-items: baseline;
+  gap: 2mm;
+  margin-block-start: 3mm;
+}
+
+.armory-custody-signature-date span {
+  flex: 1;
+  border-block-end: 1px solid #5a6068;
+}
+
+@media screen and (max-width: 48rem) {
+  .armory-custody-sheet {
+    min-block-size: 0;
+    padding: 4mm;
+  }
+}
+
+@media print {
+  @page armory-custody-receipt {
+    size: A4 portrait;
+    margin: 14mm 16mm;
+  }
+
+  body:has(.armory-custody-document) {
+    page: armory-custody-receipt;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Isolate the document and release the app's fixed-height scroll containers. */
+  body:has(.armory-custody-document) :not(.armory-custody-document, .armory-custody-document *, :has(.armory-custody-document)) {
+    display: none !important;
+  }
+
+  body :has(.armory-custody-document) {
+    display: contents !important;
+  }
+
+  .armory-custody-sheet {
+    max-inline-size: none;
+    min-block-size: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .armory-custody-sheet + .armory-custody-sheet {
+    margin: 0;
+    break-before: page;
+  }
+
+  /* Global print chrome rules hide header elements; keep the paper letterhead. */
+  .armory-custody-sheet > .armory-custody-letterhead {
+    display: block !important;
+    break-inside: avoid;
+  }
+
+  .armory-custody-paper-lines thead {
+    display: table-header-group;
+  }
+
+  .armory-custody-paper-meta,
+  .armory-custody-paper-lines tr,
+  .armory-custody-signatures {
+    break-inside: avoid;
+  }
+}

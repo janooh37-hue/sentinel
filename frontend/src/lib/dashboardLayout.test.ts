@@ -4,12 +4,37 @@ import type { DashboardLayout } from './api'
 
 describe('store dashboard layout', () => {
   it('appends store widgets hidden with list-capable default sizes', () => {
-    expect(WIDGET_IDS.slice(-2)).toEqual(['store_expiring', 'store_low_stock'])
+    expect(WIDGET_IDS.slice(-3)).toEqual(['store_expiring', 'store_low_stock', 'armory_exceptions'])
     const resolved = resolveLayout({ widgets: [{ id: 'pending', visible: true, order: 0, size: 'M' }] })
     for (const id of ['store_expiring', 'store_low_stock']) {
       expect(DEFAULT_LAYOUT.widgets.find((widget) => widget.id === id)).toMatchObject({ visible: false, size: 'L' })
       expect(resolved.widgets.find((widget) => widget.id === id)).toMatchObject({ visible: false, size: 'L' })
     }
+  })
+})
+
+describe('armory dashboard layout', () => {
+  it('shows the Armory widget at list size on a fresh layout', () => {
+    expect(resolveLayout(null).widgets.at(-1)).toMatchObject({ id: 'armory_exceptions', visible: true, size: 'L' })
+  })
+
+  it('appends the Armory widget hidden without rearranging existing choices', () => {
+    const saved = [
+      { id: 'ledger', visible: false, order: 0, size: 'S' },
+      { id: 'pending', visible: true, order: 1, size: 'M' },
+    ]
+    const { widgets } = resolveLayout({ widgets: saved })
+    expect(widgets.slice(0, saved.length)).toEqual(saved)
+    expect(widgets.at(-1)).toEqual({ id: 'armory_exceptions', visible: false, order: widgets.length - 1, size: 'L' })
+  })
+
+  it.each([false, true])('preserves the saved Armory position, size and visibility (%s)', (visible) => {
+    const saved = [
+      { id: 'ledger', visible: true, order: 0, size: 'S' },
+      { id: 'armory_exceptions', visible, order: 1, size: 'M' },
+      { id: 'pending', visible: true, order: 2, size: 'M' },
+    ]
+    expect(resolveLayout({ widgets: saved }).widgets.slice(0, saved.length)).toEqual(saved)
   })
 })
 
@@ -128,6 +153,7 @@ describe('size-based layouts', () => {
       ['waiting_approvals', 'L'], ['pending', 'M'], ['sent_approvals', 'S'], ['inbox', 'S'],
       ['ledger', 'M'], ['workspace', 'M'], ['quick_actions', 'W'], ['on_leave_today', 'L'],
       ['upcoming_leave', 'S'], ['drafts', 'S'], ['expiring_soon', 'S'], ['violation_months', 'S'],
+      ['armory_exceptions', 'L'],
     ])
     expect(DEFAULT_LAYOUT.canvas_width).toBe('compact')
   })

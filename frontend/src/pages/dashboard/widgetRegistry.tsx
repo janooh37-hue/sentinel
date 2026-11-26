@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import type { ApprovalSummaryResponse, WorkforceAccess } from '@/lib/api'
+import { ARMORY_VIEW_CAP } from '@/lib/armory'
 import { hasServiceCap, hasServiceRecordsCap, type WidgetId, type WidgetSource } from '@/lib/dashboardLayout'
 import { canViewAttendanceRoster } from '@/lib/workforceAttendance'
 import { QuickActionsWidget } from './widgets/QuickActionsWidget'
@@ -21,6 +22,7 @@ import { WorkforcePulseWidget } from './widgets/WorkforcePulseWidget'
 import { PunchLogWidget } from './widgets/PunchLogWidget'
 import { StoreExpiringWidget } from './widgets/StoreExpiringWidget'
 import { StoreLowStockWidget } from './widgets/StoreLowStockWidget'
+import { ArmoryExceptionsWidget } from './widgets/ArmoryExceptionsWidget'
 import type { WidgetProps } from './widgets/types'
 
 export interface WidgetAvailabilityContext {
@@ -59,4 +61,5 @@ export const widgetRegistry: Record<WidgetId, WidgetRegistration> = {
   quick_actions: { titleKey: 'dashboard.widgets.quickActions.title', source: 'services', available: ({ has }) => has('documents.generate') && has('books.view'), Component: QuickActionsWidget },
   store_expiring: { titleKey: 'dashboard.widgets.store_expiring.title', source: 'store', available: ({ has }) => has('store.view'), Component: StoreExpiringWidget },
   store_low_stock: { titleKey: 'dashboard.widgets.store_low_stock.title', source: 'store', available: ({ has }) => has('store.view'), Component: StoreLowStockWidget },
+  armory_exceptions: { titleKey: 'assets.armory.widgetTitle', source: 'armory', available: ({ has }) => has(ARMORY_VIEW_CAP), Component: ArmoryExceptionsWidget },
 }
