@@ -21,6 +21,7 @@ from app.api.deps import get_current_user
 from app.api.errors import NotFoundError, install_handlers
 from app.api.v1 import absences as absences_v1
 from app.api.v1 import announcements as announcements_v1
+from app.api.v1 import armory as armory_v1
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import books as books_v1
 from app.api.v1 import correspondence as correspondence_v1
@@ -334,6 +335,7 @@ def create_app() -> FastAPI:
     app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(store_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(uniform_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(armory_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(debug_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import
     # it only while constructing the application so routine module imports
