@@ -120,7 +120,7 @@ describe('serial state records', () => {
     expect(api.moveArmorySerial).toHaveBeenCalledOnce()
   })
 
-  it('hides the protected draft and shows the permission error when the write is refused', async () => {
+  it('hides the protected draft and shows the generic error when the write is refused', async () => {
     const user = userEvent.setup()
     vi.mocked(api.moveArmorySerial).mockRejectedValueOnce(new ApiError(403, 'FORBIDDEN', 'Untranslated private text'))
     const { saved } = mount()
@@ -129,7 +129,7 @@ describe('serial state records', () => {
     fireEvent.change(dialog.getByRole('textbox', { name: 'Reason' }), { target: { value: 'Test repair' } })
     await user.click(await dialog.findByRole('button', { name: /Test Witness/ }))
     await user.click(dialog.getByRole('button', { name: 'Save' }))
-    expect(await dialog.findByRole('alert')).toHaveTextContent(i18n.t('common.forbiddenError'))
+    expect(await dialog.findByRole('alert')).toHaveTextContent(i18n.t('errors.generic'))
     expect(dialog.queryByText('TEST-S-001')).not.toBeInTheDocument()
     expect(dialog.queryByRole('textbox')).not.toBeInTheDocument()
     expect(dialog.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument()

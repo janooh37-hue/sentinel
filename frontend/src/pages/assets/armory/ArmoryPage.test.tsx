@@ -155,7 +155,7 @@ describe('Armory route shell', () => {
       .mockResolvedValue([testSafe])
     renderArmory(<ArmoryRoute />)
     expect(screen.getByText(i18n.t('assets.armory.loadingText'))).toBeVisible()
-    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('common.forbiddenError'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(i18n.t('errors.generic'))
     expect(api.getArmoryShift).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByRole('combobox', { name: 'Safe' })).toBeVisible()

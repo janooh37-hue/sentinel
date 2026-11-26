@@ -1,5 +1,6 @@
 import React from 'react'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const capabilityState = vi.hoisted(() => ({
@@ -23,7 +24,8 @@ vi.mock('@/lib/useCapabilities', () => ({
     }
   },
 }))
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   api: {
     listCapabilities: vi.fn().mockResolvedValue([
       {
@@ -37,7 +39,7 @@ vi.mock('@/lib/api', () => ({
         requestable: false,
         default_roles: ['admin'],
       },
-      ...['store.view', 'uniform.view'].map((id) => ({
+      ...['store.view', 'uniform.view', 'armory.view'].map((id) => ({
         id,
         domain: id.split('.')[0],
         label_en: id,
@@ -45,12 +47,22 @@ vi.mock('@/lib/api', () => ({
         description_en: '',
         description_ar: null,
         sensitive: false,
-        requestable: true,
+        requestable: id !== 'armory.view',
         default_roles: ['admin'],
       })),
     ]),
     postCrashReport: vi.fn().mockResolvedValue(undefined),
     requestPermission: vi.fn().mockResolvedValue({}),
+    listArmorySafes: vi.fn(),
+    getArmoryShift: vi.fn(),
+    getArmoryIssue: vi.fn(),
+    getArmoryMovement: vi.fn(),
+    listArmoryCustody: vi.fn(),
+    getArmoryCustody: vi.fn(),
+    findArmoryRecords: vi.fn(),
+    listArmorySiteOptions: vi.fn(),
+    createArmorySafe: vi.fn(),
+    createArmoryReturn: vi.fn(),
   },
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
@@ -134,8 +146,9 @@ vi.mock('@/lib/routeLoaders', () => ({
 }))
 
 import App from './App'
-import { api } from '@/lib/api'
+import { api, type ArmoryAssignmentRead } from '@/lib/api'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
+import { firearmLine, guard, instant, issue, returnPosting, testSafe, testShift } from '@/pages/assets/armory/shift/shiftFixtures'
 
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
@@ -187,6 +200,7 @@ beforeEach(() => {
   sessionState.scoped_role = null
   vi.mocked(api.requestPermission).mockClear()
   vi.mocked(useNotificationStream).mockClear()
+  vi.mocked(api.listArmorySafes).mockReset().mockResolvedValue([])
 })
 
 afterEach(() => {
@@ -347,6 +361,10 @@ describe('App Assets landing route', () => {
     { caps: ['uniform.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
     { caps: ['store.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
     { caps: ['store.view', 'uniform.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['store.view', 'uniform.view', 'armory.view'], pathname: '/holdings/store', page: 'store-dashboard-page' },
+    { caps: ['uniform.view', 'armory.view'], pathname: '/holdings/uniform', page: 'uniform-page' },
+    { caps: ['armory.view'], pathname: '/holdings/armory', page: 'Shift handover' },
+    { caps: ['armory.edit'], pathname: '/holdings/store', page: "You don't have access to this page" },
     { caps: [], pathname: '/holdings/store', page: "You don't have access to this page" },
   ])('chooses the viewable default section for $caps', async ({ caps, pathname, page }) => {
     capabilityState.allowed = new Set(caps)
@@ -355,7 +373,7 @@ describe('App Assets landing route', () => {
 
     expect(await screen.findByText(page)).toBeVisible()
     expect(window.location.pathname).toBe(pathname)
-    if (caps.length === 0) {
+    if (!caps.some(cap => cap.endsWith('.view'))) {
       expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
       expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
     } else {
@@ -404,6 +422,100 @@ describe('App Assets landing route', () => {
     expect(window.location.pathname).toBe('/holdings/store')
     expect(screen.queryByText('store-dashboard-page')).not.toBeInTheDocument()
     expect(screen.queryByText('uniform-page')).not.toBeInTheDocument()
+  })
+})
+
+describe('App Armory route', () => {
+  const custody: ArmoryAssignmentRead = {
+    ...issue, id: 81, record_ref: 'TEST-CU-81', kind: 'custody', due_at: null, overdue_minutes: null,
+    shift_window: null, grace_minutes: null, off_duty_reason: null, off_duty_note: null, return_ids: [],
+    lines: [firearmLine],
+    receipt: {
+      record_ref: 'TEST-CU-81', issued_at: instant, source_safe: testSafe,
+      holder: guard, holder_employee_id: guard.employee_id, supervisor: null, supervisor_employee_id: null,
+      armorer: { name_en: 'Test Armorer', name_ar: 'أمين تجريبي' }, firearm_included: true, licence_number: null,
+      condition_note: null, lines: [{ item: firearmLine.item, qty: 1, serial_code: firearmLine.serial_code }],
+    },
+  }
+
+  beforeEach(() => {
+    vi.mocked(api.listArmorySafes).mockResolvedValue([testSafe])
+    vi.mocked(api.getArmoryShift).mockReset().mockResolvedValue(testShift)
+    vi.mocked(api.getArmoryIssue).mockReset().mockResolvedValue(issue)
+    vi.mocked(api.getArmoryMovement).mockReset().mockResolvedValue(returnPosting)
+    vi.mocked(api.listArmoryCustody).mockReset().mockResolvedValue({ items: [custody], page: 1, page_size: 20, total: 1 })
+    vi.mocked(api.getArmoryCustody).mockReset().mockResolvedValue(custody)
+    vi.mocked(api.findArmoryRecords).mockReset().mockResolvedValue({ serials: [], guards: [], items: [], custody: [], postings: [] })
+    vi.mocked(api.createArmoryReturn).mockReset()
+  })
+
+  afterEach(() => {
+    window.sessionStorage.removeItem('armory.safe')
+    vi.restoreAllMocks()
+  })
+
+  it.each([[], ['armory.edit']].map(caps => ({ caps })))('blocks a receipt deep link with $caps', async ({ caps }) => {
+    capabilityState.allowed = new Set(caps)
+    window.history.pushState({}, '', `/holdings/armory?tab=custody&receipt=${custody.id}`)
+    render(<App />)
+
+    expect(await screen.findByText('Access to this area is managed by administrators and cannot be requested.')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Print' })).not.toBeInTheDocument()
+    expect(api.listArmorySafes).not.toHaveBeenCalled()
+    expect(api.getArmoryCustody).not.toHaveBeenCalled()
+  })
+
+  it('lets a viewer read, find and print custody without write controls', async () => {
+    const user = userEvent.setup()
+    const print = vi.spyOn(window, 'print').mockImplementation(() => {})
+    capabilityState.allowed = new Set(['armory.view'])
+    window.history.pushState({}, '', `/holdings/armory?tab=custody&custody=${custody.id}`)
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { name: guard.name_en })).toBeVisible()
+    for (const name of ['Add safe', 'Shift settings', 'Hand over custody', 'Return custody items']) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    await user.click(screen.getByRole('button', { name: 'Find' }))
+    expect(await screen.findByRole('dialog', { name: 'Find in Armory' })).toBeVisible()
+    await waitFor(() => expect(api.findArmoryRecords).toHaveBeenCalled())
+    await user.keyboard('{Escape}')
+    await user.click(await screen.findByRole('button', { name: 'Print receipt' }))
+    await user.click(await screen.findByRole('button', { name: 'Print' }))
+    expect(print).toHaveBeenCalledOnce()
+  })
+
+  it('opens a return deep link read-only for a viewer', async () => {
+    capabilityState.allowed = new Set(['armory.view'])
+    window.history.pushState({}, '', `/holdings/armory?tab=shift&issue=${issue.id}&return=1`)
+    render(<App />)
+
+    const detail = await screen.findByRole('dialog', { name: 'Issue record' })
+    expect(await within(detail).findByText(issue.record_ref)).toBeVisible()
+    await waitFor(() => expect(new URLSearchParams(window.location.search).has('return')).toBe(false))
+    expect(screen.queryByRole('button', { name: 'Return' })).not.toBeInTheDocument()
+    expect(api.createArmoryReturn).not.toHaveBeenCalled()
+  })
+
+  it('lets an editor with view create a safe from the real route', async () => {
+    const user = userEvent.setup()
+    capabilityState.allowed = new Set(['armory.view', 'armory.edit'])
+    vi.mocked(api.listArmorySafes).mockResolvedValueOnce([])
+    vi.mocked(api.listArmorySiteOptions).mockResolvedValue({ vehicle_sites: [], duty_posts: [] })
+    vi.mocked(api.createArmorySafe).mockResolvedValue(testSafe)
+    window.history.pushState({}, '', '/holdings/armory')
+    render(<App />)
+
+    await user.click(await screen.findByRole('button', { name: 'Add safe' }))
+    fireEvent.change(screen.getByLabelText(/^Safe name in English/), { target: { value: testSafe.name_en } })
+    fireEvent.change(screen.getByLabelText(/^Safe name in Arabic/), { target: { value: testSafe.name_ar } })
+    await user.click(screen.getByRole('button', { name: 'Save safe' }))
+
+    expect(await screen.findByRole('option', { name: testSafe.name_en })).toBeInTheDocument()
+    expect(api.createArmorySafe).toHaveBeenCalledExactlyOnceWith({
+      name_en: testSafe.name_en, name_ar: testSafe.name_ar, vehicle_site_id: null, duty_unit: null, duty_post: null,
+    })
   })
 })
 

@@ -292,7 +292,7 @@ describe('single Armory return', () => {
     await user.click(helmetsBox())
     await user.click(submit())
 
-    expect(await screen.findByRole('alert')).toHaveTextContent("You don't have permission for this")
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Something went wrong$/)
     expect(screen.queryByText('Test Helmet')).not.toBeInTheDocument()
     expect(screen.queryByText('Test Guard One')).not.toBeInTheDocument()
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
