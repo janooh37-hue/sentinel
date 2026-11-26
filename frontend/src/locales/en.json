@@ -3823,6 +3823,9 @@
         "noStateChanges": "No state changes are available for this serial.",
         "needDestination": "Choose a different destination safe.",
         "noTransferDestination": "A transfer requires another safe.",
+        "serialChanged": "This serial changed since you started. Your entries are kept. Check the action still applies before you save.",
+        "keepEntries": "Keep my entries",
+        "discardEntries": "Discard entries",
         "needStateEvidence": "Choose a state change and a witness, and enter a reason of at least 3 characters."
       },
       "returns": {

@@ -121,7 +121,8 @@ export function ItemDetail({ itemId, safeId, safes, onReceive }: Props) {
                 {t('assets.armory.items.closeSerialHistory')}
               </Link>
             </div>
-            {serial.isError ? <>
+            {/* A failed background refetch keeps the cached serial (and an open movement draft) mounted. */}
+            {serial.isError && !serialDetail ? <>
               <p role="alert" className="text-sm text-destructive-text">{armoryErrorMessage(serial.error)}</p>
               <Button type="button" variant="outline" className="min-h-11" onClick={() => void serial.refetch()}>{t('assets.armory.retry')}</Button>
             </> : serialDetail ? <>

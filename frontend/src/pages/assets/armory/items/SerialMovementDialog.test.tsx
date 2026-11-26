@@ -36,14 +36,17 @@ const movement: ArmoryPostingRead = {
 function mount() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const saved = vi.fn()
-  function Harness() {
+  function Harness({ refreshedSerial }: { refreshedSerial?: ArmorySerialDetailRead }) {
     const current = useArmorySerial(51)
     const opener = useRef<HTMLElement>(null)
-    return current.data ? <SerialMovementDialog open serial={current.data} safes={[first, second]} returnFocusRef={opener}
+    const data = refreshedSerial ?? current.data
+    return data ? <SerialMovementDialog open serial={data} safes={[first, second]} returnFocusRef={opener}
       onOpenChange={vi.fn()} onSaved={saved} /> : null
   }
-  render(<QueryClientProvider client={client}><I18nextProvider i18n={i18n}><Harness /></I18nextProvider></QueryClientProvider>)
-  return { saved }
+  const ui = (refreshedSerial?: ArmorySerialDetailRead) =>
+    <QueryClientProvider client={client}><I18nextProvider i18n={i18n}><Harness refreshedSerial={refreshedSerial} /></I18nextProvider></QueryClientProvider>
+  const { rerender } = render(ui())
+  return { saved, refreshSerial: (latest: ArmorySerialDetailRead) => rerender(ui(latest)) }
 }
 
 beforeEach(async () => {
@@ -99,13 +102,13 @@ describe('serial state records', () => {
     })
   })
 
-  it('refreshes a stale serial after 409, shows the translated error and requires fresh choices', async () => {
+  it('keeps evidence after a 409 and submits refreshed preconditions only after review', async () => {
     const user = userEvent.setup()
     vi.mocked(api.moveArmorySerial).mockImplementationOnce(async () => {
       vi.mocked(api.getArmorySerial).mockResolvedValue({ ...serial, state: 'in_repair', last_posting_id: 42 })
       throw new ApiError(409, 'armory_serial_unavailable', 'Untranslated internal text')
     })
-    mount()
+    const { saved } = mount()
     const dialog = within(await screen.findByRole('dialog', { name: 'Change state' }))
     await user.selectOptions(dialog.getByRole('combobox', { name: 'Status' }), 'send_repair')
     fireEvent.change(dialog.getByRole('textbox', { name: 'Reason' }), { target: { value: 'Test repair' } })
@@ -113,11 +116,70 @@ describe('serial state records', () => {
     await user.click(dialog.getByRole('button', { name: 'Save' }))
     expect(await dialog.findByRole('alert')).toHaveTextContent('This serial is no longer available. Review the refreshed list.')
     await dialog.findByRole('option', { name: 'Back from repair' })
-    expect(dialog.getByRole('combobox', { name: 'Status' })).toHaveValue('')
-    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('')
+    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('Test repair')
+    expect(dialog.getByRole('button', { name: 'Change: Witness' })).toBeVisible()
+    expect(dialog.getByText('Test Witness')).toBeVisible()
     expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled()
     expect(api.getArmorySerial).toHaveBeenCalledTimes(2)
     expect(api.moveArmorySerial).toHaveBeenCalledOnce()
+    const keep = dialog.getByRole('button', { name: 'Keep my entries' })
+    expect(keep).toHaveFocus()
+    await user.click(keep)
+    const status = dialog.getByRole('combobox', { name: 'Status' })
+    expect(status).toHaveValue('')
+    expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.selectOptions(status, 'return_repair')
+    await user.click(dialog.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(saved).toHaveBeenCalledOnce())
+    expect(api.moveArmorySerial).toHaveBeenNthCalledWith(2, 51, {
+      action: 'return_repair', expected_state: 'in_repair', expected_safe_id: 11, expected_posting_id: 42,
+      destination_safe_id: null, reason: 'Test repair', witness_employee_id: 'T-0002',
+    })
+  })
+
+  it('keeps the draft across a posting-only refresh until the operator discards it', async () => {
+    const user = userEvent.setup()
+    const { refreshSerial } = mount()
+    const dialog = within(await screen.findByRole('dialog', { name: 'Change state' }))
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Status' }), 'transfer')
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Destination safe' }), '12')
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Reason' }), { target: { value: 'Test transfer' } })
+    await user.click(await dialog.findByRole('button', { name: /Test Witness/ }))
+    expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled()
+
+    refreshSerial({ ...serial, last_posting_id: 42 })
+    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('Test transfer')
+    expect(dialog.getByRole('combobox', { name: 'Destination safe' })).toHaveValue('12')
+    expect(dialog.getByRole('button', { name: 'Change: Witness' })).toBeVisible()
+    expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled()
+    await user.click(dialog.getByRole('button', { name: 'Discard entries' }))
+    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('')
+    expect(dialog.getByRole('combobox', { name: 'Status' })).toHaveValue('')
+    expect(dialog.queryByRole('combobox', { name: 'Destination safe' })).not.toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: 'Change: Witness' })).not.toBeInTheDocument()
+    expect(dialog.queryByRole('button', { name: 'Keep my entries' })).not.toBeInTheDocument()
+    expect(api.moveArmorySerial).not.toHaveBeenCalled()
+  })
+
+  it('keeps a still-valid action but clears a destination that became the current safe', async () => {
+    const user = userEvent.setup()
+    const { refreshSerial } = mount()
+    const dialog = within(await screen.findByRole('dialog', { name: 'Change state' }))
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Status' }), 'transfer')
+    await user.selectOptions(dialog.getByRole('combobox', { name: 'Destination safe' }), '12')
+    fireEvent.change(dialog.getByRole('textbox', { name: 'Reason' }), { target: { value: 'Test transfer' } })
+    await user.click(await dialog.findByRole('button', { name: /Test Witness/ }))
+
+    refreshSerial({ ...serial, safe: second, last_posting_id: 42 })
+    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('Test transfer')
+    const review = within(dialog.getByRole('region', { name: /This serial changed/ }))
+    expect(review.getByText('Test Safe B')).toBeVisible()
+    await user.click(review.getByRole('button', { name: 'Keep my entries' }))
+    expect(dialog.getByRole('combobox', { name: 'Status' })).toHaveValue('transfer')
+    expect(dialog.getByRole('combobox', { name: 'Destination safe' })).toHaveValue('')
+    expect(dialog.getByRole('textbox', { name: 'Reason' })).toHaveValue('Test transfer')
+    expect(dialog.getByRole('button', { name: 'Change: Witness' })).toBeVisible()
+    expect(dialog.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
   it('hides the protected draft and shows the generic error when the write is refused', async () => {
