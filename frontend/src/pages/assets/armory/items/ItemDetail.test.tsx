@@ -72,7 +72,7 @@ describe('armory item detail', () => {
     mount('item=31&serial=51')
     expect(await screen.findByRole('columnheader', { name: 'مفقود قيد المراجعة' })).toBeInTheDocument()
     expect(screen.getByRole('columnheader', { name: 'الكمية المستلمة' })).toBeInTheDocument()
-    expect(await screen.findByText('ملغى')).toBeVisible()
+    expect(await screen.findByText('مُبطل')).toBeVisible()
   })
 
   it('opens a selected serial history deep link for a viewer, preserves the Audit link and restores row focus', async () => {
