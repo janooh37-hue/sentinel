@@ -96,27 +96,34 @@ function ReceiveStockTask({ open, preset, safes, defaultSafeId, onOpenChange, on
   // Adjust the suspended in-memory draft once per explicit resume signal, not on query refreshes.
   if (open && !denied && resume && resume.signal !== handledResume) {
     setHandledResume(resume.signal)
-    if (resume.itemId === null) {
-      setFocusRequest({ target: 'missing' })
-    } else {
-      const existing = draft.lines.find(line => line.itemId === resume.itemId)
+    let updatedLines: ReceiptLine[] | undefined
+    let nextKey = draft.nextKey
+    let focusedKey: number | undefined
+    for (const itemId of resume.itemIds) {
+      const lines = updatedLines ?? draft.lines
+      const existing = lines.find(line => line.itemId === itemId)
       if (existing) {
-        setFocusRequest({ target: 'item', key: existing.key })
-      } else {
-        const blank = draft.lines.find(line => line.itemId === null)
-        const item = itemById.get(resume.itemId)
-        const serialSeed = blank?.serialSeed
-        const itemMayUseSeed = !item || KIND_DEFAULTS[item.kind].entry === 'serial'
-        const line: ReceiptLine = {
-          key: blank?.key ?? draft.nextKey, itemId: resume.itemId,
-          entry: serialSeed && itemMayUseSeed ? { ...BLANK_ENTRY, serialText: serialSeed } : BLANK_ENTRY,
-          serialSeed: !itemMayUseSeed ? serialSeed : undefined,
-        }
-        setDraft({ ...draft, dirty: true, nextKey: blank ? draft.nextKey : draft.nextKey + 1,
-          lines: blank ? draft.lines.map(previous => previous.key === blank.key ? line : previous) : [...draft.lines, line] })
-        setFocusRequest({ target: 'item', key: line.key })
+        focusedKey = existing.key
+        continue
       }
+
+      const blankIndex = lines.findIndex(line => line.itemId === null)
+      const blank = blankIndex === -1 ? undefined : lines[blankIndex]
+      const item = itemById.get(itemId)
+      const serialSeed = blank?.serialSeed
+      const itemMayUseSeed = !item || KIND_DEFAULTS[item.kind].entry === 'serial'
+      const line: ReceiptLine = {
+        key: blank?.key ?? nextKey++, itemId,
+        entry: serialSeed && itemMayUseSeed ? { ...BLANK_ENTRY, serialText: serialSeed } : BLANK_ENTRY,
+        serialSeed: !itemMayUseSeed ? serialSeed : undefined,
+      }
+      updatedLines ??= [...draft.lines]
+      if (blank) updatedLines[blankIndex] = line
+      else updatedLines.push(line)
+      focusedKey = line.key
     }
+    if (updatedLines) setDraft({ ...draft, dirty: true, nextKey, lines: updatedLines })
+    setFocusRequest(focusedKey === undefined ? { target: 'missing' } : { target: 'item', key: focusedKey })
   }
 
   const focusRequested = useCallback((request: FocusRequest | null): boolean => {

@@ -21,7 +21,7 @@ interface AddItemDialogProps {
   open: boolean
   safes: ArmorySafeRead[]
   onOpenChange(open: boolean): void
-  onSaved(item: ArmoryItemDetailRead): void
+  onSaved(item: ArmoryItemDetailRead, options: { addAnother: boolean }): void
   onReceiveExisting(itemId: number): void
   returnFocusRef: RefObject<HTMLElement | null>
 }
@@ -140,7 +140,7 @@ function AddItemTask({ open, safes, onOpenChange, onSaved, onReceiveExisting, re
           setDraft(BLANK_DRAFT)
           setStep('kind')
         }
-        onSaved(item)
+        onSaved(item, { addAnother })
         if (!addAnother) onOpenChange(false)
       },
       onError: error => {

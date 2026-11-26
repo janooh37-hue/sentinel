@@ -116,7 +116,7 @@ describe('Add armory item', () => {
       name_en: 'Test equipment', name_ar: 'معدات اختبار', kind: 'quantity', category: 'restraints', drawing: 'shield',
       optional_kit_ids: [55], openings: [{ safe_id: 20, received_on: DAY, reference: null, witness_employee_id: null, entry: { type: 'quantity', qty: 0 } }],
     })
-    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(SAVED))
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(SAVED, { addAnother: false }))
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
@@ -148,7 +148,7 @@ describe('Add armory item', () => {
     expect(await screen.findByRole('heading', { name: 'What are you adding?' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
     expect(screen.getByRole('radio', { name: 'Equipment by count' })).not.toBeChecked()
-    expect(onSaved).toHaveBeenCalledExactlyOnceWith(SAVED)
+    expect(onSaved).toHaveBeenCalledExactlyOnceWith(SAVED, { addAnother: true })
     expect(onOpenChange).not.toHaveBeenCalled()
     expect(api.createArmoryItem).toHaveBeenCalledExactlyOnceWith({
       name_en: 'Test equipment', name_ar: 'معدات اختبار', kind: 'quantity', category: 'accessories', drawing: 'case',

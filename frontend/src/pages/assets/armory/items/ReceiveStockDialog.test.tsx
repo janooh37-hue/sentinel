@@ -204,7 +204,7 @@ describe('Receive armory stock', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     vi.mocked(api.listArmoryItems).mockResolvedValue([COUNTED, NUMBERED, BATCHED, CONTROLLED, NEW_ITEM])
     await act(() => client.invalidateQueries())
-    update({ open: true, resume: { signal: 1, itemId: 104 } })
+    update({ open: true, resume: { signal: 1, itemIds: [104] } })
     await waitFor(() => expect(line(2).getByRole('combobox', { name: 'Item' })).toHaveFocus())
     expect(line(2).getByRole('combobox', { name: 'Item' })).toHaveValue('104')
     expect(line(1).getByRole('textbox', { name: 'Quantity' })).toHaveValue('3')
@@ -214,7 +214,7 @@ describe('Receive armory stock', () => {
 
     await user.click(screen.getByRole('button', { name: 'Not listed? Add item' }))
     update({ open: false })
-    update({ open: true, resume: { signal: 2, itemId: null } })
+    update({ open: true, resume: { signal: 2, itemIds: [] } })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Not listed? Add item' })).toHaveFocus())
     expect(line(2).getByRole('combobox', { name: 'Item' })).toHaveValue('104')
   })

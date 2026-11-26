@@ -229,6 +229,57 @@ describe('Armory route shell', () => {
     expect(within(resumed).getByRole('textbox', { name: 'Reference' })).toHaveValue('TEST-KEEP')
   })
 
+  it.each(['save the next item', 'close the wizard'] as const)('keeps Add another open during a receipt until operators %s', async finish => {
+    access.edit = true
+    const user = userEvent.setup()
+    const created: ArmoryItemDetailRead[] = []
+    vi.spyOn(api, 'listArmoryKits').mockResolvedValue([])
+    vi.spyOn(api, 'getArmorySummary').mockResolvedValue({
+      now_at: '2026-11-01T09:00:00Z', missing_firearm_count: 0, missing_firearms: [], overdue_count: 0, overdue: [],
+      decision_count: 0, due_check_count: 0, expired_batch_count: 0, expiring_batch_count: 0,
+      licences: { missing: 0, expired: 0, expiring: 0, valid: 0 }, former_open_count: 0,
+    })
+    vi.mocked(api.listArmoryItems).mockImplementation(async () => [...created])
+    vi.spyOn(api, 'createArmoryItem').mockImplementation(async ({ name_en, name_ar, kind, category, drawing }) => {
+      const item = { ...emptyDetail, id: 100 + created.length, name_en, name_ar, kind, category, drawing }
+      created.push(item)
+      return item
+    })
+    renderArmory(<ArmoryRoute />, '/holdings/armory?tab=items&safe=1')
+    await user.click(await screen.findByRole('button', { name: 'Receive stock' }))
+    const receive = within(await screen.findByRole('dialog', { name: 'Receive stock' }))
+    await user.type(receive.getByRole('textbox', { name: 'Reference' }), 'TEST-KEEP')
+    await user.click(receive.getByRole('button', { name: 'Not listed? Add item' }))
+    const addItem = within(await screen.findByRole('dialog', { name: 'Add item' }))
+
+    async function saveItem(nameEn: string, nameAr: string, addAnother: boolean) {
+      await user.click(addItem.getByRole('radio', { name: 'Equipment by count' }))
+      await user.click(addItem.getByRole('button', { name: 'Next' }))
+      await user.type(addItem.getByRole('textbox', { name: 'Name in English' }), nameEn)
+      await user.type(addItem.getByRole('textbox', { name: 'Name in Arabic' }), nameAr)
+      await user.click(addItem.getByRole('button', { name: 'Next' }))
+      if (addAnother) await user.click(addItem.getByRole('checkbox', { name: 'Add another after saving' }))
+      await user.click(addItem.getByRole('button', { name: 'Save item' }))
+    }
+
+    await saveItem('TEST-ITEM-A', 'صنف اختبار أ', true)
+    await screen.findByText('Item added to the catalogue.')
+    expect(screen.queryByRole('dialog', { name: 'Add item' })).toBeInTheDocument()
+    expect(addItem.getByRole('heading', { name: 'What are you adding?' })).toBeVisible()
+    expect(screen.queryByRole('dialog', { name: 'Receive stock' })).not.toBeInTheDocument()
+
+    if (finish === 'save the next item') await saveItem('TEST-ITEM-B', 'صنف اختبار ب', false)
+    else await user.click(addItem.getByRole('button', { name: 'Cancel' }))
+
+    const resumed = within(await screen.findByRole('dialog', { name: 'Receive stock' }))
+    expect(resumed.getByRole('textbox', { name: 'Reference' })).toHaveValue('TEST-KEEP')
+    const items = resumed.getAllByRole('combobox', { name: 'Item' })
+    expect(items).toHaveLength(finish === 'save the next item' ? 2 : 1)
+    expect(items[0]).toHaveValue('100')
+    if (finish === 'save the next item') expect(items[1]).toHaveValue('101')
+    await waitFor(() => expect(items.at(-1)).toHaveFocus())
+  })
+
   it('turns a viewer return link into the read-only issue', async () => {
     renderArmory(<ArmoryRoute />, '/holdings/armory?tab=shift&safe=1&issue=10&return=1')
     const detail = await screen.findByRole('dialog', { name: 'Issue record' })

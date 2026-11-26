@@ -47,7 +47,7 @@ type Task =
   | { kind: 'return'; mode: AssignmentKind; assignmentId: number; opener: HTMLElement | null; tracksIssue: boolean }
   | { kind: 'bulk'; safeId: number; opener: HTMLElement }
   | { kind: 'check' }
-  | { kind: 'receive'; preset: ReceivePreset; defaultSafeId: number | null; opener: HTMLElement | null; adding: boolean; resume: ReceiveResume | null }
+  | { kind: 'receive'; preset: ReceivePreset; defaultSafeId: number | null; opener: HTMLElement | null; adding: number[] | null; resume: ReceiveResume | null }
   | { kind: 'addItem' | 'safe' | 'settings' | 'find'; opener: HTMLElement | null }
 
 type CheckDraft = { safeId: number; paused: boolean; opener: HTMLElement }
@@ -241,24 +241,30 @@ export function ArmoryPage(): React.JSX.Element | null {
   }
 
   function openReceive(opener: HTMLElement | null, preset: ReceivePreset = EMPTY_PRESET) {
-    openWrite({ kind: 'receive', preset, defaultSafeId: safeId, opener, adding: false, resume: null })
+    openWrite({ kind: 'receive', preset, defaultSafeId: safeId, opener, adding: null, resume: null })
   }
 
   function resumeReceive(itemId: number | null, receiveExisting = false) {
     setTask(current => {
-      if (current?.kind === 'receive' && current.adding) {
-        return { ...current, adding: false, resume: { signal: (current.resume?.signal ?? 0) + 1, itemId } }
+      if (current?.kind === 'receive' && current.adding !== null) {
+        const itemIds = itemId === null ? current.adding : [...current.adding, itemId]
+        return { ...current, adding: null, resume: { signal: (current.resume?.signal ?? 0) + 1, itemIds } }
       }
       if (receiveExisting && current?.kind === 'addItem' && itemId !== null) {
-        return { kind: 'receive', preset: { itemId }, defaultSafeId: safeId, opener: current.opener, adding: false, resume: null }
+        return { kind: 'receive', preset: { itemId }, defaultSafeId: safeId, opener: current.opener, adding: null, resume: null }
       }
       return current
     })
   }
 
-  function savedItem(item: ArmoryItemDetailRead) {
+  function savedItem(item: ArmoryItemDetailRead, { addAnother }: { addAnother: boolean }) {
     setStatus('savedItem')
-    resumeReceive(item.id)
+    if (addAnother) {
+      setTask(current => current?.kind === 'receive' && current.adding !== null
+        ? { ...current, adding: [...current.adding, item.id] } : current)
+    } else {
+      resumeReceive(item.id)
+    }
   }
 
   if (!canView || isLoading) return null
@@ -356,12 +362,13 @@ export function ArmoryPage(): React.JSX.Element | null {
         safeId={check.safeId} returnFocusRef={checkFocus} onOpenChange={open => { if (!open) closeTask('check') }}
         onPausedChange={paused => setCheck(current => current ? { ...current, paused } : null)}
         onSaved={() => { setCheck(null); setStatus('savedCheck'); closeTask('check') }} />}
-      {receive && <ReceiveStockDialog open={!receive.adding} preset={receive.preset} defaultSafeId={receive.defaultSafeId}
+      {receive && <ReceiveStockDialog open={receive.adding === null} preset={receive.preset} defaultSafeId={receive.defaultSafeId}
         safes={safes} returnFocusRef={taskFocus} resume={receive.resume}
         onOpenChange={open => { if (!open) closeTask('receive') }}
-        onAddMissingItem={() => setTask(current => current?.kind === 'receive' ? { ...current, adding: true } : current)}
+        onAddMissingItem={() => setTask(current => current?.kind === 'receive' && current.adding === null
+          ? { ...current, adding: [] } : current)}
         onSaved={posting => setStatus(posting.kind === 'opening' ? 'intake.savedOpening' : 'savedStock')} />}
-      {(addItem || receive?.adding) && <AddItemDialog open safes={safes} returnFocusRef={addItem ? taskFocus : headingFocus}
+      {(addItem || (receive && receive.adding !== null)) && <AddItemDialog open safes={safes} returnFocusRef={addItem ? taskFocus : headingFocus}
         onOpenChange={open => { if (!open) { resumeReceive(null); closeTask('addItem') } }}
         onSaved={savedItem} onReceiveExisting={id => resumeReceive(id, true)} />}
       {editable && activeTask?.kind === 'safe' && <ArmorySafeDialog open returnFocusRef={taskFocus}

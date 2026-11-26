@@ -7,8 +7,8 @@ export interface ReceivePreset {
   serialCode?: string
 }
 
-/** Resume signal after "Not listed? Add item": the new item to add as a line, or `null` when Add item was cancelled. */
+/** Resume signal after "Not listed? Add item": add the item IDs in order, or focus the missing-item control when empty. */
 export interface ReceiveResume {
   signal: number
-  itemId: number | null
+  itemIds: number[]
 }
