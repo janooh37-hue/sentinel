@@ -16,7 +16,7 @@ def _policy_statement(
     *,
     operational_date: date,
     shift_definition_id: int | ColumnElement[int] | None,
-) -> Select[tuple[WorkAttendancePolicy]]:
+) -> Select[WorkAttendancePolicy]:
     return (
         select(WorkAttendancePolicy)
         .where(

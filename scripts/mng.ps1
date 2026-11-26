@@ -15,7 +15,8 @@
         mng restart         # restart the service         (elevates if needed)
         mng build           # rebuild the frontend bundle into backend\app\static
         mng deploy          # sync deps + backup DB (if due) + build + migrate + smoke check + restart
-        mng update          # git pull; if changed -> sync deps + deploy (skips untouched frontend)
+        mng update          # git fetch; if the new commit's GitHub checks are green -> pull + sync deps + deploy (skips untouched frontend)
+        mng update -Force   # same, without the green-checks gate (prints a warning)
         mng logs            # tail the service log   (-Tail N, -Stderr)
         mng open            # open the app in the default browser
         mng help            # this help
@@ -36,6 +37,7 @@ param(
 
     [int]    $Tail = 40,        # for `mng logs`
     [switch] $Stderr,           # `mng logs -Stderr` -> the error log
+    [switch] $Force,            # `mng update -Force` -> skip the green-checks gate
     [switch] $FromElevation     # internal: set when relaunched elevated
 )
 
@@ -179,6 +181,7 @@ function Assert-Admin([string] $verb) {
         $psArgs += @('-Tail', $Tail)
         if ($Stderr) { $psArgs += '-Stderr' }
     }
+    if ($verb -eq 'update' -and $Force) { $psArgs += '-Force' }
     try {
         Start-Process -FilePath 'powershell.exe' -Verb RunAs -ArgumentList $psArgs
     } catch {
@@ -297,7 +300,7 @@ function Get-UpdateGitAuthentication([string] $remoteUrl) {
     return [pscustomobject]@{ Username = $username; Token = $token }
 }
 
-function Invoke-AuthenticatedGitPull($authentication) {
+function Invoke-AuthenticatedGitFetch($authentication) {
     $askPassPath = $null
     $askPassCommandPath = $null
     $oldAskPass = $env:GIT_ASKPASS
@@ -340,11 +343,11 @@ exit 1
             if ($authentication) {
                 # Disable credential helpers while PAT credentials are active so
                 # stale helpers cannot override the repository PAT.
-                & git -c credential.helper= pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+                & git -c credential.helper= fetch 2>&1 | ForEach-Object { Write-Host $_ }
             } else {
                 # Preserve the user's configured helper for SSH, local, and
                 # non-HTTPS remotes, matching the historical plain `git pull`.
-                & git pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+                & git fetch 2>&1 | ForEach-Object { Write-Host $_ }
             }
             $gitExitCode = $LASTEXITCODE
         } finally {
@@ -630,7 +633,79 @@ function Invoke-Deploy {
     Show-Status
 }
 
+function Get-CommitChecks([string] $commit) {
+    # Reads the commit's check runs and commit statuses from GitHub's public
+    # API with no token: the repository is public, and the unauthenticated
+    # limit (60 requests an hour) is plenty for a manual deploy. Returns State
+    # (green, red, pending or unreachable) and a one-line Detail.
+    $api = 'https://api.github.com/repos/janooh37-hue/sentinel/commits/' + $commit
+    $headers = @{ Accept = 'application/vnd.github+json' }
+    try {
+        # Windows PowerShell 5.1 may not offer TLS 1.2 by default; GitHub requires it.
+        [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        $runs = Invoke-RestMethod -Uri "$api/check-runs?per_page=100" -Headers $headers -TimeoutSec 15 -UseBasicParsing
+        $combined = Invoke-RestMethod -Uri "$api/status?per_page=100" -Headers $headers -TimeoutSec 15 -UseBasicParsing
+    } catch {
+        return [pscustomobject]@{ State = 'unreachable'; Detail = 'GitHub API did not answer: ' + $_.Exception.Message }
+    }
+    $listed = @($runs.check_runs).Count
+    if ($listed -lt $runs.total_count) {
+        return [pscustomobject]@{ State = 'unreachable'; Detail = ('GitHub listed only {0} of {1} check runs' -f $listed, $runs.total_count) }
+    }
+    $listedStatuses = @($combined.statuses).Count
+    if ($listedStatuses -lt $combined.total_count) {
+        return [pscustomobject]@{ State = 'unreachable'; Detail = ('GitHub listed only {0} of {1} commit statuses' -f $listedStatuses, $combined.total_count) }
+    }
+    $failed = @()
+    $pending = @()
+    $passed = 0
+    foreach ($run in $runs.check_runs) {
+        if ($run.status -ne 'completed') {
+            $pending += '{0} ({1})' -f $run.name, $run.status
+        } elseif (@('success', 'neutral', 'skipped') -contains $run.conclusion) {
+            $passed++
+        } else {
+            $failed += '{0} ({1})' -f $run.name, $run.conclusion
+        }
+    }
+    # The combined `state` is not used: GitHub reports it as pending when a
+    # commit has no statuses at all, the normal case here (CI posts check runs).
+    foreach ($status in $combined.statuses) {
+        if ($status.state -eq 'success') {
+            $passed++
+        } elseif ($status.state -eq 'pending') {
+            $pending += '{0} (pending)' -f $status.context
+        } else {
+            $failed += '{0} ({1})' -f $status.context, $status.state
+        }
+    }
+    if ($failed.Count -gt 0) { return [pscustomobject]@{ State = 'red'; Detail = 'failed: ' + ($failed -join ', ') } }
+    if ($pending.Count -gt 0) { return [pscustomobject]@{ State = 'pending'; Detail = 'still running: ' + ($pending -join ', ') } }
+    if ($passed -eq 0) { return [pscustomobject]@{ State = 'pending'; Detail = 'no checks have reported yet' } }
+    return [pscustomobject]@{ State = 'green'; Detail = ('{0} checks passed' -f $passed) }
+}
+
+function Assert-CommitGreen([string] $commit, [switch] $Force) {
+    # The deploy gate: only a commit whose GitHub checks are green ships.
+    # -Force skips the check, for a hotfix while CI or GitHub is down.
+    $short = $commit.Substring(0, 7)
+    if ($Force) {
+        Write-Host ('  WARNING: -Force - deploying {0} without checking that its GitHub checks are green.' -f $short) -ForegroundColor Yellow
+        return
+    }
+    Write-Host ('  Checking GitHub checks for {0} ...' -f $short) -ForegroundColor Cyan
+    $checks = Get-CommitChecks $commit
+    if ($checks.State -eq 'green') {
+        Write-Host ('  Checks green for {0}: {1}.' -f $short, $checks.Detail) -ForegroundColor Green
+        return
+    }
+    $message = 'commit {0} is not green ({1}: {2}). Nothing was deployed and the checkout did not move. ' -f $short, $checks.State, $checks.Detail
+    $message += 'See https://github.com/janooh37-hue/sentinel/commit/{0}. To deploy it anyway: mng update -Force' -f $commit
+    throw $message
+}
+
 function Invoke-Update {
+    param([switch] $Force)
     Assert-Admin 'update'
     Push-Location $Root
     try {
@@ -644,8 +719,28 @@ function Invoke-Update {
             throw 'git origin remote is not configured; set origin to the Sentinel repository, then rerun: mng update'
         }
         $authentication = Get-UpdateGitAuthentication $remoteUrl
-        $gitExitCode = Invoke-AuthenticatedGitPull $authentication
-        if ($gitExitCode -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
+        $gitExitCode = Invoke-AuthenticatedGitFetch $authentication
+        if ($gitExitCode -ne 0) { throw 'git fetch failed (resolve manually, then rerun: mng update)' }
+        # The fetch moved only the remote-tracking branch. Gate on the commit a
+        # pull would land before the checkout moves, then land exactly that one.
+        $upstream = @(git rev-parse --verify --quiet '@{upstream}')
+        if ($LASTEXITCODE -ne 0 -or $upstream.Count -eq 0) {
+            throw 'the checkout has no upstream branch; check out main tracking origin/main, then rerun: mng update'
+        }
+        $target = ([string]$upstream[0]).Trim()
+        & git merge-base --is-ancestor $target HEAD
+        if ($LASTEXITCODE -ne 0) {
+            Assert-CommitGreen $target -Force:$Force
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & git merge --ff-only $target 2>&1 | ForEach-Object { Write-Host $_ }
+                $mergeExitCode = $LASTEXITCODE
+            } finally {
+                $ErrorActionPreference = $prevEAP
+            }
+            if ($mergeExitCode -ne 0) { throw 'git merge --ff-only failed (resolve manually, then run: mng deploy)' }
+        }
         $after = (git rev-parse HEAD).Trim()
         # Pathspecs are cwd-relative, so the frontend diff must run while we are
         # still at the repo root. `git diff --name-only` prints nothing when the
@@ -713,7 +808,8 @@ function Show-Help {
     Write-Host '    mng restart     restart the service'
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
     Write-Host '    mng deploy      sync deps + backup + build + migrate + smoke check + restart'
-    Write-Host '    mng update      git pull; if changed -> sync deps + deploy (skips untouched frontend)'
+    Write-Host '    mng update      git fetch; if the new commit is green on GitHub -> pull + sync deps + deploy'
+    Write-Host '    mng update -Force   deploy without the green-checks gate (CI or GitHub down)'
     Write-Host '  update HTTPS remotes use MNG_GIT_USERNAME and MNG_GIT_TOKEN from .env.' -ForegroundColor Gray
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
@@ -734,7 +830,7 @@ try {
         'restart' { Invoke-Restart }
         'build'   { Invoke-Build }
         'deploy'  { Invoke-Deploy }
-        'update'  { Invoke-Update }
+        'update'  { Invoke-Update -Force:$Force }
         'logs'    { Show-Logs }
         'open'    { Open-App }
         'help'    { Show-Help }
